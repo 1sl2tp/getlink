@@ -959,15 +959,16 @@ function renderCategoryMenu(){
 }
 
 function gridProductCard(row){
-  const simple=simpleRowPrice(row);
-  const displayName=retailDisplayName(row,simple);
-  const price=simple.hasCarton
-    ?(simple.promoCartonPrice||simple.cartonPrice)
-    :(simple.promoRetailPrice||simple.retailPrice);
+  const levels=rowPriceLevels(row);
+  const displayName=canonicalDisplayName(row);
+  const hierarchy=levels.hierarchy;
+  const price=levels.hasCarton
+    ?(levels.promoCartonPrice||levels.cartonPrice)
+    :(levels.hasMiddle
+      ?(levels.promoMiddlePrice||levels.middlePrice)
+      :(levels.promoLeafPrice||levels.leafPrice));
   const image=String(row.image||"").trim();
-  const qc=simple.displayQty>0
-    ?String(simple.displayQty)+" "+String(simple.displayUnit||"").trim()
-    :String(simple.displayUnit||"").trim();
+  const qc=rowPrimaryQc(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card '+
@@ -986,7 +987,7 @@ function gridProductCard(row){
           :'<span class="grid-product-fallback">GL</span>')+
       '</div>'+
       '<div class="grid-product-body">'+
-        '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(displayName)+'</button>'+
+        '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
           '<strong class="grid-price">'+money(price)+'</strong>'+

@@ -65,6 +65,36 @@ h1{margin:0;font-size:28px;line-height:1.1}
   background:var(--green);border-color:var(--green);color:#fff;
 }
 .category-chip.active small{color:#d9f2e4}
+.brand-tabs{
+  display:flex;
+  gap:7px;
+  overflow:auto;
+  padding:10px 20px 0;
+  scrollbar-width:none;
+}
+.brand-tabs[hidden]{display:none}
+.brand-tabs::-webkit-scrollbar{display:none}
+.brand-chip{
+  flex:0 0 auto;
+  border:1px solid #dfe3e8;
+  background:#fff;
+  color:#475467;
+  border-radius:9px;
+  padding:6px 9px;
+  font-size:11px;
+  font-weight:750;
+}
+.brand-chip small{
+  margin-left:3px;
+  color:#98a2b3;
+  font-weight:650;
+}
+.brand-chip.active{
+  background:#f7faf8;
+  border-color:#9fcdb4;
+  color:var(--green-strong);
+}
+.brand-chip.active small{color:#6aa985}
 .state-filters{
   display:flex;
   gap:7px;
@@ -168,6 +198,13 @@ h1{margin:0;font-size:28px;line-height:1.1}
   color:var(--green);display:grid;place-items:center;font-weight:850;font-size:14px;
 }
 .product-name-wrap{min-width:0}
+.brand-inline{
+  display:inline-block;
+  margin-left:5px;
+  color:#667085;
+  font-size:10px;
+  font-weight:750;
+}
 .product-name-wrap h3{
   margin:5px 0 0;
   font-size:14px;
@@ -374,6 +411,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .catalog-toolbar{align-items:flex-start}
   .catalog-toolbar,.catalog-search{padding-left:12px;padding-right:12px}
   .category-tabs{padding-left:12px;padding-right:12px}
+  .brand-tabs{padding-left:12px;padding-right:12px}
   .state-filters{padding-left:12px;padding-right:12px}
   .catalog-subhead{padding-left:12px;padding-right:12px}
   .input-row{flex-direction:column}

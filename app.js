@@ -23,7 +23,7 @@ let categoryPage=1;
 let libraryPage=1;
 let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
 function isCompactBrowse(){
-  return window.matchMedia("(max-width: 900px)").matches;
+  return window.matchMedia("(max-width: 1100px)").matches;
 }
 let lastMobileLayout=isCompactBrowse();
 

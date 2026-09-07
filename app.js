@@ -649,7 +649,10 @@ function productCard(row){
     '" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
     'data-pack-qty="'+simple.cartonQty+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
-      '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(simple.rawName)+'</td>'+
+      '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
+        '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(simple.rawName)+'</button>'+
+      '</td>'+
+      '<td class="xls-qc">'+(simple.hasCarton?escapeHtml(simple.cartonQty+" "+simple.cartonUnit):"—")+'</td>'+
       '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
       '<td class="xls-num">'+money(simple.retailPrice)+'</td>'+
       '<td>'+
@@ -841,7 +844,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="6">Đang đọc thư viện D1...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="7">Đang đọc thư viện D1...</td></tr>';
   $("#libraryEmpty").hidden=true;
   try{
     await ensureLibraryCache(force);
@@ -949,6 +952,13 @@ $("#librarySearch").addEventListener("input",e=>{
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
+  const detailButton=e.target.closest(".xls-open-detail");
+  if(detailButton){
+    e.stopPropagation();
+    openLibraryItem(detailButton.dataset.url||"");
+    return;
+  }
+
   const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-retail,.sheet-bargain");
   if(priceInput){
     e.stopPropagation();

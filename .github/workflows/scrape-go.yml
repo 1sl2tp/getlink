@@ -1,4 +1,4 @@
-name: Lấy giá GO Hà Nam
+name: Lấy giá GO
 
 on:
   workflow_dispatch:
@@ -56,7 +56,7 @@ jobs:
       - name: Cài Playwright client
         run: pip install -r scraper/requirements.txt
 
-      - name: Báo đang mở Bright Data / GO Hà Nam
+      - name: Báo đang mở Bright Data / GO
         run: |
           curl --silent --show-error --fail \
             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN" \
@@ -64,7 +64,7 @@ jobs:
             --data "{\"request_id\":\"$INPUT_REQUEST_ID\",\"stage\":\"brightdata\"}" \
             "$GETLINK_API_BASE/api/progress" >/dev/null
 
-      - name: Mở GO Hà Nam và lấy danh sách sản phẩm
+      - name: Mở GO và lấy danh sách sản phẩm
         id: scrape
         continue-on-error: true
         run: |
@@ -128,5 +128,5 @@ jobs:
       - name: Báo trạng thái
         if: steps.scrape.outputs.code != '0'
         run: |
-          echo "GO Hà Nam chưa trả dữ liệu hợp lệ; xem log scraper."
+          echo "GO chưa trả dữ liệu hợp lệ; xem log scraper."
           exit 1

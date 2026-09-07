@@ -1498,89 +1498,66 @@ async function handleLibrary(url,env,origin){
     ).bind(itemUrl).first();
     if(cached&&cached.result_json){
       try{
-        const preference=await getPreference(env,itemUrl);
-        return json({
-          status:"complete",
-          payload:JSON.parse(cached.result_json),
-          source:"d1-library",
-          updated_at:cached.updated_at||"",
-          preference
-        },200,origin);
+        const payload=JSON.parse(cached.result_json);
+        if(Number(payload&&payload.schema_version||0)>=6){
+          const preference=await getPreference(env,itemUrl);
+          return json({
+            status:"complete",
+            payload,
+            source:"d1-library",
+            updated_at:cached.updated_at||"",
+            preference
+          },200,origin);
+        }
       }catch{}
     }
 
-    const row=await env.DB.prepare(
-      "SELECT l.*,a.image_url AS stored_image FROM links l LEFT JOIN link_assets a ON a.link_url=l.canonical_url WHERE l.canonical_url=? LIMIT 1"
-    ).bind(itemUrl).first();
+    // Library fallback is also one-link/one-result only. Never rebuild a
+    // product detail from product_variants because those rows can be
+    // temporary sibling choices from an older BHX response.
+    const row=await env.DB.prepare(`
+      SELECT
+        l.*,
+        a.image_url AS stored_image,
+        cmp.pack_kind AS cmp_pack_kind,
+        cmp.pack_quantity AS cmp_pack_quantity,
+        cmp.pack_unit AS cmp_pack_unit,
+        cmp.size_value AS cmp_size_value,
+        cmp.size_unit AS cmp_size_unit,
+        cmp.regular_pack_price AS cmp_regular_pack_price,
+        cmp.promo_pack_price AS cmp_promo_pack_price,
+        cmp.regular_unit_price AS cmp_regular_unit_price,
+        cmp.promo_unit_price AS cmp_promo_unit_price,
+        cmp.promotion_active AS cmp_promotion_active
+      FROM links l
+      LEFT JOIN link_assets a ON a.link_url=l.canonical_url
+      LEFT JOIN link_comparison cmp ON cmp.link_url=l.canonical_url
+      WHERE l.canonical_url=?
+      LIMIT 1
+    `).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
-    const variants=await env.DB.prepare(
-      "SELECT * FROM product_variants WHERE parent_url=? ORDER BY package_item_count DESC,current_price ASC LIMIT 30"
-    ).bind(itemUrl).all();
-
-    const variantRows=[];
-    for(const v of variants.results||[]){
-      const daily=await env.DB.prepare(
-        "SELECT * FROM daily_variant_prices WHERE variant_id=? ORDER BY snapshot_date DESC LIMIT 1"
-      ).bind(v.id).first();
-      variantRows.push({
-        source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-        group:row.group_name||"",
-        branch:row.branch_name||"",
-        name:v.name||row.name||"",
-        packaging:{text:v.packaging||v.title||row.packaging||""},
-        comparison:daily?{
-          pack_quantity:Number(daily.pack_quantity)||Number(v.package_item_count)||1,
-          pack_unit:daily.pack_unit||v.package_item_unit||"",
-          size_value:daily.size_value??null,
-          size_unit:daily.size_unit||"",
-          regular_pack_price:daily.regular_pack_price??v.sys_price??v.current_price??null,
-          promo_pack_price:daily.promo_pack_price??null,
-          regular_unit_price:daily.regular_unit_price??null,
-          promo_unit_price:daily.promo_unit_price??null,
-          promotion_active:Boolean(daily.promotion_active),
-          promotion_text:daily.promotion_text||""
-        }:{
-          pack_quantity:Number(v.package_item_count)||1,
-          pack_unit:v.package_item_unit||"",
-          regular_pack_price:v.sys_price||v.current_price||null,
-          promo_pack_price:Number(v.discount_percent)>0?v.current_price:null,
-          regular_unit_price:v.sys_price&&v.package_item_count
-            ?Math.round(v.sys_price/v.package_item_count)
-            :null,
-          promo_unit_price:Number(v.discount_percent)>0&&v.current_price&&v.package_item_count
-            ?Math.round(v.current_price/v.package_item_count)
-            :null,
-          promotion_active:Number(v.discount_percent)>0,
-          promotion_text:""
-        },
-        price:{current:v.current_price||null,sys_price:v.sys_price||null},
-        promotion:{
-          active:Number(v.discount_percent)>0,
-          price:Number(v.discount_percent)>0?v.current_price:null,
-          text:""
-        },
-        url:v.variant_url||itemUrl,
-        image:v.image||"",
-        last_checked_at:v.last_checked_at||row.last_checked_at||"",
-        variant:{
-          bhx_product_id:v.bhx_product_id??null,
-          product_code:v.product_code||"",
-          title:v.title||"",
-          package_item_count:v.package_item_count??null,
-          package_item_unit:v.package_item_unit||"",
-          sys_price:v.sys_price??null,
-          discount_percent:v.discount_percent??0,
-          stock:v.stock??0,
-          is_can_buy:Boolean(v.is_can_buy),
-          text_status:v.text_status||"",
-          po_date:v.po_date||""
-        }
-      });
-    }
-
-    const mainComparison=variantRows[0]&&variantRows[0].comparison||comparisonData({
+    const hasComparison=Boolean(
+      row.cmp_pack_kind||
+      row.cmp_pack_unit||
+      row.cmp_regular_pack_price||
+      row.cmp_promo_pack_price
+    );
+    const mainComparison=hasComparison?{
+      pack_kind:row.cmp_pack_kind||"",
+      pack_quantity:Number(row.cmp_pack_quantity)||1,
+      pack_unit:row.cmp_pack_unit||"",
+      size_value:row.cmp_size_value??null,
+      size_unit:row.cmp_size_unit||"",
+      regular_pack_price:row.cmp_regular_pack_price??row.current_price??null,
+      promo_pack_price:row.cmp_promo_pack_price??null,
+      regular_unit_price:row.cmp_regular_unit_price??null,
+      promo_unit_price:row.cmp_promo_unit_price??null,
+      promotion_active:Boolean(row.cmp_promotion_active),
+      promotion_text:row.promotion_text||""
+    }:comparisonData({
       name:row.name||"",
+      packagingText:row.packaging||"",
       featureText:"",
       packCount:1,
       packUnit:"",
@@ -1589,6 +1566,7 @@ async function handleLibrary(url,env,origin){
       discount:row.promotion_price?1:0,
       promoText:row.promotion_text||""
     });
+
     const main={
       source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
       group:row.group_name||"",
@@ -1603,7 +1581,7 @@ async function handleLibrary(url,env,origin){
         text:row.promotion_text||""
       },
       url:itemUrl,
-      image:variantRows[0]&&variantRows[0].image||row.stored_image||"",
+      image:row.stored_image||"",
       last_checked_at:row.last_checked_at||""
     };
     const preference=await getPreference(env,itemUrl);
@@ -1612,7 +1590,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:5,
+        schema_version:6,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",
@@ -1620,8 +1598,8 @@ async function handleLibrary(url,env,origin){
         category_name:row.group_name||"",
         product:main,
         products:[main],
-        variants:variantRows,
-        discovered_links:variantRows.map(x=>x.url)
+        variants:[],
+        discovered_links:[]
       }
     },200,origin);
   }

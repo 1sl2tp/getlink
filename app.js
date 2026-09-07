@@ -140,9 +140,9 @@ function progressLabel(stage){
   return ({
     idle:"Sẵn sàng",
     checking:"Kiểm tra D1",
-    queued:"Chờ runner",
-    runner:"Runner đã nhận",
-    brightdata:"Đang lấy BHX",
+    queued:"Đang chờ xử lý",
+    runner:"Đang khởi tạo",
+    brightdata:"Đang lấy dữ liệu",
     saving:"Đang lưu",
     complete:"Hoàn tất",
     error:"Có lỗi"
@@ -1321,7 +1321,7 @@ async function pollOnce(){
     if(data.status==="error"){
       failPending(
         "Chưa lấy được giá: "+
-        (data.detail||data.error||"Bright Data chưa bắt được API BHX.")
+        (data.detail||data.error||"Chưa nhận được dữ liệu từ Bách Hóa XANH.")
       );
       return false;
     }
@@ -1329,11 +1329,11 @@ async function pollOnce(){
     if(data.status!=="complete"){
       lastPollAt=Date.now();
       if(data.status==="queued"){
-        setJobStage("queued","Đã gửi yêu cầu · đang chờ GitHub runner nhận việc...");
+        setJobStage("queued","Đã tiếp nhận yêu cầu · đang chờ xử lý...");
       }else if(data.status==="runner"){
-        setJobStage("runner","GitHub runner đã nhận việc · đang chuẩn bị môi trường...");
+        setJobStage("runner","Đang khởi tạo phiên lấy dữ liệu...");
       }else if(data.status==="brightdata"){
-        setJobStage("brightdata","Bright Data đang mở Bách Hóa XANH và bắt API...");
+        setJobStage("brightdata","Đang truy xuất dữ liệu từ Bách Hóa XANH...");
       }else if(data.status==="saving"){
         setJobStage("saving","Đã có response · đang chuẩn hóa và lưu vào D1...");
       }else if(data.status==="running"){
@@ -1425,7 +1425,7 @@ $("#get").addEventListener("click",async()=>{
     }
 
     localStorage.setItem("getlink:request-id",requestId);
-    setJobStage("queued","Chưa có dữ liệu mới · đã xếp hàng lấy giá mới...");
+    setJobStage("queued","Chưa có dữ liệu mới · yêu cầu đang chờ xử lý...");
     startPolling();
   }catch(error){
     setGetBusy(false);

@@ -1,4 +1,5 @@
 name: Smoke WinMart
+# retry after worker batch mapping
 
 on:
   push:

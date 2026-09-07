@@ -854,6 +854,22 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .detail-panel{max-height:none}
 }
 
+@media(min-width:1400px){
+  .xls-price-table th:nth-child(1){width:42%}
+  .xls-price-table th:nth-child(2){width:5.5%}
+  .xls-price-table th:nth-child(3){width:7%}
+  .xls-price-table th:nth-child(4){width:8%}
+  .xls-price-table th:nth-child(5){width:8%}
+  .xls-price-table th:nth-child(6){width:9.5%}
+  .xls-price-table th:nth-child(7){width:9.5%}
+  .xls-price-table th:nth-child(8){width:10.5%}
+  .xls-name{font-size:14.5px}
+  .xls-qc-main{font-size:14.5px}
+  .xls-unit{font-size:13px}
+  .xls-num,
+  .xls-input{font-size:13.5px}
+}
+
 @media(max-width:700px){
   .detail-image-wrap{
     aspect-ratio:1 / 1;
@@ -939,14 +955,14 @@ h1{margin:0;font-size:28px;line-height:1.1}
   letter-spacing:0;
   white-space:nowrap;
 }
-.xls-price-table th:nth-child(1){width:34%}
+.xls-price-table th:nth-child(1){width:41%}
 .xls-price-table th:nth-child(2){width:6%}
 .xls-price-table th:nth-child(3){width:7%}
-.xls-price-table th:nth-child(4){width:10%}
-.xls-price-table th:nth-child(5){width:10%}
-.xls-price-table th:nth-child(6){width:11%}
-.xls-price-table th:nth-child(7){width:11%}
-.xls-price-table th:nth-child(8){width:11%}
+.xls-price-table th:nth-child(4){width:8.5%}
+.xls-price-table th:nth-child(5){width:8.5%}
+.xls-price-table th:nth-child(6){width:9.5%}
+.xls-price-table th:nth-child(7){width:9.5%}
+.xls-price-table th:nth-child(8){width:10%}
 .xls-price-table th.th-num{text-align:right}
 .xls-price-table td:nth-child(n+4){text-align:right}
 
@@ -965,8 +981,8 @@ h1{margin:0;font-size:28px;line-height:1.1}
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  font-size:13px;
-  line-height:1.28;
+  font-size:14px;
+  line-height:1.3;
   font-weight:700;
   color:#111827;
 }
@@ -1004,14 +1020,14 @@ h1{margin:0;font-size:28px;line-height:1.1}
   display:block;
   line-height:1.05;
   color:#111827;
-  font-size:13px;
+  font-size:14px;
   font-weight:800;
   font-variant-numeric:tabular-nums;
   text-align:right;
 }
 .xls-unit{
   color:#667085;
-  font-size:12px;
+  font-size:13px;
   font-weight:600;
   text-align:left;
   white-space:nowrap;
@@ -1019,7 +1035,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .xls-num{
   white-space:nowrap;
   color:#087a40;
-  font-size:13px;
+  font-size:13.5px;
   font-weight:750;
   line-height:1.1;
   font-variant-numeric:tabular-nums;
@@ -1056,6 +1072,8 @@ h1{margin:0;font-size:28px;line-height:1.1}
   background:transparent;
   outline:none;
   font:inherit;
+  font-size:13.5px;
+  font-weight:700;
   color:#202124;
   font-variant-numeric:tabular-nums;
   text-align:right;

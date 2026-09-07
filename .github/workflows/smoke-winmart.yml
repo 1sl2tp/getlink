@@ -1,0 +1,69 @@
+name: Smoke WinMart
+
+on:
+  push:
+    paths:
+      - ".github/workflows/smoke-winmart.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chờ Worker/Pages nhận bản WinMart
+        run: sleep 75
+
+      - name: GET link tổng WinMart
+        env:
+          API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+          SAMPLE: "https://winmart.vn/gia-vi--c35?storeCode=1535"
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$API/health" | jq .
+
+          HTTP_CODE="$(curl --silent --show-error             --connect-timeout 20 --max-time 70             -o /tmp/winmart-create.json             -w '%{http_code}'             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$SAMPLE" '{url:$url,force:true}')")"
+
+          cat /tmp/winmart-create.json | jq .
+          test "$HTTP_CODE" -ge 200
+          test "$HTTP_CODE" -lt 300
+          RID="$(jq -r '.request_id // empty' /tmp/winmart-create.json)"
+          test -n "$RID"
+
+          for i in $(seq 1 120); do
+            sleep 5
+            curl --fail --silent --show-error               -H 'Origin: https://get.taphoa.xyz'               "$API/api/result?id=$RID" > /tmp/winmart-result.json
+            STATUS="$(jq -r '.status // empty' /tmp/winmart-result.json)"
+            echo "poll=$i status=$STATUS"
+            if [ "$STATUS" = "complete" ]; then
+              jq '{
+                status,
+                source:(.payload.source.name // ""),
+                category:(.payload.category_name // ""),
+                store:(.payload.store_code // ""),
+                products:(.payload.products|length),
+                mapped:(.payload.mapped_to_bhx // 0),
+                unmapped:(.payload.unmapped_to_bhx // 0),
+                sample:(.payload.products[0] // {})
+              }' /tmp/winmart-result.json
+              test "$(jq -r '.payload.source.name // empty' /tmp/winmart-result.json)" = "WinMart"
+              test "$(jq '.payload.products|length' /tmp/winmart-result.json)" -ge 1
+              break
+            fi
+            if [ "$STATUS" = "error" ]; then
+              cat /tmp/winmart-result.json | jq .
+              exit 1
+            fi
+            if [ "$i" = "120" ]; then
+              cat /tmp/winmart-result.json | jq .
+              exit 1
+            fi
+          done
+
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             "$API/api/library?view=search&limit=2000&include_hidden=1"             > /tmp/library.json
+
+          jq '{
+            winmart_count:([.products[]|select(.source=="WinMart")]|length),
+            mapped_groups:([.products[]|select(.source=="WinMart" and .parent_url!=null)|.group_name]|unique)
+          }' /tmp/library.json
+
+          test "$(jq '[.products[]|select(.source=="WinMart")]|length' /tmp/library.json)" -ge 1

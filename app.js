@@ -633,17 +633,31 @@ function canonicalDisplayName(row){
   );
 }
 
+function isWinmartRow(row){
+  const raw=searchKey([
+    row&&row.source,
+    row&&row.source_name
+  ].filter(Boolean).join(" "));
+  if(raw.includes("winmart")||raw==="wm")return true;
+  try{
+    return new URL(String(row&&row.canonical_url||"")).hostname
+      .toLowerCase().replace(/^www\./,"")==="winmart.vn";
+  }catch{
+    return false;
+  }
+}
+
 function sourceDisplayLabel(row){
   const raw=String(row&&row.source||"").trim();
+  if(isWinmartRow(row))return "WM";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
-  if(key.includes("winmart"))return "WM";
   return raw;
 }
 
 function sourceDisplayClass(row){
+  if(isWinmartRow(row))return " source-winmart";
   const key=searchKey(String(row&&row.source||""));
-  if(key.includes("winmart"))return " source-winmart";
   if(!key||key.includes("bach hoa xanh"))return " source-bhx";
   return "";
 }
@@ -831,7 +845,7 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
-          '<strong class="grid-price">'+money(price)+'</strong>'+
+          '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":"")+'">'+money(price)+'</strong>'+
         '</div>'+
       '</div>'+
     '</article>';

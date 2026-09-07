@@ -190,3 +190,14 @@ CREATE TABLE IF NOT EXISTS link_comparison(
 
 CREATE INDEX IF NOT EXISTS idx_link_comparison_kind
 ON link_comparison(pack_kind,pack_unit,updated_at);
+
+
+CREATE TABLE IF NOT EXISTS link_identity(
+  link_url TEXT PRIMARY KEY,
+  source_name TEXT,
+  base_name TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_identity_base
+ON link_identity(base_name,updated_at);

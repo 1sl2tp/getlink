@@ -1034,33 +1034,6 @@ function categoryPagerButtons(page,total){
     '<button type="button" data-page="'+Math.min(total,page+1)+'" '+(page>=total?'disabled':'')+' aria-label="Nhóm sau">›</button>';
 }
 
-function syncCategorySelector(){
-  const current=$("#categoryCurrent");
-  if(!current)return;
-  const group=libraryGroups.find(g=>g.url===activeGroupUrl);
-  current.textContent=group?group.name:"Tất cả";
-}
-
-function setCategoryPopover(open){
-  const popover=$("#categoryPopover");
-  const toggle=$("#categoryToggle");
-  if(!popover||!toggle)return;
-  popover.hidden=!open;
-  toggle.setAttribute("aria-expanded",open?"true":"false");
-  toggle.classList.toggle("open",open);
-
-  if(open){
-    const search=$("#categorySearch");
-    if(search){
-      search.value="";
-      document.querySelectorAll("#categoryTabs .category-chip").forEach(button=>{
-        button.hidden=false;
-      });
-      requestAnimationFrame(()=>search.focus());
-    }
-  }
-}
-
 function renderCategoryMenu(){
   const host=$("#categoryTabs");
   if(!host)return;
@@ -1074,8 +1047,6 @@ function renderCategoryMenu(){
         '<span>'+escapeHtml(g.name)+'</span><small>'+Number(g.product_count||0)+'</small>'+
       '</button>'
     ).join("");
-
-  syncCategorySelector();
 }
 
 function gridProductCard(row){
@@ -1453,19 +1424,6 @@ $("#stateFilters").addEventListener("click",e=>{
   renderLibraryProducts();
 });
 
-$("#categoryToggle").addEventListener("click",e=>{
-  e.stopPropagation();
-  setCategoryPopover($("#categoryPopover").hidden);
-});
-
-$("#categorySearch").addEventListener("input",e=>{
-  const query=searchKey(e.target.value||"");
-  document.querySelectorAll("#categoryTabs .category-chip").forEach(button=>{
-    const text=searchKey(button.textContent||"");
-    button.hidden=Boolean(query&&!text.includes(query));
-  });
-});
-
 $("#categoryTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".category-chip");
   if(!chip)return;
@@ -1476,22 +1434,8 @@ $("#categoryTabs").addEventListener("click",e=>{
   $("#librarySearch").value="";
   document.querySelectorAll(".category-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
-  syncCategorySelector();
-  setCategoryPopover(false);
   renderLibraryProducts();
 });
-
-document.addEventListener("click",e=>{
-  const popover=$("#categoryPopover");
-  if(!popover||popover.hidden)return;
-  if(e.target.closest("#categoryPopover")||e.target.closest("#categoryToggle"))return;
-  setCategoryPopover(false);
-});
-
-document.addEventListener("keydown",e=>{
-  if(e.key==="Escape")setCategoryPopover(false);
-});
-
 
 $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
@@ -1655,7 +1599,6 @@ $("#childList").addEventListener("click",e=>{
 });
 
 $("#toggleImport").addEventListener("click",()=>{
-  setCategoryPopover(false);
   $("#importCard").hidden=false;
   $("#importCard").scrollIntoView({behavior:"smooth",block:"center"});
 });

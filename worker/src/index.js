@@ -248,7 +248,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<7)return null;
+    if(Number(payload&&payload.schema_version||0)<8)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -471,7 +471,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:7,
+    schema_version:8,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -500,7 +500,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:7,
+    schema_version:8,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1635,7 +1635,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:7,
+        schema_version:8,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

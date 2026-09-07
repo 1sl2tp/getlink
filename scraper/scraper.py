@@ -4,6 +4,7 @@ import csv
 import hashlib
 import json
 import re
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse, urlunparse
@@ -374,6 +375,113 @@ async def discover_product_links(page, category_url, limit):
             break
     return out
 
+def api_product_to_observation(raw):
+    if not isinstance(raw, dict):
+        return None
+    raw_url = str(raw.get("url") or "").strip()
+    if not raw_url:
+        return None
+    if raw_url.startswith("/"):
+        raw_url = "https://www.bachhoaxanh.com" + raw_url
+    if not valid_bhx_url(raw_url):
+        return None
+
+    prices = raw.get("productPrices") or []
+    price_row = prices[0] if prices and isinstance(prices[0], dict) else {}
+    current = parse_money(price_row.get("price") or raw.get("price"))
+    system = parse_money(price_row.get("sysPrice"))
+    original = system if system and current and system > current else None
+
+    category = raw.get("category") if isinstance(raw.get("category"), dict) else {}
+    group = clean(str(category.get("name") or ""))
+    brand = clean(str(raw.get("brandName") or ""))
+    name = clean(str(raw.get("fullName") or raw.get("name") or ""))
+    promo_text = clean(str(
+        raw.get("promotionText")
+        or raw.get("promotionTextFS")
+        or raw.get("textPromtionNonBlue")
+        or ""
+    ))
+    discount = parse_money(price_row.get("discountPercent"))
+    promo_active = bool(promo_text or (discount and discount > 0))
+
+    packaging_text = clean(str(raw.get("canonical") or raw.get("unit") or ""))
+    return {
+        "id": product_id(raw_url),
+        "source": source_info(raw_url),
+        "group": group,
+        "branch": brand or group,
+        "name": name,
+        "packaging": {
+            "text": packaging_text,
+            "pack_count": None,
+            "pack_unit": clean(str(raw.get("unit") or "")),
+            "unit_size": "",
+        },
+        "price": {"current": current, "original": original},
+        "promotion": {
+            "active": promo_active,
+            "price": current if promo_active else None,
+            "text": promo_text,
+            "prices_found": [current] if current and promo_active else [],
+        },
+        "url": canonical_url(raw_url),
+        "image": str(raw.get("avatar") or ""),
+        "breadcrumbs": [x for x in (group, brand) if x],
+        "last_checked_at": now_iso(),
+    }
+
+
+async def fetch_category_api(context, category_slug, page_size=300):
+    category_slug = clean(str(category_slug or "")).strip("/")
+    if not category_slug:
+        return []
+
+    device_token = uuid.uuid4().hex.upper()
+    device_id = str(uuid.uuid4())
+    api_url = (
+        "https://api.bachhoaxanh.com/gw/Category/V2/GetCate?"
+        f"provinceId=1027&wardId=0&districtId=0&storeId=2546"
+        f"&categoryUrl={category_slug}&isMobile=true&isV2=true&pageSize={page_size}"
+    )
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Content-Type": "application/json",
+        "Origin": "https://www.bachhoaxanh.com",
+        "Referer": f"https://www.bachhoaxanh.com/{category_slug}",
+        "Authorization": "Bearer " + device_token,
+        "Xapikey": "bhx-api-core-2022",
+        "Deviceid": device_id,
+        "Platform": "webnew",
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/140.0.0.0 Safari/537.36"
+        ),
+    }
+    try:
+        response = await context.request.get(api_url, headers=headers, timeout=30000)
+        print("BHX API status=", response.status, "category=", category_slug)
+        if response.status != 200:
+            text = await response.text()
+            print("BHX API error=", clean(text)[:300])
+            return []
+        payload = await response.json()
+        if not isinstance(payload, dict) or payload.get("code") not in (0, None):
+            print("BHX API code=", payload.get("code") if isinstance(payload, dict) else "invalid")
+            return []
+        products = ((payload.get("data") or {}).get("products") or [])
+        out = []
+        for raw in products:
+            item = api_product_to_observation(raw)
+            if item:
+                out.append(item)
+        print("BHX API products=", len(out))
+        return out
+    except Exception as error:
+        print("BHX API exception=", type(error).__name__, str(error)[:240])
+        return []
+
 
 async def scrape_urls(urls, max_products=40):
     observations = []
@@ -399,6 +507,21 @@ async def scrape_urls(urls, max_products=40):
         for raw_url in urls:
             if not valid_bhx_url(raw_url):
                 continue
+
+            parts = [x for x in urlparse(raw_url).path.split("/") if x]
+            category_slug = parts[0] if parts else ""
+            api_items = await fetch_category_api(context, category_slug, page_size=max(300, max_products))
+            if api_items:
+                target = canonical_url(raw_url)
+                if len(parts) >= 2:
+                    exact = next((p for p in api_items if canonical_url(p.get("url", "")) == target), None)
+                    if exact:
+                        observations.append(exact)
+                        continue
+                else:
+                    observations.extend(api_items[:max_products])
+                    continue
+
             page = await context.new_page()
             try:
                 await page.goto(browser_url(raw_url), wait_until="domcontentloaded", timeout=60000)

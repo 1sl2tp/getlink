@@ -541,6 +541,93 @@ async function fetchSupabaseBhxPayload(inputUrl,requestId){
   };
 }
 
+
+function mirrorRowToProduct(row){
+  if(!row||typeof row!=="object"||!row.product_url)return null;
+  let url;
+  try{url=canonicalBhx(row.product_url);}catch{return null;}
+  const current=parseMoney(row.price_vnd);
+  const rawOriginal=parseMoney(row.original_price_vnd);
+  const original=rawOriginal&&current&&rawOriginal>current?rawOriginal:null;
+  const discount=Number(row.discount_pct||0);
+  return {
+    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+    group:cleanText(row.category_name||""),
+    branch:cleanText(row.brand||row.category_name||""),
+    name:cleanText(row.product_name||slugTitle(url)),
+    packaging:{text:cleanText(row.canonical_weight_raw||row.unit_type||"")},
+    price:{current,original},
+    promotion:{
+      active:discount>0,
+      price:discount>0?current:null,
+      text:discount>0?("Giảm "+discount+"%"):""
+    },
+    url,
+    image:String(row.image_url||""),
+    breadcrumbs:[row.category_name,row.brand].filter(Boolean),
+    last_checked_at:String(row.scrape_ts||"2026-04-12T00:00:00+07:00"),
+    snapshot_date:String(row.scrape_date||"2026-04-12")
+  };
+}
+
+async function fetchMirrorSnapshotPayload(inputUrl,requestId){
+  const canonical=canonicalBhx(inputUrl);
+  const parts=pathParts(canonical);
+  if(!parts.length)throw new Error("mirror_missing_category");
+  const categorySlug=parts.length>=2?parts[0]:parts[0];
+  const raw=
+    "https://raw.githubusercontent.com/hoang-trinh/supermarket-price-engine/main/"+
+    "tests/old_data/bhx/date%3D2026-04-12/2546/"+
+    encodeURIComponent(categorySlug)+".json";
+  const response=await fetch(raw,{
+    headers:{"user-agent":"getlink-worker"},
+    cf:{cacheTtl:3600,cacheEverything:true}
+  });
+  if(!response.ok)throw new Error("mirror_http_"+response.status);
+  const rows=await response.json();
+  if(!Array.isArray(rows)||!rows.length)throw new Error("mirror_empty");
+  const products=rows.map(mirrorRowToProduct).filter(Boolean);
+  if(!products.length)throw new Error("mirror_no_products");
+  const snapshotDate=String(rows[0].scrape_date||"2026-04-12");
+
+  if(parts.length>=2){
+    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
+    if(!exact)throw new Error("mirror_product_not_found");
+    return {
+      schema_version:2,
+      request_id:requestId,
+      input_url:canonical,
+      input_type:"product",
+      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+      checked_at:exact.last_checked_at,
+      category_name:exact.group||"",
+      product:exact,
+      products:[exact],
+      discovered_links:[],
+      data_mode:"snapshot",
+      snapshot_date:snapshotDate,
+      snapshot_source:"public-bhx-mirror"
+    };
+  }
+
+  const categoryName=products[0].group||slugTitle(canonical);
+  return {
+    schema_version:2,
+    request_id:requestId,
+    input_url:canonical,
+    input_type:"category",
+    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+    checked_at:products[0].last_checked_at,
+    category_name:categoryName,
+    product:null,
+    products,
+    discovered_links:products.map(p=>p.url),
+    data_mode:"snapshot",
+    snapshot_date:snapshotDate,
+    snapshot_source:"public-bhx-mirror"
+  };
+}
+
 async function renderBhxHtml(env,url){
   if(!env.BROWSER||typeof env.BROWSER.quickAction!=="function")throw new Error("browser_binding_missing");
   const response=await env.BROWSER.quickAction("content",{
@@ -710,7 +797,24 @@ async function handleCreate(request,env,origin){
       engine:"supabase-bhx-api"
     },200,origin);
   }catch(supabaseError){
-    // Tiếp tục Browser/GitHub fallback.
+    // Live API vẫn bị chặn; dùng snapshot công khai chỉ để có dữ liệu fallback minh bạch.
+  }
+
+  try{
+    const mirrorPayload=await fetchMirrorSnapshotPayload(url,requestId);
+    const mirrorSaved=await persistPayload(env,mirrorPayload);
+    return json({
+      request_id:requestId,
+      status:"complete",
+      input_url:url,
+      link_type:mirrorPayload.input_type,
+      registry_count:mirrorSaved.registry_count,
+      payload:mirrorPayload,
+      engine:"public-snapshot",
+      snapshot_date:mirrorPayload.snapshot_date
+    },200,origin);
+  }catch(mirrorError){
+    // Không có snapshot phù hợp thì tiếp tục Browser/GitHub fallback.
   }
 
   try{

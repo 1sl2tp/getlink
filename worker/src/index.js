@@ -24,7 +24,7 @@ function canonicalBhx(raw){
   const u=new URL(String(raw||""));
   const host=u.hostname.toLowerCase();
   if(host!=="bachhoaxanh.com"&&host!=="www.bachhoaxanh.com")throw new Error("invalid_bhx_url");
-  const path=(u.pathname||"/").replace(/\\/+/g,"/").replace(/\\/+$/,"")||"/";
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/+$/,"")||"/";
   return "https://bachhoaxanh.com"+path;
 }
 
@@ -44,7 +44,7 @@ function idForUrl(url){
 }
 
 function cleanText(v){
-  return String(v||"").replace(/\\s+/g," ").trim();
+  return String(v||"").replace(/\s+/g," ").trim();
 }
 
 function decodeEntities(v){
@@ -55,7 +55,7 @@ function decodeEntities(v){
     .replace(/&#39;|&apos;/gi,"'")
     .replace(/&lt;/gi,"<")
     .replace(/&gt;/gi,">")
-    .replace(/&#(\\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32))
+    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32))
     .replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)||32));
 }
 
@@ -72,21 +72,21 @@ function slugTitle(url){
 }
 
 function firstH1(html){
-  const m=String(html||"").match(/<h1\\b[^>]*>([\\s\\S]*?)<\\/h1>/i);
+  const m=String(html||"").match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
   return m?stripTags(m[1]):"";
 }
 
 function metaContent(html,key){
   const escaped=String(key||"");
-  const a=new RegExp("<meta[^>]+(?:property|name|itemprop)=[\\"']"+escaped+"[\\"'][^>]+content=[\\"']([^\\"']+)[\\"']","i");
-  const b=new RegExp("<meta[^>]+content=[\\"']([^\\"']+)[\\"'][^>]+(?:property|name|itemprop)=[\\"']"+escaped+"[\\"']","i");
+  const a=new RegExp("<meta[^>]+(?:property|name|itemprop)=[\"']"+escaped+"[\"'][^>]+content=[\"']([^\"']+)[\"']","i");
+  const b=new RegExp("<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name|itemprop)=[\"']"+escaped+"[\"']","i");
   const m=String(html||"").match(a)||String(html||"").match(b);
   return m?decodeEntities(m[1]).trim():"";
 }
 
 function jsonLdRoots(html){
   const out=[];
-  const re=/<script\\b[^>]*type=["']application\\/ld\\+json["'][^>]*>([\\s\\S]*?)<\\/script>/gi;
+  const re=/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let m;
   while((m=re.exec(String(html||"")))){
     const raw=m[1].trim();
@@ -168,17 +168,17 @@ function offerPrice(product){
 
 function visibleLines(html){
   let s=String(html||"")
-    .replace(/<script\\b[\\s\\S]*?<\\/script>/gi," ")
-    .replace(/<style\\b[\\s\\S]*?<\\/style>/gi," ")
-    .replace(/<noscript\\b[\\s\\S]*?<\\/noscript>/gi," ");
-  s=s.replace(/<\\/?(?:div|p|li|section|article|header|footer|main|span|br|h[1-6])\\b[^>]*>/gi,"\\n");
+    .replace(/<script\b[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[\s\S]*?<\/style>/gi," ")
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi," ");
+  s=s.replace(/<\/?(?:div|p|li|section|article|header|footer|main|span|br|h[1-6])\b[^>]*>/gi,"\n");
   s=decodeEntities(s.replace(/<[^>]*>/g," "));
-  return s.split(/\\n+/).map(cleanText).filter(Boolean);
+  return s.split(/\n+/).map(cleanText).filter(Boolean);
 }
 
 function moneyCandidates(text){
   const out=[];
-  const re=/(?:^|[^0-9])(\\d{1,3}(?:[.\\s]\\d{3})+|\\d{4,9})\\s*(?:₫|đ|vnđ)/gi;
+  const re=/(?:^|[^0-9])(\d{1,3}(?:[.\s]\d{3})+|\d{4,9})\s*(?:₫|đ|vnđ)/gi;
   let m;
   while((m=re.exec(String(text||"")))){
     const n=parseMoney(m[1]);
@@ -209,8 +209,8 @@ function promotionInfo(lines,current){
 
 function packagingInfo(name){
   const text=cleanText(name).toLowerCase();
-  const pack=text.match(/\\b(thùng|lốc|hộp|túi|khay|combo)\\s*(\\d+)\\s*(gói|chai|lon|hộp|túi|cái|viên|ly|hũ|thùng|lốc|khay|can)?\\b/i);
-  const size=text.match(/\\b\\d+(?:[.,]\\d+)?\\s*(?:kg|g|mg|lít|lit|l|ml)\\b/i);
+  const pack=text.match(/\b(thùng|lốc|hộp|túi|khay|combo)\s*(\d+)\s*(gói|chai|lon|hộp|túi|cái|viên|ly|hũ|thùng|lốc|khay|can)?\b/i);
+  const size=text.match(/\b\d+(?:[.,]\d+)?\s*(?:kg|g|mg|lít|lit|l|ml)\b/i);
   const parts=[];
   if(pack)parts.push(cleanText(pack[1]+" "+pack[2]+" "+(pack[3]||"")));
   if(size)parts.push(cleanText(size[0]));
@@ -260,7 +260,7 @@ function parseProduct(url,html,roots){
 }
 
 function anchorAttr(attrs,name){
-  const re=new RegExp("\\b"+name+"\\s*=\\s*(?:\\"([^\\"]*)\\"|'([^']*)'|([^\\s>]+))","i");
+  const re=new RegExp("\\b"+name+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))","i");
   const m=String(attrs||"").match(re);
   return m?(m[1]||m[2]||m[3]||""):"";
 }
@@ -270,7 +270,7 @@ function discoverChildren(inputUrl,html,categoryName){
   const baseFirst=pathParts(base)[0]||"";
   const out=[];
   const seen=new Set();
-  const re=/<a\\b([^>]*)>([\\s\\S]*?)<\\/a>/gi;
+  const re=/<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
   let m;
   while((m=re.exec(String(html||"")))){
     const href=anchorAttr(m[1],"href");

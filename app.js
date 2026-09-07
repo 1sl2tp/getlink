@@ -485,7 +485,11 @@ function sheetNormalizeUnit(value){
 function inferSheetPack(row){
   const primary=String(row.source_name||row.name||"").trim();
   const packaging=String(row.packaging||"").trim();
-  const source=primary||packaging;
+
+  // Name and API packaging are complementary. A product name can be
+  // "Cà phê ... 500g" while the detail/API packaging says "Gói 500g".
+  // Never discard packaging merely because a product name exists.
+  const source=[primary,packaging].filter(Boolean).join(" ");
   const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|thanh|cay|vien|tuyp";

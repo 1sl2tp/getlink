@@ -552,27 +552,14 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
 }
 
 function comparisonData({name,url,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText,hierarchy}){
-  const ownedHierarchy=hierarchy&&hierarchy.label1==="Thùng"
+  const ownedHierarchy=hierarchy&&typeof hierarchy==="object"
     ?hierarchy
     :packHierarchyData(name,url||"",packagingText,packCount,packUnit);
 
-  // Nhãn 1 = Thùng is now owned only by the GETLINK hierarchy.
-  // The legacy parser remains only for non-carton rows until the Lẻ phase.
-  const pack=ownedHierarchy.label1==="Thùng"
-    ?{
-      pack_kind:"Thùng",
-      pack_quantity:Math.max(1,Number(ownedHierarchy.qty2)||1),
-      pack_unit:ownedHierarchy.label2||"đơn vị",
-      size_value:parseSize([name,packagingText,featureText].filter(Boolean).join(" ")).value,
-      size_unit:parseSize([name,packagingText,featureText].filter(Boolean).join(" ")).unit
-    }
-    :parsePackStructure(name,packagingText,featureText,packCount,packUnit);
-  const quantity=Math.max(1,Number(pack.pack_quantity)||1);
+  const pack=hierarchyPackCompatibility(ownedHierarchy);
+  const size=parseSize([name,packagingText,featureText].filter(Boolean).join(" "));
   const currentPrice=Number(current)||null;
   const sys=Number(sysPrice)>0?Number(sysPrice):null;
-
-  // BHX current selling price is the main price. sysPrice is only the
-  // crossed-out/original reference price and must not become "Ưu đãi".
   const currentPack=currentPrice||sys;
   const originalPack=sys&&currentPack&&sys>currentPack?sys:null;
   const discountActive=Boolean(
@@ -580,23 +567,79 @@ function comparisonData({name,url,packagingText,featureText,packCount,packUnit,c
     (originalPack&&currentPack&&currentPack<originalPack)
   );
 
-  // "Ưu đãi" is reserved for an extra condition that matches this exact
-  // product pack, e.g. 1 túi 115k + "Mua 2 túi 199k" => 99.5k/túi.
   const quantityOffer=quantityPromotionForPack(
     promoText,pack,currentPack
   );
-  const promo=quantityOffer.matched
+  const promoSell=quantityOffer.matched
     ?quantityOffer.effective_pack_price
     :null;
   const promoActive=Boolean(quantityOffer.matched);
 
+  function hierarchyPrices(sellPrice){
+    const price=Number(sellPrice)||0;
+    if(!price){
+      return {carton:null,middle:null,leaf:null};
+    }
+
+    const hasCarton=ownedHierarchy.label1==="Thùng";
+    const hasMiddle=Boolean(ownedHierarchy.label2);
+    const hasLeaf=Boolean(ownedHierarchy.label3);
+    const middleQty=Math.max(1,Number(ownedHierarchy.qty2)||1);
+    const leafQty=Math.max(1,Number(ownedHierarchy.qty3)||1);
+
+    let carton=null;
+    let middle=null;
+    let leaf=null;
+
+    if(hasCarton){
+      carton=Math.round(price);
+      if(hasMiddle){
+        middle=Math.round(price/middleQty);
+        if(hasLeaf)leaf=Math.round(middle/leafQty);
+      }else if(hasLeaf){
+        leaf=Math.round(price/leafQty);
+      }
+    }else if(hasMiddle){
+      middle=Math.round(price);
+      if(hasLeaf)leaf=Math.round(price/leafQty);
+    }else if(hasLeaf){
+      leaf=Math.round(price);
+    }
+
+    return {carton,middle,leaf};
+  }
+
+  const regularLevels=hierarchyPrices(currentPack);
+  const promoLevels=hierarchyPrices(promoSell);
+
+  const directUnitPrice=ownedHierarchy.label1==="Thùng"
+    ?(ownedHierarchy.label2?regularLevels.middle:regularLevels.leaf)
+    :(ownedHierarchy.label2?regularLevels.leaf:regularLevels.leaf);
+  const promoDirectUnitPrice=ownedHierarchy.label1==="Thùng"
+    ?(ownedHierarchy.label2?promoLevels.middle:promoLevels.leaf)
+    :(ownedHierarchy.label2?promoLevels.leaf:promoLevels.leaf);
+
   return {
     ...pack,
+    size_value:size.value,
+    size_unit:size.unit,
+    hierarchy:ownedHierarchy,
+
+    // Canonical three-level prices.
+    regular_carton_price:regularLevels.carton,
+    promo_carton_price:promoLevels.carton,
+    regular_middle_price:regularLevels.middle,
+    promo_middle_price:promoLevels.middle,
+    regular_leaf_price:regularLevels.leaf,
+    promo_leaf_price:promoLevels.leaf,
+
+    // Compatibility fields for detail/promotion code.
     regular_pack_price:currentPack,
     original_pack_price:originalPack,
-    promo_pack_price:promo,
-    regular_unit_price:currentPack?Math.round(currentPack/quantity):null,
-    promo_unit_price:promo?Math.round(promo/quantity):null,
+    promo_pack_price:promoSell,
+    regular_unit_price:directUnitPrice,
+    promo_unit_price:promoDirectUnitPrice,
+
     promotion_active:promoActive,
     promotion_text:promoActive?cleanText(promoText||""):"",
     discount_active:discountActive,
@@ -623,7 +666,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<19)return null;
+    if(Number(payload&&payload.schema_version||0)<20)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -875,7 +918,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:19,
+    schema_version:20,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -947,7 +990,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:19,
+    schema_version:20,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -2346,7 +2389,7 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=19){
+        if(Number(payload&&payload.schema_version||0)>=20){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -2444,7 +2487,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:19,
+        schema_version:20,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

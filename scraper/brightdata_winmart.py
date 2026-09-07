@@ -569,120 +569,159 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             # hundreds of extra browser tabs. The same pass also recovers
             # og:image/gallery URLs when the category listing only had a
             # placeholder.
-            async def enrich_detail_batch(batch):
-                payload = [
-                    {
-                        "url": p.get("url") or "",
-                        "name": p.get("name") or "",
-                    }
-                    for p in batch
-                ]
-                try:
-                    rows = await page.evaluate(
-                        """async items => {
-                          const UNIT_MAP = {
-                            "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
-                            "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
-                            "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
-                            "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
-                            "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
-                          };
-                          const clean = v => String(v || "").replace(/\\s+/g," ").trim();
-                          const realImage = (value, base) => {
-                            for (const raw of String(value || "").split(",")) {
-                              let v = clean(raw).split(/\\s+/)[0] || "";
-                              if (!v || /^data:/i.test(v) || /^blob:/i.test(v) ||
-                                  /placeholder|transparent/i.test(v)) continue;
-                              try { return new URL(v, base).href; } catch {}
-                            }
-                            return "";
-                          };
-                          const one = async item => {
-                            try {
-                              const response = await fetch(item.url, {
-                                credentials:"include",
-                                cache:"no-store"
-                              });
-                              if (!response.ok) return {url:item.url};
-                              const html = await response.text();
-                              const doc = new DOMParser().parseFromString(html,"text/html");
+            async def enrich_one_detail(product, semaphore):
+                async with semaphore:
+                    detail = await page.context.new_page()
+                    try:
+                        async def detail_route(route):
+                            if route.request.resource_type in {"image", "media", "font"}:
+                                await route.abort()
+                            else:
+                                await route.continue_()
 
-                              let unit = "";
-                              let bestScore = -1;
-                              const nodes = [...doc.querySelectorAll(
-                                "button,[role='button'],label,a,span,div"
-                              )];
-                              for (const el of nodes) {
-                                const raw = clean(el.textContent).toUpperCase();
-                                const normalized = UNIT_MAP[raw];
-                                if (!normalized) continue;
-                                let score = 1;
-                                if (el.tagName === "BUTTON") score += 6;
-                                if (el.getAttribute("role") === "button") score += 4;
-                                const cls = clean(el.className).toLowerCase();
-                                if (/active|selected|type|variant|option|btn/.test(cls)) score += 3;
-                                let ctx = el;
-                                for (let depth=0; depth<4 && ctx; depth++,ctx=ctx.parentElement) {
-                                  const t = clean(ctx.textContent).toLowerCase();
-                                  if (t.includes("chọn loại") || t.includes("chon loai")) {
-                                    score += 12;
-                                    break;
-                                  }
-                                }
-                                if (score > bestScore) {
-                                  bestScore = score;
-                                  unit = normalized;
-                                }
-                              }
+                        await detail.route("**/*", detail_route)
+                        try:
+                            await detail.goto(
+                                product.get("url") or "",
+                                wait_until="domcontentloaded",
+                                timeout=45000,
+                            )
+                        except Exception:
+                            pass
 
-                              // Fallback: inspect a short HTML/text window after "Chọn loại".
-                              if (!unit) {
-                                const bodyText = clean(doc.body && doc.body.textContent || "");
-                                const pos = bodyText.toLowerCase().search(/ch[oọ]n lo[aạ]i/);
-                                if (pos >= 0) {
-                                  const tail = bodyText.slice(pos, pos + 180).toUpperCase();
-                                  for (const [key,label] of Object.entries(UNIT_MAP)) {
-                                    if (new RegExp("(^|\\\\s)"+key+"($|\\\\s)").test(tail)) {
-                                      unit = label;
-                                      break;
+                        # WinMart renders "Chọn loại" client-side. Waiting for
+                        # the rendered body is more reliable than parsing the
+                        # raw response HTML returned by fetch().
+                        try:
+                            await detail.wait_for_timeout(700)
+                            body_text = await detail.locator("body").inner_text(timeout=7000)
+                        except Exception:
+                            body_text = ""
+
+                        unit = ""
+                        # Primary proof: a visible option/button whose text is
+                        # exactly one of WinMart's retail-body labels and sits
+                        # near the "Chọn loại" section.
+                        try:
+                            unit_raw = await detail.evaluate(
+                                """() => {
+                                  const MAP = {
+                                    "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
+                                    "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
+                                    "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
+                                    "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
+                                    "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
+                                  };
+                                  const clean = v => String(v || "").replace(/\\s+/g," ").trim();
+                                  const upper = v => clean(v).toUpperCase();
+                                  const nodes = [...document.querySelectorAll(
+                                    "button,[role='button'],a,label,span"
+                                  )];
+                                  let best = null;
+                                  for (const el of nodes) {
+                                    const label = MAP[upper(el.textContent)];
+                                    if (!label) continue;
+                                    let score = 0;
+                                    if (el.matches("button")) score += 8;
+                                    if (el.getAttribute("role") === "button") score += 5;
+                                    const cls = clean(el.className).toLowerCase();
+                                    if (/active|selected|type|variant|option|btn/.test(cls)) score += 4;
+
+                                    let ctx = el;
+                                    for (let depth=0; depth<7 && ctx; depth++,ctx=ctx.parentElement) {
+                                      const text = upper(ctx.textContent);
+                                      if (text.includes("CHỌN LOẠI") || text.includes("CHON LOAI")) {
+                                        score += 20;
+                                        break;
+                                      }
                                     }
+                                    if (!best || score > best.score) best = {label,score};
                                   }
-                                }
-                              }
+                                  return best && best.score >= 20 ? best.label : "";
+                                }"""
+                            )
+                            unit = normalize_unit(unit_raw or "")
+                        except Exception:
+                            unit = ""
 
-                              const imageCandidates = [];
-                              const og = doc.querySelector(
-                                "meta[property='og:image'],meta[name='og:image']"
-                              );
-                              if (og) imageCandidates.push(og.getAttribute("content") || "");
-                              for (const img of [...doc.querySelectorAll(
-                                "img[data-src],img[data-original],img[data-lazy-src],img[srcset],img[src]"
-                              )].slice(0,80)) {
-                                const alt = clean(img.getAttribute("alt") || "").toLowerCase();
-                                const cls = clean(img.className).toLowerCase();
-                                const score =
-                                  (alt && clean(item.name).toLowerCase().includes(alt) ? 5 : 0) +
-                                  (/product|gallery|detail|main/.test(cls) ? 4 : 0);
-                                imageCandidates.push({
-                                  score,
-                                  value:
-                                    img.getAttribute("data-src") ||
-                                    img.getAttribute("data-original") ||
-                                    img.getAttribute("data-lazy-src") ||
-                                    img.getAttribute("srcset") ||
-                                    img.getAttribute("src") ||
-                                    ""
-                                });
-                              }
-                              let image = "";
-                              const ordered = imageCandidates
-                                .map(x => typeof x === "string" ? {score:20,value:x} : x)
-                                .sort((a,b)=>b.score-a.score);
-                              for (const x of ordered) {
-                                image = realImage(x.value,item.url);
-                                if (image) break;
-                              }
-                              return {url:item.url,unit,image};
+                        # Text fallback is still based on the rendered page:
+                        # "Chọn loại\\nCHAI\\nSố lượng".
+                        if not unit and body_text:
+                            match = re.search(
+                                r"(?:Chọn|Chon)\\s+lo(?:ại|ai)\\s+"
+                                r"(CHAI|LON|GÓI|GOI|HỘP|HOP|TÚI|TUI|"
+                                r"BỊCH|BICH|CAN|HŨ|HU|LY|CÂY|CAY|"
+                                r"VIÊN|VIEN|TUÝP|TUYP)\\b",
+                                body_text,
+                                re.I,
+                            )
+                            if match:
+                                unit = normalize_unit(match.group(1))
+
+                        if unit:
+                            product["unit"] = unit
+                            product["unit_evidence"] = "detail_type"
+                            product["packaging"] = unit
+
+                        # Category listing normally supplies the image already.
+                        # If not, recover a real detail image without using it
+                        # as evidence for the unit.
+                        if not image_url(
+                            product.get("image") or "",
+                            product.get("url") or target_url
+                        ):
+                            try:
+                                detail_image = await detail.evaluate(
+                                    """() => {
+                                      const values = [];
+                                      const og = document.querySelector(
+                                        "meta[property='og:image'],meta[name='og:image']"
+                                      );
+                                      if (og) values.push(og.getAttribute("content") || "");
+                                      for (const img of [...document.querySelectorAll("img")].slice(0,80)) {
+                                        values.push(
+                                          img.currentSrc ||
+                                          img.getAttribute("data-src") ||
+                                          img.getAttribute("data-original") ||
+                                          img.getAttribute("srcset") ||
+                                          img.getAttribute("src") ||
+                                          ""
+                                        );
+                                      }
+                                      return values;
+                                    }"""
+                                )
+                                recovered = image_url(
+                                    detail_image,
+                                    product.get("url") or target_url
+                                )
+                                if recovered:
+                                    product["image"] = recovered
+                            except Exception:
+                                pass
+                    finally:
+                        await detail.close()
+
+            # Every WinMart item is checked against the rendered detail page.
+            # Titles/API fields are intentionally ignored for retail unit.
+            semaphore = asyncio.Semaphore(8)
+            await asyncio.gather(*[
+                enrich_one_detail(product, semaphore)
+                for product in products
+            ])
+
+            detail_unit_count = sum(
+                1 for p in products
+                if p.get("unit_evidence") == "detail_type"
+                and normalize_unit(p.get("unit") or "")
+            )
+            print(json.dumps({
+                "winmart_detail_units": detail_unit_count,
+                "winmart_products": len(products),
+                "missing_detail_units": len(products) - detail_unit_count,
+            }, ensure_ascii=False))
+
+            return {url:item.url,unit,image};
                             } catch {
                               return {url:item.url};
                             }

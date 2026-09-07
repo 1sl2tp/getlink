@@ -1,0 +1,93 @@
+{
+  "status": "complete",
+  "engine": "brightdata-browser-api",
+  "request_id": "276996aa649645279bb472fb5297388f",
+  "input_url": "https://www.bachhoaxanh.com/dau-an/dau-an-simply-dhat-cai-1l",
+  "kind": "product",
+  "country": "vn",
+  "response_url": "https://api.bachhoaxanh.com/gw/Product/GetProductDetail?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=dau-an&ProductUrl=dau-an-simply-dhat-cai-1l",
+  "bhx_response": {
+    "code": 0,
+    "data": {
+      "id": 76167,
+      "categoryId": 2286,
+      "categoryName": "Dầu ăn",
+      "categoryParentIds": [
+        7148
+      ],
+      "brandId": 0,
+      "brandUrl": "simply",
+      "productType": 0,
+      "boxBuys": [
+        {
+          "id": 76167,
+          "name": "Dầu hạt cải nguyên chất Simply chai 1 lít",
+          "avatar": "https://cdnv2.tgdd.vn/bhx-static/bhx/production/2026/7/image/production/2026/7/image/Products/2286/76167/dau-an-simply-dhat-cai-1l_202607031432076227.jpg",
+          "url": "/dau-an/dau-an-simply-dhat-cai-1l",
+          "textAvgPriceUnit": "",
+          "title": "",
+          "deliveryTime": "",
+          "productPrices": [
+            {
+              "price": 79000.0,
+              "sysPrice": 79000.0,
+              "discountPercent": 0,
+              "quantity": 200,
+              "type": 1,
+              "status": 1,
+              "textStatus": "Mua",
+              "isCanBuy": true,
+              "storeId": 2546,
+              "poDate": "2026-09-07",
+              "label": "",
+              "isBuyTogether": false,
+              "appliedQuantity": 0,
+              "quantityCondition": 0,
+              "netUnitValue": 0,
+              "salePriceNonBlue": 0,
+              "isAutoBuy": true
+            }
+          ],
+          "maxQuantityOnBill": 0,
+          "scenario": 0,
+          "type": 1,
+          "comboType": 0,
+          "lstCampaingInfo": [],
+          "netUnitValue": 0,
+          "skuInfo": {
+            "mainGroupId": 1055,
+            "subGroupId": 3097,
+            "brandId": 6535
+          },
+          "productCode": "8934988100532",
+          "packageItemCount": 1,
+          "packageItemUnit": "Chai",
+          "isSpecialOffer": false,
+          "specifications": []
+        }
+      ],
+      "isHeavyShipping": false,
+      "isFresh": false,
+      "isChangeProduct": false,
+      "productCode": "8934988100532",
+      "verCate": 0,
+      "filterInCateV2": 0,
+      "warningStock": "",
+      "isShowPopupWarningBeer": false,
+      "productBo": {
+        "shortDescription": "<p>Là loại<a href=\"https://www.bachhoaxanh.com/dau-an\"> dầu ăn</a> nguyên chất 100%, sản xuất từ nguồn nguyên liệu nhập khẩu cao cấp, giàu chất béo không bão hoà. Các thành phần có trong <a href=\"https://www.bachhoaxanh.com/dau-an/dau-an-simply-dhat-cai-1l\">dầu hạt cải nguyên chất Simply chai 1 lít</a> của thương hiệu <a href=\"https://www.bachhoaxanh.com/dau-an-simply\">dầu ăn Simply</a> được cân bằng về tỷ lệ các chất béo và axit béo Omega nhằm đảm bảo tốt cho sức khỏe.</p>",
+        "productArticle": "<h3 style=\"text-align:justify\"><strong>Đôi nét về thương hiệu</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Simply được biết đến là thương hiệu dầu ăn duy nhất được Hội Tim Mạch Học Việt Nam khuyên dùng. Các sản phẩm dầu ăn của Simply đều sử dụng nguồn nguyên liệu nhập khẩu tự nhiên cao cấp, giàu chất béo không bão hòa rất tốt cho sức khỏe của người tiêu dùng.<br />\r\n<img alt=\"Dầu hạt cải Simply chai 1 lít\" src=\"https://www.binhchau.vn/wp-content/uploads/simply-labels.png\" style=\"height:500px; width:800px\" /></p>\r\n\r\n<h3 style=\"text-align:justify\"><strong>Thành phần dinh dưỡng trong sản phẩm</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Dầu hạt cải nguyên chất Simply chai 1 lít có chứa những thành phần dinh dưỡng như: Năng lượng, chất béo, omega 3, 6, 9, vitamin E, A. Trung bình trong 100g dầu hạt cải Simply có chứa khoảng 900 calo.</p>\r\n\r\n<h3 style=\"text-align:justify\"><strong>Tác dụng của sản phẩm với sức khỏe</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Dầu hạt cải Simply được chọn lọc từ nguồn nguyên liệu nhập khẩu cao cấp từ những cánh đồng cải tự nhiên, hàm lượng cao chất béo không bão hòa trên 88%, bổ sung các vitamin có lợi cho cơ thể như vitamin A, E, giúp chống lão hóa, tăng cường thị lực và bảo vệ sức khỏe tim mạch.</p>\r\n\r\n<h3 style=\"text-align:justify\"><strong>Hướng dẫn sử dụng sản phẩm</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Dầu hạt cải Simply có màu vàng nhạt, mùi thơm nhẹ rất thích hợp dùng để nấu các món chiên, xào, làm nước sốt, hoặc trộn salad. Ngoài ra, bạn còn có thể dùng để chế biến các món chay.<br />\r\n<img alt=\"Dầu hạt cải Simply chai 1 lít\" src=\"https://cdn2.fptshop.com.vn/unsafe/1920x0/filters:format(webp):quality(75)/dau_hat_cai_8f8120832c.jpg\" style=\"height:533px; width:800px\" /></p>\r\n\r\n<h3 style=\"text-align:justify\"><strong>Lưu ý khi sử dụng và cách bảo quản sản phẩm</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Bảo quản ở nơi khô thoáng, tránh những nơi có nhiệt độ cao và ẩm ướt, lưu ý đậy kín nắp sản phẩm sau khi sử dụng.</p>\r\n\r\n<h3 style=\"text-align:justify\"><strong>Ưu điểm khi mua sản phẩm tại Bách hoá XANH</strong></h3>\r\n\r\n<p style=\"text-align:justify\">Các sản phẩm dầu ăn nguyên chất Simply đang được bày bán tại Bách hóa XANH, bạn có thể yên tâm mua hàng tại đây vì Bách hóa XANH cam kết chỉ bán hàng chính hãng, nguồn gốc, xuất xứ rõ ràng cùng mức giá hợp lý. Ngoài ra khi mua hàng trực tuyến tại www.bachhoaxanh.com bạn còn nhận về nhiều những ưu đãi hấp dẫn và được giao hàng tận nhà, nhanh chóng.</p>",
+        "featureSpecification": "Loại dầu: Dầu hạt cải<br />\r\nKiểu ép:<br />\r\nDung tích: 1 lít<br />\r\nThành phần: 100% dầu hạt cải nguyên chất, vitamin A palmitat<br />\r\nƯu điểm: Nguồn nguyên liệu nhập khẩu cao cấp từ những cánh đồng cải tự nhiên, lưu giữ hàm lượng cao chất béo không bão hòa và các vitamin, giúp bảo vệ sức khỏe tim mạch.<br />\r\nThích hợp: Chiên, xào, nấu, trộn salad, làm bánh và các món chay<br />\r\nBảo quản: Nơi khô ráo, thoáng mát. Tránh ánh nắng mặt trời chiếu trực tiếp vào sản phẩm.<br />\r\nLưu ý: Không dùng cho người dị ứng thành phần sản phẩm. Không dùng khi sản phẩm hết hạn hoặc có dấu hiệu hư hỏng.<br />\r\nThương hiệu: Simply (Việt Nam)<br />\r\nSản xuất tại: Việt Nam"
+      },
+      "promotionTexts": [],
+      "promotionTitle": [],
+      "promotionTextsFS": [],
+      "lstGift": [],
+      "lstGiftFS": [],
+      "promotionTextsNonBlue": [],
+      "promotionTextsNonBlueFS": []
+    },
+    "serverName": "bhx-api-core-u20-84-89",
+    "requestId": "6711759cdda466bafb468c86401569f9"
+  }
+}

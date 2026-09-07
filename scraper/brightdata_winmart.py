@@ -562,153 +562,124 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             if not products:
                 raise RuntimeError("winmart_no_products_captured")
 
-            # WinMart product detail exposes the authoritative retail body
-            # under "Chọn loại" (e.g. the red CHAI button). Fetch detail HTML
-            # through the already-open WinMart browser session so we can
-            # prioritize that value over title/API guesses without opening
-            # hundreds of extra browser tabs. The same pass also recovers
-            # og:image/gallery URLs when the category listing only had a
-            # placeholder.
-            async def enrich_one_detail(product, semaphore):
-                async with semaphore:
-                    detail = await page.context.new_page()
+            # WinMart's visible "Chọn loại" is the only authoritative
+            # retail-unit source. Use a small reusable page pool; creating
+            # hundreds of tabs in parallel can stall the Bright Data browser.
+            UNIT_PATTERN = re.compile(
+                r"(?:Chọn|Chon)\s+lo(?:ại|ai)\s+"
+                r"(CHAI|LON|GÓI|GOI|HỘP|HOP|TÚI|TUI|BỊCH|BICH|CAN|"
+                r"HŨ|HU|LY|CÂY|CAY|VIÊN|VIEN|TUÝP|TUYP)\b",
+                re.I,
+            )
+
+            async def prepare_detail_page():
+                detail = await page.context.new_page()
+
+                async def detail_route(route):
+                    # Unit text needs HTML/JS/XHR, not heavy media.
+                    if route.request.resource_type in {"image", "media", "font"}:
+                        await route.abort()
+                    else:
+                        await route.continue_()
+
+                await detail.route("**/*", detail_route)
+                detail.set_default_timeout(5000)
+                return detail
+
+            async def read_detail_unit(detail, product):
+                url = product.get("url") or ""
+                if not url:
+                    return
+                try:
+                    await detail.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=12000,
+                    )
+                except Exception:
+                    # A navigation timeout can still leave enough rendered DOM
+                    # to read the "Chọn loại" control.
+                    pass
+
+                try:
+                    await detail.wait_for_timeout(350)
+                    result = await detail.evaluate(
+                        """() => {
+                          const MAP = {
+                            "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
+                            "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
+                            "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
+                            "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
+                            "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
+                          };
+                          const clean=v=>String(v||"").replace(/\s+/g," ").trim();
+                          const upper=v=>clean(v).toUpperCase();
+                          const nodes=[...document.querySelectorAll(
+                            "button,[role='button'],label,a,span"
+                          )];
+                          let best=null;
+                          for(const el of nodes){
+                            const label=MAP[upper(el.textContent)];
+                            if(!label)continue;
+                            let score=0;
+                            if(el.matches("button"))score+=8;
+                            if(el.getAttribute("role")==="button")score+=5;
+                            const cls=clean(el.className).toLowerCase();
+                            if(/active|selected|type|variant|option|btn/.test(cls))score+=4;
+                            let ctx=el;
+                            for(let d=0;d<7&&ctx;d++,ctx=ctx.parentElement){
+                              const t=upper(ctx.textContent);
+                              if(t.includes("CHỌN LOẠI")||t.includes("CHON LOAI")){
+                                score+=20;
+                                break;
+                              }
+                            }
+                            if(!best||score>best.score)best={label,score};
+                          }
+                          return {
+                            unit:best&&best.score>=20?best.label:"",
+                            body:(document.body&&document.body.innerText||"").slice(0,12000)
+                          };
+                        }"""
+                    )
+                except Exception:
+                    result = {"unit": "", "body": ""}
+
+                unit = normalize_unit((result or {}).get("unit") or "")
+                if not unit:
+                    match = UNIT_PATTERN.search((result or {}).get("body") or "")
+                    if match:
+                        unit = normalize_unit(match.group(1))
+
+                if unit:
+                    product["unit"] = unit
+                    product["unit_evidence"] = "detail_type"
+                    product["packaging"] = unit
+
+            detail_pages = [await prepare_detail_page() for _ in range(5)]
+            queue = asyncio.Queue()
+            for product in products:
+                queue.put_nowait(product)
+
+            async def detail_worker(detail):
+                while True:
                     try:
-                        async def detail_route(route):
-                            if route.request.resource_type in {"image", "media", "font"}:
-                                await route.abort()
-                            else:
-                                await route.continue_()
-
-                        await detail.route("**/*", detail_route)
-                        try:
-                            await detail.goto(
-                                product.get("url") or "",
-                                wait_until="domcontentloaded",
-                                timeout=45000,
-                            )
-                        except Exception:
-                            pass
-
-                        # WinMart renders "Chọn loại" client-side. Waiting for
-                        # the rendered body is more reliable than parsing the
-                        # raw response HTML returned by fetch().
-                        try:
-                            await detail.wait_for_timeout(700)
-                            body_text = await detail.locator("body").inner_text(timeout=7000)
-                        except Exception:
-                            body_text = ""
-
-                        unit = ""
-                        # Primary proof: a visible option/button whose text is
-                        # exactly one of WinMart's retail-body labels and sits
-                        # near the "Chọn loại" section.
-                        try:
-                            unit_raw = await detail.evaluate(
-                                """() => {
-                                  const MAP = {
-                                    "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
-                                    "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
-                                    "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
-                                    "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
-                                    "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
-                                  };
-                                  const clean = v => String(v || "").replace(/\\s+/g," ").trim();
-                                  const upper = v => clean(v).toUpperCase();
-                                  const nodes = [...document.querySelectorAll(
-                                    "button,[role='button'],a,label,span"
-                                  )];
-                                  let best = null;
-                                  for (const el of nodes) {
-                                    const label = MAP[upper(el.textContent)];
-                                    if (!label) continue;
-                                    let score = 0;
-                                    if (el.matches("button")) score += 8;
-                                    if (el.getAttribute("role") === "button") score += 5;
-                                    const cls = clean(el.className).toLowerCase();
-                                    if (/active|selected|type|variant|option|btn/.test(cls)) score += 4;
-
-                                    let ctx = el;
-                                    for (let depth=0; depth<7 && ctx; depth++,ctx=ctx.parentElement) {
-                                      const text = upper(ctx.textContent);
-                                      if (text.includes("CHỌN LOẠI") || text.includes("CHON LOAI")) {
-                                        score += 20;
-                                        break;
-                                      }
-                                    }
-                                    if (!best || score > best.score) best = {label,score};
-                                  }
-                                  return best && best.score >= 20 ? best.label : "";
-                                }"""
-                            )
-                            unit = normalize_unit(unit_raw or "")
-                        except Exception:
-                            unit = ""
-
-                        # Text fallback is still based on the rendered page:
-                        # "Chọn loại\\nCHAI\\nSố lượng".
-                        if not unit and body_text:
-                            match = re.search(
-                                r"(?:Chọn|Chon)\\s+lo(?:ại|ai)\\s+"
-                                r"(CHAI|LON|GÓI|GOI|HỘP|HOP|TÚI|TUI|"
-                                r"BỊCH|BICH|CAN|HŨ|HU|LY|CÂY|CAY|"
-                                r"VIÊN|VIEN|TUÝP|TUYP)\\b",
-                                body_text,
-                                re.I,
-                            )
-                            if match:
-                                unit = normalize_unit(match.group(1))
-
-                        if unit:
-                            product["unit"] = unit
-                            product["unit_evidence"] = "detail_type"
-                            product["packaging"] = unit
-
-                        # Category listing normally supplies the image already.
-                        # If not, recover a real detail image without using it
-                        # as evidence for the unit.
-                        if not image_url(
-                            product.get("image") or "",
-                            product.get("url") or target_url
-                        ):
-                            try:
-                                detail_image = await detail.evaluate(
-                                    """() => {
-                                      const values = [];
-                                      const og = document.querySelector(
-                                        "meta[property='og:image'],meta[name='og:image']"
-                                      );
-                                      if (og) values.push(og.getAttribute("content") || "");
-                                      for (const img of [...document.querySelectorAll("img")].slice(0,80)) {
-                                        values.push(
-                                          img.currentSrc ||
-                                          img.getAttribute("data-src") ||
-                                          img.getAttribute("data-original") ||
-                                          img.getAttribute("srcset") ||
-                                          img.getAttribute("src") ||
-                                          ""
-                                        );
-                                      }
-                                      return values;
-                                    }"""
-                                )
-                                recovered = image_url(
-                                    detail_image,
-                                    product.get("url") or target_url
-                                )
-                                if recovered:
-                                    product["image"] = recovered
-                            except Exception:
-                                pass
+                        product = queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        return
+                    try:
+                        await read_detail_unit(detail, product)
                     finally:
-                        await detail.close()
+                        queue.task_done()
 
-            # Every WinMart item is checked against the rendered detail page.
-            # Titles/API fields are intentionally ignored for retail unit.
-            semaphore = asyncio.Semaphore(8)
-            await asyncio.gather(*[
-                enrich_one_detail(product, semaphore)
-                for product in products
-            ])
+            try:
+                await asyncio.gather(*[
+                    detail_worker(detail) for detail in detail_pages
+                ])
+            finally:
+                await asyncio.gather(*[
+                    detail.close() for detail in detail_pages
+                ], return_exceptions=True)
 
             detail_unit_count = sum(
                 1 for p in products

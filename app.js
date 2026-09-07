@@ -1038,13 +1038,24 @@ function renderCategoryMenu(){
   const host=$("#categoryTabs");
   if(!host)return;
 
+  const visibleLibrary=libraryCache.filter(row=>
+    String(row.preference_state||"normal")!=="hidden"&&
+    !isTemporaryErrorFilteredRow(row)
+  );
+  const groupCounts=new Map();
+  for(const row of visibleLibrary){
+    const key=String(row.parent_url||"");
+    if(!key)continue;
+    groupCounts.set(key,(groupCounts.get(key)||0)+1);
+  }
+
   host.innerHTML=
     '<button class="category-chip '+(!activeGroupUrl?"active":"")+'" data-group="" type="button">'+
-      '<span>Tất cả</span><small>'+libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden").length+'</small>'+
+      '<span>Tất cả</span><small>'+visibleLibrary.length+'</small>'+
     '</button>'+
     libraryGroups.map(g=>
       '<button class="category-chip '+(activeGroupUrl===g.url?"active":"")+'" data-group="'+escapeAttr(g.url)+'" type="button">'+
-        '<span>'+escapeHtml(g.name)+'</span><small>'+Number(g.product_count||0)+'</small>'+
+        '<span>'+escapeHtml(g.name)+'</span><small>'+Number(groupCounts.get(g.url)||0)+'</small>'+
       '</button>'
     ).join("");
 
@@ -1132,6 +1143,27 @@ function retailIdentity(row){
   return [base,unit,size].join("|");
 }
 
+function isTemporaryErrorFilteredRow(row){
+  // TEMPORARY CLEANUP GATE for auditing bad classification/data.
+  // Keep source rows in D1; only remove them from the browse UI.
+  const name=searchKey(row.source_name||row.name||"");
+  if(!name)return false;
+
+  // 1) Combo... is not a canonical single product/carton row.
+  if(/^combo\b/.test(name))return true;
+
+  // 2) "2 thùng...", "5 thùng..." etc. are multi-carton offers.
+  //    A valid carton row is expected to START with "Thùng ...", not "N thùng ...".
+  if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(name))return true;
+
+  // 3) For this audit pass, remove every title containing the word "và".
+  //    This is deliberately broader than mixed-bundle detection so the
+  //    remaining set is easier to inspect for parser errors.
+  if(/\bva\b/.test(name))return true;
+
+  return false;
+}
+
 function suppressRedundantMultiPacks(products){
   // Keep source rows in D1 for debugging, but do not show an intermediate
   // multi-pack when the same exact product already has a real single-unit
@@ -1170,7 +1202,7 @@ function suppressRedundantMultiPacks(products){
 }
 
 function visibleRowsBeforePack(){
-  let products=libraryCache.slice();
+  let products=libraryCache.filter(row=>!isTemporaryErrorFilteredRow(row));
 
   if(libraryState==="watch"){
     products=products.filter(row=>String(row.preference_state||"normal")==="watch");
@@ -1273,7 +1305,8 @@ function renderBrandTabs(){
 
   const base=libraryCache.filter(row=>
     row.parent_url===activeGroupUrl&&
-    String(row.preference_state||"normal")!=="hidden"
+    String(row.preference_state||"normal")!=="hidden"&&
+    !isTemporaryErrorFilteredRow(row)
   );
   const counts=new Map();
   for(const row of base){

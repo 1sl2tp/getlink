@@ -1701,20 +1701,35 @@ async function loadBhxTaxonomyForWinmart(env){
     "SELECT canonical_url,name,group_name FROM links WHERE source='Bách Hóa XANH' AND link_type='category' AND COALESCE(last_status,'')<>'unlisted'"
   ).all();
   const products=await env.DB.prepare(
-    "SELECT canonical_url,parent_url,group_name,name FROM links WHERE source='Bách Hóa XANH' AND link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(last_status,'')<>'unlisted' LIMIT 6000"
+    "SELECT parent_url,group_name,name FROM links WHERE source='Bách Hóa XANH' AND link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(last_status,'')<>'unlisted' LIMIT 6000"
   ).all();
-  return {
-    categories:cats.results||[],
-    products:products.results||[]
-  };
+
+  const productByKey=new Map();
+  for(const row of products.results||[]){
+    const key=winmartTextKey(row.name);
+    if(key&&!productByKey.has(key))productByKey.set(key,row);
+  }
+
+  const categoryByKey=new Map();
+  const categoryRows=[];
+  for(const row of cats.results||[]){
+    const keys=[
+      winmartTextKey(row.name),
+      winmartTextKey(row.group_name)
+    ].filter(Boolean);
+    for(const key of keys){
+      if(!categoryByKey.has(key))categoryByKey.set(key,row);
+    }
+    categoryRows.push({row,keys});
+  }
+
+  return {productByKey,categoryByKey,categoryRows};
 }
 
 function matchBhxTaxonomyForWinmart(product,taxonomy){
   const productKey=winmartTextKey(product&&product.name||"");
   if(productKey){
-    const exact=(taxonomy.products||[]).find(
-      row=>winmartTextKey(row.name)===productKey
-    );
+    const exact=taxonomy.productByKey.get(productKey);
     if(exact&&exact.parent_url){
       return {
         parent_url:exact.parent_url,
@@ -1730,13 +1745,7 @@ function matchBhxTaxonomyForWinmart(product,taxonomy){
     ""
   );
   if(categoryKey){
-    const exactCat=(taxonomy.categories||[]).find(row=>{
-      const keys=[
-        winmartTextKey(row.name),
-        winmartTextKey(row.group_name)
-      ].filter(Boolean);
-      return keys.includes(categoryKey);
-    });
+    const exactCat=taxonomy.categoryByKey.get(categoryKey);
     if(exactCat){
       return {
         parent_url:exactCat.canonical_url,
@@ -1745,22 +1754,18 @@ function matchBhxTaxonomyForWinmart(product,taxonomy){
       };
     }
 
-    const closeCat=(taxonomy.categories||[]).find(row=>{
-      const keys=[
-        winmartTextKey(row.name),
-        winmartTextKey(row.group_name)
-      ].filter(Boolean);
-      return keys.some(key=>
+    for(const item of taxonomy.categoryRows){
+      const close=item.keys.some(key=>
         key.length>=4&&categoryKey.length>=4&&
         (key.includes(categoryKey)||categoryKey.includes(key))
       );
-    });
-    if(closeCat){
-      return {
-        parent_url:closeCat.canonical_url,
-        group_name:cleanText(closeCat.name||closeCat.group_name||""),
-        evidence:"category_near"
-      };
+      if(close){
+        return {
+          parent_url:item.row.canonical_url,
+          group_name:cleanText(item.row.name||item.row.group_name||""),
+          evidence:"category_near"
+        };
+      }
     }
   }
 
@@ -1850,19 +1855,29 @@ async function persistWinmartResponse(env,job,requestId,raw){
       evidence:unit?"winmart_leaf":"",
       locked:Boolean(unit)
     };
-    const comparison=comparisonData({
-      name,
-      url:productUrl,
-      packagingText:packaging,
-      featureText:"",
-      packCount:1,
-      packUnit:unit,
-      current,
-      sysPrice:original||current,
-      discount:0,
-      promoText:cleanText(rawProduct.promotion_text||""),
-      hierarchy
-    });
+    const size=parseSize(name);
+    const comparison={
+      pack_kind:"Lẻ",
+      pack_quantity:1,
+      pack_unit:unit,
+      size_value:size.value,
+      size_unit:size.unit,
+      regular_pack_price:current,
+      promo_pack_price:null,
+      regular_unit_price:current,
+      promo_unit_price:null,
+      regular_carton_price:null,
+      promo_carton_price:null,
+      regular_middle_price:null,
+      promo_middle_price:null,
+      regular_leaf_price:current,
+      promo_leaf_price:null,
+      promotion_active:false,
+      promotion_text:"",
+      quantity_offer_active:false,
+      quantity_offer_min_packs:null,
+      quantity_offer_total_price:null
+    };
     const tax=matchBhxTaxonomyForWinmart(rawProduct,taxonomy);
     if(tax.parent_url)mapped+=1;
     else unmapped+=1;
@@ -1889,8 +1904,7 @@ async function persistWinmartResponse(env,job,requestId,raw){
         JSON.stringify({
           source:"WinMart",
           category:tax.group_name,
-          taxonomy_evidence:tax.evidence,
-          raw:rawProduct
+          taxonomy_evidence:tax.evidence
         })
       )
     );

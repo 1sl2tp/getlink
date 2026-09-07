@@ -23,6 +23,7 @@ concurrency:
 jobs:
   get-price:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
       BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}

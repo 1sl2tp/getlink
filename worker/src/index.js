@@ -90,7 +90,7 @@ function normalizePackWord(value){
   const map={
     thung:"Thùng",loc:"Lốc",tui:"Túi",bich:"Bịch",chai:"Chai",
     hop:"Hộp",goi:"Gói",can:"Can",combo:"Combo",bo:"Bộ",
-    lon:"Lon",hu:"Hũ",ly:"Ly",thanh:"Thanh",cay:"Cây",vien:"Viên",tuyp:"Tuýp"
+    lon:"Lon",hu:"Hũ",ly:"Ly",to:"Tô",thanh:"Thanh",cay:"Cây",vien:"Viên",tuyp:"Tuýp"
   };
   return map[key]||raw;
 }
@@ -104,8 +104,8 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const text=cleanText([name,packagingText,featureText].filter(Boolean).join(" "));
   const plain=plainOf(text);
 
-  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|thanh|cay|vien|tuyp|can";
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|thanh|cay|vien|tuyp|can";
 
   const kindMatch=plain.match(new RegExp("^("+kindPattern+")\\b"));
   let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
@@ -194,7 +194,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   }
 
   if(!unit){
-    const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Ly","Can","Thanh","Cây","Viên","Tuýp"]);
+    const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô","Can","Thanh","Cây","Viên","Tuýp"]);
     unit=singleKinds.has(packKind)?packKind:"đơn vị";
   }
 
@@ -215,7 +215,7 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
     .replace(/đ/gi,"d")
     .toLowerCase();
 
-  const unitPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|thanh|cay|vien|tuyp";
+  const unitPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
   const buyFirst=new RegExp(
     "mua\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s+(?:chi\\s*)?([0-9]+(?:[.,][0-9]+)*)\\s*(k|nghin|ngan|d)?",
     "g"
@@ -349,7 +349,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<13)return null;
+    if(Number(payload&&payload.schema_version||0)<14)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -574,7 +574,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:13,
+    schema_version:14,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -603,7 +603,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:13,
+    schema_version:14,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1670,7 +1670,7 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=13){
+        if(Number(payload&&payload.schema_version||0)>=14){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -1743,7 +1743,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:13,
+        schema_version:14,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

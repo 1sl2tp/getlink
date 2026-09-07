@@ -977,6 +977,9 @@ h1{margin:0;font-size:28px;line-height:1.1}
   white-space:nowrap;
   cursor:pointer;
 }
+.xls-open-detail::first-letter{
+  text-transform:uppercase;
+}
 .xls-open-detail:hover{
   text-decoration:underline;
   text-underline-offset:2px;

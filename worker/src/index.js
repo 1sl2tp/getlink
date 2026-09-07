@@ -785,7 +785,8 @@ async function handleCreate(request,env,origin){
   try{url=canonicalBhx(body.url);}
   catch{return json({error:"invalid_bhx_url"},400,origin);}
 
-  const cached=await loadFreshCache(env,url);
+  const force=Boolean(body&&body.force);
+  const cached=force?null:await loadFreshCache(env,url);
   if(cached){
     await repairCachedGraph(env,cached.payload);
     const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();

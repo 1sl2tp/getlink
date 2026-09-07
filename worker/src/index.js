@@ -215,7 +215,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<5)return null;
+    if(Number(payload&&payload.schema_version||0)<6)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -415,28 +415,31 @@ function apiBoxBuyToProduct(raw,data){
 
 function productDetailPayload(inputUrl,requestId,data){
   const canonical=canonicalBhx(inputUrl);
-  const variants=(Array.isArray(data&&data.boxBuys)?data.boxBuys:[])
-    .map(x=>apiBoxBuyToProduct(x,data))
-    .filter(Boolean);
+  const firstRaw=Array.isArray(data&&data.boxBuys)?data.boxBuys[0]:null;
+  const first=apiBoxBuyToProduct(firstRaw,data);
 
-  if(!variants.length)throw new Error("bhx_detail_empty");
+  if(!first)throw new Error("bhx_detail_empty");
 
-  const exact=variants.find(v=>sameBhxUrl(v.url,canonical))||variants[0];
+  // A BHX detail URL owns exactly one authoritative price row:
+  // boxBuys[0]. Other boxBuys are temporary choices shown beside it and
+  // may change tomorrow, so they must never be persisted or joined as
+  // prices for this URL.
+  const product={...first,url:canonical};
   return {
-    schema_version:5,
+    schema_version:6,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     checked_at:new Date().toISOString(),
-    category_name:cleanText(data&&data.categoryName||exact.group||""),
+    category_name:cleanText(data&&data.categoryName||product.group||""),
     category_id:Number(data&&data.categoryId)||null,
     parent_category_ids:Array.isArray(data&&data.categoryParentIds)
       ?data.categoryParentIds:[],
-    product:exact,
-    products:[exact],
-    variants,
-    discovered_links:variants.map(v=>v.url)
+    product,
+    products:[product],
+    variants:[],
+    discovered_links:[]
   };
 }
 
@@ -452,7 +455,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:5,
+    schema_version:6,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -917,16 +920,8 @@ async function persistPayload(env,payload){
       name:categoryName||slugTitle(categoryParent||"")
     };
 
-    const variants=Array.isArray(payload.variants)?payload.variants:[];
-    for(const variant of variants){
-      await persistVariant(env,variant,inputUrl,payload.request_id,checked);
-      const variantUrl=canonicalBhx(variant.url);
-      if(variantUrl!==inputUrl){
-        await persistEntry(
-          env,variant,inputUrl,payload.request_id,checked,"product"
-        );
-      }
-    }
+    // Do not persist sibling boxBuys from a detail response.
+    // Only payload.product (boxBuys[0]) belongs to inputUrl.
   }else{
     await ensureSourceParent(
       env,inputUrl,payload.category_name||slugTitle(inputUrl),
@@ -1444,110 +1439,15 @@ async function handleLibrary(url,env,origin){
         cmp.regular_pack_price,cmp.promo_pack_price,
         cmp.regular_unit_price,cmp.promo_unit_price,
         cmp.promotion_active,
-        COALESCE(
-          asset.image_url,
-          (
-            SELECT pv.image
-            FROM product_variants pv
-            WHERE pv.parent_url=l.canonical_url
-            ORDER BY pv.updated_at DESC
-            LIMIT 1
-          )
-        ) AS image,
-        COALESCE(
-          cmp.promo_unit_price,cmp.regular_unit_price,
-          (
-            SELECT MIN(COALESCE(d.promo_unit_price,d.regular_unit_price))
-            FROM daily_variant_prices d
-            WHERE d.parent_url=l.canonical_url
-          )
-        ) AS unit_price,
-        COALESCE(
-          cmp.promotion_active,
-          (
-            SELECT MAX(d.promotion_active)
-            FROM daily_variant_prices d
-            WHERE d.parent_url=l.canonical_url
-          )
-        ) AS has_promo,
-        (
-          SELECT pv.current_price
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
-          LIMIT 1
-        ) AS carton_price,
-        (
-          SELECT pv.sys_price
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
-          LIMIT 1
-        ) AS carton_sys_price,
-        (
-          SELECT pv.package_item_count
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
-          LIMIT 1
-        ) AS carton_quantity,
-        (
-          SELECT pv.package_item_unit
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
-          LIMIT 1
-        ) AS carton_unit,
-        (
-          SELECT pv.current_price
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND NOT (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY
-            CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,
-            COALESCE(pv.package_item_count,1) ASC,
-            pv.updated_at DESC
-          LIMIT 1
-        ) AS retail_price,
-        (
-          SELECT pv.package_item_unit
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-            AND pv.variant_url=l.canonical_url
-            AND NOT (
-              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
-            )
-          ORDER BY
-            CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,
-            COALESCE(pv.package_item_count,1) ASC,
-            pv.updated_at DESC
-          LIMIT 1
-        ) AS retail_unit
+        asset.image_url AS image,
+        COALESCE(cmp.promo_unit_price,cmp.regular_unit_price) AS unit_price,
+        COALESCE(cmp.promotion_active,0) AS has_promo,
+        NULL AS carton_price,
+        NULL AS carton_sys_price,
+        NULL AS carton_quantity,
+        NULL AS carton_unit,
+        NULL AS retail_price,
+        NULL AS retail_unit
       FROM links l
       LEFT JOIN link_preferences pref
         ON pref.link_url=l.canonical_url

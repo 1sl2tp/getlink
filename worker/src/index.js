@@ -576,8 +576,8 @@ async function fetchMirrorSnapshotPayload(inputUrl,requestId){
   if(!parts.length)throw new Error("mirror_missing_category");
   const categorySlug=parts.length>=2?parts[0]:parts[0];
   const raw=
-    "https://raw.githubusercontent.com/hoang-trinh/supermarket-price-engine/main/"+
-    "tests/old_data/bhx/date%3D2026-04-12/2546/"+
+    "https://raw.githubusercontent.com/1sl2tp/getlink/main/"+
+    "data/snapshots/bhx/2026-04-12/"+
     encodeURIComponent(categorySlug)+".json";
   const response=await fetch(raw,{
     headers:{"user-agent":"getlink-worker"},

@@ -969,7 +969,7 @@ $("#librarySearch").addEventListener("input",e=>{
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
-  const priceInput=e.target.closest(".sheet-my-price");
+  const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-retail");
   if(priceInput){
     e.stopPropagation();
     return;
@@ -998,14 +998,21 @@ $("#libraryProducts").addEventListener("click",async e=>{
 });
 
 $("#libraryProducts").addEventListener("input",e=>{
-  const input=e.target.closest(".sheet-my-price");
+  const carton=e.target.closest(".sheet-my-carton");
+  const retail=e.target.closest(".sheet-my-retail");
+  const input=carton||retail;
   if(!input)return;
-  const minePack=writeSheetPrice(input.dataset.url||"",input.value);
-  updateSheetRow(input.closest(".product-card"),minePack);
+
+  writeOwnPrice(
+    input.dataset.url||"",
+    carton?"carton":"retail",
+    input.value
+  );
+  updateSheetRow(input.closest(".product-card"));
 });
 
 $("#libraryProducts").addEventListener("keydown",e=>{
-  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-price")){
+  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-retail")){
     const card=e.target.closest(".product-card");
     if(!card)return;
     e.preventDefault();

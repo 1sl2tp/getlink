@@ -1842,7 +1842,7 @@ async function persistWinmartResponse(env,job,requestId,raw){
 
   const linkSql=
     "INSERT INTO links(id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,packaging,current_price,original_price,promotion_price,promotion_text,last_checked_at,last_status,last_request_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
-    "ON CONFLICT(canonical_url) DO UPDATE SET source=excluded.source,link_type='product',parent_url=excluded.parent_url,group_name=COALESCE(NULLIF(excluded.group_name,''),links.group_name),branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),name=COALESCE(NULLIF(excluded.name,''),links.name),packaging=COALESCE(NULLIF(excluded.packaging,''),links.packaging),current_price=COALESCE(excluded.current_price,links.current_price),original_price=COALESCE(excluded.original_price,links.original_price),promotion_price=COALESCE(excluded.promotion_price,links.promotion_price),promotion_text=COALESCE(NULLIF(excluded.promotion_text,''),links.promotion_text),last_checked_at=excluded.last_checked_at,last_status='ok',last_request_id=excluded.last_request_id,updated_at=excluded.updated_at";
+    "ON CONFLICT(canonical_url) DO UPDATE SET source=excluded.source,link_type='product',parent_url=excluded.parent_url,group_name=excluded.group_name,branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),name=COALESCE(NULLIF(excluded.name,''),links.name),packaging=excluded.packaging,current_price=COALESCE(excluded.current_price,links.current_price),original_price=excluded.original_price,promotion_price=excluded.promotion_price,promotion_text=excluded.promotion_text,last_checked_at=excluded.last_checked_at,last_status='ok',last_request_id=excluded.last_request_id,updated_at=excluded.updated_at";
 
   for(const rawProduct of products){
     const name=cleanText(
@@ -2029,7 +2029,7 @@ async function persistWinmartResponse(env,job,requestId,raw){
   });
 
   const payload={
-    schema_version:20,
+    schema_version:21,
     request_id:requestId,
     input_url:inputUrl,
     input_type:"category",
@@ -2058,10 +2058,13 @@ async function persistWinmartResponse(env,job,requestId,raw){
   };
 }
 
-function winmartCacheHasRealImages(payload){
+function winmartCacheIsComplete(payload){
+  if(Number(payload&&payload.schema_version||0)<21)return false;
   const products=Array.isArray(payload&&payload.products)?payload.products:[];
   if(!products.length)return false;
-  let real=0;
+
+  let realImages=0;
+  let provenUnits=0;
   for(const p of products){
     const image=String(p&&p.image||"").trim().toLowerCase();
     if(image&&
@@ -2069,11 +2072,24 @@ function winmartCacheHasRealImages(payload){
        !image.startsWith("blob:")&&
        !image.includes("placeholder")&&
        !image.includes("transparent")){
-      real+=1;
-      if(real>=Math.min(3,products.length))return true;
+      realImages+=1;
+    }
+    const h=p&&p.hierarchy||{};
+    if(
+      String(h.evidence||"")==="winmart_detail_type"&&
+      String(h.label3||"").trim()
+    ){
+      provenUnits+=1;
     }
   }
-  return false;
+
+  // Images should normally cover the full list. Units must come from the
+  // detail "Chọn loại" proof; allowing a tiny miss avoids endless refetches
+  // when one product is temporarily unavailable.
+  return (
+    realImages>=Math.ceil(products.length*0.95)&&
+    provenUnits>=Math.ceil(products.length*0.95)
+  );
 }
 
 async function handleCreate(request,env,origin){
@@ -2094,7 +2110,7 @@ async function handleCreate(request,env,origin){
   let cached=force?null:await loadFreshCache(env,url);
   if(
     cached&&sourceKey==="winmart"&&
-    !winmartCacheHasRealImages(cached.payload)
+    !winmartCacheIsComplete(cached.payload)
   ){
     cached=null;
   }

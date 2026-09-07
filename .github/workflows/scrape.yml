@@ -23,49 +23,60 @@ concurrency:
 jobs:
   get-price:
     runs-on: ubuntu-latest
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+      INPUT_URL: ${{ inputs.url }}
+      INPUT_REQUEST_ID: ${{ inputs.request_id }}
+
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Cài Python + Chromium
-        run: |
-          pip install -r scraper/requirements.txt
-          python -m playwright install --with-deps chromium
-      - name: Lấy giá
+
+      - name: Cài Playwright client
+        run: pip install -r scraper/requirements.txt
+
+      - name: Mở link qua Bright Data và bắt API BHX
         id: scrape
         continue-on-error: true
-        env:
-          INPUT_URL: ${{ inputs.url }}
-          INPUT_REQUEST_ID: ${{ inputs.request_id }}
         run: |
           set +e
-          python scraper/scraper.py --url "$INPUT_URL" --request-id "$INPUT_REQUEST_ID" --max-products 20 2>&1 | tee /tmp/getlink-scrape.log
+          python scraper/brightdata_bhx.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --output "data/jobs/$INPUT_REQUEST_ID.json"             2>&1 | tee /tmp/getlink-brightdata.log
           CODE=${PIPESTATUS[0]}
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
-          if [ "$CODE" -ne 0 ] && [ -n "$INPUT_REQUEST_ID" ]; then
-            mkdir -p data/jobs
-            DETAIL="$(tail -40 /tmp/getlink-scrape.log | tr '\n' ' ' | cut -c1-1200)"
-            jq -n               --arg status "error"               --arg error "Không lấy được dữ liệu từ Bách Hóa XANH"               --arg detail "$DETAIL"               --arg request_id "$INPUT_REQUEST_ID"               '{status:$status,error:$error,detail:$detail,request_id:$request_id}'               > "data/jobs/$INPUT_REQUEST_ID.json"
-          fi
           exit 0
 
-      - name: Lưu kết quả về GitHub
+      - name: Đảm bảo có kết quả lỗi nếu runner dừng bất thường
+        if: always()
+        run: |
+          if [ -n "$INPUT_REQUEST_ID" ] && [ ! -s "data/jobs/$INPUT_REQUEST_ID.json" ]; then
+            mkdir -p data/jobs
+            DETAIL="$(tail -50 /tmp/getlink-brightdata.log 2>/dev/null | tr '\n' ' ' | cut -c1-1800)"
+            jq -n               --arg status "error"               --arg error "brightdata_runner_failed"               --arg detail "$DETAIL"               --arg request_id "$INPUT_REQUEST_ID"               '{status:$status,error:$error,detail:$detail,request_id:$request_id}'               > "data/jobs/$INPUT_REQUEST_ID.json"
+          fi
+
+      - name: Lưu response API về GitHub
+        if: always()
         run: |
           git config user.name "getlink-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/products.json data/products.csv data/latest.json data/jobs
+          git add data/jobs
           if git diff --cached --quiet; then
             echo "Không có thay đổi"
             exit 0
           fi
-          git commit -m "data: cập nhật giá BHX"
+          git commit -m "data: lưu response BHX từ Bright Data"
           git push origin HEAD:main
 
-      - name: Báo trạng thái scrape
+      - name: Báo trạng thái
         if: steps.scrape.outputs.code != '0'
         run: |
-          echo "BHX scrape failed; error result was saved for GETLINK UI."
+          echo "Bright Data/BHX chưa trả API hợp lệ; file lỗi đã được lưu cho GETLINK UI."
           exit 1

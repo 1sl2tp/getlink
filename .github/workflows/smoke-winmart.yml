@@ -1,4 +1,5 @@
 name: Smoke WinMart
+# API pagination gate: Sữa đặc = 2 pages x 8 in captured WinMart response
 # retry after reusable detail pool
 # retry after scraper compile fix
 # rerun after rendered Chọn loại + stale-row repair
@@ -20,7 +21,7 @@ jobs:
       - name: GET link tổng WinMart
         env:
           API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
-          SAMPLE: "https://winmart.vn/gia-vi--c35?storeCode=1535"
+          SAMPLE: "https://winmart.vn/sua-cac-loai--c08?storeCode=1535&cate2=sua-dac--c01161"
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$API/health" | jq .
@@ -50,7 +51,7 @@ jobs:
                 sample:(.payload.products[0] // {})
               }' /tmp/winmart-result.json
               test "$(jq -r '.payload.source.name // empty' /tmp/winmart-result.json)" = "WinMart"
-              test "$(jq '.payload.products|length' /tmp/winmart-result.json)" -ge 1
+              test "$(jq '.payload.products|length' /tmp/winmart-result.json)" -ge 16
               break
             fi
             if [ "$STATUS" = "error" ]; then

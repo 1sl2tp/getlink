@@ -14,6 +14,7 @@ let libraryCache=[];
 let libraryLoaded=false;
 let libraryState="visible";
 let activePreferenceState="normal";
+let selectedLibraryUrl="";
 
 function canonical(url){
   try{
@@ -276,6 +277,11 @@ function renderProduct(payload){
   const variants=Array.isArray(payload&&payload.variants)?payload.variants:[];
 
   $("#result").hidden=false;
+  $("#detailEmpty").hidden=true;
+  const detailImage=String(p.image||"");
+  $("#detailImage").hidden=!detailImage;
+  $("#detailImageFallback").hidden=Boolean(detailImage);
+  if(detailImage)$("#detailImage").src=detailImage;
   $("#priceGrid").hidden=false;
   $("#productPersonal").hidden=false;
   $("#categoryChildren").hidden=true;
@@ -350,6 +356,9 @@ function renderCategory(payload){
   const first=products[0]||{};
 
   $("#result").hidden=false;
+  $("#detailEmpty").hidden=true;
+  $("#detailImage").hidden=true;
+  $("#detailImageFallback").hidden=false;
   $("#priceGrid").hidden=true;
   $("#productPersonal").hidden=true;
   $("#productVariants").hidden=true;
@@ -424,43 +433,22 @@ function updateSheetRow(card){
   if(!card)return;
   const qty=Math.max(1,Number(card.dataset.packQty)||1);
   const packKind=String(card.dataset.packKind||"");
-  const webPack=Number(card.dataset.webPack)||0;
-  const webUnit=Number(card.dataset.webUnit)||0;
   const cartonInput=card.querySelector(".sheet-my-carton");
   const retailInput=card.querySelector(".sheet-my-retail");
-  const diffCell=card.querySelector(".sheet-diff");
 
   const mineCarton=cartonInput
     ?Number(String(cartonInput.value||"").replace(/\D/g,""))||0
-    :0;
-  const manualRetail=retailInput
-    ?Number(String(retailInput.value||"").replace(/\D/g,""))||0
     :0;
 
   const canBorrowCartonQty=packKind==="Thùng"&&qty>1;
   const derivedRetail=canBorrowCartonQty&&mineCarton
     ?Math.round(mineCarton/qty)
     :0;
-  const mineRetail=manualRetail||derivedRetail;
 
   if(retailInput){
     retailInput.placeholder=derivedRetail
       ?"≈ "+money(derivedRetail)+" từ thùng"
       :"Giá/Lẻ";
-  }
-
-  const lines=[];
-  if(canBorrowCartonQty&&webPack&&mineCarton){
-    lines.push("Thùng: "+sheetDiffText(webPack,mineCarton));
-  }
-  if(webUnit&&mineRetail){
-    lines.push("Lẻ: "+sheetDiffText(webUnit,mineRetail));
-  }
-
-  if(diffCell){
-    diffCell.innerHTML=lines.length
-      ?lines.map(x=>'<span>'+escapeHtml(x)+'</span>').join("")
-      :"—";
   }
 }
 
@@ -613,14 +601,15 @@ function productCard(row){
   const inferred=inferSheetPack(row);
   const qty=inferred.qty;
   const unitName=inferred.unit;
-  const webUnit=effectivePack
-    ?Math.round(effectivePack/qty)
-    :Number(row.promo_unit_price||row.regular_unit_price||row.unit_price||0);
   const packKind=inferred.kind;
   const size=inferred.sizeValue
     ?String(inferred.sizeValue)+" "+String(inferred.sizeUnit||"")
-    :"—";
-  const image=String(row.image||"");
+    :"";
+
+  const webUnit=effectivePack
+    ?Math.round(effectivePack/qty)
+    :Number(row.promo_unit_price||row.regular_unit_price||row.unit_price||0);
+
   const pref=String(row.preference_state||"normal");
   const mineCarton=packKind==="Thùng"
     ?readOwnPrice(row.canonical_url,"carton")
@@ -629,63 +618,62 @@ function productCard(row){
   const derivedRetail=packKind==="Thùng"&&qty>1&&mineCarton
     ?Math.round(mineCarton/qty)
     :0;
-  const effectiveMineRetail=mineRetail||derivedRetail;
-  const initialDiff=[];
-  if(packKind==="Thùng"&&effectivePack&&mineCarton){
-    initialDiff.push("Thùng: "+sheetDiffText(effectivePack,mineCarton));
-  }
-  if(webUnit&&effectiveMineRetail){
-    initialDiff.push("Lẻ: "+sheetDiffText(webUnit,effectiveMineRetail));
-  }
-  const thumb=image
-    ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy">'
-    :'<div class="thumb-fallback">GL</div>';
+  const bargain=readOwnPrice(row.canonical_url,"bargain");
 
   const watchTitle=pref==="watch"?"Bỏ quan tâm":"Đánh dấu quan tâm";
   const watchNext=pref==="watch"?"normal":"watch";
   const hideTitle=pref==="hidden"?"Hiện lại":"Ẩn khỏi thư viện";
   const hideNext=pref==="hidden"?"normal":"hidden";
 
-  return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" '+
+  const bhxTopLabel=packKind||"QC";
+  const bargainUnit=packKind==="Thùng"?"Thùng":unitName;
+
+  return '<div class="product-card compact-row '+(pref==="hidden"?"is-hidden ":"")+
+    (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
+    '" role="button" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+escapeAttr(packKind)+'" '+
     'data-pack-qty="'+qty+'" data-web-pack="'+effectivePack+'" data-web-unit="'+webUnit+'">'+
-    '<div class="product-main">'+
-      '<div class="product-thumb">'+thumb+'</div>'+
-      '<div class="product-name-wrap">'+
-        '<h3 title="'+escapeAttr(row.source_name||row.name||"")+'">'+escapeHtml(normalizedBaseName(row))+'</h3>'+
-        '<div class="row-actions">'+
-          '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
-          '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
-        '</div>'+
+
+    '<div class="compact-name">'+
+      '<div class="compact-title" title="'+escapeAttr(row.source_name||row.name||"")+'">'+
+        escapeHtml(normalizedBaseName(row))+
+      '</div>'+
+      '<div class="compact-meta">'+
+        escapeHtml([
+          row.brand_name||row.branch_name||"",
+          packKind+(qty>1?" "+qty+" "+unitName:""),
+          size
+        ].filter(Boolean).join(" · "))+
+      '</div>'+
+      '<div class="row-actions">'+
+        '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
+        '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
       '</div>'+
     '</div>'+
-    '<div class="product-cell brand-cell">'+escapeHtml(row.brand_name||row.branch_name||"—")+'</div>'+
-    '<div class="product-cell qc-kind"><strong>'+escapeHtml(packKind)+'</strong></div>'+
-    '<div class="product-cell qc-count"><strong>'+qty+'</strong><small>'+escapeHtml(unitName)+'</small></div>'+
-    '<div class="product-cell size-cell"><strong>'+escapeHtml(size)+'</strong></div>'+
-    '<div class="product-cell bhx-pack"><strong>'+money(regularPack||effectivePack)+'</strong></div>'+
-    '<div class="product-cell product-promo">'+
-      (promoPack
-        ?'<strong>'+money(promoPack)+'</strong>'+
-          (regularPack&&regularPack!==promoPack?'<small>từ '+money(regularPack)+'</small>':'')
-        :'<span>—</span>')+
+
+    '<div class="compact-price bhx-compact">'+
+      '<div><small>'+escapeHtml(bhxTopLabel)+'</small><strong>'+money(effectivePack)+'</strong></div>'+
+      '<div><small>Lẻ</small><strong>'+money(webUnit)+'</strong><em>/ '+escapeHtml(unitName)+'</em></div>'+
+      (promoPack?'<span class="compact-promo">Ưu đãi</span>':'')+
     '</div>'+
-    '<div class="product-cell bhx-unit"><strong>'+money(webUnit)+'</strong><small>/ '+escapeHtml(unitName)+'</small></div>'+
-    '<div class="product-cell mine-pack-cell">'+
-      (packKind==="Thùng"
-        ?'<input class="sheet-my-carton" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
-          'value="'+(mineCarton||"")+'" placeholder="Giá/Thùng">'
-        :'<span class="not-comparable">—</span>')+
+
+    '<div class="compact-price mine-compact">'+
+      '<div>'+
+        '<small>Thùng</small>'+
+        (packKind==="Thùng"
+          ?'<input class="sheet-my-carton" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="Giá thùng">'
+          :'<strong class="muted-price">—</strong>')+
+      '</div>'+
+      '<div>'+
+        '<small>Lẻ</small>'+
+        '<input class="sheet-my-retail" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="'+
+          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail))+' từ thùng':'Giá lẻ')+'">'+
+      '</div>'+
     '</div>'+
-    '<div class="product-cell mine-retail-cell">'+
-      '<input class="sheet-my-retail" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
-        'value="'+(mineRetail||"")+'" placeholder="'+
-          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail))+' từ thùng':'Giá/Lẻ')+'">'+
-    '</div>'+
-    '<div class="product-cell sheet-diff">'+
-      (initialDiff.length
-        ?initialDiff.map(x=>'<span>'+escapeHtml(x)+'</span>').join("")
-        :'—')+
+
+    '<div class="bargain-cell">'+
+      '<input class="sheet-bargain" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Khách nhập">'+
+      '<small>/ '+escapeHtml(bargainUnit)+'</small>'+
     '</div>'+
   '</div>';
 }
@@ -902,8 +890,13 @@ async function loadLibraryProducts(force=false){
 
 async function openLibraryItem(url){
   if(!API||!url)return;
+  selectedLibraryUrl=url;
+  document.querySelectorAll(".product-card").forEach(x=>x.classList.remove("selected"));
   const card=document.querySelector('.product-card[data-url="'+CSS.escape(url)+'"]');
-  if(card)card.classList.add("loading");
+  if(card){
+    card.classList.add("selected","loading");
+  }
+
   try{
     const r=await fetch(
       API+"/api/library?view=item&url="+encodeURIComponent(url),
@@ -913,9 +906,9 @@ async function openLibraryItem(url){
     if(!r.ok)throw new Error(data.error||"not_found");
     wantedUrl=url;
     $("#url").value=url;
+    $("#detailEmpty").hidden=true;
     renderPayload(data.payload);
     syncWatchCheckbox(data.preference&&data.preference.state||preferenceStateForUrl(url));
-    $("#result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch{
     $("#importCard").hidden=false;
     $("#url").value=url;
@@ -990,7 +983,7 @@ $("#librarySearch").addEventListener("input",e=>{
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
-  const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-retail");
+  const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-retail,.sheet-bargain");
   if(priceInput){
     e.stopPropagation();
     return;
@@ -1021,19 +1014,17 @@ $("#libraryProducts").addEventListener("click",async e=>{
 $("#libraryProducts").addEventListener("input",e=>{
   const carton=e.target.closest(".sheet-my-carton");
   const retail=e.target.closest(".sheet-my-retail");
-  const input=carton||retail;
+  const bargain=e.target.closest(".sheet-bargain");
+  const input=carton||retail||bargain;
   if(!input)return;
 
-  writeOwnPrice(
-    input.dataset.url||"",
-    carton?"carton":"retail",
-    input.value
-  );
-  updateSheetRow(input.closest(".product-card"));
+  const type=carton?"carton":(retail?"retail":"bargain");
+  writeOwnPrice(input.dataset.url||"",type,input.value);
+  if(!bargain)updateSheetRow(input.closest(".product-card"));
 });
 
 $("#libraryProducts").addEventListener("keydown",e=>{
-  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-retail")){
+  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-retail,.sheet-bargain")){
     const card=e.target.closest(".product-card");
     if(!card)return;
     e.preventDefault();

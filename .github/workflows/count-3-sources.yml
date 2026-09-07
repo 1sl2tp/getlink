@@ -1,0 +1,83 @@
+name: Count 3 Sources
+
+on:
+  push:
+    paths:
+      - "scraper/count_catalog.py"
+      - ".github/workflows/count-3-sources.yml"
+  workflow_dispatch:
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cài Playwright client
+        run: pip install -r scraper/requirements.txt
+
+      - name: Count-only BHX
+        id: bhx
+        continue-on-error: true
+        run: |
+          set +e
+          python scraper/count_catalog.py             --source bhx             --url "https://www.bachhoaxanh.com/sua-tuoi"             --output /tmp/count-bhx.json
+          CODE=$?
+          cat /tmp/count-bhx.json | jq .
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Count-only WinMart
+        id: winmart
+        continue-on-error: true
+        run: |
+          set +e
+          python scraper/count_catalog.py             --source winmart             --url "https://winmart.vn/sua-cac-loai--c08?storeCode=1535"             --output /tmp/count-winmart.json
+          CODE=$?
+          cat /tmp/count-winmart.json | jq .
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Count-only GO
+        id: go
+        continue-on-error: true
+        run: |
+          set +e
+          python scraper/count_catalog.py             --source go             --url "https://sieuthi-go.vn/categories/sua-cac-loai-i.81"             --output /tmp/count-go.json
+          CODE=$?
+          cat /tmp/count-go.json | jq .
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Tổng kết 3 nguồn
+        if: always()
+        run: |
+          echo "===== BHX ====="
+          cat /tmp/count-bhx.json | jq . || true
+          echo "===== WINMART ====="
+          cat /tmp/count-winmart.json | jq . || true
+          echo "===== GO ====="
+          cat /tmp/count-go.json | jq . || true
+
+          BHX_OK="$(jq -r '.complete_page_scan // false' /tmp/count-bhx.json 2>/dev/null || echo false)"
+          WM_OK="$(jq -r '.complete_page_scan // false' /tmp/count-winmart.json 2>/dev/null || echo false)"
+          GO_OK="$(jq -r '.complete_page_scan // false' /tmp/count-go.json 2>/dev/null || echo false)"
+
+          test "$BHX_OK" = "true"
+          test "$WM_OK" = "true"
+          test "$GO_OK" = "true"

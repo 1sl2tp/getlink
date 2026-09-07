@@ -65,11 +65,13 @@ assert.equal(money(0),"—");
   assert.match(html,/<th>Thùng<\/th>/);
   assert.match(html,/<th>Giữa<\/th>/);
   assert.match(html,/<th>Lẻ<\/th>/);
-  assert.match(html,/BHX \/ Thùng/);
-  assert.match(html,/BHX \/ Giữa/);
-  assert.match(html,/BHX \/ Lẻ/);
+  assert.match(html,/Giá nguồn \/ Thùng/);
+  assert.match(html,/Giá nguồn \/ Giữa/);
+  assert.match(html,/Giá nguồn \/ Lẻ/);
   assert.match(html,/Giá mình \/ Giữa/);
   assert.match(app,/sheet-my-middle/);
+  assert.match(html,/<th>Nguồn<\/th>/);
+  assert.match(app,/winmart\.vn/);
 }
 
 console.log("money and hierarchy UI tests passed");

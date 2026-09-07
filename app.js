@@ -17,6 +17,15 @@ function money(v){
 }
 function setStatus(text){$("#status").textContent=text}
 function stopPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=0}
+function clearPending(){
+  requestId="";
+  localStorage.removeItem("getlink:request-id");
+}
+function failPending(message){
+  stopPolling();
+  clearPending();
+  setStatus(message);
+}
 function saveLocal(){
   const key=canonical(wantedUrl||$("#url").value.trim());
   if(!key)return;
@@ -110,16 +119,23 @@ async function pollOnce(){
   try{
     const r=await fetch(API+"/api/result?id="+encodeURIComponent(requestId),{cache:"no-store"});
     const data=await r.json();
-    if(data.status==="error"){
-      stopPolling();
-      setStatus("Lấy giá lỗi: "+(data.error||"không rõ lỗi"));
+    if(!r.ok){
+      failPending("GETLINK API lỗi "+r.status+". Bấm Lấy giá để thử lại.");
       return false;
     }
-    if(data.status!=="complete")return false;
+    if(data.status==="error"){
+      failPending("Chưa lấy được giá: "+(data.error||"Bách Hóa XANH không trả dữ liệu."));
+      return false;
+    }
+    if(data.status!=="complete"){
+      if(data.status==="queued")setStatus("Đã gửi yêu cầu. Đang chờ Bách Hóa XANH trả dữ liệu...");
+      else if(data.status==="running")setStatus("Đang xử lý dữ liệu Bách Hóa XANH...");
+      return false;
+    }
     stopPolling();
     renderPayload(data.payload);
     if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
-    localStorage.removeItem("getlink:request-id");
+    clearPending();
     setStatus("Đã lấy xong và lưu link vào kho.");
     return true;
   }catch{return false}
@@ -130,8 +146,7 @@ function startPolling(){
   pollOnce();
   pollTimer=setInterval(async()=>{
     if(Date.now()>pollUntil){
-      stopPolling();
-      setStatus("Quá thời gian chờ. Có thể GitHub Actions vẫn đang chạy; bấm Lấy giá để thử lại.");
+      failPending("Chưa lấy được dữ liệu sau 90 giây. Bách Hóa XANH đang từ chối kết nối; bấm Lấy giá để thử lại.");
       return;
     }
     await pollOnce();
@@ -159,11 +174,24 @@ $("#get").addEventListener("click",async()=>{
       body:JSON.stringify({url})
     });
     const data=await r.json();
-    if(!r.ok||!data.request_id)throw new Error(data.error||"Không tạo được yêu cầu");
+    if(!r.ok||!data.request_id)throw new Error(data.detail||data.error||"Không tạo được yêu cầu");
     requestId=data.request_id;
     localStorage.setItem("getlink:last-url",url);
+
+    if(data.status==="complete"&&data.payload){
+      renderPayload(data.payload);
+      if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
+      clearPending();
+      setStatus("Đã lấy xong và lưu link vào kho.");
+      return;
+    }
+
     localStorage.setItem("getlink:request-id",requestId);
-    setStatus(data.link_type==="category"?"Đang quét link nhóm...":"Đang lấy giá sản phẩm...");
+    if(data.engine==="github"){
+      setStatus("Bách Hóa XANH chặn kết nối trực tiếp. Đã chuyển sang luồng dự phòng, đang chờ kết quả...");
+    }else{
+      setStatus(data.link_type==="category"?"Đang quét link nhóm...":"Đang lấy giá sản phẩm...");
+    }
     startPolling();
   }catch(error){
     setStatus("Không gửi được yêu cầu: "+String(error&&error.message||error));

@@ -74,7 +74,7 @@ jobs:
             --request-id "$INPUT_REQUEST_ID" \
             --output "data/jobs/$INPUT_REQUEST_ID.json" \
             2>&1 | tee /tmp/getlink-go.log
-          CODE=\${PIPESTATUS[0]}
+          CODE=${PIPESTATUS[0]}
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           exit 0
 

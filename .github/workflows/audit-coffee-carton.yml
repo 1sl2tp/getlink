@@ -58,10 +58,16 @@ jobs:
 
           MATCH="$(jq '[.products[] | select(
             (.canonical_url|ascii_downcase|contains("thung-24-lon-ca-phe-sua-highlands-235ml"))
+            and (.pack_label_1=="Thùng")
+            and ((.pack_qty_1|tonumber)==1)
+            and (.pack_label_2=="Lon")
+            and ((.pack_qty_2|tonumber)==24)
+            and ((.pack_label_3 // "")=="")
+            and ((.pack_qty_3 // 0 | tonumber)==0)
             and (.pack_kind=="Thùng")
             and ((.pack_quantity|tonumber)==24)
             and (.pack_unit=="Lon")
           )] | length' /tmp/coffee.json)"
 
           test "$MATCH" -ge 1
-          echo "PASS: Highlands 24 lon is persisted as Thùng 24 Lon."
+          echo "PASS: Highlands persisted hierarchy = Thùng -> 24 Lon -> empty."

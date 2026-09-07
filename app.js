@@ -94,10 +94,10 @@ function normalizedBaseName(row){
   // packaging at the beginning and size/weight at the end.
   let value=source
     .replace(/^(thùng|lốc|cụm|combo|bộ)\s+/iu,"")
-    .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s+/iu,"")
-    .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|khoanh|thanh|cây|viên|tuýp|can)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|khoanh|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/\s+\d+(?:[.,]\d+)?\s*(ml|lít|lit|l|kg|g)\s*$/iu,"")
-    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s*$/iu,"")
+    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|khoanh|thanh|cây|viên|tuýp|can)\s*$/iu,"")
     .replace(/\s+/g," ")
     .trim();
 
@@ -109,8 +109,8 @@ function packSortRank(kind){
   const ranks={
     "Thùng":1,"Lốc":2,"Cụm":3,"Combo":4,"Bộ":5,
     "Chai":6,"Lon":7,"Hộp":8,"Gói":9,"Bịch":10,
-    "Túi":11,"Can":12,"Hũ":13,"Ly":14,"Tô":15,"Thanh":16,"Cây":17,
-    "Viên":18,"Tuýp":19,"Đơn":90
+    "Túi":11,"Can":12,"Hũ":13,"Ly":14,"Tô":15,"Khoanh":16,"Thanh":17,"Cây":18,
+    "Viên":19,"Tuýp":20,"Đơn":90
   };
   return ranks[kind]||50;
 }
@@ -553,7 +553,7 @@ function sheetNormalizeUnit(value){
   const map={
     hop:"Hộp",chai:"Chai",goi:"Gói",bich:"Bịch",tui:"Túi",
     lon:"Lon",hu:"Hũ",ly:"Ly",to:"Tô",can:"Can",thanh:"Thanh",cay:"Cây",
-    vien:"Viên",tuyp:"Tuýp",thung:"Thùng",loc:"Lốc",
+    vien:"Viên",tuyp:"Tuýp",khoanh:"Khoanh",thung:"Thùng",loc:"Lốc",
     combo:"Combo",bo:"Bộ"
   };
   return map[key]||raw;
@@ -569,8 +569,8 @@ function inferSheetPack(row){
   const source=[primary,packaging].filter(Boolean).join(" ");
   const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
-  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|loc|thanh|cay|vien|tuyp";
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|loc|khoanh|thanh|cay|vien|tuyp";
 
   const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
   const body=explicitKind
@@ -736,7 +736,7 @@ function rowIsCarton(row){
 
 function rowHasMixedBundle(row){
   const name=searchKey(row.source_name||row.name||"");
-  const units="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
+  const units="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
   // Only treat "và" as a mixed bundle when a SECOND explicit pack starts
   // after it, e.g. "24 lon ... và 24 lon ...". Normal product wording
   // such as "hương nhài trắng và tuyết tùng" must not trigger this.
@@ -846,8 +846,31 @@ function xlsWebPrice(main,promo){
       :'');
 }
 
+function retailDisplayName(row,simple){
+  const raw=String(simple&&simple.rawName||row.source_name||row.name||"").trim();
+  if(!raw)return "Sản phẩm";
+
+  const shouldStrip=
+    simple&&
+    !simple.hasCarton&&
+    !simple.mixedBundle&&
+    Number(simple.displayQty)>1&&
+    String(simple.displayUnit||"").toLowerCase()!=="thùng";
+
+  if(!shouldStrip)return raw;
+
+  const units="lốc|túi|bịch|chai|hộp|gói|can|lon|hũ|ly|tô|khoanh|thanh|cây|viên|tuýp";
+  const cleaned=raw.replace(
+    new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s*(?:"+units+")\\s+","iu"),
+    ""
+  ).trim();
+
+  return cleaned||raw;
+}
+
 function productCard(row){
   const simple=simpleRowPrice(row);
+  const displayName=retailDisplayName(row,simple);
   const pref=String(row.preference_state||"normal");
   const mineCarton=simple.hasCarton
     ?readOwnPrice(row.canonical_url,"carton")
@@ -864,7 +887,7 @@ function productCard(row){
     'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
     'data-pack-qty="'+(simple.cartonQty||0)+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
       '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
-        '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(simple.rawName)+'</button>'+
+        '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-qc xls-num-cell">'+
         (simple.displayQty>0

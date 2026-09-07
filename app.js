@@ -827,26 +827,37 @@ function packHierarchyText(qty,label){
   return (q>0?q+" ":"")+unit;
 }
 
+function xlsWebPrice(main,promo){
+  return '<span class="xls-price-main">'+money(main)+'</span>'+
+    (promo&&promo<main
+      ?'<small class="xls-promo-note">ƯĐ '+money(promo)+'</small>'
+      :'');
+}
+
 function productCard(row){
-  const simple=simpleRowPrice(row);
-  const hierarchy=rowPackHierarchy(row);
-  const displayName=retailDisplayName(row,simple);
+  const levels=rowPriceLevels(row);
+  const hierarchy=levels.hierarchy;
+  const displayName=canonicalDisplayName(row);
   const pref=String(row.preference_state||"normal");
-  const mineCarton=simple.hasCarton
+
+  const mineCarton=levels.hasCarton
     ?readOwnPrice(row.canonical_url,"carton")
     :0;
-  const mineRetail=readOwnPrice(row.canonical_url,"retail");
-  const derivedRetail=simple.hasCarton&&simple.cartonQty>1&&mineCarton
-    ?Math.round(mineCarton/simple.cartonQty)
+  const mineMiddle=levels.hasMiddle
+    ?readOwnPrice(row.canonical_url,"middle")
+    :0;
+  const mineRetail=levels.hasLeaf
+    ?readOwnPrice(row.canonical_url,"retail")
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
   return '<tr class="product-card xls-row '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" '+
-    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
-    'data-pack-qty="'+(simple.cartonQty||0)+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
-      '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
+    'data-url="'+escapeAttr(row.canonical_url)+'" '+
+    'data-middle-qty="'+(Number(hierarchy.qty2)||1)+'" '+
+    'data-leaf-qty="'+(Number(hierarchy.qty3)||1)+'">'+
+      '<td class="xls-name" title="'+escapeAttr(levels.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-pack-level">'+
@@ -857,25 +868,30 @@ function productCard(row){
       '<td class="xls-pack-level">'+
         (hierarchy.label2
           ?escapeHtml(packHierarchyText(hierarchy.qty2,hierarchy.label2))
-          :(!simple.hasCarton&&simple.displayUnit
-            ?escapeHtml(packHierarchyText(simple.displayQty,simple.displayUnit))
-            :'<span class="xls-empty">—</span>'))+
+          :'<span class="xls-empty">—</span>')+
       '</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label3
           ?escapeHtml(packHierarchyText(hierarchy.qty3,hierarchy.label3))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-num">'+xlsWebPrice(simple.cartonPrice,simple.promoCartonPrice)+'</td>'+
-      '<td class="xls-num">'+xlsWebPrice(simple.retailPrice,simple.promoRetailPrice)+'</td>'+
+      '<td class="xls-num">'+xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice)+'</td>'+
+      '<td class="xls-num">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
+      '<td class="xls-num">'+xlsWebPrice(levels.leafPrice,levels.promoLeafPrice)+'</td>'+
       '<td>'+
-        (simple.hasCarton
+        (levels.hasCarton
           ?'<input class="sheet-my-carton xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="—">'
           :'<span class="xls-empty">—</span>')+
       '</td>'+
       '<td>'+
-        '<input class="sheet-my-retail xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="'+
-          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail)):'—')+'">'+
+        (levels.hasMiddle
+          ?'<input class="sheet-my-middle xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineMiddle||"")+'" placeholder="—">'
+          :'<span class="xls-empty">—</span>')+
+      '</td>'+
+      '<td>'+
+        (levels.hasLeaf
+          ?'<input class="sheet-my-retail xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="—">'
+          :'<span class="xls-empty">—</span>')+
       '</td>'+
       '<td>'+
         '<input class="sheet-bargain xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="—">'+

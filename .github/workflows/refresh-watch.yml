@@ -1,0 +1,24 @@
+name: Refresh watched GETLINK prices
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    env:
+      API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+      TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
+    steps:
+      - name: Queue due watched links
+        run: |
+          set -euo pipefail
+          test -n "$TOKEN" || (echo "Thiếu GETLINK_GITHUB_TOKEN" && exit 1)
+          curl --fail --silent --show-error             -H "Authorization: Bearer $TOKEN"             -H "Content-Type: application/json"             -X POST "$API/api/refresh-due"             --data '{"limit":10}'             | tee /tmp/refresh-due.json
+          jq '{queued_count,error_count,queued:[.queued[]|{url,refresh_hours}],errors}' /tmp/refresh-due.json

@@ -25,6 +25,15 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 {
+  const p = parsePackStructure("Thùng 12 ly mì mini Doraemon hải sản chua ngọt 53g","","",1,"");
+  assert.equal(p.pack_kind,"Thùng");
+  assert.equal(p.pack_quantity,12);
+  assert.equal(p.pack_unit,"Ly");
+  assert.equal(p.size_value,53);
+  assert.equal(p.size_unit,"g");
+}
+
+{
   const p = parsePackStructure("Bia Budweiser lon 330ml","","",1,"");
   assert.equal(p.pack_kind,"Lon");
   assert.equal(p.pack_quantity,1);
@@ -135,7 +144,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,12);
+  assert.equal(payload.schema_version,13);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -322,7 +331,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,12);
+  assert.equal(payload.schema_version,13);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

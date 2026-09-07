@@ -452,7 +452,7 @@ function productCard(row){
     '<div class="product-cell bhx-unit"><strong>'+money(webUnit)+'</strong><small>/ '+escapeHtml(unitName)+'</small></div>'+
     '<div class="product-cell mine-pack-cell">'+
       '<input class="sheet-my-price" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
-        'value="'+(minePack||"")+'" placeholder="Nhập giá">'+
+        'value="'+(minePack||"")+'" placeholder="Giá/'+escapeAttr(packKind)+'">'+
     '</div>'+
     '<div class="product-cell sheet-mine-unit">'+(mineUnit?money(mineUnit):"—")+'</div>'+
     '<div class="product-cell sheet-diff">'+sheetDiffText(webUnit,mineUnit)+'</div>'+

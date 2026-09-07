@@ -506,82 +506,55 @@ function categoryPayload(inputUrl,requestId,data){
   };
 }
 
-async function fetchBhxApiPayload(inputUrl,requestId){
+async function fetchBhxApiPayload(inputUrl,requestId,env){
   const canonical=canonicalBhx(inputUrl);
   const parts=pathParts(canonical);
-  if(!parts.length)return null;
-  const categorySlug=parts.length>=2?parts[0]:parts[0];
+  if(!parts.length)throw new Error("missing_category");
+  const categorySlug=parts[0];
+  const referer=browserBhxUrl(canonical);
   const params=new URLSearchParams({
     provinceId:"1027",
     wardId:"0",
     districtId:"0",
-    storeId:"2546",
-    categoryUrl:categorySlug,
-    isMobile:"true",
-    isV2:"true",
-    pageSize:"300"
+    storeId:"2546"
   });
-  const api="https://api.bachhoaxanh.com/gw/Category/V2/GetCate?"+params.toString();
+  let api;
+  if(parts.length>=2){
+    params.set("CategoryUrl",categorySlug);
+    params.set("ProductUrl",parts.slice(1).join("/"));
+    api="https://api.bachhoaxanh.com/gw/Product/GetProductDetail?"+params.toString();
+  }else{
+    params.set("categoryUrl",categorySlug);
+    params.set("isMobile","true");
+    params.set("isV2","true");
+    params.set("pageSize","300");
+    api="https://api.bachhoaxanh.com/gw/Category/V2/GetCate?"+params.toString();
+  }
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),12000);
+  const timer=setTimeout(()=>controller.abort(),15000);
   let response;
   try{
     response=await fetch(api,{
-      headers:bhxApiHeaders(categorySlug),
+      headers:bhxApiHeaders(env,referer),
       signal:controller.signal
     });
   }finally{
     clearTimeout(timer);
   }
   if(!response.ok)throw new Error("bhx_api_http_"+response.status);
-  const data=await response.json();
-  if(!data||Number(data.code)!==0||!data.data)throw new Error("bhx_api_invalid");
-  const rawProducts=Array.isArray(data.data.products)?data.data.products:[];
-  const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
-  if(!products.length)throw new Error("bhx_api_empty");
-
-  const checked=new Date().toISOString();
-  if(parts.length>=2){
-    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
-    if(!exact)throw new Error("bhx_api_product_not_found");
-    return {
-      schema_version:2,
-      request_id:requestId,
-      input_url:canonical,
-      input_type:"product",
-      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-      checked_at:checked,
-      category_name:exact.group||"",
-      product:exact,
-      products:[exact],
-      discovered_links:[]
-    };
-  }
-
-  const categoryName=cleanText(
-    (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
-    slugTitle(canonical)
-  );
-  return {
-    schema_version:2,
-    request_id:requestId,
-    input_url:canonical,
-    input_type:"category",
-    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-    checked_at:checked,
-    category_name:categoryName,
-    product:null,
-    products,
-    discovered_links:products.map(p=>p.url)
-  };
+  const envelope=await response.json();
+  if(!envelope||Number(envelope.code)!==0||!envelope.data)throw new Error("bhx_api_invalid");
+  return parts.length>=2
+    ? productDetailPayload(canonical,requestId,envelope.data)
+    : categoryPayload(canonical,requestId,envelope.data);
 }
 
-
-async function fetchSupabaseBhxPayload(inputUrl,requestId){
+async function fetchSupabaseBhxPayload(inputUrl,requestId,env){
+  bhxApiHeaders(env,browserBhxUrl(inputUrl));
   const endpoint="https://gcnoahqsrquxkwkjbuxy.supabase.co/functions/v1/getlink-bhx-proxy";
   const key="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
   const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),18000);
+  const timer=setTimeout(()=>controller.abort(),20000);
   let response;
   try{
     response=await fetch(endpoint,{
@@ -589,7 +562,11 @@ async function fetchSupabaseBhxPayload(inputUrl,requestId){
       headers:{
         "content-type":"application/json",
         "apikey":key,
-        "authorization":"Bearer "+key
+        "authorization":"Bearer "+key,
+        "x-getlink-bhx-bearer":String(env.BHX_BEARER_TOKEN||""),
+        "x-getlink-bhx-xapikey":String(env.BHX_XAPIKEY||""),
+        "x-getlink-bhx-deviceid":String(env.BHX_DEVICE_ID||""),
+        "x-getlink-bhx-reversehost":String(env.BHX_REVERSE_HOST||"http://bhxapi.live")
       },
       body:JSON.stringify({url:browserBhxUrl(inputUrl)}),
       signal:controller.signal
@@ -598,55 +575,14 @@ async function fetchSupabaseBhxPayload(inputUrl,requestId){
     clearTimeout(timer);
   }
   if(!response.ok)throw new Error("supabase_proxy_http_"+response.status);
-  const envelope=await response.json();
-  if(!envelope||envelope.ok!==true||!envelope.payload)throw new Error(
-    "supabase_proxy_"+String(envelope&&envelope.status||envelope&&envelope.error||"failed")
-  );
-  const data=envelope.payload;
-  if(!data||Number(data.code)!==0||!data.data)throw new Error("supabase_bhx_invalid");
-
-  const canonical=canonicalBhx(inputUrl);
-  const parts=pathParts(canonical);
-  const rawProducts=Array.isArray(data.data.products)?data.data.products:[];
-  const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
-  if(!products.length)throw new Error("supabase_bhx_empty");
-  const checked=new Date().toISOString();
-
-  if(parts.length>=2){
-    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
-    if(!exact)throw new Error("supabase_bhx_product_not_found");
-    return {
-      schema_version:2,
-      request_id:requestId,
-      input_url:canonical,
-      input_type:"product",
-      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-      checked_at:checked,
-      category_name:exact.group||"",
-      product:exact,
-      products:[exact],
-      discovered_links:[]
-    };
+  const result=await response.json();
+  if(!result||result.ok!==true||!result.payload||!result.payload.data){
+    throw new Error("supabase_proxy_"+String(result&&result.error||"failed"));
   }
-
-  const categoryName=cleanText(
-    (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
-    slugTitle(canonical)
-  );
-  return {
-    schema_version:2,
-    request_id:requestId,
-    input_url:canonical,
-    input_type:"category",
-    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-    checked_at:checked,
-    category_name:categoryName,
-    product:null,
-    products,
-    discovered_links:products.map(p=>p.url)
-  };
+  return result.kind==="product"
+    ? productDetailPayload(inputUrl,requestId,result.payload.data)
+    : categoryPayload(inputUrl,requestId,result.payload.data);
 }
-
 
 function mirrorRowToProduct(row){
   if(!row||typeof row!=="object"||!row.product_url)return null;

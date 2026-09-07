@@ -566,8 +566,22 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
   return best||{matched:false,structured};
 }
 
-function comparisonData({name,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
-  const pack=parsePackStructure(name,packagingText,featureText,packCount,packUnit);
+function comparisonData({name,url,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText,hierarchy}){
+  const ownedHierarchy=hierarchy&&hierarchy.label1==="Thùng"
+    ?hierarchy
+    :packHierarchyData(name,url||"",packagingText,packCount,packUnit);
+
+  // Nhãn 1 = Thùng is now owned only by the GETLINK hierarchy.
+  // The legacy parser remains only for non-carton rows until the Lẻ phase.
+  const pack=ownedHierarchy.label1==="Thùng"
+    ?{
+      pack_kind:"Thùng",
+      pack_quantity:Math.max(1,Number(ownedHierarchy.qty2)||1),
+      pack_unit:ownedHierarchy.label2||"đơn vị",
+      size_value:parseSize([name,packagingText,featureText].filter(Boolean).join(" ")).value,
+      size_unit:parseSize([name,packagingText,featureText].filter(Boolean).join(" ")).unit
+    }
+    :parsePackStructure(name,packagingText,featureText,packCount,packUnit);
   const quantity=Math.max(1,Number(pack.pack_quantity)||1);
   const currentPrice=Number(current)||null;
   const sys=Number(sysPrice)>0?Number(sysPrice):null;

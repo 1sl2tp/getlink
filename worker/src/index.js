@@ -259,6 +259,10 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
     "([0-9]+(?:[.,][0-9]+)*)\\s*(k|nghin|ngan|d)\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b",
     "g"
   );
+  const discountFirst=new RegExp(
+    "giam\\s+([0-9]+(?:[.,][0-9]+)*)\\s*(k|nghin|ngan|d)?\\s+(?:tu\\s+)?([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b",
+    "g"
+  );
 
   const wrapperKinds=new Set(["Thùng","Lốc","Combo","Bộ"]);
   const packKind=normalizePackWord(pack&&pack.pack_kind||"");
@@ -278,13 +282,7 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
     return parseMoney(priceToken)||0;
   }
 
-  function consider(promoQty,promoUnitRaw,priceToken,suffix){
-    structured=true;
-    const qty=Number(String(promoQty||"").replace(",","."));
-    const promoUnit=normalizePackWord(promoUnitRaw);
-    const total=parseTotal(priceToken,suffix);
-    if(!(qty>0&&total>0))return;
-
+  function requiredPackCount(qty,promoUnit){
     let requiredPacks=0;
     if(wrapperKinds.has(packKind)&&promoUnit===packKind){
       requiredPacks=qty;
@@ -294,6 +292,17 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
         requiredPacks=Math.round(ratio);
       }
     }
+    return requiredPacks;
+  }
+
+  function consider(promoQty,promoUnitRaw,priceToken,suffix){
+    structured=true;
+    const qty=Number(String(promoQty||"").replace(",","."));
+    const promoUnit=normalizePackWord(promoUnitRaw);
+    const total=parseTotal(priceToken,suffix);
+    if(!(qty>0&&total>0))return;
+
+    const requiredPacks=requiredPackCount(qty,promoUnit);
     if(!(requiredPacks>=1))return;
 
     const effectivePack=Math.round(total/requiredPacks);
@@ -315,12 +324,52 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
     }
   }
 
+  function considerDiscount(discountToken,suffix,promoQty,promoUnitRaw){
+    structured=true;
+    const qty=Number(String(promoQty||"").replace(",","."));
+    const promoUnit=normalizePackWord(promoUnitRaw);
+    const discountValue=parseTotal(discountToken,suffix);
+    if(!(qty>0&&discountValue>0&&basePack>0))return;
+
+    const requiredPacks=requiredPackCount(qty,promoUnit);
+    if(!(requiredPacks>=1))return;
+
+    const regularTotal=basePack*requiredPacks;
+    if(discountValue>=regularTotal)return;
+
+    const total=regularTotal-discountValue;
+    const effectivePack=Math.round(total/requiredPacks);
+    const effectiveUnit=Math.round(total/(requiredPacks*packQty));
+    if(effectivePack>=basePack)return;
+
+    const candidate={
+      matched:true,
+      structured:true,
+      required_packs:requiredPacks,
+      required_quantity:qty,
+      required_unit:promoUnit,
+      total_price:total,
+      discount_amount:discountValue,
+      effective_pack_price:effectivePack,
+      effective_unit_price:effectiveUnit
+    };
+    if(!best||candidate.effective_pack_price<best.effective_pack_price){
+      best=candidate;
+    }
+  }
+
   let match;
   while((match=buyFirst.exec(plain))){
     consider(match[1],match[2],match[3],match[4]);
   }
   while((match=priceFirst.exec(plain))){
+    // Do not misread "GIẢM 20.000Đ 5 LỐC" as a total price of 20k.
+    const before=plain.slice(Math.max(0,match.index-12),match.index);
+    if(/\\bgiam\\s*$/.test(before))continue;
     consider(match[3],match[4],match[1],match[2]);
+  }
+  while((match=discountFirst.exec(plain))){
+    considerDiscount(match[1],match[2],match[3],match[4]);
   }
 
   return best||{matched:false,structured};

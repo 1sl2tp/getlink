@@ -739,8 +739,13 @@ function apiProductToPayloadProduct(raw){
   );
   if(!identity.keep)return null;
 
+  const hierarchy=packHierarchyData(
+    identity.name,url,identity.packaging,
+    raw.packageItemCount,raw.packageItemUnit||raw.unit
+  );
   const comparison=comparisonData({
     name:identity.name,
+    url,
     packagingText:identity.packaging,
     featureText:"",
     packCount:raw.packageItemCount,
@@ -748,7 +753,8 @@ function apiProductToPayloadProduct(raw){
     current,
     sysPrice:sys,
     discount,
-    promoText
+    promoText,
+    hierarchy
   });
 
   return {
@@ -757,6 +763,7 @@ function apiProductToPayloadProduct(raw){
     branch,
     name:identity.name,
     packaging:{text:identity.packaging},
+    hierarchy,
     comparison,
     price:{current,original},
     promotion:{
@@ -816,8 +823,13 @@ function apiBoxBuyToProduct(raw,data){
   );
   if(!identity.keep)return null;
 
+  const hierarchy=packHierarchyData(
+    identity.name,url,identity.packaging,
+    raw.packageItemCount,raw.packageItemUnit
+  );
   const comparison=comparisonData({
     name:identity.name,
+    url,
     packagingText:identity.packaging,
     featureText:data&&data.productBo&&data.productBo.featureSpecification||"",
     packCount:raw.packageItemCount,
@@ -825,7 +837,8 @@ function apiBoxBuyToProduct(raw,data){
     current,
     sysPrice,
     discount,
-    promoText
+    promoText,
+    hierarchy
   });
 
   return {
@@ -834,6 +847,7 @@ function apiBoxBuyToProduct(raw,data){
     branch:cleanText(data&&data.brandUrl||data&&data.categoryName||""),
     name:identity.name,
     packaging:{text:identity.packaging},
+    hierarchy,
     comparison,
     price:{current,original:null,sys_price:sysPrice},
     promotion:{

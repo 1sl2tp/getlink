@@ -208,3 +208,51 @@ jobs:
 
           echo "Restore normal after smoke:"
           curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/preference"             --data "$(jq -nc --arg url "$CHILD" '{url:$url,state:"normal"}')"             >/dev/null
+
+
+      - name: Verify fresh milk brands and images
+        env:
+          API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+          PARENT: "https://www.bachhoaxanh.com/sua-tuoi"
+        run: |
+          set -euo pipefail
+
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$PARENT" '{url:$url,force:true}')"             > /tmp/milk-create.json
+
+          RID="$(jq -r '.request_id // empty' /tmp/milk-create.json)"
+          STATUS="$(jq -r '.status // empty' /tmp/milk-create.json)"
+          test -n "$RID"
+
+          if [ "$STATUS" != "complete" ]; then
+            for i in $(seq 1 48); do
+              sleep 5
+              curl --fail --silent --show-error                 -H 'Origin: https://get.taphoa.xyz'                 "$API/api/result?id=$RID" > /tmp/milk-result.json
+              STATUS="$(jq -r '.status // empty' /tmp/milk-result.json)"
+              echo "milk poll=$i status=$STATUS"
+              [ "$STATUS" = "complete" ] && break
+              if [ "$STATUS" = "error" ]; then
+                jq . /tmp/milk-result.json
+                exit 1
+              fi
+            done
+          else
+            cp /tmp/milk-create.json /tmp/milk-result.json
+          fi
+
+          test "$STATUS" = "complete"
+          jq '{category:.payload.category_name,children:(.payload.products|length)}' /tmp/milk-result.json
+          test "$(jq '.payload.products|length' /tmp/milk-result.json)" -ge 100
+
+          PARENT_CANONICAL="https://bachhoaxanh.com/sua-tuoi"
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             --get             --data-urlencode "view=products"             --data-urlencode "parent=$PARENT_CANONICAL"             --data-urlencode "limit=500"             "$API/api/library" > /tmp/milk-products.json
+
+          jq '{
+            products:(.products|length),
+            brands:([.products[].brand_name|select(length>0)]|unique|length),
+            images:([.products[].image|select(type=="string" and startswith("http"))]|length),
+            sample:(.products[0]|{name,brand_name,image,current_price})
+          }' /tmp/milk-products.json
+
+          test "$(jq '.products|length' /tmp/milk-products.json)" -ge 100
+          test "$(jq '[.products[].brand_name|select(length>0)]|unique|length' /tmp/milk-products.json)" -ge 4
+          test "$(jq '[.products[].image|select(type=="string" and startswith("http"))]|length' /tmp/milk-products.json)" -ge 80

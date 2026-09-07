@@ -2325,21 +2325,13 @@ async function handleLibrary(url,env,origin){
 
     const result=await env.DB.prepare(sql).bind(...binds).all();
     let products=(result.results||[]).map(row=>{
-      const persistedHierarchy={
-        label1:row.pack_label_1||"",
-        qty1:Number(row.pack_qty_1)||0,
-        label2:row.pack_label_2||"",
-        qty2:Number(row.pack_qty_2)||0,
-        label3:row.pack_label_3||"",
-        qty3:Number(row.pack_qty_3)||0,
-        evidence:row.pack_evidence||""
-      };
-      const hierarchy=persistedHierarchy.label1
-        ?persistedHierarchy
-        :packHierarchyData(
-          row.name||"",row.canonical_url||"",row.packaging||"",
-          row.pack_quantity||1,row.pack_unit||""
-        );
+      // Schema 20 changed label2/label3 semantics to:
+      // label2 = middle pack, label3 = final leaf. Recompute in the Worker
+      // so old persisted hierarchy rows can never leak the previous meaning.
+      const hierarchy=packHierarchyData(
+        row.name||"",row.canonical_url||"",row.packaging||"",
+        row.pack_quantity||1,row.pack_unit||""
+      );
       const fresh=comparisonData({
         name:row.name||"",
         url:row.canonical_url||"",
@@ -2362,6 +2354,13 @@ async function handleLibrary(url,env,origin){
         pack_label_3:hierarchy.label3||"",
         pack_qty_3:Number(hierarchy.qty3)||0,
         pack_evidence:hierarchy.evidence||"",
+        hierarchy_locked:hierarchy.locked?1:0,
+        web_carton_price:fresh.regular_carton_price,
+        promo_carton_price:fresh.promo_carton_price,
+        web_middle_price:fresh.regular_middle_price,
+        promo_middle_price:fresh.promo_middle_price,
+        web_leaf_price:fresh.regular_leaf_price,
+        promo_leaf_price:fresh.promo_leaf_price,
         promo_pack_price:fresh.promo_pack_price,
         promo_unit_price:fresh.promo_unit_price,
         promotion_active:fresh.promotion_active?1:0,
@@ -2435,20 +2434,10 @@ async function handleLibrary(url,env,origin){
     `).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
-    const mainHierarchy=(row.pack_label_1
-      ?{
-        label1:row.pack_label_1||"",
-        qty1:Number(row.pack_qty_1)||0,
-        label2:row.pack_label_2||"",
-        qty2:Number(row.pack_qty_2)||0,
-        label3:row.pack_label_3||"",
-        qty3:Number(row.pack_qty_3)||0,
-        evidence:row.pack_evidence||""
-      }
-      :packHierarchyData(
-        row.name||"",itemUrl,row.packaging||"",
-        row.cmp_pack_quantity||1,row.cmp_pack_unit||""
-      ));
+    const mainHierarchy=packHierarchyData(
+      row.name||"",itemUrl,row.packaging||"",
+      row.cmp_pack_quantity||1,row.cmp_pack_unit||""
+    );
     const mainComparison=comparisonData({
       name:row.name||"",
       url:itemUrl,

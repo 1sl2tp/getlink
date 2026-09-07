@@ -272,21 +272,300 @@ async def click_load_more_products(page) -> bool:
     return False
 
 
+def go_detail_value(product: dict, label_pattern: str) -> str:
+    for item in product.get("detail") or []:
+        if not isinstance(item, dict):
+            continue
+        name = clean_text(item.get("name") or "")
+        if re.search(label_pattern, name, re.I):
+            return clean_text(item.get("value") or "")
+    return ""
+
+
+def go_product_url(product: dict, observed_urls: dict) -> str:
+    raw_name = clean_text(product.get("name") or "")
+    clean_name = clean_go_product_name(raw_name).lower()
+    if clean_name and clean_name in observed_urls:
+        return observed_urls[clean_name]
+
+    alias = clean_text(product.get("alias") or "").strip("/")
+    if alias:
+        # GO listing anchors are under /product/. Keep a deterministic URL even
+        # when the API batch was never rendered into the DOM.
+        return "https://sieuthi-go.vn/product/" + alias
+
+    pid = str(product.get("id") or "").strip()
+    if pid:
+        return "https://sieuthi-go.vn/product/go-item-" + pid
+    return ""
+
+
+def go_api_product_row(product: dict, category_label: str, observed_urls: dict) -> dict | None:
+    if not isinstance(product, dict):
+        return None
+
+    raw_name = clean_text(product.get("name") or product.get("meta", {}).get("title") or "")
+    name = clean_go_product_name(raw_name)
+    price = parse_money(product.get("price"))
+    if not name or not price:
+        return None
+
+    promo = parse_money(product.get("promotion_price"))
+    original = promo if promo and promo > price else None
+
+    thumbnails = product.get("thumbnail") or []
+    if isinstance(thumbnails, str):
+        thumbnails = [thumbnails]
+    image = next((clean_text(x) for x in thumbnails if clean_text(x)), "")
+    if not image:
+        image = clean_text((product.get("meta") or {}).get("image") or "")
+
+    brand = go_detail_value(product, r"Thương\s*hiệu")
+    if brand:
+        brand = re.sub(r"\s*\([^)]*\)\s*$", "", brand).strip()
+    size = go_detail_value(product, r"Trọng\s*lượng|Dung\s*tích")
+
+    return {
+        "url": go_product_url(product, observed_urls),
+        "name": name,
+        "current_price": price,
+        "original_price": original,
+        "image": image,
+        "brand": brand,
+        "category_name": category_label,
+        "spec_text": size,
+        "barcode": clean_text(product.get("barcode") or ""),
+        "product_id": product.get("id"),
+        "go_alias": clean_text(product.get("alias") or ""),
+        "api_evidence": "go_order2_listProduct",
+    }
+
+
+async def observed_go_product_urls(page) -> dict:
+    rows = await page.locator('a[href*="/product/"]').evaluate_all(
+        """els => els.map(a => ({
+          href: a.href || "",
+          text: String(
+            a.getAttribute("title") ||
+            (a.querySelector("img") && a.querySelector("img").getAttribute("alt")) ||
+            a.textContent ||
+            ""
+          ).replace(/\s+/g," ").trim()
+        }))"""
+    )
+    out = {}
+    for row in rows or []:
+        href = clean_text(row.get("href") or "")
+        name = clean_go_product_name(row.get("text") or "").lower()
+        if href and name:
+            out[name] = href
+    return out
+
+
+def go_list_api_response(url: str, body) -> bool:
+    return (
+        "/api/order2_listProduct" in str(url or "")
+        and isinstance(body, dict)
+        and body.get("status") == "success"
+        and isinstance(body.get("products"), list)
+        and isinstance(body.get("pagination"), dict)
+    )
+
+
 async def capture_go(ws_url: str, target_url: str) -> dict:
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(ws_url, timeout=60000)
         try:
             page = await browser.new_page()
             await page.route("**/*", route_handler)
+
+            api_events = asyncio.Queue()
+            response_tasks = set()
+
+            async def consume_response(response):
+                try:
+                    if response.status != 200:
+                        return
+                    if "/api/order2_listProduct" not in response.url:
+                        return
+                    body = await response.json()
+                    if not go_list_api_response(response.url, body):
+                        return
+                    try:
+                        request_payload = response.request.post_data_json
+                    except Exception:
+                        request_payload = None
+                    if not isinstance(request_payload, dict):
+                        try:
+                            request_payload = json.loads(response.request.post_data or "{}")
+                        except Exception:
+                            request_payload = {}
+                    try:
+                        request_headers = await response.request.all_headers()
+                    except Exception:
+                        request_headers = {}
+                    await api_events.put({
+                        "url": response.url,
+                        "body": body,
+                        "payload": request_payload,
+                        "headers": request_headers,
+                    })
+                except Exception:
+                    return
+
+            def on_response(response):
+                task = asyncio.create_task(consume_response(response))
+                response_tasks.add(task)
+                task.add_done_callback(response_tasks.discard)
+
+            page.on("response", on_response)
             await prepare_go_page(page, target_url)
 
             category_label = category_name_from_url(target_url)
+
+            first_event = None
+            deadline = time.monotonic() + 12
+            while time.monotonic() < deadline and first_event is None:
+                try:
+                    first_event = await asyncio.wait_for(
+                        api_events.get(),
+                        timeout=min(1.5, max(0.1, deadline - time.monotonic())),
+                    )
+                except asyncio.TimeoutError:
+                    pass
+
+            if first_event:
+                first_body = first_event["body"]
+                pagination = first_body.get("pagination") or {}
+                total_pages = max(1, int(pagination.get("total_pages") or 1))
+                page_size = int(pagination.get("page_size") or 15)
+                base_payload = dict(first_event.get("payload") or {})
+
+                # Exact payload confirmed from GO Network:
+                # page, category, filter_brand, filter_subfamily, search,
+                # store, sitecode, platform, lang.
+                # Preserve the live request and change only page.
+                base_payload.setdefault("filter_brand", [])
+                base_payload.setdefault("filter_subfamily", [])
+                base_payload.setdefault("search", None)
+                base_payload.setdefault("platform", 2)
+                base_payload.setdefault("lang", "vi")
+
+                observed_urls = await observed_go_product_urls(page)
+                products = {}
+
+                def add_body(body):
+                    for raw_product in body.get("products") or []:
+                        row = go_api_product_row(
+                            raw_product,
+                            category_label,
+                            observed_urls,
+                        )
+                        if not row or not row.get("url"):
+                            continue
+                        key = str(
+                            raw_product.get("id") or
+                            raw_product.get("barcode") or
+                            row["url"]
+                        )
+                        products[key] = row
+
+                add_body(first_body)
+
+                api_headers = {}
+                for key, value in (first_event.get("headers") or {}).items():
+                    low = str(key).lower()
+                    if low in {
+                        "accept", "accept-language", "content-type",
+                        "origin", "referer", "user-agent"
+                    } or low.startswith("x-"):
+                        api_headers[key] = value
+
+                async def fetch_page(page_number: int):
+                    payload = dict(base_payload)
+                    payload["page"] = page_number
+                    last_error = ""
+                    for attempt in range(3):
+                        try:
+                            response = await page.context.request.post(
+                                first_event["url"],
+                                data=payload,
+                                headers=api_headers,
+                                timeout=25000,
+                            )
+                            if response.ok:
+                                body = await response.json()
+                                if go_list_api_response(first_event["url"], body):
+                                    return page_number, body, ""
+                            last_error = "http_" + str(response.status)
+                        except Exception as exc:
+                            last_error = str(exc)[:300]
+                        await asyncio.sleep(0.4 * (attempt + 1))
+                    return page_number, None, last_error
+
+                first_page = int(pagination.get("current_page") or base_payload.get("page") or 1)
+                remaining = [
+                    n for n in range(1, total_pages + 1)
+                    if n != first_page
+                ]
+                semaphore = asyncio.Semaphore(8)
+
+                async def limited(n):
+                    async with semaphore:
+                        return await fetch_page(n)
+
+                results = await asyncio.gather(
+                    *[limited(n) for n in remaining],
+                    return_exceptions=False,
+                )
+
+                failed_pages = []
+                for page_number, body, error in sorted(results, key=lambda x: x[0]):
+                    if body is None:
+                        failed_pages.append({"page": page_number, "error": error})
+                        continue
+                    add_body(body)
+
+                print(json.dumps({
+                    "go_api": "order2_listProduct",
+                    "category": base_payload.get("category"),
+                    "store": base_payload.get("store"),
+                    "sitecode": base_payload.get("sitecode"),
+                    "total_pages": total_pages,
+                    "page_size": page_size,
+                    "products_loaded": len(products),
+                    "failed_pages": failed_pages,
+                    "detail_pages_opened": 0,
+                    "load_more_clicks": 0,
+                }, ensure_ascii=False))
+
+                if failed_pages:
+                    raise RuntimeError(
+                        "go_api_pages_failed:" +
+                        json.dumps(failed_pages, ensure_ascii=False)
+                    )
+                if not products:
+                    raise RuntimeError("go_api_no_products")
+
+                return {
+                    "category_name": category_label,
+                    "store_name": "GO!",
+                    "store_code": base_payload.get("store"),
+                    "sitecode": base_payload.get("sitecode"),
+                    "total_pages": total_pages,
+                    "page_size": page_size,
+                    "products": list(products.values()),
+                    "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                }
+
+            # Fallback only if GO changes the API or the first request was not
+            # observable. This keeps the old UI click path as a safety net.
             products = {}
             stable = 0
             previous_count = -1
             previous_height = -1
-
             load_more_clicks = 0
+
             for _ in range(60):
                 for row in await extract_products(page, category_label):
                     products[row["url"]] = row
@@ -321,6 +600,7 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
                     break
 
             print(json.dumps({
+                "go_api": "fallback_dom",
                 "go_products_loaded": len(products),
                 "go_load_more_clicks": load_more_clicks,
             }, ensure_ascii=False))
@@ -330,7 +610,7 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
 
             return {
                 "category_name": category_label,
-                "store_name": "",
+                "store_name": "GO!",
                 "products": list(products.values()),
                 "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }

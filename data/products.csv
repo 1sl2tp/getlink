@@ -1,1 +1,1 @@
-name,price,packaging,url,image
+source,group,branch,name,packaging,competitor_price,original_price,promotion_price,promotion_text,my_price,difference_market_minus_mine,watch,last_checked_at,url,image

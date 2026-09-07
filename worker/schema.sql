@@ -217,3 +217,39 @@ CREATE TABLE IF NOT EXISTS link_identity(
 
 CREATE INDEX IF NOT EXISTS idx_link_identity_base
 ON link_identity(base_name,updated_at);
+
+
+CREATE TABLE IF NOT EXISTS source_product_identity(
+  link_url TEXT PRIMARY KEY,
+  source_name TEXT NOT NULL,
+  source_product_id TEXT,
+  source_code TEXT,
+  barcode TEXT,
+  sku TEXT,
+  brand TEXT,
+  category TEXT,
+  raw_name TEXT,
+  raw_description TEXT,
+  size_value REAL,
+  size_unit TEXT,
+  pack_label_1 TEXT,
+  pack_qty_1 REAL NOT NULL DEFAULT 0,
+  pack_label_2 TEXT,
+  pack_qty_2 REAL NOT NULL DEFAULT 0,
+  pack_label_3 TEXT,
+  pack_qty_3 REAL NOT NULL DEFAULT 0,
+  match_name TEXT,
+  match_key TEXT,
+  match_basis TEXT,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY(link_url) REFERENCES links(canonical_url) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_source_identity_barcode
+ON source_product_identity(barcode);
+
+CREATE INDEX IF NOT EXISTS idx_source_identity_code
+ON source_product_identity(source_code);
+
+CREATE INDEX IF NOT EXISTS idx_source_identity_match
+ON source_product_identity(match_key,source_name);

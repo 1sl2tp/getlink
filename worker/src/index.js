@@ -1,5 +1,8 @@
 const BAD_PATH=["tin-tuc","blog","khuyen-mai","kinh-nghiem-hay"];
 const PROMO_WORDS=["ưu đãi","khuyến mãi","giảm","tặng","mua ","combo","quà"];
+const OWNER="1sl2tp";
+const REPO="getlink";
+const WORKFLOW="scrape.yml";
 
 function json(data,status=200,origin=""){
   const headers={
@@ -48,6 +51,31 @@ function idForUrl(url){
   return crypto.subtle.digest("SHA-256",bytes).then(buf=>
     Array.from(new Uint8Array(buf)).slice(0,12).map(x=>x.toString(16).padStart(2,"0")).join("")
   );
+}
+
+async function dispatchGithub(env,url,requestId){
+  if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
+  return fetch("https://api.github.com/repos/"+OWNER+"/"+REPO+"/actions/workflows/"+WORKFLOW+"/dispatches",{
+    method:"POST",
+    headers:{
+      "accept":"application/vnd.github+json",
+      "authorization":"Bearer "+env.GITHUB_TOKEN,
+      "content-type":"application/json",
+      "x-github-api-version":"2026-03-10",
+      "user-agent":"getlink-worker"
+    },
+    body:JSON.stringify({ref:"main",inputs:{url,request_id:requestId}})
+  });
+}
+
+async function readGithubJob(requestId){
+  const safe=String(requestId||"").replace(/[^A-Za-z0-9_-]/g,"");
+  if(!safe)return null;
+  const raw="https://raw.githubusercontent.com/"+OWNER+"/"+REPO+"/main/data/jobs/"+safe+".json?ts="+Date.now();
+  const r=await fetch(raw,{headers:{"user-agent":"getlink-worker"}});
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error("github_result_"+r.status);
+  return r.json();
 }
 
 function cleanText(v){
@@ -497,14 +525,48 @@ async function handleCreate(request,env,origin){
       registry_count:saved.registry_count
     },200,origin);
   }catch(error){
-    const detail=String(error&&error.message||error).slice(0,800);
-    await env.DB.prepare(
-      "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
-    ).bind(detail,new Date().toISOString(),requestId).run();
-    await env.DB.prepare(
-      "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
-    ).bind(new Date().toISOString(),url).run();
-    return json({error:"scrape_failed",detail,request_id:requestId},502,origin);
+    const browserError=String(error&&error.message||error).slice(0,800);
+    if(!env.GITHUB_TOKEN){
+      const detail=browserError+"; github_fallback_not_configured";
+      await env.DB.prepare(
+        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+      ).bind(detail,new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+      return json({error:"github_fallback_not_configured",detail:browserError,request_id:requestId},503,origin);
+    }
+
+    try{
+      const r=await dispatchGithub(env,url,requestId);
+      if(!r.ok){
+        const detail=(await r.text()).slice(0,700);
+        throw new Error("github_dispatch_"+r.status+":"+detail);
+      }
+      await env.DB.prepare(
+        "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
+      ).bind(new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='queued',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+      return json({
+        request_id:requestId,
+        status:"queued",
+        input_url:url,
+        link_type:initialType,
+        engine:"github",
+        browser_error:browserError
+      },202,origin);
+    }catch(dispatchError){
+      const detail=String(dispatchError&&dispatchError.message||dispatchError).slice(0,900);
+      await env.DB.prepare(
+        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+      ).bind(detail,new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+      return json({error:"github_dispatch_failed",detail,request_id:requestId},502,origin);
+    }
   }
 }
 
@@ -522,6 +584,21 @@ async function handleResult(url,env,origin){
     },200,origin);
   }
   if(job.status==="error")return json({status:"error",error:job.error||"unknown"},200,origin);
+
+  try{
+    const payload=await readGithubJob(id);
+    if(payload){
+      if(!payload.request_id)payload.request_id=id;
+      const saved=await persistPayload(env,payload);
+      return json({status:"complete",...saved},200,origin);
+    }
+  }catch(error){
+    return json({
+      status:"running",
+      request_id:id,
+      detail:String(error&&error.message||error).slice(0,500)
+    },200,origin);
+  }
   return json({status:job.status||"running",request_id:id},200,origin);
 }
 
@@ -567,7 +644,7 @@ export default {
       if(request.method==="GET"&&url.pathname==="/api/links")return handleLinks(url,env,origin||"*");
       if(request.method==="GET"&&url.pathname==="/health"){
         const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
-        return json({ok:true,browser:Boolean(env.BROWSER),links:Number(count&&count.n||0)},200,origin||"*");
+        return json({ok:true,browser:Boolean(env.BROWSER),github_fallback:Boolean(env.GITHUB_TOKEN),links:Number(count&&count.n||0)},200,origin||"*");
       }
       return json({error:"not_found"},404,origin||"*");
     }catch(error){

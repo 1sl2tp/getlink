@@ -1624,7 +1624,7 @@ $("#libraryProducts").addEventListener("click",async e=>{
     return;
   }
 
-  openLibraryItem(card.dataset.url||"");
+  if(!isCompactBrowse())openLibraryItem(card.dataset.url||"");
 });
 
 $("#libraryProducts").addEventListener("input",e=>{

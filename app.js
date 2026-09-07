@@ -582,21 +582,53 @@ function inferSheetPack(row){
   };
 }
 
-function rowIsCarton(row){
-  // Only this link's visible/current API text may decide Thùng.
-  // Do not trust an old hidden pack_kind by itself.
+function rowCartonStructure(row){
   const name=searchKey(row.source_name||row.name||"");
   const packaging=searchKey(row.packaging||"");
-  const structural=value=>
-    /^thung\b/.test(value)||
-    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(value);
-  return structural(name)||structural(packaging);
+  const units="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp|loc";
+
+  // A pure BHX carton must START with "Thùng".
+  // Exception: if the product name itself is neutral (e.g. "24 lon",
+  // "4 túi") the first price label may start with "Thùng" and is then
+  // authoritative for this link. A name starting "2 thùng" or "Combo..."
+  // is a multi-carton offer, not a pure Thùng row.
+  const multiName=name.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s+thung\b/);
+  const nameIsCombo=/^combo\b/.test(name);
+  const pureByName=/^thung\b/.test(name);
+  const pureByPrice=!pureByName&&!multiName&&!nameIsCombo&&/^thung\b/.test(packaging);
+  const isPureCarton=pureByName||pureByPrice;
+
+  let cartonCount=1;
+  if(multiName){
+    cartonCount=Math.max(1,Number(String(multiName[1]).replace(",","."))||1);
+  }
+
+  const innerText=pureByName?name:(/^thung\b/.test(packaging)?packaging:name);
+  const pureInner=innerText.match(
+    new RegExp("^thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
+  );
+  const multiInner=name.match(
+    new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s+thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
+  );
+  const inner=pureInner||multiInner;
+
+  return {
+    isPureCarton,
+    cartonCount,
+    itemCount:inner?Math.max(1,Number(String(inner[1]).replace(",","."))||1):0,
+    itemUnit:inner?sheetNormalizeUnit(inner[2]):""
+  };
+}
+
+function rowIsCarton(row){
+  return rowCartonStructure(row).isPureCarton;
 }
 
 function simpleRowPrice(row){
   const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
-  const hasCarton=rowIsCarton(row);
+  const structure=rowCartonStructure(row);
+  const hasCarton=structure.isPureCarton;
   const ownPrice=Number(
     row.promotion_price||
     row.current_price||
@@ -606,22 +638,31 @@ function simpleRowPrice(row){
     0
   );
 
-  // One detail link owns one authoritative price only.
-  // Put that price in exactly one bucket; never derive the other bucket.
-  const cartonPrice=hasCarton?ownPrice:0;
-  const retailPrice=hasCarton?0:ownPrice;
+  // "Thùng xx chai/lon/..." = one carton.
+  // "2 thùng..." / "Combo 5 thùng..." = multi-carton offer:
+  // normalize total price to one carton, but DO NOT classify it as a
+  // pure Thùng row in the filter.
+  const hasCartonMath=hasCarton||structure.cartonCount>1;
+  const cartonPrice=hasCartonMath&&ownPrice
+    ?Math.round(ownPrice/Math.max(1,structure.cartonCount))
+    :0;
+  const retailPrice=hasCartonMath&&structure.itemCount>0&&cartonPrice
+    ?Math.round(cartonPrice/structure.itemCount)
+    :(!hasCartonMath?ownPrice:0);
 
   const cartonQty=hasCarton
-    ?(Number(row.pack_quantity)||Number(inferred.qty)||1)
-    :0;
+    ?(structure.itemCount||Number(row.pack_quantity)||Number(inferred.qty)||1)
+    :(structure.cartonCount>1?structure.cartonCount:0);
   const cartonUnit=hasCarton
-    ?String(row.pack_unit||inferred.unit||"đơn vị").trim()
-    :"";
-  const retailUnit=String(row.pack_unit||inferred.unit||"đơn vị").trim();
+    ?(structure.itemUnit||String(row.pack_unit||inferred.unit||"đơn vị").trim())
+    :(structure.cartonCount>1?"Thùng":"");
+  const retailUnit=structure.itemUnit||
+    String(row.pack_unit||inferred.unit||"đơn vị").trim();
 
   return {
     rawName:rawName||"Sản phẩm",
     hasCarton,
+    cartonCount:structure.cartonCount,
     cartonPrice,
     cartonQty,
     cartonUnit:cartonUnit||"đơn vị",

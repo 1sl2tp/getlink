@@ -2016,6 +2016,24 @@ async function persistWinmartResponse(env,job,requestId,raw){
   };
 }
 
+function winmartCacheHasRealImages(payload){
+  const products=Array.isArray(payload&&payload.products)?payload.products:[];
+  if(!products.length)return false;
+  let real=0;
+  for(const p of products){
+    const image=String(p&&p.image||"").trim().toLowerCase();
+    if(image&&
+       !image.startsWith("data:")&&
+       !image.startsWith("blob:")&&
+       !image.includes("placeholder")&&
+       !image.includes("transparent")){
+      real+=1;
+      if(real>=Math.min(3,products.length))return true;
+    }
+  }
+  return false;
+}
+
 async function handleCreate(request,env,origin){
   let body;
   try{body=await request.json();}
@@ -2031,7 +2049,13 @@ async function handleCreate(request,env,origin){
   }
 
   const force=Boolean(body&&body.force);
-  const cached=force?null:await loadFreshCache(env,url);
+  let cached=force?null:await loadFreshCache(env,url);
+  if(
+    cached&&sourceKey==="winmart"&&
+    !winmartCacheHasRealImages(cached.payload)
+  ){
+    cached=null;
+  }
   if(cached){
     if(sourceKey==="bachhoaxanh"){
       await repairCachedGraph(env,cached.payload);

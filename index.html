@@ -8,13 +8,48 @@
 </head>
 <body>
 <main class="wrap">
-  <header>
+  <header class="site-head">
     <div class="logo">GL</div>
-    <div><h1>GETLINK</h1><p>Lấy giá Bách Hóa XANH từ link nhóm hoặc link chi tiết</p></div>
+    <div>
+      <h1>GETLINK</h1>
+      <p>Thư viện giá Bách Hóa XANH · Tra cứu và so sánh theo quy cách</p>
+    </div>
   </header>
 
-  <section class="card">
-    <label for="url">Link Bách Hóa XANH</label>
+  <section class="card catalog">
+    <div class="catalog-toolbar">
+      <div>
+        <h2>Thư viện giá</h2>
+        <p>Chọn nhóm hoặc tìm sản phẩm đã lấy. Bấm sản phẩm để mở giá từ D1 ngay.</p>
+      </div>
+      <button id="toggleImport" class="secondary" type="button">+ Thêm / cập nhật link</button>
+    </div>
+
+    <div class="catalog-search">
+      <input id="librarySearch" autocomplete="off" placeholder="Tìm tên sản phẩm, nhãn, quy cách...">
+    </div>
+
+    <div id="categoryTabs" class="category-tabs">
+      <button class="category-chip active" type="button">Đang tải thư viện...</button>
+    </div>
+
+    <div class="catalog-subhead">
+      <strong id="libraryTitle">Sản phẩm đã lưu</strong>
+      <span id="libraryCount"></span>
+    </div>
+
+    <div id="libraryProducts" class="product-grid"></div>
+    <div id="libraryEmpty" class="library-empty" hidden>Chưa có sản phẩm trong nhóm này.</div>
+  </section>
+
+  <section class="card import-card" id="importCard" hidden>
+    <div class="import-head">
+      <div>
+        <strong>Thêm / cập nhật link Bách Hóa XANH</strong>
+        <small>Link đã lấy trong vòng 24 giờ sẽ đọc lại từ D1, không gọi Bright Data.</small>
+      </div>
+      <button id="closeImport" class="icon-button" type="button" aria-label="Đóng">×</button>
+    </div>
     <div class="input-row">
       <input id="url" autocomplete="off" placeholder="https://www.bachhoaxanh.com/...">
       <button id="get" type="button">Lấy giá</button>
@@ -28,25 +63,39 @@
   <section class="card result" id="result" hidden>
     <div class="result-head">
       <div>
-        <div class="result-kicker"><span id="source">Bách Hóa XANH</span><span id="linkType" class="type-badge"></span></div>
+        <div class="result-kicker">
+          <span id="source">Bách Hóa XANH</span>
+          <span id="linkType" class="type-badge"></span>
+        </div>
         <h2 id="name"></h2>
       </div>
-      <a id="productLink" target="_blank" rel="noopener">Mở link</a>
+      <a id="productLink" target="_blank" rel="noopener">Mở link gốc</a>
     </div>
 
     <div class="meta-grid">
       <div><small>Nhóm</small><strong id="group">—</strong></div>
       <div><small>Nhánh</small><strong id="branch">—</strong></div>
-      <div><small>Quy cách / số link</small><strong id="packaging">—</strong></div>
+      <div><small>Quy cách</small><strong id="packaging">—</strong></div>
     </div>
 
     <div class="price-grid" id="priceGrid">
-      <div class="price"><small>1 · Giá của họ</small><strong id="webPrice">—</strong></div>
-      <div class="price promo"><small>2 · Ưu đãi</small><strong id="promoPrice">—</strong><span id="promoText"></span></div>
+      <div class="price">
+        <small>Giá thường BHX</small>
+        <strong id="webPrice">—</strong>
+      </div>
+      <div class="price promo">
+        <small>Ưu đãi BHX</small>
+        <strong id="promoPrice">—</strong>
+        <span id="promoText"></span>
+      </div>
       <div class="price mine">
-        <small>3 · Giá của mình</small>
+        <small>Giá của mình</small>
         <input id="myPrice" inputmode="numeric" placeholder="Nhập tổng giá">
-        <div class="mine-qty"><span>Giá trên</span><input id="myPackQty" inputmode="decimal" value="1"><span>quy cách</span></div>
+        <div class="mine-qty">
+          <span>Giá trên</span>
+          <input id="myPackQty" inputmode="decimal" value="1">
+          <span>quy cách</span>
+        </div>
         <span id="myUnitPrice" class="unit-note"></span>
       </div>
     </div>
@@ -57,12 +106,18 @@
     </div>
 
     <div id="productVariants" class="children" hidden>
-      <div class="children-title"><strong>Quy cách / variant</strong><span id="variantCount"></span></div>
+      <div class="children-title">
+        <strong>Quy cách / variant</strong>
+        <span id="variantCount"></span>
+      </div>
       <div id="variantList" class="child-list"></div>
     </div>
 
     <div id="categoryChildren" class="children" hidden>
-      <div class="children-title"><strong>Link chi tiết đã phát hiện</strong><span id="childCount"></span></div>
+      <div class="children-title">
+        <strong>Link chi tiết đã phát hiện</strong>
+        <span id="childCount"></span>
+      </div>
       <div id="childList" class="child-list"></div>
     </div>
   </section>

@@ -34,10 +34,13 @@ function categoryRoot(url){
 function money(v){
   const n=Math.round(Number(v||0));
   if(n<=0)return "—";
-  const full=n.toLocaleString("vi-VN");
-  return n%1000===0
-    ?Math.round(n/1000).toLocaleString("vi-VN")
-    :full;
+
+  // Display prices in thousands everywhere:
+  // 738.000 -> 738, 61.500 -> 61.5, 46.833 -> 46.833.
+  const scaled=n/1000;
+  return scaled.toFixed(3)
+    .replace(/0+$/,"")
+    .replace(/\.$/,"");
 }
 
 function escapeHtml(v){

@@ -299,18 +299,11 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     if isinstance(obj.get("brand"), dict):
         brand = clean_text(first_value(obj["brand"], ("name", "label")) or brand)
 
-    unit = clean_text(first_value(obj, (
-        "unit", "uom", "uomName", "packageUnit", "package_unit",
-        "packingUnit", "measureUnit", "unitName"
-    )))
-    api_unit = normalize_unit(unit)
-    name_unit = unit_from_name(name)
-    unit = api_unit or name_unit
-    unit_evidence = "api_unit" if api_unit else ("name_unit" if name_unit else "")
-
-    packaging = clean_text(first_value(obj, (
-        "packaging", "packSize", "pack_size", "unitText", "unit_text"
-    )))
+    # WinMart's authoritative retail body is the visible "Chọn loại"
+    # control on the product detail page. Do not infer it from the title/API.
+    unit = ""
+    unit_evidence = ""
+    packaging = ""
     image = image_url([
         obj.get("imageUrl"), obj.get("image_url"),
         obj.get("thumbnailUrl"), obj.get("thumbnail_url"),
@@ -494,8 +487,8 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         "original_price": original,
                         "image": image_url(row.get("image") or "", page.url),
                         "brand": "",
-                        "unit": unit_from_name(title),
-                        "unit_evidence": "name_unit" if unit_from_name(title) else "",
+                        "unit": "",
+                        "unit_evidence": "",
                         "packaging": "",
                         "category_name": category_label,
                         "promotion_text": "",
@@ -684,8 +677,8 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                             }
                           };
                           const out = [];
-                          for (let i=0;i<items.length;i+=8) {
-                            const part = await Promise.all(items.slice(i,i+8).map(one));
+                          for (let i=0;i<items.length;i+=12) {
+                            const part = await Promise.all(items.slice(i,i+12).map(one));
                             out.push(...part);
                           }
                           return out;
@@ -714,18 +707,12 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     if detail_image:
                         product["image"] = detail_image
 
-            # Only open detail HTML when the listing/API still lacks a
-            # reliable retail unit or a real image. Most WinMart rows already
-            # expose these on the category page; avoiding 200+ detail fetches
-            # keeps the total-category GET fast. When detail is fetched,
-            # "Chọn loại" remains authoritative and overrides guesses.
-            detail_candidates = [
-                p for p in products
-                if not normalize_unit(p.get("unit") or "")
-                or not image_url(p.get("image") or "", p.get("url") or target_url)
-            ]
-            for start in range(0, len(detail_candidates), 40):
-                await enrich_detail_batch(detail_candidates[start:start + 40])
+            # Every product must be checked against the detail-page
+            # "Chọn loại" control. This is the only authoritative WinMart
+            # retail unit source; titles such as "... gói 2kg" are descriptive
+            # text only and must never define the unit.
+            for start in range(0, len(products), 48):
+                await enrich_detail_batch(products[start:start + 48])
 
             return {
                 "category_name": root_label,

@@ -43,6 +43,9 @@ function canonical(url){
       if(cate2)out.searchParams.set("cate2",cate2);
       return out.toString().replace(/\?$/,"").toLowerCase();
     }
+    if(host==="sieuthi-go.vn"){
+      return ("https://sieuthi-go.vn"+path).toLowerCase();
+    }
     return (u.origin+path).toLowerCase();
   }catch{return ""}
 }
@@ -654,9 +657,24 @@ function isWinmartRow(row){
   }
 }
 
+function isGoRow(row){
+  const raw=searchKey([
+    row&&row.source,
+    row&&row.source_name
+  ].filter(Boolean).join(" "));
+  if(raw==="go"||raw.includes("go ha nam"))return true;
+  try{
+    return new URL(String(row&&row.canonical_url||"")).hostname
+      .toLowerCase().replace(/^www\./,"")==="sieuthi-go.vn";
+  }catch{
+    return false;
+  }
+}
+
 function sourceDisplayLabel(row){
   const raw=String(row&&row.source||"").trim();
   if(isWinmartRow(row))return "WM";
+  if(isGoRow(row))return "GO";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
   return raw;
@@ -664,6 +682,7 @@ function sourceDisplayLabel(row){
 
 function sourceDisplayClass(row){
   if(isWinmartRow(row))return " source-winmart";
+  if(isGoRow(row))return " source-go";
   const key=searchKey(String(row&&row.source||""));
   if(!key||key.includes("bach hoa xanh"))return " source-bhx";
   return "";
@@ -852,7 +871,7 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
-          '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":"")+'">'+money(price)+'</strong>'+
+          '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
         '</div>'+
       '</div>'+
     '</article>';
@@ -1460,7 +1479,7 @@ function startPolling(){
 function supportedSourceUrl(raw){
   try{
     const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
-    return host==="bachhoaxanh.com"||host==="winmart.vn";
+    return host==="bachhoaxanh.com"||host==="winmart.vn"||host==="sieuthi-go.vn";
   }catch{
     return false;
   }
@@ -1469,7 +1488,9 @@ function supportedSourceUrl(raw){
 function inputSourceName(raw){
   try{
     const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
-    return host==="winmart.vn"?"WinMart":"Bách Hóa XANH";
+    if(host==="winmart.vn")return "WinMart";
+    if(host==="sieuthi-go.vn")return "GO!";
+    return "Bách Hóa XANH";
   }catch{
     return "";
   }
@@ -1479,7 +1500,7 @@ $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
   if(!supportedSourceUrl(url)){
-    setJobStage("error","Chỉ hỗ trợ link bachhoaxanh.com hoặc winmart.vn.");
+    setJobStage("error","Chỉ hỗ trợ link bachhoaxanh.com, winmart.vn hoặc sieuthi-go.vn.");
     return;
   }
   if(!API){

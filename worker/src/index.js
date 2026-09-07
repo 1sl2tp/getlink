@@ -1216,6 +1216,39 @@ function callbackAuthorized(request,env){
   return got==="Bearer "+expected;
 }
 
+
+async function handleProgress(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  let raw;
+  try{raw=await request.json();}
+  catch{return json({error:"invalid_json"},400,"");}
+
+  const id=String(raw&&raw.request_id||"")
+    .replace(/[^A-Za-z0-9_-]/g,"");
+  const stage=String(raw&&raw.stage||"").trim().toLowerCase();
+  const allowed=new Set(["runner","brightdata","saving"]);
+  if(!id)return json({error:"missing_request_id"},400,"");
+  if(!allowed.has(stage))return json({error:"invalid_stage"},400,"");
+
+  const job=await env.DB.prepare(
+    "SELECT canonical_url FROM jobs WHERE request_id=?"
+  ).bind(id).first();
+  if(!job)return json({error:"not_found"},404,"");
+
+  const now=new Date().toISOString();
+  await env.DB.prepare(
+    "UPDATE jobs SET status=?,updated_at=? WHERE request_id=?"
+  ).bind(stage,now,id).run();
+  await env.DB.prepare(
+    "UPDATE links SET last_status=?,updated_at=? WHERE canonical_url=?"
+  ).bind(stage,now,job.canonical_url).run();
+
+  return json({status:stage,request_id:id,updated_at:now},200,"");
+}
+
 async function handleComplete(request,env){
   if(!callbackAuthorized(request,env)){
     return json({error:"unauthorized"},401,"");
@@ -1825,6 +1858,9 @@ export default {
     try{
       if(request.method==="POST"&&url.pathname==="/api/get-price"){
         return handleCreate(request,env,origin||"*");
+      }
+      if(request.method==="POST"&&url.pathname==="/api/progress"){
+        return handleProgress(request,env);
       }
       if(request.method==="POST"&&url.pathname==="/api/complete"){
         return handleComplete(request,env);

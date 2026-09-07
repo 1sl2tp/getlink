@@ -283,15 +283,26 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     if original and original <= current:
         original = None
 
-    category = clean_text(first_value(obj, (
+    api_category = clean_text(first_value(obj, (
         "category2Name", "category_name", "categoryName", "cateName", "category"
     )))
     if isinstance(obj.get("category"), dict):
-        category = clean_text(
-            first_value(obj["category"], ("name", "label", "title")) or category
+        api_category = clean_text(
+            first_value(obj["category"], ("name", "label", "title")) or api_category
         )
-    if not category:
-        category = clean_text(category_label)
+
+    # When scanning a concrete WinMart subcategory (e.g. "Dầu ăn"),
+    # that visible category is more specific than a broad API parent
+    # such as "Gia vi". Preserve it so BHX taxonomy mapping stays correct.
+    page_category = clean_text(category_label)
+    page_key = re.sub(r"[^a-z0-9]+", " ", (
+        page_category.lower()
+        .replace("đ", "d")
+    )).strip()
+    if page_category and page_key not in {"gia vi", "winmart"}:
+        category = page_category
+    else:
+        category = api_category or page_category
 
     brand = clean_text(first_value(obj, (
         "brandName", "brand_name", "brand", "manufacturer"

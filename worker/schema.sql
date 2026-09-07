@@ -61,3 +61,56 @@ CREATE TABLE IF NOT EXISTS price_snapshots(
 
 CREATE INDEX IF NOT EXISTS idx_snapshots_link_checked
 ON price_snapshots(link_id,checked_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS product_variants(
+  id TEXT PRIMARY KEY,
+  parent_url TEXT NOT NULL,
+  variant_url TEXT NOT NULL,
+  bhx_product_id INTEGER,
+  product_code TEXT,
+  name TEXT,
+  title TEXT,
+  packaging TEXT,
+  package_item_count REAL,
+  package_item_unit TEXT,
+  current_price INTEGER,
+  sys_price INTEGER,
+  discount_percent REAL,
+  stock INTEGER,
+  is_can_buy INTEGER,
+  text_status TEXT,
+  store_id INTEGER,
+  po_date TEXT,
+  image TEXT,
+  raw_json TEXT,
+  last_checked_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(parent_url,variant_url,product_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_variants_parent
+ON product_variants(parent_url);
+
+CREATE INDEX IF NOT EXISTS idx_variants_product_code
+ON product_variants(product_code);
+
+CREATE TABLE IF NOT EXISTS variant_price_snapshots(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  variant_id TEXT NOT NULL,
+  request_id TEXT NOT NULL,
+  checked_at TEXT NOT NULL,
+  current_price INTEGER,
+  sys_price INTEGER,
+  discount_percent REAL,
+  stock INTEGER,
+  is_can_buy INTEGER,
+  po_date TEXT,
+  raw_json TEXT,
+  UNIQUE(variant_id,request_id),
+  FOREIGN KEY(variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_variant_snapshots_checked
+ON variant_price_snapshots(variant_id,checked_at DESC);

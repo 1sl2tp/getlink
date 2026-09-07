@@ -378,11 +378,22 @@ async def discover_product_links(page, category_url, limit):
 async def scrape_urls(urls, max_products=40):
     observations = []
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         context = await browser.new_context(
             locale="vi-VN",
             timezone_id="Asia/Ho_Chi_Minh",
             viewport={"width": 1440, "height": 1000},
+            user_agent=(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/140.0.0.0 Safari/537.36"
+            ),
+            extra_http_headers={
+                "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7",
+            },
         )
 
         for raw_url in urls:
@@ -391,11 +402,31 @@ async def scrape_urls(urls, max_products=40):
             page = await context.new_page()
             try:
                 await page.goto(browser_url(raw_url), wait_until="domcontentloaded", timeout=60000)
-                await page.wait_for_timeout(2500)
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=10000)
+                except Exception:
+                    pass
+                await page.wait_for_timeout(5000)
                 parsed = await parse_product_page(page, raw_url)
                 if parsed:
                     observations.append(parsed)
                     continue
+
+                try:
+                    debug_title = clean(await page.title())
+                except Exception:
+                    debug_title = ""
+                try:
+                    debug_url = page.url
+                except Exception:
+                    debug_url = ""
+                try:
+                    debug_body = clean((await page.locator("body").inner_text(timeout=4000))[:1200])
+                except Exception:
+                    debug_body = ""
+                print("DEBUG unparsed title=", debug_title[:180])
+                print("DEBUG unparsed url=", debug_url[:300])
+                print("DEBUG unparsed body=", debug_body[:900])
 
                 links = await discover_product_links(page, raw_url, max_products)
                 await page.close()
@@ -404,7 +435,11 @@ async def scrape_urls(urls, max_products=40):
                     pp = await context.new_page()
                     try:
                         await pp.goto(browser_url(url), wait_until="domcontentloaded", timeout=35000)
-                        await pp.wait_for_timeout(700)
+                        try:
+                            await pp.wait_for_load_state("networkidle", timeout=7000)
+                        except Exception:
+                            pass
+                        await pp.wait_for_timeout(2500)
                         item = await parse_product_page(pp, url)
                         if item:
                             observations.append(item)

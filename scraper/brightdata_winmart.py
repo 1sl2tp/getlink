@@ -303,7 +303,10 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
         "unit", "uom", "uomName", "packageUnit", "package_unit",
         "packingUnit", "measureUnit", "unitName"
     )))
-    unit = normalize_unit(unit) or unit_from_name(name)
+    api_unit = normalize_unit(unit)
+    name_unit = unit_from_name(name)
+    unit = api_unit or name_unit
+    unit_evidence = "api_unit" if api_unit else ("name_unit" if name_unit else "")
 
     packaging = clean_text(first_value(obj, (
         "packaging", "packSize", "pack_size", "unitText", "unit_text"
@@ -329,6 +332,7 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
         "image": image,
         "brand": brand,
         "unit": unit,
+        "unit_evidence": unit_evidence,
         "packaging": packaging,
         "category_name": category,
         "promotion_text": promo,
@@ -491,6 +495,7 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         "image": image_url(row.get("image") or "", page.url),
                         "brand": "",
                         "unit": unit_from_name(title),
+                        "unit_evidence": "name_unit" if unit_from_name(title) else "",
                         "packaging": "",
                         "category_name": category_label,
                         "promotion_text": "",
@@ -552,6 +557,167 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             products = list(collector.products.values())
             if not products:
                 raise RuntimeError("winmart_no_products_captured")
+
+            # WinMart product detail exposes the authoritative retail body
+            # under "Chọn loại" (e.g. the red CHAI button). Fetch detail HTML
+            # through the already-open WinMart browser session so we can
+            # prioritize that value over title/API guesses without opening
+            # hundreds of extra browser tabs. The same pass also recovers
+            # og:image/gallery URLs when the category listing only had a
+            # placeholder.
+            async def enrich_detail_batch(batch):
+                payload = [
+                    {
+                        "url": p.get("url") or "",
+                        "name": p.get("name") or "",
+                    }
+                    for p in batch
+                ]
+                try:
+                    rows = await page.evaluate(
+                        """async items => {
+                          const UNIT_MAP = {
+                            "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
+                            "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
+                            "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
+                            "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
+                            "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
+                          };
+                          const clean = v => String(v || "").replace(/\\s+/g," ").trim();
+                          const realImage = (value, base) => {
+                            for (const raw of String(value || "").split(",")) {
+                              let v = clean(raw).split(/\\s+/)[0] || "";
+                              if (!v || /^data:/i.test(v) || /^blob:/i.test(v) ||
+                                  /placeholder|transparent/i.test(v)) continue;
+                              try { return new URL(v, base).href; } catch {}
+                            }
+                            return "";
+                          };
+                          const one = async item => {
+                            try {
+                              const response = await fetch(item.url, {
+                                credentials:"include",
+                                cache:"no-store"
+                              });
+                              if (!response.ok) return {url:item.url};
+                              const html = await response.text();
+                              const doc = new DOMParser().parseFromString(html,"text/html");
+
+                              let unit = "";
+                              let bestScore = -1;
+                              const nodes = [...doc.querySelectorAll(
+                                "button,[role='button'],label,a,span,div"
+                              )];
+                              for (const el of nodes) {
+                                const raw = clean(el.textContent).toUpperCase();
+                                const normalized = UNIT_MAP[raw];
+                                if (!normalized) continue;
+                                let score = 1;
+                                if (el.tagName === "BUTTON") score += 6;
+                                if (el.getAttribute("role") === "button") score += 4;
+                                const cls = clean(el.className).toLowerCase();
+                                if (/active|selected|type|variant|option|btn/.test(cls)) score += 3;
+                                let ctx = el;
+                                for (let depth=0; depth<4 && ctx; depth++,ctx=ctx.parentElement) {
+                                  const t = clean(ctx.textContent).toLowerCase();
+                                  if (t.includes("chọn loại") || t.includes("chon loai")) {
+                                    score += 12;
+                                    break;
+                                  }
+                                }
+                                if (score > bestScore) {
+                                  bestScore = score;
+                                  unit = normalized;
+                                }
+                              }
+
+                              // Fallback: inspect a short HTML/text window after "Chọn loại".
+                              if (!unit) {
+                                const bodyText = clean(doc.body && doc.body.textContent || "");
+                                const pos = bodyText.toLowerCase().search(/ch[oọ]n lo[aạ]i/);
+                                if (pos >= 0) {
+                                  const tail = bodyText.slice(pos, pos + 180).toUpperCase();
+                                  for (const [key,label] of Object.entries(UNIT_MAP)) {
+                                    if (new RegExp("(^|\\\\s)"+key+"($|\\\\s)").test(tail)) {
+                                      unit = label;
+                                      break;
+                                    }
+                                  }
+                                }
+                              }
+
+                              const imageCandidates = [];
+                              const og = doc.querySelector(
+                                "meta[property='og:image'],meta[name='og:image']"
+                              );
+                              if (og) imageCandidates.push(og.getAttribute("content") || "");
+                              for (const img of [...doc.querySelectorAll(
+                                "img[data-src],img[data-original],img[data-lazy-src],img[srcset],img[src]"
+                              )].slice(0,80)) {
+                                const alt = clean(img.getAttribute("alt") || "").toLowerCase();
+                                const cls = clean(img.className).toLowerCase();
+                                const score =
+                                  (alt && clean(item.name).toLowerCase().includes(alt) ? 5 : 0) +
+                                  (/product|gallery|detail|main/.test(cls) ? 4 : 0);
+                                imageCandidates.push({
+                                  score,
+                                  value:
+                                    img.getAttribute("data-src") ||
+                                    img.getAttribute("data-original") ||
+                                    img.getAttribute("data-lazy-src") ||
+                                    img.getAttribute("srcset") ||
+                                    img.getAttribute("src") ||
+                                    ""
+                                });
+                              }
+                              let image = "";
+                              const ordered = imageCandidates
+                                .map(x => typeof x === "string" ? {score:20,value:x} : x)
+                                .sort((a,b)=>b.score-a.score);
+                              for (const x of ordered) {
+                                image = realImage(x.value,item.url);
+                                if (image) break;
+                              }
+                              return {url:item.url,unit,image};
+                            } catch {
+                              return {url:item.url};
+                            }
+                          };
+                          const out = [];
+                          for (let i=0;i<items.length;i+=8) {
+                            const part = await Promise.all(items.slice(i,i+8).map(one));
+                            out.push(...part);
+                          }
+                          return out;
+                        }""",
+                        payload,
+                    )
+                except Exception:
+                    return
+
+                by_url = {
+                    str(row.get("url") or ""): row
+                    for row in rows or []
+                    if row and row.get("url")
+                }
+                for product in batch:
+                    row = by_url.get(str(product.get("url") or ""))
+                    if not row:
+                        continue
+                    detail_unit = normalize_unit(row.get("unit") or "")
+                    if detail_unit:
+                        # Authoritative: the visible "Chọn loại" button wins.
+                        product["unit"] = detail_unit
+                        product["unit_evidence"] = "detail_type"
+                        product["packaging"] = detail_unit
+                    detail_image = image_url(row.get("image") or "", product.get("url") or target_url)
+                    if detail_image:
+                        product["image"] = detail_image
+
+            # Enrich every product so the detail "Chọn loại" can override
+            # a misleading unit in the title, while using small batches.
+            for start in range(0, len(products), 40):
+                await enrich_detail_batch(products[start:start + 40])
 
             return {
                 "category_name": root_label,

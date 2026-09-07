@@ -112,7 +112,10 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   // Otherwise Vietnamese words such as "lớn" normalize to "lon" and are
   // falsely classified as the unit Lon.
   const rawUnitPattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
-  const rawUnitRe=new RegExp("\\b("+rawUnitPattern+")\\b","iu");
+  const rawUnitRe=new RegExp(
+    "(?:^|[^\\p{L}\\p{N}])("+rawUnitPattern+")(?=$|[^\\p{L}\\p{N}])",
+    "iu"
+  );
 
   // Priority contract:
   // 1) "Thùng ..." at the start of this link's own name/price label.

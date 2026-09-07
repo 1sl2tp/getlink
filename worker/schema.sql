@@ -192,6 +192,22 @@ CREATE INDEX IF NOT EXISTS idx_link_comparison_kind
 ON link_comparison(pack_kind,pack_unit,updated_at);
 
 
+CREATE TABLE IF NOT EXISTS link_pack_hierarchy(
+  link_url TEXT PRIMARY KEY,
+  label1 TEXT,
+  qty1 REAL NOT NULL DEFAULT 0,
+  label2 TEXT,
+  qty2 REAL NOT NULL DEFAULT 0,
+  label3 TEXT,
+  qty3 REAL NOT NULL DEFAULT 0,
+  evidence TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_pack_hierarchy_labels
+ON link_pack_hierarchy(label1,label2,label3,updated_at);
+
+
 CREATE TABLE IF NOT EXISTS link_identity(
   link_url TEXT PRIMARY KEY,
   source_name TEXT,

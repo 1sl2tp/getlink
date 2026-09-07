@@ -35,11 +35,23 @@ jobs:
           pip install -r scraper/requirements.txt
           python -m playwright install --with-deps chromium
       - name: Lấy giá
+        id: scrape
+        continue-on-error: true
         env:
           INPUT_URL: ${{ inputs.url }}
           INPUT_REQUEST_ID: ${{ inputs.request_id }}
         run: |
-          python scraper/scraper.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --max-products 20
+          set +e
+          python scraper/scraper.py --url "$INPUT_URL" --request-id "$INPUT_REQUEST_ID" --max-products 20 2>&1 | tee /tmp/getlink-scrape.log
+          CODE=${PIPESTATUS[0]}
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          if [ "$CODE" -ne 0 ] && [ -n "$INPUT_REQUEST_ID" ]; then
+            mkdir -p data/jobs
+            DETAIL="$(tail -40 /tmp/getlink-scrape.log | tr '\n' ' ' | cut -c1-1200)"
+            jq -n               --arg status "error"               --arg error "Không lấy được dữ liệu từ Bách Hóa XANH"               --arg detail "$DETAIL"               --arg request_id "$INPUT_REQUEST_ID"               '{status:$status,error:$error,detail:$detail,request_id:$request_id}'               > "data/jobs/$INPUT_REQUEST_ID.json"
+          fi
+          exit 0
+
       - name: Lưu kết quả về GitHub
         run: |
           git config user.name "getlink-bot"
@@ -51,3 +63,9 @@ jobs:
           fi
           git commit -m "data: cập nhật giá BHX"
           git push origin HEAD:main
+
+      - name: Báo trạng thái scrape
+        if: steps.scrape.outputs.code != '0'
+        run: |
+          echo "BHX scrape failed; error result was saved for GETLINK UI."
+          exit 1

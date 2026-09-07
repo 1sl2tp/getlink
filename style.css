@@ -2686,3 +2686,69 @@ h1{margin:0;font-size:28px;line-height:1.1}
     max-height:124px!important;
   }
 }
+
+
+/* Browse balance v8: align filter row and restore natural image proportions */
+@media(max-width:1100px){
+  /* Previous mobile rules left pack tabs spanning both columns,
+     which pushed Ảnh/Bảng onto a second empty row. */
+  .catalog-controls{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:center!important;
+  }
+  .catalog-controls .catalog-pack-tabs{
+    grid-column:1!important;
+    grid-row:1!important;
+    align-self:center!important;
+  }
+  .catalog-controls .view-switch{
+    grid-column:2!important;
+    grid-row:1!important;
+    align-self:center!important;
+  }
+
+  /* Do not flatten product photos into a short fixed strip.
+     Let the media frame follow the card width. */
+  .grid-product-image{
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    aspect-ratio:4 / 3!important;
+    padding:10px!important;
+  }
+  .grid-product-image img{
+    width:100%!important;
+    height:100%!important;
+    max-width:100%!important;
+    max-height:100%!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    transform:none!important;
+  }
+}
+
+/* Narrow desktop / tablet: three compact columns are more balanced
+   than two very wide, squat cards. */
+@media(min-width:721px) and (max-width:1100px){
+  .workspace-list .product-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+}
+
+/* Real phone widths keep two columns, with a slightly taller media frame. */
+@media(max-width:720px){
+  .workspace-list .product-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .grid-product-image{
+    aspect-ratio:1 / 0.82!important;
+    padding:8px!important;
+  }
+}
+
+/* Very narrow phones: keep cards usable without making images tiny. */
+@media(max-width:390px){
+  .grid-product-image{
+    aspect-ratio:1 / 0.86!important;
+  }
+}

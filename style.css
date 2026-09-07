@@ -2854,3 +2854,51 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .xls-price-table th:nth-child(8){width:8%}
   .xls-price-table th:nth-child(9){width:9%}
 }
+
+
+/* Pack hierarchy table v2: Thùng -> Giữa -> Lẻ + three price levels */
+.xls-price-table{
+  min-width:1120px!important;
+}
+.xls-price-table th:nth-child(1){width:28%!important}
+.xls-price-table th:nth-child(2){width:6%!important}
+.xls-price-table th:nth-child(3){width:7%!important}
+.xls-price-table th:nth-child(4){width:7%!important}
+.xls-price-table th:nth-child(5){width:7%!important}
+.xls-price-table th:nth-child(6){width:7%!important}
+.xls-price-table th:nth-child(7){width:7%!important}
+.xls-price-table th:nth-child(8){width:8%!important}
+.xls-price-table th:nth-child(9){width:8%!important}
+.xls-price-table th:nth-child(10){width:8%!important}
+.xls-price-table th:nth-child(11){width:7%!important}
+
+.xls-price-table td:nth-child(2),
+.xls-price-table td:nth-child(3),
+.xls-price-table td:nth-child(4){
+  text-align:left!important;
+}
+.xls-price-table td:nth-child(n+5){
+  text-align:right!important;
+}
+.xls-pack-level{
+  color:#475467;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.xls-pack-level:nth-child(2){
+  color:#087a40;
+  font-weight:800;
+}
+.xls-pack-level:nth-child(3){
+  color:#344054;
+}
+.xls-pack-level:nth-child(4){
+  color:#667085;
+}
+
+@media(max-width:700px){
+  .xls-price-table{
+    min-width:1120px!important;
+  }
+}

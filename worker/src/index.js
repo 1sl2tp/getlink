@@ -1476,8 +1476,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY pv.package_item_count DESC,pv.updated_at DESC
           LIMIT 1
@@ -1488,8 +1487,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY pv.package_item_count DESC,pv.updated_at DESC
           LIMIT 1
@@ -1500,8 +1498,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY pv.package_item_count DESC,pv.updated_at DESC
           LIMIT 1
@@ -1512,8 +1509,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY pv.package_item_count DESC,pv.updated_at DESC
           LIMIT 1
@@ -1524,8 +1520,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND NOT (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY
             CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,
@@ -1539,8 +1534,7 @@ async function handleLibrary(url,env,origin){
           WHERE pv.parent_url=l.canonical_url
             AND NOT (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
-              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
             )
           ORDER BY
             CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,

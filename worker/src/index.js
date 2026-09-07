@@ -1732,7 +1732,73 @@ async function loadBhxTaxonomyForWinmart(env){
     categoryRows.push({row,keys});
   }
 
-  return {productByKey,categoryByKey,categoryRows,brandKeys};
+  const nearRows=[];
+  const tokenIndex=new Map();
+  const stop=new Set([
+    "chai","lon","goi","hop","tui","bich","can","hu","ly","cay","vien","tuyp",
+    "kg","g","ml","lit","l","gram","gam"
+  ]);
+  for(const row of products.results||[]){
+    const key=winmartTextKey(row.name);
+    const tokens=[...new Set(
+      key.split(/\s+/).filter(t=>t.length>=2&&!stop.has(t)&&!/^[0-9.]+$/.test(t))
+    )];
+    const item={row,key,tokens};
+    nearRows.push(item);
+    for(const token of tokens){
+      if(!tokenIndex.has(token))tokenIndex.set(token,[]);
+      tokenIndex.get(token).push(item);
+    }
+  }
+
+  return {
+    productByKey,categoryByKey,categoryRows,brandKeys,
+    nearRows,tokenIndex,nearStop:stop
+  };
+}
+
+function winmartNearBhxProduct(name,taxonomy){
+  const key=winmartTextKey(name||"");
+  if(!key)return null;
+  const exact=taxonomy.productByKey.get(key);
+  if(exact)return {row:exact,score:1,evidence:"same_product"};
+
+  const tokens=[...new Set(
+    key.split(/\s+/).filter(
+      t=>t.length>=2&&!taxonomy.nearStop.has(t)&&!/^[0-9.]+$/.test(t)
+    )
+  )];
+  if(tokens.length<3)return null;
+
+  const counts=new Map();
+  for(const token of tokens){
+    for(const item of taxonomy.tokenIndex.get(token)||[]){
+      counts.set(item,(counts.get(item)||0)+1);
+    }
+  }
+
+  const sourceSize=parseSize(name||"");
+  let best=null;
+  for(const [item,common] of counts){
+    if(common<3)continue;
+    const candidateSize=parseSize(item.row.name||"");
+    if(
+      sourceSize.value&&candidateSize.value&&
+      (
+        sourceSize.unit!==candidateSize.unit||
+        Number(sourceSize.value)!==Number(candidateSize.value)
+      )
+    )continue;
+
+    const denom=Math.max(tokens.length,item.tokens.length);
+    const score=denom?common/denom:0;
+    const minCommon=Math.max(3,Math.ceil(Math.min(tokens.length,item.tokens.length)*0.65));
+    if(common<minCommon||score<0.62)continue;
+    if(!best||score>best.score){
+      best={row:item.row,score,evidence:"near_product"};
+    }
+  }
+  return best;
 }
 
 function matchBhxBrandForWinmart(product,name,taxonomy){
@@ -1750,6 +1816,10 @@ function matchBhxBrandForWinmart(product,name,taxonomy){
   if(exact&&cleanText(exact.branch_name||"")){
     return cleanText(exact.branch_name);
   }
+  const near=winmartNearBhxProduct(name,taxonomy);
+  if(near&&near.row&&cleanText(near.row.branch_name||"")){
+    return cleanText(near.row.branch_name);
+  }
 
   const padded=" "+nameKey+" ";
   for(const item of taxonomy.brandKeys||[]){
@@ -1762,16 +1832,14 @@ function matchBhxBrandForWinmart(product,name,taxonomy){
 }
 
 function matchBhxTaxonomyForWinmart(product,taxonomy){
-  const productKey=winmartTextKey(product&&product.name||"");
-  if(productKey){
-    const exact=taxonomy.productByKey.get(productKey);
-    if(exact&&exact.parent_url){
-      return {
-        parent_url:exact.parent_url,
-        group_name:cleanText(exact.group_name||""),
-        evidence:"same_product"
-      };
-    }
+  const productName=cleanText(product&&product.name||"");
+  const productMatch=winmartNearBhxProduct(productName,taxonomy);
+  if(productMatch&&productMatch.row&&productMatch.row.parent_url){
+    return {
+      parent_url:productMatch.row.parent_url,
+      group_name:cleanText(productMatch.row.group_name||""),
+      evidence:productMatch.evidence
+    };
   }
 
   const categoryKey=winmartTextKey(
@@ -2892,26 +2960,57 @@ async function handleLibrary(url,env,origin){
 
     const result=await env.DB.prepare(sql).bind(...binds).all();
     let products=(result.results||[]).map(row=>{
-      // Schema 20 changed label2/label3 semantics to:
-      // label2 = middle pack, label3 = final leaf. Recompute in the Worker
-      // so old persisted hierarchy rows can never leak the previous meaning.
-      const hierarchy=packHierarchyData(
-        row.name||"",row.canonical_url||"",row.packaging||"",
-        row.pack_quantity||1,row.pack_unit||""
-      );
-      const fresh=comparisonData({
-        name:row.name||"",
-        url:row.canonical_url||"",
-        packagingText:row.packaging||"",
-        featureText:"",
-        packCount:row.pack_quantity||1,
-        packUnit:row.pack_unit||"",
-        current:row.current_price,
-        sysPrice:row.original_price||row.current_price,
-        discount:0,
-        promoText:row.promotion_text||"",
-        hierarchy
-      });
+      const isWinmart=String(row.source||"").toLowerCase().includes("winmart");
+      let hierarchy;
+      let fresh;
+
+      if(isWinmart){
+        // WinMart unit is valid only when the detail-page "Chọn loại"
+        // proof was persisted. Never infer CHAI/GÓI/etc from the title.
+        const proven=String(row.pack_evidence||"")==="winmart_detail_type";
+        hierarchy={
+          keep:true,reason:"",
+          label1:"",qty1:0,
+          label2:"",qty2:0,
+          label3:proven?cleanText(row.pack_label_3||""):"",
+          qty3:proven?(Number(row.pack_qty_3)||1):0,
+          evidence:proven?"winmart_detail_type":"",
+          locked:proven
+        };
+        const size=parseSize(row.name||"");
+        const leaf=Number(row.current_price||row.promotion_price||0)||null;
+        fresh={
+          regular_carton_price:null,promo_carton_price:null,
+          regular_middle_price:null,promo_middle_price:null,
+          regular_leaf_price:leaf,promo_leaf_price:null,
+          regular_pack_price:leaf,promo_pack_price:null,
+          regular_unit_price:leaf,promo_unit_price:null,
+          promotion_active:false,
+          quantity_offer_active:false,
+          quantity_offer_min_packs:null,
+          quantity_offer_total_price:null,
+          size_value:size.value,size_unit:size.unit
+        };
+      }else{
+        // BHX keeps the established three-level parser.
+        hierarchy=packHierarchyData(
+          row.name||"",row.canonical_url||"",row.packaging||"",
+          row.pack_quantity||1,row.pack_unit||""
+        );
+        fresh=comparisonData({
+          name:row.name||"",
+          url:row.canonical_url||"",
+          packagingText:row.packaging||"",
+          featureText:"",
+          packCount:row.pack_quantity||1,
+          packUnit:row.pack_unit||"",
+          current:row.current_price,
+          sysPrice:row.original_price||row.current_price,
+          discount:0,
+          promoText:row.promotion_text||"",
+          hierarchy
+        });
+      }
       return {
         ...row,
         pack_label_1:hierarchy.label1||"",
@@ -2952,7 +3051,11 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=20){
+        const isWinmartPayload=String(
+          payload&&payload.source&&payload.source.key||""
+        )==="winmart";
+        const usableWinmart=!isWinmartPayload||winmartCacheIsComplete(payload);
+        if(Number(payload&&payload.schema_version||0)>=20&&usableWinmart){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -2998,23 +3101,50 @@ async function handleLibrary(url,env,origin){
     `).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
-    const mainHierarchy=packHierarchyData(
-      row.name||"",itemUrl,row.packaging||"",
-      row.cmp_pack_quantity||1,row.cmp_pack_unit||""
-    );
-    const mainComparison=comparisonData({
-      name:row.name||"",
-      url:itemUrl,
-      packagingText:row.packaging||"",
-      featureText:"",
-      packCount:row.cmp_pack_quantity||1,
-      packUnit:row.cmp_pack_unit||"",
-      current:row.current_price,
-      sysPrice:row.original_price||row.current_price,
-      discount:0,
-      promoText:row.promotion_text||"",
-      hierarchy:mainHierarchy
-    });
+    const rowIsWinmart=String(row.source||"").toLowerCase().includes("winmart");
+    const provenWinmartUnit=rowIsWinmart&&String(row.pack_evidence||"")==="winmart_detail_type";
+    const mainHierarchy=rowIsWinmart
+      ?{
+          keep:true,reason:"",
+          label1:"",qty1:0,label2:"",qty2:0,
+          label3:provenWinmartUnit?cleanText(row.pack_label_3||""):"",
+          qty3:provenWinmartUnit?(Number(row.pack_qty_3)||1):0,
+          evidence:provenWinmartUnit?"winmart_detail_type":"",
+          locked:provenWinmartUnit
+        }
+      :packHierarchyData(
+          row.name||"",itemUrl,row.packaging||"",
+          row.cmp_pack_quantity||1,row.cmp_pack_unit||""
+        );
+    const mainComparison=rowIsWinmart
+      ?{
+          pack_kind:"Lẻ",
+          pack_quantity:1,
+          pack_unit:mainHierarchy.label3||"",
+          size_value:parseSize(row.name||"").value,
+          size_unit:parseSize(row.name||"").unit,
+          regular_pack_price:row.current_price||null,
+          promo_pack_price:null,
+          regular_unit_price:row.current_price||null,
+          promo_unit_price:null,
+          regular_carton_price:null,promo_carton_price:null,
+          regular_middle_price:null,promo_middle_price:null,
+          regular_leaf_price:row.current_price||null,promo_leaf_price:null,
+          promotion_active:false,promotion_text:""
+        }
+      :comparisonData({
+          name:row.name||"",
+          url:itemUrl,
+          packagingText:row.packaging||"",
+          featureText:"",
+          packCount:row.cmp_pack_quantity||1,
+          packUnit:row.cmp_pack_unit||"",
+          current:row.current_price,
+          sysPrice:row.original_price||row.current_price,
+          discount:0,
+          promoText:row.promotion_text||"",
+          hierarchy:mainHierarchy
+        });
 
     const main={
       source:String(row.source||"").toLowerCase().includes("winmart")

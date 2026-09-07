@@ -612,3 +612,51 @@ console.log("pack parser tests passed");
   assert.equal(c.pack_unit,"Lon");
   assert.equal(c.regular_unit_price,21000);
 }
+
+
+{
+  const payload=categoryPayload(
+    "https://www.bachhoaxanh.com/bia",
+    "test-duplicate-canonical-name",
+    {
+      products:[
+        {
+          url:"/bia/thung-24-lon-bia-heineken-silver-330ml",
+          name:"Thùng 24 lon bia Heineken Silver 330ml",
+          fullName:"Thùng 24 lon Bia Heineken Silver 330ml",
+          canonical:"24 lon 330ml",
+          unit:"Lon",
+          packageItemCount:null,
+          packageItemUnit:null,
+          avatar:"https://example.com/heineken-carton.jpg",
+          brandName:"Heineken",
+          category:{name:"Bia, nước có cồn"},
+          productPrices:[{price:469000,sysPrice:469000}]
+        },
+        {
+          url:"https://www.bachhoaxanh.com/bia/thung-24-lon-bia-heineken-silver-330ml",
+          name:"HEINEKEN KÈM TRỨNG 10K",
+          fullName:null,
+          canonical:null,
+          unit:null,
+          packageItemCount:null,
+          packageItemUnit:null,
+          avatar:"",
+          brandName:null,
+          category:{name:"Bia, nước có cồn"},
+          productPrices:null
+        }
+      ]
+    }
+  );
+
+  assert.equal(payload.products.length,1);
+  assert.equal(payload.filter_summary.source_count,2);
+  assert.equal(payload.filter_summary.candidate_count,2);
+  assert.equal(payload.filter_summary.duplicate_count,1);
+  assert.equal(payload.products[0].name,"Thùng 24 lon Bia Heineken Silver 330ml");
+  assert.equal(payload.products[0].hierarchy.label1,"Thùng");
+  assert.equal(payload.products[0].hierarchy.label2,"Lon");
+  assert.equal(payload.products[0].hierarchy.qty2,24);
+  assert.equal(payload.products[0].price.current,469000);
+}

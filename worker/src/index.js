@@ -120,8 +120,10 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   const ageMs=Date.now()-checked;
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
+    const payload=JSON.parse(row.result_json);
+    if(Number(payload&&payload.schema_version||0)<4)return null;
     return {
-      payload:JSON.parse(row.result_json),
+      payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
     };
   }catch{
@@ -325,7 +327,7 @@ function productDetailPayload(inputUrl,requestId,data){
 
   const exact=variants.find(v=>sameBhxUrl(v.url,canonical))||variants[0];
   return {
-    schema_version:3,
+    schema_version:4,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -354,7 +356,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:3,
+    schema_version:4,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",

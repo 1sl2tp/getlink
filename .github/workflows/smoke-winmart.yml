@@ -1,4 +1,5 @@
 name: Smoke WinMart
+# retry after zero-detail scraper syntax fix
 # API pagination + listing-card unit gate; no product-detail crawl
 # retry after reusable detail pool
 # retry after scraper compile fix

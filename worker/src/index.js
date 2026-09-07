@@ -2326,7 +2326,7 @@ async function handleLibrary(url,env,origin){
 
     let sql=`
       SELECT
-        l.id,l.canonical_url,l.parent_url,l.group_name,l.branch_name,
+        l.id,l.canonical_url,l.parent_url,l.source,l.group_name,l.branch_name,
         l.branch_name AS brand_name,l.name,
         l.packaging,l.current_price,l.original_price,l.promotion_price,
         l.promotion_text,l.last_checked_at,l.last_status,l.updated_at,

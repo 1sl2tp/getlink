@@ -19,3 +19,4 @@ jobs:
       - run: node --check app.js
       - run: node --check worker/src/index.js
       - run: node tests/test_pack_parser.mjs
+      - run: node tests/test_money_display.mjs

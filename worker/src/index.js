@@ -342,6 +342,134 @@ function discoverChildren(inputUrl,html,categoryName){
   return out;
 }
 
+
+function bhxApiHeaders(categorySlug){
+  const deviceToken=crypto.randomUUID().replace(/-/g,"").toUpperCase();
+  const deviceId=crypto.randomUUID();
+  const referer="https://www.bachhoaxanh.com/"+categorySlug;
+  return {
+    "accept":"application/json, text/plain, */*",
+    "content-type":"application/json",
+    "authorization":"Bearer "+deviceToken,
+    "deviceid":deviceId,
+    "xapikey":"bhx-api-core-2022",
+    "platform":"webnew",
+    "reversehost":"http://bhxapi.live",
+    "origin":"https://www.bachhoaxanh.com",
+    "referer":referer,
+    "referer-url":referer,
+    "customer-id":"",
+    "user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+  };
+}
+
+function apiProductToPayloadProduct(raw){
+  if(!raw||typeof raw!=="object"||!raw.url)return null;
+  let url;
+  try{url=canonicalBhx(new URL(String(raw.url),"https://www.bachhoaxanh.com").toString());}
+  catch{return null;}
+  const prices=Array.isArray(raw.productPrices)?raw.productPrices:[];
+  const priceRow=prices[0]&&typeof prices[0]==="object"?prices[0]:{};
+  const current=parseMoney(priceRow.price||raw.price);
+  const sys=parseMoney(priceRow.sysPrice);
+  const original=sys&&current&&sys>current?sys:null;
+  const category=raw.category&&typeof raw.category==="object"?raw.category:{};
+  const group=cleanText(category.name||"");
+  const branch=cleanText(raw.brandName||group);
+  const promoText=cleanText(
+    raw.promotionText||raw.promotionTextFS||raw.textPromtionNonBlue||""
+  );
+  const discount=Number(priceRow.discountPercent||0);
+  const promoActive=Boolean(promoText||discount>0);
+  return {
+    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+    group,
+    branch,
+    name:cleanText(raw.fullName||raw.name||slugTitle(url)),
+    packaging:{text:cleanText(raw.canonical||raw.unit||"")},
+    price:{current,original},
+    promotion:{
+      active:promoActive,
+      price:promoActive?current:null,
+      text:promoText
+    },
+    url,
+    image:String(raw.avatar||""),
+    breadcrumbs:[group,branch].filter(Boolean),
+    last_checked_at:new Date().toISOString()
+  };
+}
+
+async function fetchBhxApiPayload(inputUrl,requestId){
+  const canonical=canonicalBhx(inputUrl);
+  const parts=pathParts(canonical);
+  if(!parts.length)return null;
+  const categorySlug=parts.length>=2?parts[0]:parts[0];
+  const params=new URLSearchParams({
+    provinceId:"1027",
+    wardId:"0",
+    districtId:"0",
+    storeId:"2546",
+    categoryUrl:categorySlug,
+    isMobile:"true",
+    isV2:"true",
+    pageSize:"300"
+  });
+  const api="https://api.bachhoaxanh.com/gw/Category/V2/GetCate?"+params.toString();
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),12000);
+  let response;
+  try{
+    response=await fetch(api,{
+      headers:bhxApiHeaders(categorySlug),
+      signal:controller.signal
+    });
+  }finally{
+    clearTimeout(timer);
+  }
+  if(!response.ok)throw new Error("bhx_api_http_"+response.status);
+  const data=await response.json();
+  if(!data||Number(data.code)!==0||!data.data)throw new Error("bhx_api_invalid");
+  const rawProducts=Array.isArray(data.data.products)?data.data.products:[];
+  const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
+  if(!products.length)throw new Error("bhx_api_empty");
+
+  const checked=new Date().toISOString();
+  if(parts.length>=2){
+    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
+    if(!exact)throw new Error("bhx_api_product_not_found");
+    return {
+      schema_version:2,
+      request_id:requestId,
+      input_url:canonical,
+      input_type:"product",
+      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+      checked_at:checked,
+      category_name:exact.group||"",
+      product:exact,
+      products:[exact],
+      discovered_links:[]
+    };
+  }
+
+  const categoryName=cleanText(
+    (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
+    slugTitle(canonical)
+  );
+  return {
+    schema_version:2,
+    request_id:requestId,
+    input_url:canonical,
+    input_type:"category",
+    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+    checked_at:checked,
+    category_name:categoryName,
+    product:null,
+    products,
+    discovered_links:products.map(p=>p.url)
+  };
+}
+
 async function renderBhxHtml(env,url){
   if(!env.BROWSER||typeof env.BROWSER.quickAction!=="function")throw new Error("browser_binding_missing");
   const response=await env.BROWSER.quickAction("content",{
@@ -483,6 +611,22 @@ async function handleCreate(request,env,origin){
   });
 
   try{
+    const apiPayload=await fetchBhxApiPayload(url,requestId);
+    const apiSaved=await persistPayload(env,apiPayload);
+    return json({
+      request_id:requestId,
+      status:"complete",
+      input_url:url,
+      link_type:apiPayload.input_type,
+      registry_count:apiSaved.registry_count,
+      payload:apiPayload,
+      engine:"bhx-api"
+    },200,origin);
+  }catch(apiError){
+    // BHX có thể chặn một số datacenter; tiếp tục qua Browser/GitHub fallback.
+  }
+
+  try{
     const html=await renderBhxHtml(env,url);
     const roots=jsonLdRoots(html);
     const product=parseProduct(url,html,roots);
@@ -588,6 +732,13 @@ async function handleResult(url,env,origin){
   try{
     const payload=await readGithubJob(id);
     if(payload){
+      if(payload.status==="error"){
+        const message=String(payload.error||payload.detail||"Không lấy được dữ liệu từ Bách Hóa XANH").slice(0,900);
+        await env.DB.prepare(
+          "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+        ).bind(message,new Date().toISOString(),id).run();
+        return json({status:"error",error:message},200,origin);
+      }
       if(!payload.request_id)payload.request_id=id;
       const saved=await persistPayload(env,payload);
       return json({status:"complete",...saved},200,origin);

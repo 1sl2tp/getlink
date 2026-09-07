@@ -1,4 +1,5 @@
 name: Deploy GETLINK Worker
+# dispatcher secret refresh
 
 on:
   push:

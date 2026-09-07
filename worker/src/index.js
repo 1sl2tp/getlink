@@ -172,6 +172,96 @@ function getlinkPlain(value){
     .toLowerCase();
 }
 
+function sourceMatchName(value,brand){
+  let text=getlinkPlain(value||"")
+    .replace(/(\d+(?:[.,]\d+)?)\s*(ml|lit|lít|l|kg|g)\b/g," ")
+    .replace(/\b\d+(?:[.,]\d+)?\b/g," ")
+    .replace(/[^a-z0-9]+/g," ")
+    .trim();
+
+  const stop=new Set([
+    "thung","loc","hop","chai","goi","bich","tui","lon","hu","ly",
+    "to","can","vi","cay","vien","tuyp"
+  ]);
+  const brandTokens=new Set(
+    getlinkPlain(brand||"").split(/\s+/).filter(Boolean)
+  );
+  const tokens=text.split(/\s+/)
+    .filter(token=>token&&token.length>1&&!stop.has(token)&&!brandTokens.has(token));
+  return [...new Set(tokens)].sort().join(" ");
+}
+
+function normalizedBarcode(value){
+  const raw=cleanText(value||"");
+  const digits=raw.replace(/\D/g,"");
+  return digits.length>=8?digits:"";
+}
+
+function sourceIdentityStatement(env,data,updatedAt){
+  const rawName=cleanText(data&&data.raw_name||data&&data.name||"");
+  const description=cleanText(data&&data.raw_description||"");
+  const brand=cleanText(data&&data.brand||"");
+  const category=cleanText(data&&data.category||"");
+  const barcode=normalizedBarcode(data&&data.barcode);
+  const size=(data&&data.size&&data.size.value)
+    ?data.size
+    :parseSize([rawName,description].filter(Boolean).join(" "));
+  const matchName=sourceMatchName(rawName,brand);
+  const brandKey=getlinkPlain(brand).replace(/[^a-z0-9]+/g," ").trim();
+  let matchKey="";
+  let matchBasis="";
+  if(barcode){
+    matchKey="barcode:"+barcode;
+    matchBasis="barcode";
+  }else if(brandKey&&size.value&&size.unit&&matchName){
+    matchKey=[
+      "fingerprint",
+      brandKey,
+      String(size.value)+String(size.unit),
+      matchName
+    ].join(":");
+    matchBasis="brand_size_name";
+  }
+
+  const h=data&&data.hierarchy||{};
+  return env.DB.prepare(
+    "INSERT INTO source_product_identity("+
+    "link_url,source_name,source_product_id,source_code,barcode,sku,brand,category,"+
+    "raw_name,raw_description,size_value,size_unit,"+
+    "pack_label_1,pack_qty_1,pack_label_2,pack_qty_2,pack_label_3,pack_qty_3,"+
+    "match_name,match_key,match_basis,updated_at"+
+    ") VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+    "ON CONFLICT(link_url) DO UPDATE SET "+
+    "source_name=excluded.source_name,source_product_id=excluded.source_product_id,"+
+    "source_code=excluded.source_code,barcode=excluded.barcode,sku=excluded.sku,"+
+    "brand=excluded.brand,category=excluded.category,raw_name=excluded.raw_name,"+
+    "raw_description=excluded.raw_description,size_value=excluded.size_value,"+
+    "size_unit=excluded.size_unit,pack_label_1=excluded.pack_label_1,"+
+    "pack_qty_1=excluded.pack_qty_1,pack_label_2=excluded.pack_label_2,"+
+    "pack_qty_2=excluded.pack_qty_2,pack_label_3=excluded.pack_label_3,"+
+    "pack_qty_3=excluded.pack_qty_3,match_name=excluded.match_name,"+
+    "match_key=excluded.match_key,match_basis=excluded.match_basis,updated_at=excluded.updated_at"
+  ).bind(
+    String(data&&data.link_url||""),
+    cleanText(data&&data.source_name||""),
+    cleanText(data&&data.source_product_id||""),
+    cleanText(data&&data.source_code||""),
+    barcode,
+    cleanText(data&&data.sku||""),
+    brand,
+    category,
+    rawName,
+    description,
+    size.value??null,
+    size.unit||"",
+    h.label1||"",Number(h.qty1)||0,
+    h.label2||"",Number(h.qty2)||0,
+    h.label3||"",Number(h.qty3)||0,
+    matchName,matchKey,matchBasis,
+    updatedAt||new Date().toISOString()
+  );
+}
+
 function getlinkUrlIsCarton(value){
   try{
     const parts=pathParts(canonicalBhx(value));
@@ -876,6 +966,18 @@ function apiProductToPayloadProduct(raw){
     url,
     image:String(raw.avatar||""),
     breadcrumbs:[group,branch].filter(Boolean),
+    source_identity:{
+      source_product_id:String(raw.id||""),
+      source_code:String(raw.productCode||""),
+      barcode:"",
+      sku:"",
+      brand:cleanText(raw.brandName||""),
+      category:group,
+      raw_name:cleanText(raw.name||""),
+      raw_description:cleanText(
+        [raw.fullName,raw.canonical].filter(Boolean).join(" · ")
+      )
+    },
     last_checked_at:new Date().toISOString()
   };
 }
@@ -1564,6 +1666,25 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
         p.last_checked_at||checked
       )
     );
+
+    const sourceMeta=p.source_identity||{};
+    prepared.push(sourceIdentityStatement(env,{
+      link_url:childUrl,
+      source_name:"Bách Hóa XANH",
+      source_product_id:sourceMeta.source_product_id||"",
+      source_code:sourceMeta.source_code||"",
+      barcode:sourceMeta.barcode||"",
+      sku:sourceMeta.sku||"",
+      brand:sourceMeta.brand||p.branch||"",
+      category:sourceMeta.category||p.group||"",
+      raw_name:sourceMeta.raw_name||p.name||"",
+      raw_description:sourceMeta.raw_description||"",
+      hierarchy:h,
+      size:{
+        value:cmp.size_value??null,
+        unit:cmp.size_unit||""
+      }
+    },p.last_checked_at||checked));
   }
 
   // Keep D1 batches deliberately small: category roots can contain hundreds of children.
@@ -2082,6 +2203,25 @@ async function persistWinmartResponse(env,job,requestId,raw){
       )
     );
 
+    prepared.push(sourceIdentityStatement(env,{
+      link_url:productUrl,
+      source_name:"WinMart",
+      source_product_id:rawProduct.source_product_id||"",
+      source_code:rawProduct.source_item_no||"",
+      barcode:rawProduct.barcode||"",
+      sku:rawProduct.source_sku||"",
+      brand:rawProduct.brand||brand||"",
+      category:rawProduct.category_name||tax.group_name||"",
+      raw_name:rawProduct.name||name,
+      raw_description:[
+        rawProduct.source_description,
+        rawProduct.source_short_description,
+        rawProduct.source_uom_name
+      ].filter(Boolean).join(" · "),
+      hierarchy,
+      size
+    },checked));
+
     normalized.push({
       source:{key:"winmart",name:"WinMart",host:"winmart.vn"},
       group:tax.group_name,
@@ -2098,6 +2238,12 @@ async function persistWinmartResponse(env,job,requestId,raw){
       winmart_category:cleanText(
         rawProduct.category_name||rawProduct.category||""
       ),
+      source_identity:{
+        product_id:cleanText(rawProduct.source_product_id||""),
+        item_no:cleanText(rawProduct.source_item_no||""),
+        sku:cleanText(rawProduct.source_sku||""),
+        barcode:cleanText(rawProduct.barcode||"")
+      },
       last_checked_at:checked
     });
   }
@@ -2498,6 +2644,27 @@ async function persistGoResponse(env,job,requestId,raw){
       )
     );
 
+    prepared.push(sourceIdentityStatement(env,{
+      link_url:productUrl,
+      source_name:"GO!",
+      source_product_id:rawProduct.product_id||"",
+      source_code:"",
+      barcode:rawProduct.barcode||"",
+      sku:"",
+      brand:rawProduct.brand||brand||"",
+      category:rawProduct.category_name||tax.group_name||"",
+      raw_name:rawProduct.source_name||rawProduct.name||name,
+      raw_description:[
+        rawProduct.spec_text,
+        rawProduct.go_alias
+      ].filter(Boolean).join(" · "),
+      hierarchy,
+      size:{
+        value:comparison.size_value??null,
+        unit:comparison.size_unit||""
+      }
+    },checked));
+
     normalized.push({
       source:{key:"go",name:"GO!",host:"sieuthi-go.vn"},
       store:null,
@@ -2513,6 +2680,11 @@ async function persistGoResponse(env,job,requestId,raw){
       image,
       taxonomy_match:tax.evidence,
       go_category:cleanText(rawProduct.category_name||response.category_name||""),
+      source_identity:{
+        product_id:cleanText(rawProduct.product_id||""),
+        barcode:cleanText(rawProduct.barcode||""),
+        alias:cleanText(rawProduct.go_alias||"")
+      },
       last_checked_at:checked
     });
   }
@@ -3370,6 +3542,10 @@ async function handleLibrary(url,env,origin){
         h.label3 AS pack_label_3,
         h.qty3 AS pack_qty_3,
         h.evidence AS pack_evidence,
+        ident.source_product_id,ident.source_code,ident.barcode,ident.sku,
+        ident.raw_name AS source_raw_name,
+        ident.raw_description AS source_raw_description,
+        ident.match_key,ident.match_basis,
         asset.image_url AS image,
         COALESCE(cmp.promo_unit_price,cmp.regular_unit_price) AS unit_price,
         COALESCE(cmp.promotion_active,0) AS has_promo,
@@ -3388,6 +3564,8 @@ async function handleLibrary(url,env,origin){
         ON cmp.link_url=l.canonical_url
       LEFT JOIN link_pack_hierarchy h
         ON h.link_url=l.canonical_url
+      LEFT JOIN source_product_identity ident
+        ON ident.link_url=l.canonical_url
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
@@ -3494,6 +3672,60 @@ async function handleLibrary(url,env,origin){
       };
     });
     return json({products},200,origin);
+  }
+
+  if(view==="matches"){
+    const rows=await env.DB.prepare(`
+      SELECT
+        i.link_url,i.source_name,i.source_product_id,i.source_code,i.barcode,i.sku,
+        i.brand,i.category,i.raw_name,i.raw_description,
+        i.size_value,i.size_unit,
+        i.pack_label_1,i.pack_qty_1,i.pack_label_2,i.pack_qty_2,
+        i.pack_label_3,i.pack_qty_3,
+        i.match_name,i.match_key,i.match_basis,
+        l.name,l.current_price,l.original_price,l.promotion_price,l.parent_url
+      FROM source_product_identity i
+      JOIN links l ON l.canonical_url=i.link_url
+      WHERE TRIM(COALESCE(i.match_key,''))<>''
+        AND l.link_type='product'
+        AND COALESCE(l.last_status,'')<>'unlisted'
+      ORDER BY i.match_key,i.source_name,i.link_url
+      LIMIT 6000
+    `).all();
+
+    const grouped=new Map();
+    for(const row of rows.results||[]){
+      const key=String(row.match_key||"");
+      if(!key)continue;
+      if(!grouped.has(key)){
+        grouped.set(key,{
+          match_key:key,
+          match_basis:row.match_basis||"",
+          items:[],
+          sources:new Set()
+        });
+      }
+      const group=grouped.get(key);
+      group.sources.add(row.source_name||"");
+      group.items.push(row);
+    }
+
+    const matches=[...grouped.values()]
+      .filter(group=>group.sources.size>=2)
+      .map(group=>({
+        match_key:group.match_key,
+        match_basis:group.match_basis,
+        source_count:group.sources.size,
+        item_count:group.items.length,
+        items:group.items
+      }))
+      .sort((a,b)=>b.source_count-a.source_count||b.item_count-a.item_count);
+
+    return json({
+      matches,
+      match_group_count:matches.length,
+      rule:"barcode exact; otherwise strict brand + size + normalized name"
+    },200,origin);
   }
 
   if(view==="item"){
@@ -3751,11 +3983,15 @@ export default {
         const count=await env.DB.prepare(
           "SELECT COUNT(*) AS n FROM links"
         ).first();
+        const identityCount=await env.DB.prepare(
+          "SELECT COUNT(*) AS n FROM source_product_identity"
+        ).first();
         return json({
           ok:true,
           mode:"brightdata-browser-api",
           dispatcher:Boolean(env.GITHUB_TOKEN),
-          links:Number(count&&count.n||0)
+          links:Number(count&&count.n||0),
+          source_identities:Number(identityCount&&identityCount.n||0)
         },200,origin||"*");
       }
       return json({error:"not_found"},404,origin||"*");

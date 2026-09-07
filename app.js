@@ -931,8 +931,7 @@ function renderCategoryMenu(){
   if(!host)return;
 
   const visibleLibrary=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"&&
-    !isTemporaryErrorFilteredRow(row)
+    String(row.preference_state||"normal")!=="hidden"
   );
   const groupCounts=new Map();
   for(const row of visibleLibrary){
@@ -1026,74 +1025,8 @@ async function ensureLibraryCache(force=false){
 }
 
 
-function retailIdentity(row){
-  const pack=inferSheetPack(row);
-  const base=searchKey(normalizedBaseName(row));
-  const unit=searchKey(pack.unit||"");
-  const size=pack.sizeValue
-    ?String(pack.sizeValue)+" "+String(pack.sizeUnit||"")
-    :"";
-  return [base,unit,size].join("|");
-}
-
-function isTemporaryErrorFilteredRow(row){
-  // UI safety mirror of the GETLINK ingestion gate.
-  // D1 should already be clean after a fresh GETLINK, but old rows can
-  // remain until their category is refreshed.
-  const name=searchKey(row.source_name||row.name||"");
-  if(!name)return false;
-
-  // Always reject explicit multi-product/multi-carton offers first.
-  if(/^combo\b/.test(name))return true;
-  if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(name))return true;
-  if(/\bva\b/.test(name))return true;
-
-  // A numeric title is normally hidden, EXCEPT when this exact row has
-  // authoritative carton evidence (name/packaging/URL = Thùng).
-  if(rowIsCarton(row))return false;
-  if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(name))return true;
-
-  return false;
-}
-
-function suppressRedundantMultiPacks(products){
-  // Keep source rows in D1 for debugging, but do not show an intermediate
-  // multi-pack when the same exact product already has a real single-unit
-  // row. Example: "6 lon Bia Heineken Silver 330ml" is redundant when
-  // "Bia Heineken Silver lon 330ml" already exists.
-  const singleKeys=new Set();
-
-  for(const row of products){
-    const pack=inferSheetPack(row);
-    const simple=simpleRowPrice(row);
-    const unit=String(pack.unit||"").trim().toLowerCase();
-    const isRealSingle=
-      !simple.hasCarton&&
-      Number(pack.qty)===1&&
-      unit&&unit!=="đơn vị"&&
-      pack.kind!=="Combo"&&
-      pack.kind!=="Bộ"&&
-      pack.kind!=="Lốc";
-    if(isRealSingle)singleKeys.add(retailIdentity(row));
-  }
-
-  return products.filter(row=>{
-    // Nhãn 1 is authoritative: cartons are never touched by retail cleanup.
-    if(rowIsCarton(row))return true;
-
-    const pack=inferSheetPack(row);
-    const simple=simpleRowPrice(row);
-    const isIntermediateMulti=
-      !simple.hasCarton&&
-      pack.kind==="Cụm"&&
-      Number(pack.qty)>1;
-    if(!isIntermediateMulti)return true;
-    return !singleKeys.has(retailIdentity(row));
-  });
-}
-
 function visibleRowsBeforePack(){
-  let products=libraryCache.filter(row=>!isTemporaryErrorFilteredRow(row));
+  let products=libraryCache.slice();
 
   if(libraryState==="watch"){
     products=products.filter(row=>String(row.preference_state||"normal")==="watch");
@@ -1111,11 +1044,6 @@ function visibleRowsBeforePack(){
       String(row.brand_name||row.branch_name||"")===activeBrand
     );
   }
-
-  // Suppress redundant 6-lon/10-bịch/... rows BEFORE text search so a
-  // search for "6 lon" cannot bring back a row we intentionally hide.
-  products=suppressRedundantMultiPacks(products);
-
   if(libraryQuery){
     products=products.filter(row=>matchesSearch(row,libraryQuery));
   }
@@ -1127,15 +1055,16 @@ function renderPackTabs(){
   if(!host)return;
 
   const base=visibleRowsBeforePack();
-  const cartonCount=base.filter(row=>simpleRowPrice(row).hasCarton).length;
+  const cartonCount=base.filter(row=>rowIsCarton(row)).length;
   const retailCount=base.length-cartonCount;
-  const promoCount=base.filter(row=>simpleRowPrice(row).hasPromo).length;
+  const promoCount=base.filter(row=>rowPriceLevels(row).hasPromo).length;
 
   const selectedCount=activePackKind==="Thùng"
     ?cartonCount
     :(activePackKind==="Lẻ"
       ?retailCount
       :(activePackKind==="Ưu đãi"?promoCount:base.length));
+
   if(activePackKind&&selectedCount===0){
     activePackKind="";
     localStorage.removeItem("getlink:filter-pack");
@@ -1152,6 +1081,7 @@ function renderPackTabs(){
     activePackKind="";
     localStorage.removeItem("getlink:filter-pack");
   }
+
   host.hidden=false;
   host.innerHTML=
     '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
@@ -1164,11 +1094,11 @@ function filteredLibraryProducts(){
   let products=visibleRowsBeforePack();
 
   if(activePackKind==="Thùng"){
-    products=products.filter(row=>simpleRowPrice(row).hasCarton);
+    products=products.filter(row=>rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
-    products=products.filter(row=>!simpleRowPrice(row).hasCarton);
+    products=products.filter(row=>!rowIsCarton(row));
   }else if(activePackKind==="Ưu đãi"){
-    products=products.filter(row=>simpleRowPrice(row).hasPromo);
+    products=products.filter(row=>rowPriceLevels(row).hasPromo);
   }
 
   products.sort((a,b)=>{
@@ -1179,7 +1109,6 @@ function filteredLibraryProducts(){
 
   return products;
 }
-
 
 function renderBrandTabs(){
   const host=$("#brandTabs");
@@ -1196,8 +1125,7 @@ function renderBrandTabs(){
 
   const base=libraryCache.filter(row=>
     row.parent_url===activeGroupUrl&&
-    String(row.preference_state||"normal")!=="hidden"&&
-    !isTemporaryErrorFilteredRow(row)
+    String(row.preference_state||"normal")!=="hidden"
   );
   const counts=new Map();
   for(const row of base){

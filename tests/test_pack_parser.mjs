@@ -135,7 +135,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,11);
+  assert.equal(payload.schema_version,12);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -233,6 +233,27 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 
 {
   const c = comparisonData({
+    name:"Thùng 30 gói mì 3 Miền Gold chua cay Thái 75g",
+    packagingText:"Thùng 30 Gói",
+    featureText:"",
+    packCount:30,
+    packUnit:"Gói",
+    current:147000,
+    sysPrice:147000,
+    discount:0,
+    promoText:"216.000Đ 2 THÙNG (ONLINE)"
+  });
+  assert.equal(c.quantity_offer_active,true);
+  assert.equal(c.quantity_offer_min_packs,2);
+  assert.equal(c.quantity_offer_total_price,216000);
+  assert.equal(c.quantity_offer_pack_price,108000);
+  assert.equal(c.quantity_offer_unit_price,3600);
+  assert.equal(c.promo_pack_price,108000);
+  assert.equal(c.promo_unit_price,3600);
+}
+
+{
+  const c = comparisonData({
     name:"4 túi nước xả vải Downy 3 lít",
     packagingText:"4 Túi",
     featureText:"",
@@ -301,7 +322,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,11);
+  assert.equal(payload.schema_version,12);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

@@ -102,12 +102,34 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
 
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can";
+  const bonusMatch=plain.match(
+    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
+  const bonusWithUnits=plain.match(
+    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
   const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
   const singleUnitMatch=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
   let quantity=Number(rawCount)>0?Number(rawCount):0;
   let unit=cleanText(rawUnit||"");
 
-  if(countMatch){
+  if(bonusMatch){
+    const base=Number(String(bonusMatch[1]).replace(",","."));
+    const bonus=Number(String(bonusMatch[2]).replace(",","."));
+    if(base>0&&bonus>0){
+      quantity=base+bonus;
+      unit=normalizePackWord(bonusMatch[3]);
+    }
+  }else if(bonusWithUnits){
+    const base=Number(String(bonusWithUnits[1]).replace(",","."));
+    const bonus=Number(String(bonusWithUnits[3]).replace(",","."));
+    const unitA=normalizePackWord(bonusWithUnits[2]);
+    const unitB=normalizePackWord(bonusWithUnits[4]);
+    if(base>0&&bonus>0&&unitA===unitB){
+      quantity=base+bonus;
+      unit=unitA;
+    }
+  }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
     if(parsed>0&&(quantity<=1||!unit||normalizePackWord(unit)===packKind)){
       quantity=parsed;

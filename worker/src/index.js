@@ -208,17 +208,94 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   };
 }
 
+function quantityPromotionForPack(text,pack,currentPackPrice){
+  const original=cleanText(text||"");
+  const plain=original.normalize("NFD")
+    .replace(/[\u0300-\u036f]/g,"")
+    .toLowerCase();
+
+  const re=/mua\s+([0-9]+(?:[.,][0-9]+)?)\s*(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\s+(?:chi\s*)?([0-9]+(?:[.,][0-9]+)*)\s*(k|nghin|ngan|d)?/g;
+  const wrapperKinds=new Set(["Thùng","Lốc","Combo","Bộ"]);
+  const packKind=normalizePackWord(pack&&pack.pack_kind||"");
+  const packUnit=normalizePackWord(pack&&pack.pack_unit||"");
+  const packQty=Math.max(1,Number(pack&&pack.pack_quantity)||1);
+  const basePack=Number(currentPackPrice)||0;
+
+  let structured=false;
+  let best=null;
+  let match;
+  while((match=re.exec(plain))){
+    structured=true;
+    const promoQty=Number(String(match[1]).replace(",","."));
+    const promoUnit=normalizePackWord(match[2]);
+    const priceToken=String(match[3]||"");
+    const suffix=String(match[4]||"").toLowerCase();
+
+    let total=0;
+    if(suffix==="k"||suffix==="nghin"||suffix==="ngan"){
+      const kValue=Number(priceToken.replace(",","."));
+      total=Number.isFinite(kValue)?Math.round(kValue*1000):0;
+    }else{
+      total=parseMoney(priceToken)||0;
+    }
+    if(!(promoQty>0&&total>0))continue;
+
+    let requiredPacks=0;
+    if(wrapperKinds.has(packKind)&&promoUnit===packKind){
+      requiredPacks=promoQty;
+    }else if(promoUnit===packUnit){
+      const ratio=promoQty/packQty;
+      if(ratio>=1&&Math.abs(ratio-Math.round(ratio))<1e-9){
+        requiredPacks=Math.round(ratio);
+      }
+    }
+    if(!(requiredPacks>=1))continue;
+
+    const effectivePack=Math.round(total/requiredPacks);
+    const effectiveUnit=Math.round(total/(requiredPacks*packQty));
+    if(basePack>0&&effectivePack>=basePack)continue;
+
+    const candidate={
+      matched:true,
+      structured:true,
+      required_packs:requiredPacks,
+      required_quantity:promoQty,
+      required_unit:promoUnit,
+      total_price:total,
+      effective_pack_price:effectivePack,
+      effective_unit_price:effectiveUnit
+    };
+    if(!best||candidate.effective_pack_price<best.effective_pack_price){
+      best=candidate;
+    }
+  }
+
+  return best||{matched:false,structured};
+}
+
 function comparisonData({name,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
   const pack=parsePackStructure(name,packagingText,featureText,packCount,packUnit);
   const quantity=Math.max(1,Number(pack.pack_quantity)||1);
   const regular=Number(sysPrice)>0?Number(sysPrice):(Number(current)||null);
   const currentPrice=Number(current)||null;
-  const promoActive=Boolean(
+  const discountActive=Boolean(
     Number(discount)>0||
-    (regular&&currentPrice&&currentPrice<regular)||
-    cleanText(promoText)
+    (regular&&currentPrice&&currentPrice<regular)
   );
-  const promo=promoActive?currentPrice:null;
+  const quantityOffer=quantityPromotionForPack(
+    promoText,pack,currentPrice||regular
+  );
+
+  const promoCandidates=[];
+  if(discountActive&&currentPrice)promoCandidates.push(currentPrice);
+  if(quantityOffer.matched)promoCandidates.push(quantityOffer.effective_pack_price);
+  const promo=promoCandidates.length?Math.min(...promoCandidates):null;
+  const promoActive=Boolean(promo);
+
+  const safePromoText=quantityOffer.matched
+    ?cleanText(promoText||"")
+    :(discountActive&&!quantityOffer.structured?cleanText(promoText||""):"");
+
   return {
     ...pack,
     regular_pack_price:regular,
@@ -226,7 +303,14 @@ function comparisonData({name,packagingText,featureText,packCount,packUnit,curre
     regular_unit_price:regular?Math.round(regular/quantity):null,
     promo_unit_price:promo?Math.round(promo/quantity):null,
     promotion_active:promoActive,
-    promotion_text:cleanText(promoText||""),
+    promotion_text:safePromoText,
+    quantity_offer_active:Boolean(quantityOffer.matched),
+    quantity_offer_min_packs:quantityOffer.matched?quantityOffer.required_packs:null,
+    quantity_offer_quantity:quantityOffer.matched?quantityOffer.required_quantity:null,
+    quantity_offer_unit:quantityOffer.matched?quantityOffer.required_unit:"",
+    quantity_offer_total_price:quantityOffer.matched?quantityOffer.total_price:null,
+    quantity_offer_pack_price:quantityOffer.matched?quantityOffer.effective_pack_price:null,
+    quantity_offer_unit_price:quantityOffer.matched?quantityOffer.effective_unit_price:null,
     price_kind:promoActive?"promotion":"regular"
   };
 }
@@ -242,7 +326,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<9)return null;
+    if(Number(payload&&payload.schema_version||0)<10)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -336,28 +420,30 @@ function apiProductToPayloadProduct(raw){
   );
   const discount=Number(priceRow.discountPercent||0);
 
+  const comparison=comparisonData({
+    name:cleanText(raw.fullName||raw.name||slugTitle(url)),
+    packagingText:cleanText(raw.canonical||raw.unit||""),
+    featureText:"",
+    packCount:raw.packageItemCount,
+    packUnit:raw.packageItemUnit||raw.unit,
+    current,
+    sysPrice:sys,
+    discount,
+    promoText
+  });
+
   return {
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group,
     branch,
     name:cleanText(raw.fullName||raw.name||slugTitle(url)),
     packaging:{text:cleanText(raw.canonical||raw.unit||"")},
-    comparison:comparisonData({
-      name:cleanText(raw.fullName||raw.name||slugTitle(url)),
-      packagingText:cleanText(raw.canonical||raw.unit||""),
-      featureText:"",
-      packCount:raw.packageItemCount,
-      packUnit:raw.packageItemUnit||raw.unit,
-      current,
-      sysPrice:sys,
-      discount,
-      promoText
-    }),
+    comparison,
     price:{current,original},
     promotion:{
-      active:Boolean(promoText||discount>0),
-      price:discount>0?current:null,
-      text:promoText
+      active:Boolean(comparison.promotion_active),
+      price:comparison.promo_pack_price||null,
+      text:comparison.promotion_text||""
     },
     url,
     image:String(raw.avatar||""),
@@ -426,9 +512,9 @@ function apiBoxBuyToProduct(raw,data){
     comparison,
     price:{current,original:null,sys_price:sysPrice},
     promotion:{
-      active:Boolean(promoText||discount>0),
-      price:discount>0?current:null,
-      text:promoText
+      active:Boolean(comparison.promotion_active),
+      price:comparison.promo_pack_price||null,
+      text:comparison.promotion_text||""
     },
     url,
     image:String(raw.avatar||""),
@@ -465,7 +551,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:9,
+    schema_version:10,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -494,7 +580,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:9,
+    schema_version:10,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1629,7 +1715,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:9,
+        schema_version:10,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

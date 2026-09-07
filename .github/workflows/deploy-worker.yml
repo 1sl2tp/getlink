@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   deploy:
@@ -24,7 +25,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      GETLINK_GITHUB_TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
+      GETLINK_GITHUB_TOKEN: ${{ github.token }}
       ALLOWED_ORIGINS: ${{ inputs.allowed_origins || 'https://get.taphoa.xyz,https://1sl2tp.github.io' }}
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +40,6 @@ jobs:
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || (echo "Thiếu CLOUDFLARE_API_TOKEN" && exit 1)
           test -n "$CLOUDFLARE_ACCOUNT_ID" || (echo "Thiếu CLOUDFLARE_ACCOUNT_ID" && exit 1)
-          test -n "$GETLINK_GITHUB_TOKEN" || (echo "Thiếu GETLINK_GITHUB_TOKEN" && exit 1)
 
       - name: Cài Wrangler
         run: npm install -g wrangler@latest

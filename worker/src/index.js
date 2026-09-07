@@ -860,6 +860,249 @@ async function handleResult(url,env,origin){
   },200,origin);
 }
 
+
+function isCategoryRootUrl(value){
+  try{return pathParts(canonicalBhx(value)).length===1;}
+  catch{return false;}
+}
+
+async function handleLibrary(url,env,origin){
+  const view=String(url.searchParams.get("view")||"groups");
+  const limit=Math.min(300,Math.max(1,Number(url.searchParams.get("limit")||120)));
+
+  if(view==="groups"){
+    const categories=await env.DB.prepare(
+      "SELECT canonical_url,name,group_name,updated_at FROM links WHERE link_type='category' ORDER BY updated_at DESC LIMIT 300"
+    ).all();
+
+    const productParents=await env.DB.prepare(
+      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
+    ).all();
+
+    const map=new Map();
+    for(const row of categories.results||[]){
+      if(!isCategoryRootUrl(row.canonical_url))continue;
+      map.set(row.canonical_url,{
+        url:row.canonical_url,
+        name:cleanText(row.name||row.group_name||slugTitle(row.canonical_url)),
+        product_count:0,
+        updated_at:row.updated_at||""
+      });
+    }
+    for(const row of productParents.results||[]){
+      if(!row.parent_url||!isCategoryRootUrl(row.parent_url))continue;
+      const previous=map.get(row.parent_url);
+      map.set(row.parent_url,{
+        url:row.parent_url,
+        name:cleanText(
+          (previous&&previous.name)||
+          row.group_name||
+          slugTitle(row.parent_url)
+        ),
+        product_count:Number(row.product_count)||0,
+        updated_at:String(
+          (previous&&previous.updated_at)>row.updated_at
+            ?previous.updated_at
+            :row.updated_at||previous&&previous.updated_at||""
+        )
+      });
+    }
+    const groups=Array.from(map.values())
+      .sort((a,b)=>a.name.localeCompare(b.name,"vi"));
+    return json({groups},200,origin);
+  }
+
+  if(view==="products"||view==="search"){
+    let parent="";
+    const q=cleanText(url.searchParams.get("q")||"");
+    if(view==="products"){
+      try{parent=canonicalBhx(url.searchParams.get("parent")||"");}
+      catch{return json({error:"invalid_parent"},400,origin);}
+    }
+
+    let sql=`
+      SELECT
+        l.id,l.canonical_url,l.parent_url,l.group_name,l.branch_name,l.name,
+        l.packaging,l.current_price,l.original_price,l.promotion_price,
+        l.promotion_text,l.last_checked_at,l.last_status,l.updated_at,
+        (
+          SELECT pv.image
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+          ORDER BY pv.updated_at DESC
+          LIMIT 1
+        ) AS image,
+        (
+          SELECT MIN(COALESCE(d.promo_unit_price,d.regular_unit_price))
+          FROM daily_variant_prices d
+          WHERE d.parent_url=l.canonical_url
+        ) AS unit_price,
+        (
+          SELECT MAX(d.promotion_active)
+          FROM daily_variant_prices d
+          WHERE d.parent_url=l.canonical_url
+        ) AS has_promo
+      FROM links l
+      WHERE l.link_type='product'
+    `;
+    const binds=[];
+    if(parent){
+      sql+=" AND l.parent_url=?";
+      binds.push(parent);
+    }
+    if(q){
+      sql+=" AND (l.name LIKE ? OR l.group_name LIKE ? OR l.branch_name LIKE ? OR l.packaging LIKE ?)";
+      const like="%"+q+"%";
+      binds.push(like,like,like,like);
+    }
+    sql+=" ORDER BY l.name COLLATE NOCASE ASC,l.updated_at DESC LIMIT ?";
+    binds.push(limit);
+
+    const result=await env.DB.prepare(sql).bind(...binds).all();
+    let products=result.results||[];
+    if(view==="search"){
+      products=products.filter(x=>isCategoryRootUrl(x.parent_url||""));
+    }
+    return json({products},200,origin);
+  }
+
+  if(view==="item"){
+    let itemUrl;
+    try{itemUrl=canonicalBhx(url.searchParams.get("url")||"");}
+    catch{return json({error:"invalid_url"},400,origin);}
+
+    const cached=await env.DB.prepare(
+      "SELECT result_json,updated_at FROM jobs WHERE canonical_url=? AND status='complete' AND result_json IS NOT NULL ORDER BY updated_at DESC LIMIT 1"
+    ).bind(itemUrl).first();
+    if(cached&&cached.result_json){
+      try{
+        return json({
+          status:"complete",
+          payload:JSON.parse(cached.result_json),
+          source:"d1-library",
+          updated_at:cached.updated_at||""
+        },200,origin);
+      }catch{}
+    }
+
+    const row=await env.DB.prepare(
+      "SELECT * FROM links WHERE canonical_url=? LIMIT 1"
+    ).bind(itemUrl).first();
+    if(!row)return json({error:"not_found"},404,origin);
+
+    const variants=await env.DB.prepare(
+      "SELECT * FROM product_variants WHERE parent_url=? ORDER BY package_item_count DESC,current_price ASC LIMIT 30"
+    ).bind(itemUrl).all();
+
+    const variantRows=[];
+    for(const v of variants.results||[]){
+      const daily=await env.DB.prepare(
+        "SELECT * FROM daily_variant_prices WHERE variant_id=? ORDER BY snapshot_date DESC LIMIT 1"
+      ).bind(v.id).first();
+      variantRows.push({
+        source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+        group:row.group_name||"",
+        branch:row.branch_name||"",
+        name:v.name||row.name||"",
+        packaging:{text:v.packaging||v.title||row.packaging||""},
+        comparison:daily?{
+          pack_quantity:Number(daily.pack_quantity)||Number(v.package_item_count)||1,
+          pack_unit:daily.pack_unit||v.package_item_unit||"",
+          size_value:daily.size_value??null,
+          size_unit:daily.size_unit||"",
+          regular_pack_price:daily.regular_pack_price??v.sys_price??v.current_price??null,
+          promo_pack_price:daily.promo_pack_price??null,
+          regular_unit_price:daily.regular_unit_price??null,
+          promo_unit_price:daily.promo_unit_price??null,
+          promotion_active:Boolean(daily.promotion_active),
+          promotion_text:daily.promotion_text||""
+        }:{
+          pack_quantity:Number(v.package_item_count)||1,
+          pack_unit:v.package_item_unit||"",
+          regular_pack_price:v.sys_price||v.current_price||null,
+          promo_pack_price:Number(v.discount_percent)>0?v.current_price:null,
+          regular_unit_price:v.sys_price&&v.package_item_count
+            ?Math.round(v.sys_price/v.package_item_count)
+            :null,
+          promo_unit_price:Number(v.discount_percent)>0&&v.current_price&&v.package_item_count
+            ?Math.round(v.current_price/v.package_item_count)
+            :null,
+          promotion_active:Number(v.discount_percent)>0,
+          promotion_text:""
+        },
+        price:{current:v.current_price||null,sys_price:v.sys_price||null},
+        promotion:{
+          active:Number(v.discount_percent)>0,
+          price:Number(v.discount_percent)>0?v.current_price:null,
+          text:""
+        },
+        url:v.variant_url||itemUrl,
+        image:v.image||"",
+        last_checked_at:v.last_checked_at||row.last_checked_at||"",
+        variant:{
+          bhx_product_id:v.bhx_product_id??null,
+          product_code:v.product_code||"",
+          title:v.title||"",
+          package_item_count:v.package_item_count??null,
+          package_item_unit:v.package_item_unit||"",
+          sys_price:v.sys_price??null,
+          discount_percent:v.discount_percent??0,
+          stock:v.stock??0,
+          is_can_buy:Boolean(v.is_can_buy),
+          text_status:v.text_status||"",
+          po_date:v.po_date||""
+        }
+      });
+    }
+
+    const mainComparison=variantRows[0]&&variantRows[0].comparison||comparisonData({
+      name:row.name||"",
+      featureText:"",
+      packCount:1,
+      packUnit:"",
+      current:row.current_price,
+      sysPrice:row.original_price||row.current_price,
+      discount:row.promotion_price?1:0,
+      promoText:row.promotion_text||""
+    });
+    const main={
+      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+      group:row.group_name||"",
+      branch:row.branch_name||"",
+      name:row.name||slugTitle(itemUrl),
+      packaging:{text:row.packaging||""},
+      comparison:mainComparison,
+      price:{current:row.current_price||null,original:row.original_price||null},
+      promotion:{
+        active:Boolean(row.promotion_price||row.promotion_text),
+        price:row.promotion_price||null,
+        text:row.promotion_text||""
+      },
+      url:itemUrl,
+      image:variantRows[0]&&variantRows[0].image||"",
+      last_checked_at:row.last_checked_at||""
+    };
+    return json({
+      status:"complete",
+      source:"d1-library",
+      payload:{
+        schema_version:4,
+        request_id:row.last_request_id||"",
+        input_url:itemUrl,
+        input_type:"product",
+        checked_at:row.last_checked_at||"",
+        category_name:row.group_name||"",
+        product:main,
+        products:[main],
+        variants:variantRows,
+        discovered_links:variantRows.map(x=>x.url)
+      }
+    },200,origin);
+  }
+
+  return json({error:"invalid_view"},400,origin);
+}
+
 async function handleLinks(url,env,origin){
   const limit=Math.min(
     200,Math.max(1,Number(url.searchParams.get("limit")||50))
@@ -931,6 +1174,9 @@ export default {
       }
       if(request.method==="GET"&&url.pathname==="/api/result"){
         return handleResult(url,env,origin||"*");
+      }
+      if(request.method==="GET"&&url.pathname==="/api/library"){
+        return handleLibrary(url,env,origin||"*");
       }
       if(request.method==="GET"&&url.pathname==="/api/links"){
         return handleLinks(url,env,origin||"*");

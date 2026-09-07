@@ -21,10 +21,11 @@ assert.equal(money(0),"—");
 {
   const app=fs.readFileSync("app.js","utf8");
   const searchMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
+  const urlMatch=app.match(/function rowUrlIsCarton\(row\)\{[\s\S]*?\n\}/);
   const cartonMatch=app.match(/function rowCartonStartText\(row\)\{[\s\S]*?\n\}/);
-  assert.ok(searchMatch&&cartonMatch,"carton safety helpers not found");
+  assert.ok(searchMatch&&urlMatch&&cartonMatch,"carton safety helpers not found");
   const rowCartonStartText=new Function(
-    searchMatch[0]+"\n"+cartonMatch[0]+"\nreturn rowCartonStartText;"
+    searchMatch[0]+"\n"+urlMatch[0]+"\n"+cartonMatch[0]+"\nreturn rowCartonStartText;"
   )();
   assert.equal(
     rowCartonStartText({name:"Thùng 24 lon cà phê sữa Highlands 235ml"}),
@@ -38,6 +39,13 @@ assert.equal(money(0),"—");
     "thung 24 lon ca phe sua highlands 235ml"
   );
   assert.equal(
+    rowCartonStartText({
+      name:"24 lon cà phê sữa Highlands 235ml",
+      canonical_url:"https://bachhoaxanh.com/ca-phe/ca-phe-sua-highlands-235ml-thung"
+    }),
+    "thung"
+  );
+  assert.equal(
     rowCartonStartText({name:"6 lon cà phê sữa Highlands 235ml"}),
     ""
   );
@@ -46,32 +54,47 @@ assert.equal(money(0),"—");
 
 {
   const app=fs.readFileSync("app.js","utf8");
+  const capMatch=app.match(/function capitalizeDisplayName\(value\)\{[\s\S]*?\n\}/);
   const displayMatch=app.match(/function retailDisplayName\(row,simple\)\{[\s\S]*?\n\}/);
-  assert.ok(displayMatch,"retailDisplayName() not found");
-  const retailDisplayName=new Function(displayMatch[0]+"\nreturn retailDisplayName;")();
+  assert.ok(capMatch&&displayMatch,"retailDisplayName() not found");
+  const retailDisplayName=new Function(
+    capMatch[0]+"\n"+displayMatch[0]+"\nreturn retailDisplayName;"
+  )();
 
-  const simple={rawName:"Combo 6 lon bia Sài Gòn Special Sleek 330ml",hasCarton:false,mixedBundle:false,displayQty:6,displayUnit:"Lon"};
-  assert.equal(retailDisplayName({},simple),"bia Sài Gòn Special Sleek 330ml");
+  const simple={
+    rawName:"Combo 6 lon bia Sài Gòn Special Sleek 330ml",
+    hasCarton:false,
+    mixedBundle:false,
+    retailNormalized:true,
+    displayQty:1,
+    displayUnit:"Lon"
+  };
+  assert.equal(retailDisplayName({},simple),"Bia Sài Gòn Special Sleek 330ml");
 
   assert.equal(retailDisplayName({},{
     rawName:"5 lốc Sữa dinh dưỡng pha sẵn NutiFood Grow Plus+ vani 180ml",
-    hasCarton:false,mixedBundle:false,displayQty:5,displayUnit:"Lốc"
+    hasCarton:false,mixedBundle:false,retailNormalized:true,displayQty:1,displayUnit:"Lốc"
   }),"Sữa dinh dưỡng pha sẵn NutiFood Grow Plus+ vani 180ml");
 
   assert.equal(retailDisplayName({},{
     rawName:"10 khoanh nhang muỗi Jumbo Vape M22 hương lavender 120g",
-    hasCarton:false,mixedBundle:false,displayQty:10,displayUnit:"Khoanh"
-  }),"nhang muỗi Jumbo Vape M22 hương lavender 120g");
+    hasCarton:false,mixedBundle:false,retailNormalized:true,displayQty:1,displayUnit:"Khoanh"
+  }),"Nhang muỗi Jumbo Vape M22 hương lavender 120g");
 
   assert.equal(retailDisplayName({},{
     rawName:"Thùng 24 lon cà phê sữa Highlands 235ml",
-    hasCarton:true,mixedBundle:false,displayQty:24,displayUnit:"Lon"
+    hasCarton:true,mixedBundle:false,retailNormalized:false,displayQty:24,displayUnit:"Lon"
   }),"Thùng 24 lon cà phê sữa Highlands 235ml");
 
   assert.equal(retailDisplayName({},{
     rawName:"Combo 24 lon A và 24 lon B",
-    hasCarton:false,mixedBundle:true,displayQty:0,displayUnit:""
+    hasCarton:false,mixedBundle:true,retailNormalized:false,displayQty:0,displayUnit:""
   }),"Combo 24 lon A và 24 lon B");
+
+  assert.equal(retailDisplayName({},{
+    rawName:"sữa dinh dưỡng Nutimilk có đường 220ml",
+    hasCarton:false,mixedBundle:false,retailNormalized:false,displayQty:1,displayUnit:"Bịch"
+  }),"Sữa dinh dưỡng Nutimilk có đường 220ml");
 }
 
 

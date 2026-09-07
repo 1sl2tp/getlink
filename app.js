@@ -67,7 +67,10 @@ function searchKey(value){
 
 
 function escapeRegex(value){
-  return String(value||"").replace(/[.*+?^$\{\}()|[\]\\]/g,"\\function productSearchKey(row){");
+  const special="\\^$.*+?()[]{}|";
+  return String(value||"").split("").map(ch=>
+    special.includes(ch)?"\\"+ch:ch
+  ).join("");
 }
 
 function normalizedBaseName(row){
@@ -86,7 +89,7 @@ function normalizedBaseName(row){
   const brand=String(row.brand_name||row.branch_name||"").trim();
   if(brand){
     value=value.replace(
-      new RegExp("(^|\\\\s)"+escapeRegex(brand)+"(?=\\\\s|$)","iu"),
+      new RegExp("(^|\\s)"+escapeRegex(brand)+"(?=\\s|$)","iu"),
       " "
     );
 
@@ -94,7 +97,7 @@ function normalizedBaseName(row){
     for(const token of tokens){
       if(token.length<3&&!/^[A-ZĐ]{2,}$/u.test(token))continue;
       value=value.replace(
-        new RegExp("(^|\\\\s)"+escapeRegex(token)+"(?=\\\\s|$)","giu"),
+        new RegExp("(^|\\s)"+escapeRegex(token)+"(?=\\s|$)","giu"),
         " "
       );
     }

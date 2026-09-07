@@ -812,7 +812,7 @@ function gridProductCard(row){
   const qc=rowPrimaryQc(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
-  return '<article class="grid-product product-card '+
+  return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+
     (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+

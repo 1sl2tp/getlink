@@ -155,12 +155,17 @@ async function pollOnce(){
       return false;
     }
     if(data.status==="error"){
-      failPending("Chưa lấy được giá: "+(data.error||"Bách Hóa XANH không trả dữ liệu."));
+      const error=String(data.error||"");
+      if(error.includes("brightdata_credentials_missing")){
+        failPending("Chưa cấu hình Bright Data Browser API cho GETLINK.");
+      }else{
+        failPending("Chưa lấy được giá: "+(data.detail||data.error||"Browser proxy chưa bắt được API BHX."));
+      }
       return false;
     }
     if(data.status!=="complete"){
-      if(data.status==="queued")setStatus("Đã gửi yêu cầu. Đang chờ Bách Hóa XANH trả dữ liệu...");
-      else if(data.status==="running")setStatus("Đang xử lý dữ liệu Bách Hóa XANH...");
+      if(data.status==="queued")setStatus("Bright Data đang mở link và chờ API Bách Hóa XANH...");
+      else if(data.status==="running")setStatus("Đang xử lý response API Bách Hóa XANH...");
       return false;
     }
     stopPolling();
@@ -177,7 +182,7 @@ function startPolling(){
   pollOnce();
   pollTimer=setInterval(async()=>{
     if(Date.now()>pollUntil){
-      failPending("Chưa lấy được dữ liệu sau 90 giây. Bách Hóa XANH đang từ chối kết nối; bấm Lấy giá để thử lại.");
+      failPending("Chưa có response sau 4 phút. Bright Data có thể đang chờ mở khóa trang; bấm Lấy giá để thử lại.");
       return;
     }
     await pollOnce();
@@ -197,7 +202,7 @@ $("#get").addEventListener("click",async()=>{
   wantedUrl=url;
   $("#result").hidden=true;
   $("#get").disabled=true;
-  setStatus("Đang gọi API Bách Hóa XANH...");
+  setStatus("Đang gửi link sang Bright Data Browser API...");
   try{
     const r=await fetch(API+"/api/get-price",{
       method:"POST",
@@ -217,13 +222,13 @@ $("#get").addEventListener("click",async()=>{
       return;
     }
 
-    throw new Error(data.detail||data.error||"API chưa trả kết quả.");
+    localStorage.setItem("getlink:request-id",requestId);
+    setStatus("Bright Data đang mở link và bắt GetProductDetail/GetCate...");
+    startPolling();
   }catch(error){
     const message=String(error&&error.message||error);
-    if(message.includes("bhx_credentials_missing")){
-      setStatus("GETLINK đã chuyển sang API. Cần cấu hình phiên BHX hợp lệ trước khi Lấy giá.");
-    }else if(message.includes("bhx_api_failed")){
-      setStatus("API BHX chưa trả dữ liệu. Phiên BHX có thể đã hết hạn hoặc bị giới hạn; cần cập nhật phiên API.");
+    if(message.includes("brightdata_credentials_missing")){
+      setStatus("Chưa cấu hình Bright Data Browser API.");
     }else{
       setStatus("Không lấy được giá: "+message);
     }
@@ -234,6 +239,9 @@ $("#get").addEventListener("click",async()=>{
 
 const saved=localStorage.getItem("getlink:last-url")||"";
 if(saved)$("#url").value=saved;
-requestId="";
-localStorage.removeItem("getlink:request-id");
+requestId=localStorage.getItem("getlink:request-id")||"";
 wantedUrl=saved;
+if(requestId&&API){
+  setStatus("Đang tiếp tục chờ kết quả Bright Data lần trước...");
+  startPolling();
+}

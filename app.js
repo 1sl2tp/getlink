@@ -578,7 +578,10 @@ function inferSheetPack(row){
   // Accent-sensitive retail-unit detection avoids collisions such as
   // Vietnamese "lớn" -> "lon" after accent stripping.
   const rawUnitPattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
-  const rawUnitRe=new RegExp("\\b("+rawUnitPattern+")\\b","iu");
+  const rawUnitRe=new RegExp(
+    "(?:^|[^\\p{L}\\p{N}])("+rawUnitPattern+")(?=$|[^\\p{L}\\p{N}])",
+    "iu"
+  );
 
   // Same priority as the Worker:
   // Thùng -> structural retail QC in name -> explicit retail unit in name

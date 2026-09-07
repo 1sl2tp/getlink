@@ -74,38 +74,17 @@ function escapeRegex(value){
 }
 
 function normalizedBaseName(row){
-  const stored=String(row.base_name||"").trim();
-  if(stored&&stored!==String(row.name||"").trim())return stored;
-
-  const source=String(row.source_name||row.name||"").trim();
+  const source=String(row.source_name||row.name||row.base_name||"").trim();
   if(!source)return "Sản phẩm";
 
+  // Keep the commercial/product name intact. Only remove structural
+  // packaging at the beginning and size/weight at the end.
   let value=source
     .replace(/^(thùng|lốc|cụm|combo|bộ)\s+/iu,"")
     .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/\s+\d+(?:[.,]\d+)?\s*(ml|lít|lit|l|kg|g)\s*$/iu,"")
-    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s*$/iu,"");
-
-  const brand=String(row.brand_name||row.branch_name||"").trim();
-  if(brand){
-    value=value.replace(
-      new RegExp("(^|\\s)"+escapeRegex(brand)+"(?=\\s|$)","iu"),
-      " "
-    );
-
-    const tokens=brand.split(/\s+/).filter(Boolean).sort((a,b)=>b.length-a.length);
-    for(const token of tokens){
-      if(token.length<3&&!/^[A-ZĐ]{2,}$/u.test(token))continue;
-      value=value.replace(
-        new RegExp("(^|\\s)"+escapeRegex(token)+"(?=\\s|$)","giu"),
-        " "
-      );
-    }
-  }
-
-  value=value
-    .replace(/\s*[-–—·,]+\s*/g," ")
+    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s*$/iu,"")
     .replace(/\s+/g," ")
     .trim();
 

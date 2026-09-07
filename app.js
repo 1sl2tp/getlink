@@ -498,23 +498,34 @@ function sheetNormalizeUnit(value){
 }
 
 function inferSheetPack(row){
-  const text=[row.name,row.packaging].filter(Boolean).join(" ");
-  const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const primary=String(row.source_name||row.name||"").trim();
+  const packaging=String(row.packaging||"").trim();
+  const source=primary||packaging;
+  const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp";
-  const bonusMatch=plain.match(
-    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+
+  const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
+  const body=explicitKind
+    ?plain.slice(explicitKind[0].length).trimStart()
+    :plain;
+
+  const bonusMatch=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const bonusWithUnits=plain.match(
-    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  const bonusWithUnits=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
-  const explicitKind=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
-  const singleUnit=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
+  const countMatch=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
+  const singleUnit=body.match(new RegExp("\\b("+unitPattern+")\\b"));
   const sizeMatch=plain.match(/([0-9]+(?:[.,][0-9]+)?)\s*(ml|lit|l|kg|g)\b/);
 
-  let qty=Math.max(1,Number(row.pack_quantity)||1);
-  let unit=String(row.pack_unit||"").trim();
-  let kind=String(row.pack_kind||"").trim();
+  let qty=1;
+  let unit="";
+  let structuralCount=false;
 
   if(bonusMatch){
     const base=Number(String(bonusMatch[1]).replace(",","."));
@@ -522,6 +533,7 @@ function inferSheetPack(row){
     if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300){
       qty=base+bonus;
       unit=sheetNormalizeUnit(bonusMatch[3]);
+      structuralCount=true;
     }
   }else if(bonusWithUnits){
     const base=Number(String(bonusWithUnits[1]).replace(",","."));
@@ -531,28 +543,51 @@ function inferSheetPack(row){
     if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300&&unitA===unitB){
       qty=base+bonus;
       unit=unitA;
+      structuralCount=true;
     }
   }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
-    if(parsed>1&&parsed<=300&&qty<=1)qty=parsed;
-    if(!unit||unit.toLowerCase()==="đơn vị"||Number(row.pack_quantity)<=1){
+    if(parsed>0&&parsed<=300){
+      qty=parsed;
       unit=sheetNormalizeUnit(countMatch[2]);
+      structuralCount=true;
     }
-  }else if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnit){
+  }
+
+  if(!unit&&singleUnit){
     unit=sheetNormalizeUnit(singleUnit[1]);
   }
 
-  if(explicitKind){
-    kind=sheetNormalizeUnit(explicitKind[1]);
-  }else if((!kind||/^(đơn|lẻ|đơn vị)$/i.test(kind))&&qty>1){
-    kind="Cụm";
-  }else if(!kind||/^đơn vị$/i.test(kind)){
-    kind=unit&&unit.toLowerCase()!=="đơn vị"?unit:"Đơn";
+  // Only trust persisted quantity when the name itself does not provide
+  // a readable single-unit grammar. This repairs old bad rows such as
+  // "Bia Blanc 1664 lon 330ml" that were once stored as 1664 lon.
+  if(!structuralCount){
+    const persisted=Number(row.pack_quantity);
+    const persistedValid=Number.isFinite(persisted)&&persisted>0&&persisted<=300;
+    if(explicitKind&&persistedValid&&persisted>1){
+      qty=persisted;
+    }else{
+      qty=1;
+    }
   }
 
-  let sizeValue=Number(row.size_value)||0;
-  let sizeUnit=String(row.size_unit||"");
-  if(!sizeValue&&sizeMatch){
+  let kind="";
+  if(explicitKind){
+    kind=sheetNormalizeUnit(explicitKind[1]);
+  }else if(structuralCount&&qty>1){
+    kind="Cụm";
+  }else if(unit){
+    kind=unit;
+  }else{
+    const persistedKind=String(row.pack_kind||"").trim();
+    kind=persistedKind&&!/^cụm$/i.test(persistedKind)
+      ?persistedKind
+      :"Đơn";
+  }
+
+  let sizeValue=0;
+  let sizeUnit="";
+  if(sizeMatch){
     sizeValue=Number(String(sizeMatch[1]).replace(",","."));
     sizeUnit=sizeMatch[2].toLowerCase();
     if(sizeUnit==="l"||sizeUnit==="lit"){
@@ -562,6 +597,9 @@ function inferSheetPack(row){
       sizeValue=Math.round(sizeValue*1000);
       sizeUnit="g";
     }
+  }else{
+    sizeValue=Number(row.size_value)||0;
+    sizeUnit=String(row.size_unit||"");
   }
 
   return {

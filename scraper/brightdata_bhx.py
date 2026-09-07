@@ -126,29 +126,129 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
             except Exception as exc:
                 nav_error = exc
 
-            deadline = time.monotonic() + 90
             seen: list[str] = []
-            while time.monotonic() < deadline:
-                remaining = max(1, deadline - time.monotonic())
-                try:
-                    response = await asyncio.wait_for(queue.get(), timeout=remaining)
-                except asyncio.TimeoutError:
-                    break
 
+            async def valid_payload(response):
                 seen.append(f"{response.status} {response.url}")
                 if response.status != 200:
-                    continue
+                    return None
                 try:
                     payload = await response.json()
                 except Exception:
-                    continue
-
+                    return None
                 if (
                     isinstance(payload, dict)
                     and int(payload.get("code", -1)) == 0
                     and payload.get("data") is not None
                 ):
-                    return payload, response.url
+                    return payload
+                return None
+
+            if kind == "product":
+                deadline = time.monotonic() + 90
+                while time.monotonic() < deadline:
+                    remaining = max(1, deadline - time.monotonic())
+                    try:
+                        response = await asyncio.wait_for(queue.get(), timeout=remaining)
+                    except asyncio.TimeoutError:
+                        break
+                    payload = await valid_payload(response)
+                    if payload is not None:
+                        return payload, response.url
+            else:
+                # Category pages lazy-load GetCate in multiple batches while scrolling.
+                # Keep one browser/session, merge all product batches, then write D1 once.
+                first_payload = None
+                first_response_url = ""
+                merged: dict[str, dict] = {}
+                idle_rounds = 0
+                rounds = 0
+                deadline = time.monotonic() + 75
+
+                def item_key(item: dict) -> str:
+                    return str(
+                        item.get("url")
+                        or item.get("id")
+                        or item.get("productCode")
+                        or item.get("productId")
+                        or json.dumps(item, ensure_ascii=False, sort_keys=True)[:500]
+                    )
+
+                while time.monotonic() < deadline and rounds < 36:
+                    rounds += 1
+                    before = len(merged)
+                    drain_until = min(deadline, time.monotonic() + 2.0)
+
+                    while time.monotonic() < drain_until:
+                        timeout = max(0.15, drain_until - time.monotonic())
+                        try:
+                            response = await asyncio.wait_for(queue.get(), timeout=timeout)
+                        except asyncio.TimeoutError:
+                            break
+
+                        payload = await valid_payload(response)
+                        if payload is None:
+                            continue
+
+                        if first_payload is None:
+                            first_payload = payload
+                            first_response_url = response.url
+
+                        data = payload.get("data")
+                        products = data.get("products") if isinstance(data, dict) else None
+                        if isinstance(products, list):
+                            for item in products:
+                                if isinstance(item, dict):
+                                    merged[item_key(item)] = item
+
+                    after = len(merged)
+                    if after > before:
+                        idle_rounds = 0
+                        print(
+                            json.dumps(
+                                {
+                                    "category_merge_round": rounds,
+                                    "products": after,
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                    else:
+                        idle_rounds += 1
+
+                    try:
+                        await page.evaluate(
+                            """() => {
+                              const h = Math.max(
+                                document.body ? document.body.scrollHeight : 0,
+                                document.documentElement ? document.documentElement.scrollHeight : 0
+                              );
+                              window.scrollTo(0, h);
+                            }"""
+                        )
+                        await page.wait_for_timeout(900)
+                    except Exception:
+                        pass
+
+                    # After several scrolls without a new GetCate batch, the catalog is exhausted.
+                    if first_payload is not None and idle_rounds >= 5 and rounds >= 6:
+                        break
+
+                if first_payload is not None and merged:
+                    data = first_payload.get("data")
+                    if isinstance(data, dict):
+                        data["products"] = list(merged.values())
+                        data["_getlink_merged_count"] = len(merged)
+                    print(
+                        json.dumps(
+                            {
+                                "category_merged_products": len(merged),
+                                "rounds": rounds,
+                            },
+                            ensure_ascii=False,
+                        )
+                    )
+                    return first_payload, first_response_url
 
             title = ""
             final_url = ""
@@ -161,9 +261,11 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                 "navigation_error": str(nav_error)[:400] if nav_error else "",
                 "title": title[:200],
                 "final_url": final_url[:500],
-                "api_seen": seen[-8:],
+                "api_seen": seen[-12:],
             }
-            raise RuntimeError("bhx_api_not_captured:" + json.dumps(detail, ensure_ascii=False))
+            raise RuntimeError(
+                "bhx_api_not_captured:" + json.dumps(detail, ensure_ascii=False)
+            )
         finally:
             await browser.close()
 

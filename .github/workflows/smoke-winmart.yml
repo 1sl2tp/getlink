@@ -1,4 +1,5 @@
 name: Smoke WinMart
+# rerun after WM image/brand/red-price fix
 # retry after worker batch mapping
 
 on:
@@ -64,7 +65,13 @@ jobs:
 
           jq '{
             winmart_count:([.products[]|select(.source=="WinMart")]|length),
-            mapped_groups:([.products[]|select(.source=="WinMart" and .parent_url!=null)|.group_name]|unique)
+            wm_image_count:([.products[]|select(.source=="WinMart" and (.image // "") != "")]|length),
+            wm_brand_count:([.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length),
+            mapped_groups:([.products[]|select(.source=="WinMart" and .parent_url!=null)|.group_name]|unique),
+            sample_with_image:([.products[]|select(.source=="WinMart" and (.image // "") != "")][0] // {}),
+            sample_with_brand:([.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))][0] // {})
           }' /tmp/library.json
 
           test "$(jq '[.products[]|select(.source=="WinMart")]|length' /tmp/library.json)" -ge 1
+          test "$(jq '[.products[]|select(.source=="WinMart" and (.image // "") != "")]|length' /tmp/library.json)" -ge 1
+          test "$(jq '[.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length' /tmp/library.json)" -ge 1

@@ -24,6 +24,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GETLINK_GITHUB_TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
       ALLOWED_ORIGINS: ${{ inputs.allowed_origins || 'https://get.taphoa.xyz,https://1sl2tp.github.io' }}
     steps:
       - uses: actions/checkout@v4
@@ -95,7 +96,13 @@ jobs:
 
       - name: Deploy Worker
         run: |
-          wrangler deploy --config worker/wrangler.toml 2>&1 | tee /tmp/getlink-deploy.log
+          if [ -n "$GETLINK_GITHUB_TOKEN" ]; then
+            printf 'GITHUB_TOKEN=%s\n' "$GETLINK_GITHUB_TOKEN" > /tmp/getlink-worker-secrets.env
+            wrangler deploy --config worker/wrangler.toml --secrets-file /tmp/getlink-worker-secrets.env 2>&1 | tee /tmp/getlink-deploy.log
+          else
+            echo "GETLINK_GITHUB_TOKEN chưa có; deploy Worker nhưng GitHub fallback đang tắt"
+            wrangler deploy --config worker/wrangler.toml 2>&1 | tee /tmp/getlink-deploy.log
+          fi
           WORKER_URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/getlink-deploy.log | tail -1)"
           test -n "$WORKER_URL" || (echo "Không đọc được Worker URL" && exit 1)
           echo "WORKER_URL=$WORKER_URL" >> "$GITHUB_ENV"

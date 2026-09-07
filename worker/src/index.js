@@ -557,20 +557,117 @@ async function persistVariant(env,p,parentUrl,requestId,checked){
   return id;
 }
 
+
+function sourceParentUrl(productUrl){
+  const parts=pathParts(productUrl);
+  return parts.length?"https://bachhoaxanh.com/"+parts[0]:null;
+}
+
+async function ensureSourceParent(env,parentUrl,categoryName,requestId,checked,status="linked"){
+  if(!parentUrl)return null;
+  return upsertLink(env,{
+    canonical_url:parentUrl,
+    source:"Bách Hóa XANH",
+    link_type:"category",
+    parent_url:null,
+    group_name:categoryName||"",
+    branch_name:"",
+    name:categoryName||slugTitle(parentUrl),
+    packaging:"",
+    last_checked_at:checked,
+    last_status:status,
+    last_request_id:requestId
+  });
+}
+
+async function markMissingChildrenUnlisted(env,parentUrl,activeUrls,checked){
+  const existing=await env.DB.prepare(
+    "SELECT canonical_url FROM links WHERE link_type='product' AND parent_url=?"
+  ).bind(parentUrl).all();
+  const active=new Set(activeUrls);
+  for(const row of existing.results||[]){
+    if(active.has(row.canonical_url))continue;
+    await env.DB.prepare(
+      "UPDATE links SET last_status='unlisted',updated_at=? WHERE canonical_url=? AND parent_url=?"
+    ).bind(new Date().toISOString(),row.canonical_url,parentUrl).run();
+  }
+}
+
+async function repairCachedGraph(env,payload){
+  if(!payload||!payload.input_url)return;
+  const checked=payload.checked_at||new Date().toISOString();
+  const requestId=payload.request_id||"cache-repair";
+  const inputUrl=canonicalBhx(payload.input_url);
+
+  if(payload.input_type==="product"){
+    const parentUrl=sourceParentUrl(inputUrl);
+    await ensureSourceParent(
+      env,parentUrl,payload.category_name||payload.product&&payload.product.group||"",
+      requestId,checked,"linked"
+    );
+    if(payload.product){
+      await persistEntry(
+        env,{...payload.product,url:inputUrl},
+        parentUrl,requestId,checked,"product"
+      );
+    }
+    return;
+  }
+
+  if(payload.input_type==="category"){
+    await ensureSourceParent(
+      env,inputUrl,payload.category_name||slugTitle(inputUrl),
+      requestId,checked,"ok"
+    );
+    const activeUrls=[];
+    for(const child of payload.products||[]){
+      let childUrl;
+      try{childUrl=canonicalBhx(child.url);}catch{continue;}
+      activeUrls.push(childUrl);
+      await persistEntry(
+        env,{
+          ...child,
+          group:child.group||payload.category_name||""
+        },
+        inputUrl,requestId,checked,"product"
+      );
+    }
+    if(activeUrls.length){
+      await markMissingChildrenUnlisted(env,inputUrl,activeUrls,checked);
+    }
+  }
+}
+
 async function persistPayload(env,payload){
   const checked=payload.checked_at||new Date().toISOString();
   const inputUrl=canonicalBhx(payload.input_url);
 
   if(payload.input_type==="product"&&payload.product){
-    const parts=pathParts(inputUrl);
-    const categoryParent=parts.length
-      ?"https://bachhoaxanh.com/"+parts[0]
-      :null;
+    const categoryParent=sourceParentUrl(inputUrl);
+    const categoryName=
+      payload.category_name||
+      payload.product.group||
+      "";
+
+    await ensureSourceParent(
+      env,categoryParent,categoryName,
+      payload.request_id,checked,"linked"
+    );
 
     await persistEntry(
-      env,{...payload.product,url:inputUrl},
+      env,{
+        ...payload.product,
+        url:inputUrl,
+        group:payload.product.group||categoryName
+      },
       categoryParent,payload.request_id,checked,"product"
     );
+
+    payload.parent_url=categoryParent;
+    payload.source_parent={
+      url:categoryParent,
+      name:categoryName||slugTitle(categoryParent||"")
+    };
 
     const variants=Array.isArray(payload.variants)?payload.variants:[];
     for(const variant of variants){
@@ -583,26 +680,33 @@ async function persistPayload(env,payload){
       }
     }
   }else{
-    await upsertLink(env,{
-      canonical_url:inputUrl,
-      source:"Bách Hóa XANH",
-      link_type:"category",
-      parent_url:null,
-      group_name:payload.category_name||"",
-      branch_name:"",
-      name:payload.category_name||slugTitle(inputUrl),
-      packaging:"",
-      last_checked_at:checked,
-      last_status:"ok",
-      last_request_id:payload.request_id
-    });
+    await ensureSourceParent(
+      env,inputUrl,payload.category_name||slugTitle(inputUrl),
+      payload.request_id,checked,"ok"
+    );
 
+    const activeUrls=[];
     for(const child of payload.products||[]){
+      let childUrl;
+      try{childUrl=canonicalBhx(child.url);}catch{continue;}
+      activeUrls.push(childUrl);
       await persistEntry(
-        env,child,inputUrl,payload.request_id,checked,
-        child.link_type==="category"?"category":"product"
+        env,{
+          ...child,
+          group:child.group||payload.category_name||""
+        },
+        inputUrl,payload.request_id,checked,"product"
       );
     }
+
+    if(activeUrls.length){
+      await markMissingChildrenUnlisted(
+        env,inputUrl,activeUrls,checked
+      );
+    }
+
+    payload.child_count=activeUrls.length;
+    payload.discovered_links=activeUrls;
   }
 
   const resultJson=JSON.stringify(payload);
@@ -630,6 +734,7 @@ async function handleCreate(request,env,origin){
 
   const cached=await loadFreshCache(env,url);
   if(cached){
+    await repairCachedGraph(env,cached.payload);
     const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
     return json({
       request_id:cached.payload.request_id||"",
@@ -656,13 +761,21 @@ async function handleCreate(request,env,origin){
     requestId,url,url,initialType,"queued",now,now
   ).run();
 
+  const initialParent=initialType==="product"
+    ?sourceParentUrl(url)
+    :null;
+
+  if(initialParent){
+    await ensureSourceParent(
+      env,initialParent,"",requestId,now,"linked"
+    );
+  }
+
   await upsertLink(env,{
     canonical_url:url,
     source:"Bách Hóa XANH",
     link_type:initialType,
-    parent_url:initialType==="product"
-      ?"https://bachhoaxanh.com/"+(pathParts(url)[0]||"")
-      :null,
+    parent_url:initialParent,
     name:"",
     last_checked_at:now,
     last_status:"queued",
@@ -876,7 +989,7 @@ async function handleLibrary(url,env,origin){
     ).all();
 
     const productParents=await env.DB.prepare(
-      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(current_price,promotion_price) IS NOT NULL GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
+      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(current_price,promotion_price) IS NOT NULL AND COALESCE(last_status,'')<>'unlisted' GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
     ).all();
 
     const map=new Map();
@@ -947,6 +1060,7 @@ async function handleLibrary(url,env,origin){
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
+        AND COALESCE(l.last_status,'')<>'unlisted'
     `;
     const binds=[];
     if(parent){

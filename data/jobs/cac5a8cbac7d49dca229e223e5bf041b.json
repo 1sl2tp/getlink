@@ -1,0 +1,139 @@
+{
+  "status": "complete",
+  "engine": "brightdata-browser-api",
+  "request_id": "cac5a8cbac7d49dca229e223e5bf041b",
+  "input_url": "https://www.bachhoaxanh.com/dau-an/thung-12-chai-dau-thuc-vat-good-meall-1-lit",
+  "kind": "product",
+  "country": "vn",
+  "response_url": "https://api.bachhoaxanh.com/gw/Product/GetProductDetail?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=dau-an&ProductUrl=thung-12-chai-dau-thuc-vat-good-meall-1-lit",
+  "bhx_response": {
+    "code": 0,
+    "data": {
+      "id": 5366609,
+      "categoryId": 2286,
+      "categoryName": "Dầu ăn",
+      "categoryParentIds": [
+        7148
+      ],
+      "brandId": 0,
+      "brandUrl": "good-meall",
+      "productType": 0,
+      "boxBuys": [
+        {
+          "id": 5366609,
+          "name": "Thùng 12 chai Dầu thực vật Good Meall 1 lít",
+          "avatar": "https://cdnv2.tgdd.vn/bhx-static/bhx/production/2026/6/image/production/2026/6/image/Products/2286/5366609/thung-12-chai-dau-thuc-vat-good-meall-1-lit_202606010038344441.jpg",
+          "url": "/dau-an/thung-12-chai-dau-thuc-vat-good-meall-1-lit",
+          "textAvgPriceUnit": "(46.833₫/Chai)",
+          "title": "Thùng 12 Chai",
+          "deliveryTime": "",
+          "productPrices": [
+            {
+              "price": 562000.0,
+              "sysPrice": 562000.0,
+              "discountPercent": 0,
+              "quantity": 200,
+              "type": 1,
+              "status": 1,
+              "textStatus": "Mua",
+              "isCanBuy": true,
+              "storeId": 2546,
+              "poDate": "2026-09-07",
+              "label": "",
+              "isBuyTogether": false,
+              "appliedQuantity": 0,
+              "quantityCondition": 0,
+              "netUnitValue": 0,
+              "salePriceNonBlue": 0,
+              "isAutoBuy": true
+            }
+          ],
+          "maxQuantityOnBill": 0,
+          "scenario": 0,
+          "type": 1,
+          "comboType": 0,
+          "lstCampaingInfo": [],
+          "netUnitValue": 0,
+          "skuInfo": {
+            "mainGroupId": 1055,
+            "subGroupId": 3093,
+            "brandId": 7615
+          },
+          "productCode": "1053093000058",
+          "packageItemCount": 12,
+          "packageItemUnit": "Chai",
+          "isSpecialOffer": false,
+          "specifications": []
+        },
+        {
+          "id": 96427,
+          "name": "Dầu thực vật Good Meall chai 1 lít",
+          "avatar": "https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/2286/96427/bhx/96427-thumb-moi_202411071438077864.jpg",
+          "url": "/dau-an/dau-an-good-meal-chai-1l-12",
+          "textAvgPriceUnit": "",
+          "title": "Chai",
+          "deliveryTime": "",
+          "productPrices": [
+            {
+              "price": 48000.0,
+              "sysPrice": 48000.0,
+              "discountPercent": 0,
+              "quantity": 200,
+              "type": 1,
+              "status": 1,
+              "textStatus": "Mua",
+              "isCanBuy": true,
+              "storeId": 2546,
+              "poDate": "2026-09-07",
+              "label": "",
+              "isBuyTogether": true,
+              "appliedQuantity": 0,
+              "quantityCondition": 0,
+              "netUnitValue": 0,
+              "salePriceNonBlue": 0,
+              "isAutoBuy": true
+            }
+          ],
+          "maxQuantityOnBill": 0,
+          "scenario": 0,
+          "type": 1,
+          "comboType": 0,
+          "lstCampaingInfo": [],
+          "netUnitValue": 0,
+          "skuInfo": {
+            "mainGroupId": 1055,
+            "subGroupId": 3093,
+            "brandId": 7615
+          },
+          "productCode": "1053093000004",
+          "packageItemCount": 1,
+          "packageItemUnit": "Chai",
+          "isSpecialOffer": false,
+          "specifications": []
+        }
+      ],
+      "isHeavyShipping": false,
+      "isFresh": false,
+      "isChangeProduct": false,
+      "productCode": "1053093000058",
+      "verCate": 0,
+      "filterInCateV2": 0,
+      "warningStock": "",
+      "isShowPopupWarningBeer": false,
+      "productBo": {
+        "shortDescription": "Được sản xuất theo công nghệ hiện đại, mọi khâu từ tuyển chọn nguyên liệu tới chế biến, đóng gói luôn được giám sát và kiểm tra nghiêm ngặt.  Loại dầu này không có cholesterol, bảo đảm an toàn cho sức khỏe người sử dụng, rất tốt đối với những người mắc bệnh tim mạch, người cao tuổi.<br />\r\n ",
+        "productArticle": "<p><a href=\"https://www.bachhoaxanh.com/dau-an-dau-thuc-vat\" target=\"_blank\">Dầu thực vật</a> là loại <a href=\"https://www.bachhoaxanh.com/dau-an\">dầu ăn</a> thiên nhiên ban tặng cho con người, với nhiều dưỡng chất tốt cho sức khỏe, <a href=\"https://www.bachhoaxanh.com/dau-an/thung-12-chai-dau-thuc-vat-good-meall-1-lit\" target=\"_blank\">dầu thực vật Good Meall chai 1 lít</a> của <a href=\"https://www.bachhoaxanh.com/dau-an-good-meall\" target=\"_blank\">dầu ăn Good Meall</a> là sản phẩm được người tiêu dùng tin tưởng và sử dụng cho các bữa ăn của gia đình.</p>\r\n\r\n<p><img alt=\"bs9a7846_202409251758346667.jpg (1024×768)\" src=\"https://cdnv2.tgdd.vn/bhx-static/bhx/Products/Images/2286/96427/bhx/bs9a7846_202409251758346667.jpg\" /></p>\r\n\r\n<h2><strong>Chiết xuất thiên nhiên</strong></h2>\r\n\r\n<p>Dầu cọ Olein tinh luyện 100% với dây chuyền sản xuất hiện đại, đảm bảo an toàn chất lượng nhất đến người tiêu dùng.</p>\r\n\r\n<p><strong><img src=\"https://lh4.googleusercontent.com/ZbunGLf_86rXAjtddpVrR0JV7Strueyx-3JmRfv3nQvabpsGR-OMDEZacmya4RWSEHQ8c-s_QNuNe-7t0bBsJVtMj2xQCR8mD0ZBPfklO6JttHAdN8-a-6Ug8aYKrHeYRaZ0UL8S\" /></strong></p>\r\n\r\n<h2><strong>Sử dụng tiện lợi</strong></h2>\r\n\r\n<p>Sản phẩm có thể được sử dụng trong việc chế biến thành nhiều món ăn khác nhau từ chiên, xào, trộn salad, làm bánh, làm nước sốt chấm,...</p>\r\n\r\n<h2><strong>Hàm lượng dinh dưỡng cao</strong></h2>\r\n\r\n<p>Dầu cọ chứa nhiều hàm lượng Caroten và Vitamin E. Dầu cọ chứa khoảng 77 % chất béo no, khoảng 26 % chất béo chưa no đơn nhóm và 12 % chất béo chưa no đa nhóm. Dầu cọ được ví là món quà từ thiên nhiên ban tặng cho con người.</p>\r\n\r\n<p><strong><img src=\"https://lh5.googleusercontent.com/uVI0EgARmK4ilng5MGYH68N1Kvv_1_5Si0W9u3v5zMDg6lNr78iZWwp3SVXUhHPHeAmYrv3tQ6TZOBUAwc4vy9igoRdRqf42oXBccnHrzj0dLwgCjhnebo9d6BAEEchiKeD2JbSf\" /></strong></p>\r\n\r\n<h2><strong>Dung tích vừa đủ</strong></h2>\r\n\r\n<p>Sản phẩm có dung tích 1 lít vừa đủ, phù hợp với không gian của căn bếp nhỏ gia đình bạn, giúp các bà mẹ có đa dạng sự lựa chọn.</p>\r\n\r\n<h2><strong>Mẹo hay cho bạn</strong></h2>\r\n\r\n<p>Dầu ăn không thể thiếu trong căn bếp của mọi gia đình. Nhưng thói quen dùng <a href=\"https://www.bachhoaxanh.com/kinh-nghiem-hay/sai-lam-chet-nguoi-khi-dung-dau-an-hau-nhu-ai-cung-mac-1023270\" target=\"_blank\">sử dụng dầu ăn sai lầm</a> đang gây bệnh cho cả gia đình mà bạn không hay biết. Cùng Bách Hóa Xanh cải thiện lại thói quen không tốt này nhé:</p>\r\n\r\n<ul>\r\n\t<li>\r\n\t<p>Sử dụng lại dầu cũ</p>\r\n\t</li>\r\n\t<li>\r\n\t<p>Để dầu ở nhiệt độ cao quá lâu</p>\r\n\t</li>\r\n\t<li>\r\n\t<p>Chỉ dùng 1 loại dầu ăn</p>\r\n\t</li>\r\n\t<li>\r\n\t<p>Không sử dụng mỡ động vật</p>\r\n\t</li>\r\n</ul>",
+        "featureSpecification": "Loại dầu: Dầu thực vật<br />\r\nKiểu ép:<br />\r\nDung tích: Thùng 12 chai 1 lít<br />\r\nThành phần: Dầu cọ olein tinh luyện 100%<br />\r\nƯu điểm:<br />\r\nThích hợp: Chiên, xào, trộn salad, làm sốt<br />\r\nBảo quản: Nơi khô ráo, thoáng mát. Tránh ánh nắng mặt trời chiếu trực tiếp vào sản phẩm.<br />\r\nLưu ý:<br />\r\nThương hiệu: Good Meall ()<br />\r\nSản xuất tại: Việt Nam"
+      },
+      "promotionTexts": [],
+      "promotionTitle": [],
+      "promotionTextsFS": [],
+      "lstGift": [],
+      "lstGiftFS": [],
+      "promotionTextsNonBlue": [],
+      "promotionTextsNonBlueFS": []
+    },
+    "serverName": "bhx-api-core-45-88",
+    "requestId": "55b086b5be765989f4008934f45ff687"
+  }
+}

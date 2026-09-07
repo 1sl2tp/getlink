@@ -20,13 +20,39 @@ jobs:
           curl --fail --silent --show-error --retry 5 --retry-delay 2 --retry-all-errors "$API/health" | jq .
 
           echo "Get sample:"
-          HTTP_CODE="$(curl --silent --show-error             --connect-timeout 20 --max-time 70             -o /tmp/getlink-response.json             -w '%{http_code}'             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$SAMPLE" '{url:$url}')")"
+          HTTP_CODE="$(curl --silent --show-error \
+            --connect-timeout 20 --max-time 70 \
+            -o /tmp/getlink-response.json \
+            -w '%{http_code}' \
+            -H 'Origin: https://get.taphoa.xyz' \
+            -H 'Content-Type: application/json' \
+            -X POST "$API/api/get-price" \
+            --data "$(jq -nc --arg url "$SAMPLE" '{url:$url}')")"
 
-          jq '{request_id,status,link_type,registry_count,error,detail}' /tmp/getlink-response.json
+          jq '{request_id,status,link_type,registry_count,error,detail,engine}' /tmp/getlink-response.json
           test "$HTTP_CODE" -ge 200
           test "$HTTP_CODE" -lt 300
           REQUEST_ID="$(jq -r '.request_id // empty' /tmp/getlink-response.json)"
           test -n "$REQUEST_ID"
 
-          echo "Result:"
-          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             "$API/api/result?id=$REQUEST_ID"             | jq '{status,registry_count,input_type:.payload.input_type,name:(.payload.product.name // .payload.category_name),price:(.payload.product.price.current // null),children:(.payload.products|length)}'
+          echo "Wait result:"
+          for i in $(seq 1 48); do
+            sleep 5
+            curl --fail --silent --show-error \
+              -H 'Origin: https://get.taphoa.xyz' \
+              "$API/api/result?id=$REQUEST_ID" > /tmp/getlink-result.json
+            STATUS="$(jq -r '.status // empty' /tmp/getlink-result.json)"
+            echo "poll=$i status=$STATUS"
+            if [ "$STATUS" = "complete" ]; then
+              jq '{status,registry_count,input_type:.payload.input_type,name:(.payload.product.name // .payload.category_name),price:(.payload.product.price.current // null),children:(.payload.products|length)}' /tmp/getlink-result.json
+              exit 0
+            fi
+            if [ "$STATUS" = "error" ]; then
+              jq . /tmp/getlink-result.json
+              exit 1
+            fi
+          done
+
+          echo "Timeout waiting for complete result"
+          jq . /tmp/getlink-result.json || true
+          exit 1

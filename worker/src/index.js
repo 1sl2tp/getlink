@@ -907,10 +907,53 @@ function productDetailPayload(inputUrl,requestId,data){
   };
 }
 
+function productPayloadQuality(p){
+  if(!p)return -Infinity;
+  let score=0;
+  const name=getlinkPlain(p.name||"");
+  const hierarchy=p.hierarchy||{};
+  const price=p.price||{};
+
+  // Prefer the canonical sellable row for a URL over nearby promo/campaign
+  // rows that BHX may emit with the SAME url.
+  if(Number(price.current)>0)score+=100;
+  if(hierarchy.label1==="Thùng")score+=30;
+  if(Number(hierarchy.qty2)>0&&hierarchy.label2)score+=60;
+  if(/^thung\b/.test(name))score+=30;
+  if(cleanText(p.packaging&&p.packaging.text||""))score+=15;
+  if(cleanText(p.group||""))score+=10;
+  if(cleanText(p.branch||""))score+=10;
+  if(cleanText(p.image||""))score+=5;
+
+  // Campaign labels such as "HEINEKEN KÈM TRỨNG 10K" must never replace
+  // the real product title for the same canonical link.
+  if(/\b(kem|mua|tang|giam|qua)\b/.test(name)&&/\b[0-9]+(?:[.,][0-9]+)?k\b/.test(name)){
+    score-=80;
+  }
+  return score;
+}
+
+function dedupeCategoryProducts(products){
+  const best=new Map();
+  for(const p of products||[]){
+    if(!p||!p.url)continue;
+    let key;
+    try{key=canonicalBhx(p.url);}
+    catch{continue;}
+
+    const current=best.get(key);
+    if(!current||productPayloadQuality(p)>productPayloadQuality(current)){
+      best.set(key,{...p,url:key});
+    }
+  }
+  return [...best.values()];
+}
+
 function categoryPayload(inputUrl,requestId,data){
   const canonical=canonicalBhx(inputUrl);
   const rawProducts=Array.isArray(data&&data.products)?data.products:[];
-  const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
+  const candidates=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
+  const products=dedupeCategoryProducts(candidates);
   if(!products.length)throw new Error("bhx_category_filtered_or_empty");
 
   const categoryName=cleanText(
@@ -930,6 +973,8 @@ function categoryPayload(inputUrl,requestId,data){
     products,
     filter_summary:{
       source_count:rawProducts.length,
+      candidate_count:candidates.length,
+      duplicate_count:Math.max(0,candidates.length-products.length),
       kept_count:products.length,
       filtered_count:Math.max(0,rawProducts.length-products.length)
     },

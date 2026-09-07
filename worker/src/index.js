@@ -3327,6 +3327,72 @@ async function handleCleanupIngestionRules(request,env){
   },200,"");
 }
 
+async function handleRebuildIdentities(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  const rows=await env.DB.prepare(`
+    SELECT
+      l.canonical_url,l.source,l.group_name,l.branch_name,l.name,l.packaging,
+      cmp.size_value,cmp.size_unit,
+      h.label1,h.qty1,h.label2,h.qty2,h.label3,h.qty3
+    FROM links l
+    LEFT JOIN source_product_identity i
+      ON i.link_url=l.canonical_url
+    LEFT JOIN link_comparison cmp
+      ON cmp.link_url=l.canonical_url
+    LEFT JOIN link_pack_hierarchy h
+      ON h.link_url=l.canonical_url
+    WHERE l.link_type='product'
+      AND COALESCE(l.last_status,'')<>'unlisted'
+      AND TRIM(COALESCE(l.name,''))<>''
+      AND i.link_url IS NULL
+    ORDER BY l.updated_at DESC
+    LIMIT 6000
+  `).all();
+
+  const statements=[];
+  const now=new Date().toISOString();
+  for(const row of rows.results||[]){
+    statements.push(sourceIdentityStatement(env,{
+      link_url:row.canonical_url,
+      source_name:row.source||"",
+      source_product_id:"",
+      source_code:"",
+      barcode:"",
+      sku:"",
+      brand:row.branch_name||"",
+      category:row.group_name||"",
+      raw_name:row.name||"",
+      raw_description:row.packaging||"",
+      hierarchy:{
+        label1:row.label1||"",qty1:Number(row.qty1)||0,
+        label2:row.label2||"",qty2:Number(row.qty2)||0,
+        label3:row.label3||"",qty3:Number(row.qty3)||0
+      },
+      size:{
+        value:row.size_value??null,
+        unit:row.size_unit||""
+      }
+    },now));
+  }
+
+  for(let i=0;i<statements.length;i+=40){
+    await env.DB.batch(statements.slice(i,i+40));
+  }
+
+  const total=await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM source_product_identity"
+  ).first();
+
+  return json({
+    ok:true,
+    backfilled:statements.length,
+    source_identities:Number(total&&total.n||0)
+  },200,"");
+}
+
 async function handleImageRefreshTargets(request,env){
   if(!callbackAuthorized(request,env)){
     return json({error:"unauthorized"},401,"");
@@ -3963,6 +4029,9 @@ export default {
       }
       if(request.method==="POST"&&url.pathname==="/api/cleanup-ingestion-rules"){
         return handleCleanupIngestionRules(request,env);
+      }
+      if(request.method==="POST"&&url.pathname==="/api/rebuild-identities"){
+        return handleRebuildIdentities(request,env);
       }
       if(request.method==="GET"&&url.pathname==="/api/image-refresh-targets"){
         return handleImageRefreshTargets(request,env);

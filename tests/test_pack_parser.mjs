@@ -43,6 +43,16 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 {
+  const p = parsePackStructure(
+    "5 lốc Sữa dinh dưỡng pha sẵn NutiFood Grow Plus+ vani 180ml",
+    "Can 180ml","",1,"Can"
+  );
+  assert.equal(p.pack_kind,"Cụm");
+  assert.equal(p.pack_quantity,5);
+  assert.equal(p.pack_unit,"Lốc");
+}
+
+{
   const p = parsePackStructure("Thùng 12 tô mì ăn liền 99g","","",1,"");
   assert.equal(p.pack_kind,"Thùng");
   assert.equal(p.pack_quantity,12);
@@ -160,7 +170,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,14);
+  assert.equal(payload.schema_version,15);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -347,7 +357,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,14);
+  assert.equal(payload.schema_version,15);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

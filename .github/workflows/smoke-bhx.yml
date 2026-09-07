@@ -1,0 +1,59 @@
+name: Smoke BHX API First
+
+on:
+  push:
+    paths:
+      - "scraper/brightdata_bhx.py"
+      - ".github/workflows/smoke-bhx.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cài Playwright client
+        run: pip install -r scraper/requirements.txt
+
+      - name: BHX Sữa tươi phải lấy đủ bằng một GetCate lớn
+        run: |
+          set -euo pipefail
+          python scraper/brightdata_bhx.py \
+            --url "https://www.bachhoaxanh.com/sua-tuoi" \
+            --request-id "smoke-bhx-api-first" \
+            --output "/tmp/bhx.json"
+
+          jq '{
+            status,
+            kind,
+            response_url,
+            api_first:(.bhx_response.data._getlink_api_first // false),
+            total:(.bhx_response.data._getlink_total // .bhx_response.data.total // 0),
+            requested_page_size:(.bhx_response.data._getlink_requested_page_size // 0),
+            products:(.bhx_response.data.products|length)
+          }' /tmp/bhx.json
+
+          test "$(jq -r '.status' /tmp/bhx.json)" = "complete"
+          test "$(jq -r '.kind' /tmp/bhx.json)" = "category"
+          test "$(jq -r '.bhx_response.data._getlink_api_first // false' /tmp/bhx.json)" = "true"
+
+          TOTAL="$(jq -r '.bhx_response.data._getlink_total // .bhx_response.data.total // 0' /tmp/bhx.json)"
+          COUNT="$(jq -r '.bhx_response.data.products|length' /tmp/bhx.json)"
+          test "$TOTAL" -ge 100
+          test "$COUNT" -ge "$TOTAL"

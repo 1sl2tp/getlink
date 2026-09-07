@@ -173,9 +173,13 @@ function getlinkPlain(value){
 }
 
 function sourceMatchName(value,brand){
+  // Remove only packaging quantities and physical size. Standalone numbers
+  // may be part of the product identity (e.g. "60 độ đạm", "3 Miền").
+  const packUnits="thung|loc|hop|chai|goi|bich|tui|lon|hu|ly|to|can|vi|cay|vien|tuyp";
   let text=getlinkPlain(value||"")
     .replace(/(\d+(?:[.,]\d+)?)\s*(ml|lit|lít|l|kg|g)\b/g," ")
-    .replace(/\b\d+(?:[.,]\d+)?\b/g," ")
+    .replace(new RegExp("\\b(?:thung|loc)\\s+[0-9]+(?:[.,][0-9]+)?\\s*(?:"+packUnits+")\\b","g")," ")
+    .replace(new RegExp("\\b[0-9]+(?:[.,][0-9]+)?\\s*(?:"+packUnits+")\\b","g")," ")
     .replace(/[^a-z0-9]+/g," ")
     .trim();
 
@@ -3347,7 +3351,6 @@ async function handleRebuildIdentities(request,env){
     WHERE l.link_type='product'
       AND COALESCE(l.last_status,'')<>'unlisted'
       AND TRIM(COALESCE(l.name,''))<>''
-      AND i.link_url IS NULL
     ORDER BY l.updated_at DESC
     LIMIT 6000
   `).all();

@@ -560,22 +560,34 @@ function sheetNormalizeUnit(value){
 }
 
 function inferSheetPack(row){
-  const primary=String(row.source_name||row.name||"").trim();
+  const nameTexts=[row.name,row.source_name]
+    .map(value=>String(value||"").trim())
+    .filter(Boolean);
+  const primary=nameTexts[0]||"";
   const packaging=String(row.packaging||"").trim();
 
-  // Name and API packaging are complementary. A product name can be
-  // "Cà phê ... 500g" while the detail/API packaging says "Gói 500g".
-  // Never discard packaging merely because a product name exists.
-  const source=[primary,packaging].filter(Boolean).join(" ");
-  const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const plainOf=value=>String(value||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const namePlain=plainOf(primary);
+  const packagingPlain=plainOf(packaging);
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|loc|khoanh|thanh|cay|vien|tuyp";
+  const unitRe=new RegExp("\\b("+unitPattern+")\\b");
 
-  const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
+  // Same priority as the Worker:
+  // Thùng -> structural retail QC in name -> explicit retail unit in name
+  // -> API packaging -> persisted fallback.
+  const pureByName=/^thung\b/.test(namePlain);
+  const pureByPackaging=!pureByName&&/^thung\b/.test(packagingPlain);
+  const structuralPlain=pureByName
+    ?namePlain
+    :(pureByPackaging?packagingPlain:namePlain);
+
+  const explicitKind=structuralPlain.match(new RegExp("^("+kindPattern+")\\b"));
   const body=explicitKind
-    ?plain.slice(explicitKind[0].length).trimStart()
-    :plain;
+    ?structuralPlain.slice(explicitKind[0].length).trimStart()
+    :structuralPlain;
 
   const bonusMatch=body.match(
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
@@ -586,8 +598,9 @@ function inferSheetPack(row){
   const countMatch=body.match(
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const singleUnit=body.match(new RegExp("\\b("+unitPattern+")\\b"));
-  const sizeMatch=plain.match(/([0-9]+(?:[.,][0-9]+)?)\s*(ml|lit|l|kg|g)\b/);
+
+  const nameUnit=namePlain.match(unitRe);
+  const packagingUnit=packagingPlain.match(unitRe);
 
   let qty=1;
   let unit="";
@@ -620,25 +633,24 @@ function inferSheetPack(row){
     }
   }
 
-  if(!unit&&singleUnit){
-    unit=sheetNormalizeUnit(singleUnit[1]);
-  }
-
-  // Only trust persisted quantity when the name itself does not provide
-  // a readable single-unit grammar. This repairs old bad rows such as
-  // "Bia Blanc 1664 lon 330ml" that were once stored as 1664 lon.
   if(!structuralCount){
+    if(nameUnit){
+      unit=sheetNormalizeUnit(nameUnit[1]);
+    }else if(packagingUnit){
+      unit=sheetNormalizeUnit(packagingUnit[1]);
+    }else{
+      unit=sheetNormalizeUnit(row.pack_unit||"");
+    }
+
     const persisted=Number(row.pack_quantity);
     const persistedValid=Number.isFinite(persisted)&&persisted>0&&persisted<=300;
-    if(explicitKind&&persistedValid&&persisted>1){
-      qty=persisted;
-    }else{
-      qty=1;
-    }
+    qty=persistedValid?persisted:1;
   }
 
   let kind="";
-  if(explicitKind){
+  if(pureByName||pureByPackaging){
+    kind="Thùng";
+  }else if(explicitKind){
     kind=sheetNormalizeUnit(explicitKind[1]);
   }else if(structuralCount&&qty>1){
     kind="Cụm";
@@ -650,6 +662,9 @@ function inferSheetPack(row){
       ?persistedKind
       :"Đơn";
   }
+
+  const sizeSource=[primary,packaging].filter(Boolean).join(" ");
+  const sizeMatch=plainOf(sizeSource).match(/([0-9]+(?:[.,][0-9]+)?)\s*(ml|lit|l|kg|g)\b/);
 
   let sizeValue=0;
   let sizeUnit="";

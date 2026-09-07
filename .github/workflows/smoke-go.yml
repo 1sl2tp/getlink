@@ -80,11 +80,14 @@ jobs:
             go_image_count:([.products[]|select(.source=="GO!" and (.image // "") != "")]|length),
             go_pack_count:([.products[]|select(.source=="GO!" and ((.pack_label_1 // "") != "" or (.pack_label_2 // "") != "" or (.pack_label_3 // "") != ""))]|length),
             mapped_groups:([.products[]|select(.source=="GO!" and .parent_url!=null)|.group_name]|unique),
+            bhx_sua_groups:([.products[]|select(.source=="Bách Hóa XANH" and ((.group_name // "")|ascii_downcase|contains("sữa")))|.group_name]|unique),
             carton_sample:([.products[]|select(.source=="GO!" and .pack_label_1=="Thùng")][0] // {}),
             retail_sample:([.products[]|select(.source=="GO!" and (.pack_label_3 // "") != "" and .pack_label_1!="Thùng")][0] // {})
           }' /tmp/library.json
 
           GO_COUNT="$(jq '[.products[]|select(.source=="GO!")]|length' /tmp/library.json)"
           GO_PACK="$(jq '[.products[]|select(.source=="GO!" and ((.pack_label_1 // "") != "" or (.pack_label_2 // "") != "" or (.pack_label_3 // "") != ""))]|length' /tmp/library.json)"
+          GO_MAPPED="$(jq '[.products[]|select(.source=="GO!" and .parent_url!=null)]|length' /tmp/library.json)"
           test "$GO_COUNT" -ge 1
           test "$GO_PACK" -ge 1
+          test "$GO_MAPPED" -ge 1

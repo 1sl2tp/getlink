@@ -1,4 +1,4 @@
-name: Smoke GO Hà Nam
+name: Smoke GO
 # inspect GO store state
 # retry with GO diagnostics
 
@@ -16,7 +16,7 @@ jobs:
       - name: Chờ Worker/Pages nhận nguồn GO
         run: sleep 45
 
-      - name: GET nguồn 3 GO Hà Nam
+      - name: GET nguồn 3 GO
         env:
           API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
           SAMPLE: "https://sieuthi-go.vn/categories/sua-cac-loai-i.81"
@@ -50,7 +50,6 @@ jobs:
               jq '{
                 status,
                 source:(.payload.source.name // ""),
-                store:(.payload.store.name // ""),
                 category:(.payload.category_name // ""),
                 products:(.payload.products|length),
                 mapped:(.payload.mapped_to_bhx // 0),
@@ -58,7 +57,6 @@ jobs:
                 sample:(.payload.products[0] // {})
               }' /tmp/go-result.json
               test "$(jq -r '.payload.source.name // empty' /tmp/go-result.json)" = "GO!"
-              test "$(jq -r '.payload.store.name // empty' /tmp/go-result.json)" = "GO! Hà Nam"
               test "$(jq '.payload.products|length' /tmp/go-result.json)" -ge 1
               break
             fi

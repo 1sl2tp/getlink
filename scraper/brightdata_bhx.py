@@ -209,8 +209,8 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
             else:
                 # Category pages lazy-load GetCate in multiple batches while scrolling.
                 # Keep one browser/session, merge all product batches, then write D1 once.
-                first_payload = None
-                first_response_url = ""
+                first_product_payload = None
+                first_product_response_url = ""
                 merged: dict[str, dict] = {}
                 idle_rounds = 0
                 rounds = 0
@@ -241,15 +241,11 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         if payload is None:
                             continue
 
-                        if first_payload is None:
-                            first_payload = payload
-                            first_response_url = response.url
-
                         products = category_products_from_payload(payload)
                         if products:
-                            if first_payload is None:
-                                first_payload = payload
-                                first_response_url = response.url
+                            if first_product_payload is None:
+                                first_product_payload = payload
+                                first_product_response_url = response.url
                             for item in products:
                                 merged[item_key(item)] = item
 
@@ -287,14 +283,28 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         pass
 
                     # After several scrolls without a new GetCate batch, the catalog is exhausted.
-                    if first_payload is not None and idle_rounds >= 5 and rounds >= 6:
+                    if merged and idle_rounds >= 5 and rounds >= 6:
                         break
 
-                if first_payload is not None and merged:
-                    data = first_payload.get("data")
-                    if isinstance(data, dict):
-                        data["products"] = list(merged.values())
-                        data["_getlink_merged_count"] = len(merged)
+                if merged:
+                    # Never forward an arbitrary first /gw/ response.
+                    # Build a stable category payload from actual product objects only.
+                    first_item = next(iter(merged.values()))
+                    category = (
+                        first_item.get("category")
+                        if isinstance(first_item, dict)
+                        and isinstance(first_item.get("category"), dict)
+                        else {}
+                    )
+                    synthetic_payload = {
+                        "code": 0,
+                        "data": {
+                            "products": list(merged.values()),
+                            "_getlink_merged_count": len(merged),
+                            "_getlink_category_slug": category_slug,
+                            "_getlink_category_name": category.get("name", ""),
+                        },
+                    }
                     print(
                         json.dumps(
                             {
@@ -304,7 +314,10 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                             ensure_ascii=False,
                         )
                     )
-                    return first_payload, first_response_url
+                    return synthetic_payload, (
+                        first_product_response_url
+                        or "getlink://category-merged"
+                    )
 
             title = ""
             final_url = ""

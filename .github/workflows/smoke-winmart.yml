@@ -1,4 +1,5 @@
 name: Smoke WinMart
+# retry after scraper compile fix
 # rerun after rendered Chọn loại + stale-row repair
 # retry after worker batch mapping
 

@@ -1416,6 +1416,7 @@ $("#stateFilters").addEventListener("click",e=>{
   const chip=e.target.closest(".state-chip");
   if(!chip)return;
   libraryState=chip.dataset.state||"visible";
+  libraryPage=1;
   document.querySelectorAll(".state-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
@@ -1426,6 +1427,7 @@ $("#categoryTabs").addEventListener("click",e=>{
   if(!chip)return;
   activeGroupUrl=chip.dataset.group||"";
   activeBrand="";
+  libraryPage=1;
   libraryQuery="";
   $("#librarySearch").value="";
   document.querySelectorAll(".category-chip").forEach(x=>x.classList.remove("active"));
@@ -1438,6 +1440,7 @@ $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
   if(!chip)return;
   activeBrand=chip.dataset.brand||"";
+  libraryPage=1;
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
@@ -1448,6 +1451,7 @@ $("#packTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".pack-chip");
   if(!chip)return;
   activePackKind=chip.dataset.pack||"";
+  libraryPage=1;
   if(activePackKind)localStorage.setItem("getlink:filter-pack",activePackKind);
   else localStorage.removeItem("getlink:filter-pack");
   document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
@@ -1457,7 +1461,50 @@ $("#packTabs").addEventListener("click",e=>{
 
 $("#librarySearch").addEventListener("input",e=>{
   libraryQuery=String(e.target.value||"").trim();
+  libraryPage=1;
   renderLibraryProducts();
+});
+
+$("#categoryPager").addEventListener("click",e=>{
+  const button=e.target.closest("button[data-page]");
+  if(!button||button.disabled)return;
+  categoryPage=Number(button.dataset.page)||1;
+  activeGroupUrl="";
+  activeBrand="";
+  libraryPage=1;
+  renderCategoryMenu();
+  renderLibraryProducts();
+});
+
+$("#resultPager").addEventListener("click",e=>{
+  const button=e.target.closest("button[data-page]");
+  if(!button||button.disabled)return;
+  libraryPage=Number(button.dataset.page)||1;
+  renderLibraryProducts();
+  $(".workspace-list").scrollIntoView({behavior:"smooth",block:"start"});
+});
+
+document.querySelector(".view-switch").addEventListener("click",e=>{
+  const button=e.target.closest(".view-button");
+  if(!button)return;
+  libraryView=button.dataset.view==="table"?"table":"grid";
+  localStorage.setItem("getlink:view-mode",libraryView);
+  syncViewMode();
+});
+
+$("#productGrid").addEventListener("click",e=>{
+  const button=e.target.closest(".grid-product-name");
+  const card=e.target.closest(".grid-product");
+  const url=(button&&button.dataset.url)||(card&&card.dataset.url)||"";
+  if(url)openLibraryItem(url);
+});
+
+$("#productGrid").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  const card=e.target.closest(".grid-product");
+  if(!card)return;
+  e.preventDefault();
+  openLibraryItem(card.dataset.url||"");
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
@@ -1667,6 +1714,18 @@ requestId=localStorage.getItem("getlink:request-id")||"";
 wantedUrl=saved;
 
 refreshCatalog();
+
+syncViewMode();
+
+window.addEventListener("resize",()=>{
+  const mobile=window.innerWidth<=700;
+  if(mobile===lastMobileLayout)return;
+  lastMobileLayout=mobile;
+  categoryPage=1;
+  libraryPage=1;
+  renderCategoryMenu();
+  if(libraryLoaded)renderLibraryProducts();
+});
 
 if(requestId&&API){
   $("#importCard").hidden=false;

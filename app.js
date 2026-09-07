@@ -106,7 +106,7 @@ function packSortRank(kind){
 function productSearchKey(row){
   const pack=inferSheetPack(row);
   return searchKey([
-    normalizedBaseName(row),row.name,row.source_name,
+    row.source_name,row.name,
     row.group_name,row.branch_name,row.brand_name,row.packaging,
     pack.kind,pack.qty,pack.unit,pack.sizeValue,pack.sizeUnit,
     row.canonical_url
@@ -578,45 +578,69 @@ function inferSheetPack(row){
   };
 }
 
-function productCard(row){
-  const hasPromo=Boolean(
-    Number(row.promotion_active)||
-    Number(row.has_promo)||
-    Number(row.promotion_price)||
-    String(row.promotion_text||"").trim()
-  );
-  const current=Number(row.current_price||0);
-  const regularPack=Number(
-    row.regular_pack_price||
-    row.original_price||
-    current||
-    0
-  );
-  const promoPack=Number(
-    row.promo_pack_price||
-    (hasPromo?row.promotion_price||current:0)||
-    0
-  );
-  const effectivePack=promoPack||current||regularPack;
+function simpleRowPrice(row){
+  const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
-  const qty=inferred.qty;
-  const unitName=inferred.unit;
-  const packKind=inferred.kind;
-  const size=inferred.sizeValue
-    ?String(inferred.sizeValue)+" "+String(inferred.sizeUnit||"")
-    :"";
+  const rowStartsCarton=/^thùng\b/iu.test(rawName);
 
-  const webUnit=effectivePack
-    ?Math.round(effectivePack/qty)
-    :Number(row.promo_unit_price||row.regular_unit_price||row.unit_price||0);
+  let cartonPrice=Number(row.carton_price||0);
+  let cartonQty=Math.max(1,Number(row.carton_quantity)||0);
+  let cartonUnit=String(row.carton_unit||"").trim();
 
+  if(!cartonPrice&&rowStartsCarton){
+    cartonPrice=Number(
+      row.promo_pack_price||
+      row.current_price||
+      row.regular_pack_price||
+      row.original_price||
+      0
+    );
+    cartonQty=Math.max(1,Number(inferred.qty)||1);
+    cartonUnit=inferred.unit||"đơn vị";
+  }
+
+  const hasCarton=cartonPrice>0;
+  let retailPrice=Number(row.retail_price||0);
+  let retailUnit=String(row.retail_unit||"").trim();
+
+  // If there is no detail variant yet, a non-carton row itself is the retail row.
+  if(!retailPrice&&!rowStartsCarton){
+    retailPrice=Number(
+      row.promo_pack_price||
+      row.current_price||
+      row.regular_pack_price||
+      row.original_price||
+      0
+    );
+    retailUnit=inferred.unit||"đơn vị";
+  }
+
+  // Only as a fallback for a carton-only row, expose a calculated retail figure.
+  if(!retailPrice&&hasCarton&&cartonQty>1){
+    retailPrice=Math.round(cartonPrice/cartonQty);
+    retailUnit=cartonUnit||"đơn vị";
+  }
+
+  return {
+    rawName:rawName||"Sản phẩm",
+    hasCarton,
+    cartonPrice,
+    cartonQty,
+    cartonUnit:cartonUnit||"đơn vị",
+    retailPrice,
+    retailUnit:retailUnit||cartonUnit||"đơn vị"
+  };
+}
+
+function productCard(row){
+  const simple=simpleRowPrice(row);
   const pref=String(row.preference_state||"normal");
-  const mineCarton=packKind==="Thùng"
+  const mineCarton=simple.hasCarton
     ?readOwnPrice(row.canonical_url,"carton")
     :0;
   const mineRetail=readOwnPrice(row.canonical_url,"retail");
-  const derivedRetail=packKind==="Thùng"&&qty>1&&mineCarton
-    ?Math.round(mineCarton/qty)
+  const derivedRetail=simple.hasCarton&&simple.cartonQty>1&&mineCarton
+    ?Math.round(mineCarton/simple.cartonQty)
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
@@ -625,25 +649,18 @@ function productCard(row){
   const hideTitle=pref==="hidden"?"Hiện lại":"Ẩn khỏi thư viện";
   const hideNext=pref==="hidden"?"normal":"hidden";
 
-  const bhxTopLabel=packKind||"QC";
-  const bargainUnit=packKind==="Thùng"?"Thùng":unitName;
-
   return '<div class="product-card compact-row '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" role="button" tabindex="0" '+
-    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+escapeAttr(packKind)+'" '+
-    'data-pack-qty="'+qty+'" data-web-pack="'+effectivePack+'" data-web-unit="'+webUnit+'">'+
+    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
+    'data-pack-qty="'+simple.cartonQty+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
 
     '<div class="compact-name">'+
-      '<div class="compact-title" title="'+escapeAttr(row.source_name||row.name||"")+'">'+
-        escapeHtml(normalizedBaseName(row))+
-      '</div>'+
+      '<div class="compact-title" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(simple.rawName)+'</div>'+
       '<div class="compact-meta">'+
-        escapeHtml([
-          row.brand_name||row.branch_name||"",
-          packKind+(qty>1?" "+qty+" "+unitName:""),
-          size
-        ].filter(Boolean).join(" · "))+
+        (simple.hasCarton
+          ?'Thùng '+simple.cartonQty+' '+escapeHtml(simple.cartonUnit)
+          :'Lẻ')+
       '</div>'+
       '<div class="row-actions">'+
         '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
@@ -652,15 +669,14 @@ function productCard(row){
     '</div>'+
 
     '<div class="compact-price bhx-compact">'+
-      '<div><small>'+escapeHtml(bhxTopLabel)+'</small><strong>'+money(effectivePack)+'</strong></div>'+
-      '<div><small>Lẻ</small><strong>'+money(webUnit)+'</strong><em>/ '+escapeHtml(unitName)+'</em></div>'+
-      (promoPack?'<span class="compact-promo">Ưu đãi</span>':'')+
+      '<div><small>Thùng</small><strong>'+money(simple.cartonPrice)+'</strong></div>'+
+      '<div><small>Lẻ</small><strong>'+money(simple.retailPrice)+'</strong><em>/ '+escapeHtml(simple.retailUnit)+'</em></div>'+
     '</div>'+
 
     '<div class="compact-price mine-compact">'+
       '<div>'+
         '<small>Thùng</small>'+
-        (packKind==="Thùng"
+        (simple.hasCarton
           ?'<input class="sheet-my-carton" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="Giá thùng">'
           :'<strong class="muted-price">—</strong>')+
       '</div>'+
@@ -673,7 +689,7 @@ function productCard(row){
 
     '<div class="bargain-cell">'+
       '<input class="sheet-bargain" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Khách nhập">'+
-      '<small>/ '+escapeHtml(bargainUnit)+'</small>'+
+      '<small>/ '+escapeHtml(simple.hasCarton?"thùng":"lẻ")+'</small>'+
     '</div>'+
   '</div>';
 }
@@ -743,60 +759,37 @@ function renderPackTabs(){
   if(!host)return;
 
   const base=visibleRowsBeforePack();
-  const counts=new Map();
-  for(const row of base){
-    const kind=inferSheetPack(row).kind||"Đơn";
-    counts.set(kind,(counts.get(kind)||0)+1);
-  }
+  const cartonCount=base.filter(row=>simpleRowPrice(row).hasCarton).length;
+  const retailCount=base.length-cartonCount;
 
-  const kinds=[...counts.entries()].sort((a,b)=>{
-    const rank=packSortRank(a[0])-packSortRank(b[0]);
-    return rank||a[0].localeCompare(b[0],"vi");
-  });
-
-  if(!kinds.length){
+  if(!base.length){
     activePackKind="";
     host.hidden=true;
     host.innerHTML="";
     return;
   }
 
-  if(activePackKind&&!counts.has(activePackKind))activePackKind="";
+  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ")activePackKind="";
   host.hidden=false;
   host.innerHTML=
-    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả QC <small>'+base.length+'</small></button>'+
-    kinds.map(([kind,count])=>
-      '<button class="pack-chip '+(activePackKind===kind?"active":"")+'" data-pack="'+escapeAttr(kind)+'" type="button">'+
-        escapeHtml(kind)+' <small>'+count+'</small>'+
-      '</button>'
-    ).join("");
+    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button">Thùng <small>'+cartonCount+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
 }
 
 function filteredLibraryProducts(){
   let products=visibleRowsBeforePack();
 
-  if(activePackKind){
-    products=products.filter(row=>inferSheetPack(row).kind===activePackKind);
+  if(activePackKind==="Thùng"){
+    products=products.filter(row=>simpleRowPrice(row).hasCarton);
+  }else if(activePackKind==="Lẻ"){
+    products=products.filter(row=>!simpleRowPrice(row).hasCarton);
   }
 
   products.sort((a,b)=>{
-    const nameA=normalizedBaseName(a);
-    const nameB=normalizedBaseName(b);
-    let d=nameA.localeCompare(nameB,"vi");
-    if(d)return d;
-
-    d=String(a.brand_name||a.branch_name||"").localeCompare(
-      String(b.brand_name||b.branch_name||""),"vi"
-    );
-    if(d)return d;
-
-    const pa=inferSheetPack(a);
-    const pb=inferSheetPack(b);
-    d=packSortRank(pa.kind)-packSortRank(pb.kind);
-    if(d)return d;
-    d=Number(pa.qty||1)-Number(pb.qty||1);
-    if(d)return d;
-    return Number(pa.sizeValue||0)-Number(pb.sizeValue||0);
+    const nameA=String(a.source_name||a.name||"");
+    const nameB=String(b.source_name||b.name||"");
+    return nameA.localeCompare(nameB,"vi");
   });
 
   return products;

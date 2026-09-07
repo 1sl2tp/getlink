@@ -582,36 +582,61 @@ function inferSheetPack(row){
   };
 }
 
+function rowIsCarton(row){
+  // "Thùng" comes only from this API row's own name / packaging / parsed
+  // pack kind. QC quantity alone never turns a retail row into a carton.
+  const source=[
+    row.source_name,row.name,row.packaging,row.pack_kind
+  ].map(searchKey).filter(Boolean).join(" ");
+  return source.split(/\s+/).includes("thung");
+}
+
 function simpleRowPrice(row){
   const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
+  const hasCarton=rowIsCarton(row);
 
-  // Carton is authoritative only when the API library exposes a carton
-  // variant whose BHX-visible title/packaging explicitly starts with "Thùng".
-  const cartonPrice=Number(row.carton_price||0);
-  const cartonQty=Number(row.carton_quantity)||0;
-  const cartonUnit=String(row.carton_unit||"").trim();
-  const hasCarton=cartonPrice>0;
-
-  let retailPrice=Number(row.retail_price||0);
-  let retailUnit=String(row.retail_unit||"").trim();
-
-  // No explicit carton in detail => the row is retail by default.
-  if(!retailPrice&&!hasCarton){
-    retailPrice=Number(
-      row.promo_pack_price||
+  const cartonPrice=hasCarton
+    ?Number(
+      row.carton_price||
+      row.promotion_price||
       row.current_price||
+      row.promo_pack_price||
+      row.regular_pack_price||
+      row.original_price||
+      0
+    )
+    :0;
+  const cartonQty=hasCarton
+    ?(Number(row.carton_quantity)||Number(row.pack_quantity)||Number(inferred.qty)||1)
+    :0;
+  const cartonUnit=hasCarton
+    ?String(row.carton_unit||row.pack_unit||inferred.unit||"đơn vị").trim()
+    :"";
+
+  let retailPrice=0;
+  let retailUnit=String(row.retail_unit||row.pack_unit||inferred.unit||"").trim();
+
+  if(hasCarton){
+    retailPrice=Number(
+      row.promo_unit_price||
+      row.regular_unit_price||
+      row.retail_price||
+      0
+    );
+    if(!retailPrice&&cartonPrice&&cartonQty>1){
+      retailPrice=Math.round(cartonPrice/cartonQty);
+    }
+  }else{
+    retailPrice=Number(
+      row.retail_price||
+      row.promotion_price||
+      row.current_price||
+      row.promo_pack_price||
       row.regular_pack_price||
       row.original_price||
       0
     );
-    retailUnit=inferred.unit||"đơn vị";
-  }
-
-  // Explicit carton + known carton quantity may be normalized to retail.
-  if(!retailPrice&&hasCarton&&cartonQty>1){
-    retailPrice=Math.round(cartonPrice/cartonQty);
-    retailUnit=cartonUnit||"đơn vị";
   }
 
   return {

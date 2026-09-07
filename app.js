@@ -8,7 +8,7 @@ let pollUntil=0;
 let activeComparison=null;
 let activeGroupUrl="";
 let activeBrand="";
-let activePackKind="";
+let activePackKind=localStorage.getItem("getlink:filter-pack")||"";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
@@ -32,8 +32,12 @@ function categoryRoot(url){
 }
 
 function money(v){
-  const n=Number(v||0);
-  return n>0?n.toLocaleString("vi-VN")+"₫":"—";
+  const n=Math.round(Number(v||0));
+  if(n<=0)return "—";
+  const full=n.toLocaleString("vi-VN");
+  return n%1000===0
+    ?Math.round(n/1000).toLocaleString("vi-VN")
+    :full;
 }
 
 function escapeHtml(v){
@@ -641,7 +645,11 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(simple.rawName)+'</button>'+
       '</td>'+
-      '<td class="xls-qc">'+(simple.hasCarton&&simple.cartonQty>0?escapeHtml(simple.cartonQty+" "+simple.cartonUnit):"—")+'</td>'+
+      '<td class="xls-qc">'+
+        (simple.hasCarton&&simple.cartonQty>0
+          ?'<span class="xls-qc-main">'+escapeHtml(simple.cartonQty)+'</span><small class="xls-qc-unit">'+escapeHtml(simple.cartonUnit)+'</small>'
+          :'<span class="xls-empty">—</span>')+
+      '</td>'+
       '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
       '<td class="xls-num">'+money(simple.retailPrice)+'</td>'+
       '<td>'+
@@ -734,7 +742,10 @@ function renderPackTabs(){
     return;
   }
 
-  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ")activePackKind="";
+  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ"){
+    activePackKind="";
+    localStorage.removeItem("getlink:filter-pack");
+  }
   host.hidden=false;
   host.innerHTML=
     '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
@@ -880,7 +891,6 @@ async function refreshCatalog(selectUrl=""){
   if(selectUrl){
     activeGroupUrl=categoryRoot(selectUrl);
     activeBrand="";
-    activePackKind="";
     libraryQuery="";
     $("#librarySearch").value="";
   }
@@ -906,7 +916,6 @@ $("#categoryTabs").addEventListener("click",e=>{
   if(!chip)return;
   activeGroupUrl=chip.dataset.group||"";
   activeBrand="";
-  activePackKind="";
   libraryQuery="";
   $("#librarySearch").value="";
   document.querySelectorAll(".category-chip").forEach(x=>x.classList.remove("active"));
@@ -919,7 +928,6 @@ $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
   if(!chip)return;
   activeBrand=chip.dataset.brand||"";
-  activePackKind="";
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
@@ -930,6 +938,8 @@ $("#packTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".pack-chip");
   if(!chip)return;
   activePackKind=chip.dataset.pack||"";
+  if(activePackKind)localStorage.setItem("getlink:filter-pack",activePackKind);
+  else localStorage.removeItem("getlink:filter-pack");
   document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();

@@ -108,7 +108,11 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
             await page.route("**/*", route_handler)
 
             def on_response(response):
-                if marker_matches(response.url, kind):
+                url = response.url.lower()
+                should_queue = marker_matches(response.url, kind)
+                if kind == "category" and "api.bachhoaxanh.com/" in url and "/gw/" in url:
+                    should_queue = True
+                if should_queue:
                     try:
                         queue.put_nowait(response)
                     except Exception:
@@ -127,6 +131,53 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                 nav_error = exc
 
             seen: list[str] = []
+            category_slug = next(
+                (x for x in urlparse(target_url).path.split("/") if x),
+                "",
+            )
+
+            def category_products_from_payload(payload: dict) -> list[dict]:
+                found: list[dict] = []
+
+                def walk(value):
+                    if isinstance(value, dict):
+                        for child in value.values():
+                            walk(child)
+                    elif isinstance(value, list):
+                        product_like = [
+                            x for x in value
+                            if isinstance(x, dict)
+                            and x.get("url")
+                            and (
+                                x.get("name")
+                                or x.get("fullName")
+                                or x.get("productPrices")
+                                or x.get("avatar")
+                            )
+                        ]
+                        if product_like:
+                            for item in product_like:
+                                raw_url = str(item.get("url") or "")
+                                try:
+                                    p = urlparse(
+                                        raw_url
+                                        if "://" in raw_url
+                                        else "https://www.bachhoaxanh.com/" + raw_url.lstrip("/")
+                                    )
+                                    parts = [x for x in p.path.split("/") if x]
+                                    if (
+                                        category_slug
+                                        and len(parts) >= 2
+                                        and parts[0].lower() == category_slug.lower()
+                                    ):
+                                        found.append(item)
+                                except Exception:
+                                    pass
+                        for child in value:
+                            walk(child)
+
+                walk(payload)
+                return found
 
             async def valid_payload(response):
                 seen.append(f"{response.status} {response.url}")
@@ -194,12 +245,13 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                             first_payload = payload
                             first_response_url = response.url
 
-                        data = payload.get("data")
-                        products = data.get("products") if isinstance(data, dict) else None
-                        if isinstance(products, list):
+                        products = category_products_from_payload(payload)
+                        if products:
+                            if first_payload is None:
+                                first_payload = payload
+                                first_response_url = response.url
                             for item in products:
-                                if isinstance(item, dict):
-                                    merged[item_key(item)] = item
+                                merged[item_key(item)] = item
 
                     after = len(merged)
                     if after > before:
@@ -223,10 +275,14 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                                 document.body ? document.body.scrollHeight : 0,
                                 document.documentElement ? document.documentElement.scrollHeight : 0
                               );
-                              window.scrollTo(0, h);
+                              const y = Math.min(
+                                h,
+                                window.scrollY + Math.max(window.innerHeight * 0.85, 700)
+                              );
+                              window.scrollTo(0, y);
                             }"""
                         )
-                        await page.wait_for_timeout(900)
+                        await page.wait_for_timeout(1100)
                     except Exception:
                         pass
 

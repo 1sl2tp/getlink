@@ -1030,17 +1030,20 @@ function renderCategoryMenu(){
   const pager=$("#categoryPager");
   if(!host)return;
 
+  const mobile=window.innerWidth<=700;
   const pageSize=categoryPageSize();
   const totalPages=Math.max(1,Math.ceil(libraryGroups.length/pageSize));
 
-  if(activeGroupUrl){
+  if(activeGroupUrl&&!mobile){
     const activeIndex=libraryGroups.findIndex(g=>g.url===activeGroupUrl);
     if(activeIndex>=0)categoryPage=Math.floor(activeIndex/pageSize)+1;
   }
   categoryPage=Math.min(Math.max(1,categoryPage),totalPages);
 
   const start=(categoryPage-1)*pageSize;
-  const visible=libraryGroups.slice(start,start+pageSize);
+  const visible=mobile
+    ?libraryGroups
+    :libraryGroups.slice(start,start+pageSize);
 
   host.innerHTML=
     '<button class="category-chip '+(!activeGroupUrl?"active":"")+'" data-group="" type="button">'+
@@ -1053,8 +1056,8 @@ function renderCategoryMenu(){
     ).join("");
 
   if(pager){
-    pager.innerHTML=pagerButtons(categoryPage,totalPages);
-    pager.hidden=totalPages<=1;
+    pager.innerHTML=mobile?"":pagerButtons(categoryPage,totalPages);
+    pager.hidden=mobile||totalPages<=1;
   }
 }
 
@@ -1068,12 +1071,19 @@ function gridProductCard(row){
   const qc=simple.displayQty>0
     ?String(simple.displayQty)+" "+String(simple.displayUnit||"").trim()
     :String(simple.displayUnit||"").trim();
+  const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card '+
     (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
       '<div class="grid-product-image">'+
+        '<button class="grid-watch-button '+(isWatch?"active":"")+'" type="button" '+
+          'data-url="'+escapeAttr(row.canonical_url)+'" data-watch="'+(isWatch?"1":"0")+'" '+
+          'aria-label="'+(isWatch?"Bỏ quan tâm":"Đánh dấu quan tâm")+'" '+
+          'title="'+(isWatch?"Bỏ quan tâm":"Quan tâm")+'">'+
+          '<span aria-hidden="true">'+(isWatch?"♥":"♡")+'</span>'+
+        '</button>'+
         (image
           ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">'
           :'<span class="grid-product-fallback">GL</span>')+
@@ -1290,6 +1300,17 @@ function renderBrandTabs(){
 function renderResultPager(total,pageCount){
   const host=$("#resultPager");
   if(!host)return;
+
+  if(window.innerWidth<=700){
+    const shown=Math.min(total,libraryPage*resultPageSize());
+    const remaining=Math.max(0,total-shown);
+    host.innerHTML=remaining
+      ?'<button class="load-more-button" type="button" data-more="1">Xem thêm <small>'+remaining+'</small></button>'
+      :"";
+    host.hidden=!remaining;
+    return;
+  }
+
   host.innerHTML=pagerButtons(libraryPage,pageCount);
   host.hidden=pageCount<=1;
 }
@@ -1323,11 +1344,15 @@ function renderLibraryProducts(){
   const size=resultPageSize();
   const pageCount=Math.max(1,Math.ceil(products.length/size));
   libraryPage=Math.min(Math.max(1,libraryPage),pageCount);
-  const start=(libraryPage-1)*size;
-  const visible=products.slice(start,start+size);
+  const mobile=window.innerWidth<=700;
+  const start=mobile?0:(libraryPage-1)*size;
+  const end=mobile?libraryPage*size:start+size;
+  const visible=products.slice(start,end);
 
   $("#libraryCount").textContent=products.length
-    ?products.length+" sản phẩm · "+libraryPage+"/"+pageCount
+    ?(mobile
+      ?products.length+" sản phẩm"
+      :products.length+" sản phẩm · "+libraryPage+"/"+pageCount)
     :"0 sản phẩm";
 
   $("#productGrid").innerHTML=visible.map(gridProductCard).join("");
@@ -1477,6 +1502,13 @@ $("#categoryPager").addEventListener("click",e=>{
 });
 
 $("#resultPager").addEventListener("click",e=>{
+  const more=e.target.closest("button[data-more]");
+  if(more){
+    libraryPage+=1;
+    renderLibraryProducts();
+    return;
+  }
+
   const button=e.target.closest("button[data-page]");
   if(!button||button.disabled)return;
   libraryPage=Number(button.dataset.page)||1;
@@ -1492,7 +1524,23 @@ document.querySelector(".view-switch").addEventListener("click",e=>{
   syncViewMode();
 });
 
-$("#productGrid").addEventListener("click",e=>{
+$("#productGrid").addEventListener("click",async e=>{
+  const watch=e.target.closest(".grid-watch-button");
+  if(watch){
+    e.preventDefault();
+    e.stopPropagation();
+    if(watch.disabled)return;
+    watch.disabled=true;
+    const url=watch.dataset.url||"";
+    const next=watch.dataset.watch==="1"?"normal":"watch";
+    try{
+      await updatePreference(url,next,6);
+    }catch{
+      watch.disabled=false;
+    }
+    return;
+  }
+
   const button=e.target.closest(".grid-product-name");
   const card=e.target.closest(".grid-product");
   const url=(button&&button.dataset.url)||(card&&card.dataset.url)||"";

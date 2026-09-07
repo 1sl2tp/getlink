@@ -1,5 +1,5 @@
 name: Smoke GETLINK
-# supabase-fallback smoke
+# supabase-route-v2 smoke
 
 on:
   push:

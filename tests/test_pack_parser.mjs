@@ -60,6 +60,13 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 {
+  const p = parsePackStructure("10 khoanh nhang muỗi Jumbo Vape M22 hương lavender 120g","","",1,"");
+  assert.equal(p.pack_kind,"Cụm");
+  assert.equal(p.pack_quantity,10);
+  assert.equal(p.pack_unit,"Khoanh");
+}
+
+{
   const p = parsePackStructure("Bia Budweiser lon 330ml","","",1,"");
   assert.equal(p.pack_kind,"Lon");
   assert.equal(p.pack_quantity,1);
@@ -170,7 +177,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,15);
+  assert.equal(payload.schema_version,16);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -357,7 +364,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,15);
+  assert.equal(payload.schema_version,16);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

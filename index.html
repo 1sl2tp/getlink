@@ -43,7 +43,12 @@
     <div class="price-grid" id="priceGrid">
       <div class="price"><small>1 · Giá của họ</small><strong id="webPrice">—</strong></div>
       <div class="price promo"><small>2 · Ưu đãi</small><strong id="promoPrice">—</strong><span id="promoText"></span></div>
-      <div class="price mine"><small>3 · Giá của mình</small><input id="myPrice" inputmode="numeric" placeholder="Nhập giá"></div>
+      <div class="price mine">
+        <small>3 · Giá của mình</small>
+        <input id="myPrice" inputmode="numeric" placeholder="Nhập tổng giá">
+        <div class="mine-qty"><span>Giá trên</span><input id="myPackQty" inputmode="decimal" value="1"><span>quy cách</span></div>
+        <span id="myUnitPrice" class="unit-note"></span>
+      </div>
     </div>
 
     <div id="productPersonal">

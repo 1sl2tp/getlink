@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260907-workspace71">
+  <link rel="stylesheet" href="style.css?v=20260907-workspace72">
 </head>
 <body>
 <main class="wrap">
@@ -40,8 +40,15 @@
     </div>
   </section>
 
+  <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
+    <span aria-hidden="true">☰</span>
+    <strong>Danh mục</strong>
+    <span id="mobileCategoryCurrent">Tất cả</span>
+  </button>
+  <div id="mobileNavScrim" class="mobile-nav-scrim" hidden></div>
+
   <div class="workspace">
-    <aside class="card workspace-nav">
+    <aside id="workspaceNav" class="card workspace-nav">
       <div class="nav-head">
         <strong>Danh mục</strong>
         <button id="toggleImport" class="nav-add" type="button">+ Link</button>
@@ -185,7 +192,7 @@
 <script>
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
-<script src="config.js?v=20260907-workspace71"></script>
-<script src="app.js?v=20260907-workspace71"></script>
+<script src="config.js?v=20260907-workspace72"></script>
+<script src="app.js?v=20260907-workspace72"></script>
 </body>
 </html>

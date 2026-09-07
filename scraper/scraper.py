@@ -51,6 +51,11 @@ def canonical_url(url):
     return urlunparse(("https", host, path, "", "", ""))
 
 
+def browser_url(url):
+    parsed = urlparse(canonical_url(url))
+    return urlunparse(("https", "www." + HOST, parsed.path, "", "", ""))
+
+
 def product_id(url):
     return hashlib.sha1(canonical_url(url).encode("utf-8")).hexdigest()[:16]
 
@@ -385,7 +390,7 @@ async def scrape_urls(urls, max_products=40):
                 continue
             page = await context.new_page()
             try:
-                await page.goto(raw_url, wait_until="domcontentloaded", timeout=60000)
+                await page.goto(browser_url(raw_url), wait_until="domcontentloaded", timeout=60000)
                 await page.wait_for_timeout(2500)
                 parsed = await parse_product_page(page, raw_url)
                 if parsed:
@@ -398,7 +403,7 @@ async def scrape_urls(urls, max_products=40):
                 for url in links:
                     pp = await context.new_page()
                     try:
-                        await pp.goto(url, wait_until="domcontentloaded", timeout=35000)
+                        await pp.goto(browser_url(url), wait_until="domcontentloaded", timeout=35000)
                         await pp.wait_for_timeout(700)
                         item = await parse_product_page(pp, url)
                         if item:

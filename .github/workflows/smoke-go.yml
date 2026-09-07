@@ -1,4 +1,5 @@
 name: Smoke GO Hà Nam
+# inspect GO store state
 # retry with GO diagnostics
 
 on:

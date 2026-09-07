@@ -553,6 +553,67 @@ async function handleCreate(request,env,origin){
   }
 }
 
+
+function callbackAuthorized(request,env){
+  const expected=String(env.GITHUB_TOKEN||"");
+  if(!expected)return false;
+  const got=String(request.headers.get("authorization")||"");
+  return got==="Bearer "+expected;
+}
+
+async function handleComplete(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  let raw;
+  try{raw=await request.json();}
+  catch{return json({error:"invalid_json"},400,"");}
+
+  const id=String(raw&&raw.request_id||"").replace(/[^A-Za-z0-9_-]/g,"");
+  if(!id)return json({error:"missing_request_id"},400,"");
+
+  const job=await env.DB.prepare(
+    "SELECT * FROM jobs WHERE request_id=?"
+  ).bind(id).first();
+  if(!job)return json({error:"not_found"},404,"");
+
+  if(raw.status==="error"){
+    const message=String(
+      raw.error||raw.detail||"Bright Data chưa lấy được API Bách Hóa XANH"
+    ).slice(0,1200);
+    await env.DB.prepare(
+      "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+    ).bind(message,new Date().toISOString(),id).run();
+    await env.DB.prepare(
+      "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+    ).bind(new Date().toISOString(),job.canonical_url).run();
+    return json({status:"error",error:message},200,"");
+  }
+
+  if(!raw.bhx_response||!raw.bhx_response.data){
+    return json({error:"missing_bhx_response"},400,"");
+  }
+
+  const inputUrl=raw.input_url||job.input_url||job.canonical_url;
+  const kind=raw.kind||job.link_type;
+  const normalized=kind==="product"
+    ?productDetailPayload(inputUrl,id,raw.bhx_response.data)
+    :categoryPayload(inputUrl,id,raw.bhx_response.data);
+
+  normalized.capture_engine=raw.engine||"brightdata-browser-api";
+  normalized.capture_country=raw.country||"";
+  normalized.response_url=raw.response_url||"";
+
+  const saved=await persistPayload(env,normalized);
+  return json({
+    status:"complete",
+    ...saved,
+    engine:normalized.capture_engine,
+    country:normalized.capture_country
+  },200,"");
+}
+
 async function handleResult(url,env,origin){
   const id=String(url.searchParams.get("id")||"")
     .replace(/[^A-Za-z0-9_-]/g,"");
@@ -705,6 +766,9 @@ export default {
     try{
       if(request.method==="POST"&&url.pathname==="/api/get-price"){
         return handleCreate(request,env,origin||"*");
+      }
+      if(request.method==="POST"&&url.pathname==="/api/complete"){
+        return handleComplete(request,env);
       }
       if(request.method==="GET"&&url.pathname==="/api/result"){
         return handleResult(url,env,origin||"*");

@@ -4,6 +4,7 @@ let wantedUrl="";
 let requestId="";
 let pollTimer=0;
 let pollUntil=0;
+let activeComparison=null;
 
 function canonical(url){
   try{
@@ -38,6 +39,7 @@ function saveLocal(){
   if(!key)return;
   localStorage.setItem("getlink:"+key,JSON.stringify({
     myPrice:$("#myPrice").value.trim(),
+    myPackQty:$("#myPackQty").value.trim(),
     watch:$("#watch").checked
   }));
 }
@@ -45,23 +47,50 @@ function restoreLocal(url){
   try{
     const x=JSON.parse(localStorage.getItem("getlink:"+canonical(url))||"null");
     $("#myPrice").value=x&&x.myPrice||"";
+    $("#myPackQty").value=x&&x.myPackQty||"1";
     $("#watch").checked=Boolean(x&&x.watch);
   }catch{
     $("#myPrice").value="";
+    $("#myPackQty").value="1";
     $("#watch").checked=false;
   }
   updateCompare();
 }
+function unitLabel(cmp){
+  const u=String(cmp&&cmp.pack_unit||"đơn vị").trim().toLowerCase();
+  return u||"đơn vị";
+}
 function updateCompare(){
-  const web=Number($("#webPrice").dataset.value||0);
+  const cmp=activeComparison||{};
   const mine=Number($("#myPrice").value.replace(/\D/g,"")||0);
-  if(!web||!mine){$("#compare").textContent="";return}
-  const d=web-mine;
-  $("#compare").textContent=d===0?"Giá bằng nhau":d>0
-    ?"Giá web cao hơn giá của mình "+money(d)
-    :"Giá của mình cao hơn giá web "+money(Math.abs(d));
+  const bundleQty=Math.max(.0001,Number(String($("#myPackQty").value||"1").replace(",","."))||1);
+  const unitsPerPack=Math.max(.0001,Number(cmp.pack_quantity)||1);
+  const webUnit=Number(cmp.promo_unit_price||cmp.regular_unit_price||$("#webPrice").dataset.unitValue||0);
+
+  if(!mine){
+    $("#myUnitPrice").textContent="";
+    $("#compare").textContent="";
+    return;
+  }
+
+  const myPack=mine/bundleQty;
+  const myUnit=myPack/unitsPerPack;
+  $("#myUnitPrice").textContent="≈ "+money(Math.round(myPack))+" / quy cách · "+money(Math.round(myUnit))+" / "+unitLabel(cmp);
+
+  if(!webUnit){
+    $("#compare").textContent="";
+    return;
+  }
+
+  const d=webUnit-myUnit;
+  $("#compare").textContent=Math.abs(d)<.5
+    ?"Giá lẻ bằng nhau"
+    :d>0
+      ?"Giá lẻ BHX cao hơn của mình "+money(Math.round(d))+" / "+unitLabel(cmp)
+      :"Giá lẻ của mình cao hơn BHX "+money(Math.round(Math.abs(d)))+" / "+unitLabel(cmp);
 }
 $("#myPrice").addEventListener("input",()=>{saveLocal();updateCompare()});
+$("#myPackQty").addEventListener("input",()=>{saveLocal();updateCompare()});
 $("#watch").addEventListener("change",saveLocal);
 
 
@@ -81,13 +110,23 @@ function renderProduct(payload){
   $("#branch").textContent=p.branch||"—";
   $("#packaging").textContent=(p.packaging&&p.packaging.text)||"—";
 
-  const web=Number(p.price&&p.price.current||0);
+  const cmp=p.comparison||{};
+  activeComparison=cmp;
+  const web=Number(cmp.regular_pack_price||p.price&&p.price.current||0);
   $("#webPrice").dataset.value=String(web||"");
+  $("#webPrice").dataset.unitValue=String(cmp.regular_unit_price||0);
   $("#webPrice").textContent=money(web);
+  if(cmp.regular_unit_price){
+    $("#webPrice").textContent+=" · "+money(cmp.regular_unit_price)+"/"+unitLabel(cmp);
+  }
 
   const promo=p.promotion||{};
-  $("#promoPrice").textContent=promo.price?money(promo.price):(promo.active?"Có ưu đãi":"—");
-  $("#promoText").textContent=promo.text||"";
+  const promoPack=Number(cmp.promo_pack_price||promo.price||0);
+  $("#promoPrice").textContent=promoPack?money(promoPack):(cmp.promotion_active||promo.active?"Có ưu đãi":"—");
+  if(cmp.promo_unit_price){
+    $("#promoPrice").textContent+=" · "+money(cmp.promo_unit_price)+"/"+unitLabel(cmp);
+  }
+  $("#promoText").textContent=cmp.promotion_text||promo.text||"";
   $("#productLink").href=p.url||"#";
   restoreLocal(p.url||wantedUrl);
 
@@ -96,12 +135,19 @@ function renderProduct(payload){
     $("#variantCount").textContent=variants.length+" quy cách";
     $("#variantList").innerHTML=variants.map(v=>{
       const meta=v.variant||{};
+      const cmp=v.comparison||{};
       const pack=(v.packaging&&v.packaging.text)||meta.title||"Quy cách";
-      const stock=meta.is_can_buy===false?" · Hết hàng":(meta.stock?" · Tồn "+meta.stock:"");
+      const size=cmp.size_value?(cmp.size_value+" "+cmp.size_unit):"";
+      const kind=cmp.promotion_active?"ƯU ĐÃI":"THƯỜNG";
+      const stock=meta.is_can_buy===false?"Hết hàng":(meta.stock?"Tồn "+meta.stock:"");
+      const packPrice=cmp.promo_pack_price||cmp.regular_pack_price||(v.price&&v.price.current);
+      const unitPrice=cmp.promo_unit_price||cmp.regular_unit_price;
       const href=escapeAttr(v.url||"#");
       return '<a class="child-row" href="'+href+'" target="_blank" rel="noopener">'+
-        '<span><b>'+escapeHtml(pack)+'</b><small>'+escapeHtml(v.name||"")+'</small></span>'+
-        '<strong>'+money(v.price&&v.price.current)+escapeHtml(stock)+'</strong></a>';
+        '<span><b>'+escapeHtml(pack)+'</b><small>'+escapeHtml([v.name,size,kind,stock].filter(Boolean).join(" · "))+'</small></span>'+
+        '<span class="variant-price"><strong>'+money(packPrice)+'</strong>'+
+        (unitPrice?'<small>≈ '+money(unitPrice)+' / '+escapeHtml(unitLabel(cmp))+'</small>':'')+
+        '</span></a>';
     }).join("");
   }else{
     $("#productVariants").hidden=true;
@@ -218,7 +264,9 @@ $("#get").addEventListener("click",async()=>{
       renderPayload(data.payload);
       if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
       clearPending();
-      setStatus(doneStatus(data.payload));
+      setStatus(data.cache_hit
+        ?"Đã đọc từ kho D1 vì link này được lấy trong vòng 24 giờ."
+        :doneStatus(data.payload));
       return;
     }
 

@@ -7,6 +7,7 @@ let pollTimer=0;
 let pollUntil=0;
 let activeComparison=null;
 let activeGroupUrl="";
+let activeBrand="";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
@@ -373,7 +374,9 @@ function productCard(row){
   return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="product-main">'+
       '<div class="product-thumb">'+thumb+'</div>'+
-      '<div class="product-name-wrap">'+badge+stateBadge+'<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3></div>'+
+      '<div class="product-name-wrap">'+badge+stateBadge+
+        (row.brand_name||row.branch_name?'<span class="brand-inline">'+escapeHtml(row.brand_name||row.branch_name)+'</span>':'')+
+        '<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3></div>'+
     '</div>'+
     '<div class="product-cell product-pack-cell" data-label="Quy cách">'+
       escapeHtml(pack||row.group_name||"—")+
@@ -448,6 +451,11 @@ function filteredLibraryProducts(){
   if(activeGroupUrl){
     products=products.filter(row=>row.parent_url===activeGroupUrl);
   }
+  if(activeBrand){
+    products=products.filter(row=>
+      String(row.brand_name||row.branch_name||"")===activeBrand
+    );
+  }
   if(libraryQuery){
     products=products.filter(row=>matchesSearch(row,libraryQuery));
   }
@@ -455,7 +463,51 @@ function filteredLibraryProducts(){
   return products;
 }
 
+
+function renderBrandTabs(){
+  const host=$("#brandTabs");
+  if(!host)return;
+
+  if(!activeGroupUrl){
+    activeBrand="";
+    host.hidden=true;
+    host.innerHTML="";
+    return;
+  }
+
+  const base=libraryCache.filter(row=>
+    row.parent_url===activeGroupUrl&&
+    String(row.preference_state||"normal")!=="hidden"
+  );
+  const counts=new Map();
+  for(const row of base){
+    const brand=String(row.brand_name||row.branch_name||"").trim();
+    if(!brand)continue;
+    counts.set(brand,(counts.get(brand)||0)+1);
+  }
+  const brands=[...counts.entries()]
+    .sort((a,b)=>a[0].localeCompare(b[0],"vi"));
+
+  if(!brands.length){
+    activeBrand="";
+    host.hidden=true;
+    host.innerHTML="";
+    return;
+  }
+
+  if(activeBrand&&!counts.has(activeBrand))activeBrand="";
+  host.hidden=false;
+  host.innerHTML=
+    '<button class="brand-chip '+(!activeBrand?"active":"")+'" data-brand="" type="button">Tất cả hãng <small>'+base.length+'</small></button>'+
+    brands.map(([brand,count])=>
+      '<button class="brand-chip '+(activeBrand===brand?"active":"")+'" data-brand="'+escapeAttr(brand)+'" type="button">'+
+        escapeHtml(brand)+' <small>'+count+'</small>'+
+      '</button>'
+    ).join("");
+}
+
 function renderLibraryProducts(){
+  renderBrandTabs();
   const products=filteredLibraryProducts();
   if(libraryQuery){
     $("#libraryTitle").textContent='Kết quả cho “'+libraryQuery+'”';
@@ -524,6 +576,7 @@ async function openLibraryItem(url){
 async function refreshCatalog(selectUrl=""){
   if(selectUrl){
     activeGroupUrl=categoryRoot(selectUrl);
+    activeBrand="";
     libraryQuery="";
     $("#librarySearch").value="";
   }
@@ -548,9 +601,20 @@ $("#categoryTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".category-chip");
   if(!chip)return;
   activeGroupUrl=chip.dataset.group||"";
+  activeBrand="";
   libraryQuery="";
   $("#librarySearch").value="";
   document.querySelectorAll(".category-chip").forEach(x=>x.classList.remove("active"));
+  chip.classList.add("active");
+  renderLibraryProducts();
+});
+
+
+$("#brandTabs").addEventListener("click",e=>{
+  const chip=e.target.closest(".brand-chip");
+  if(!chip)return;
+  activeBrand=chip.dataset.brand||"";
+  document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
 });

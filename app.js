@@ -591,9 +591,16 @@ function rowIsCarton(row){
 
 function rowPriceLevels(row){
   const h=rowPackHierarchy(row);
+  const winmart=isWinmartRow(row);
   const carton=Number(row.web_carton_price||0);
   const middle=Number(row.web_middle_price||0);
-  const leaf=Number(row.web_leaf_price||0);
+  const sourceLeaf=Number(
+    row.current_price||
+    row.regular_pack_price||
+    row.unit_price||
+    0
+  );
+  const leaf=Number(row.web_leaf_price||0)||(winmart?sourceLeaf:0);
   const promoCarton=Number(row.promo_carton_price||0);
   const promoMiddle=Number(row.promo_middle_price||0);
   const promoLeaf=Number(row.promo_leaf_price||0);
@@ -610,7 +617,7 @@ function rowPriceLevels(row){
     hierarchy:h,
     hasCarton:h.label1==="Thùng",
     hasMiddle:Boolean(h.label2),
-    hasLeaf:Boolean(h.label3),
+    hasLeaf:Boolean(h.label3)||(winmart&&leaf>0),
     hasPromo,
     cartonPrice:carton,
     middlePrice:middle,

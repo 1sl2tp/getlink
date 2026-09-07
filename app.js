@@ -613,6 +613,13 @@ function productCard(row){
     ?Math.round(mineCarton/qty)
     :0;
   const effectiveMineRetail=mineRetail||derivedRetail;
+  const initialDiff=[];
+  if(packKind==="Thùng"&&effectivePack&&mineCarton){
+    initialDiff.push("Thùng: "+sheetDiffText(effectivePack,mineCarton));
+  }
+  if(webUnit&&effectiveMineRetail){
+    initialDiff.push("Lẻ: "+sheetDiffText(webUnit,effectiveMineRetail));
+  }
   const thumb=image
     ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy">'
     :'<div class="thumb-fallback">GL</div>';
@@ -659,11 +666,8 @@ function productCard(row){
           (derivedRetail?'≈ '+escapeAttr(money(derivedRetail))+' từ thùng':'Giá/Lẻ')+'">'+
     '</div>'+
     '<div class="product-cell sheet-diff">'+
-      ((packKind==="Thùng"&&effectivePack&&mineCarton)
-        ?'<span>Thùng: '+escapeHtml(sheetDiffText(effectivePack,mineCarton))+'</span>'
-        :'')+
-      ((webUnit&&effectiveMineRetail)
-        ?'<span>Lẻ: '+escapeHtml(sheetDiffText(webUnit,effectiveMineRetail))+'</span>'
+      (initialDiff.length
+        ?initialDiff.map(x=>'<span>'+escapeHtml(x)+'</span>').join("")
         :'—')+
     '</div>'+
   '</div>';

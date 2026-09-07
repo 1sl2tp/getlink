@@ -126,3 +126,19 @@ jobs:
           curl --fail --silent --show-error \
             --retry 10 --retry-delay 3 --retry-all-errors \
             "$WORKER_URL/health"
+
+      - name: Bổ sung identity cho dữ liệu cũ
+        run: |
+          curl --fail --silent --show-error \
+            --connect-timeout 20 --max-time 120 \
+            -H "Authorization: Bearer $GETLINK_GITHUB_TOKEN" \
+            -H "Content-Type: application/json" \
+            -X POST "$WORKER_URL/api/rebuild-identities" | tee /tmp/getlink-identities.json
+          cat /tmp/getlink-identities.json | jq .
+
+      - name: Kiểm tra nhóm ghép nghiêm ngặt
+        run: |
+          curl --fail --silent --show-error \
+            --connect-timeout 20 --max-time 60 \
+            "$WORKER_URL/api/library?view=matches" \
+            | jq '{match_group_count, sample:(.matches[0:3] // [])}'

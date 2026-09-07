@@ -907,12 +907,12 @@ h1{margin:0;font-size:28px;line-height:1.1}
   border-collapse:collapse;
   table-layout:fixed;
   background:#fff;
-  font-size:10px;
+  font-size:12px;
 }
 .xls-price-table th,
 .xls-price-table td{
-  height:36px;
-  padding:4px 7px;
+  height:42px;
+  padding:6px 8px;
   border-right:1px solid #e4e7ec;
   border-bottom:1px solid #e4e7ec;
   text-align:left;
@@ -928,7 +928,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
   z-index:2;
   background:#f8faf9;
   color:#667085;
-  font-size:8px;
+  font-size:9.5px;
   font-weight:800;
   text-transform:uppercase;
   white-space:nowrap;
@@ -959,6 +959,8 @@ h1{margin:0;font-size:28px;line-height:1.1}
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
+  font-size:12.5px;
+  line-height:1.25;
   font-weight:650;
   color:#202124;
 }
@@ -996,18 +998,26 @@ h1{margin:0;font-size:28px;line-height:1.1}
   display:block;
   line-height:1.05;
   color:#202124;
-  font-weight:700;
+  font-size:12.5px;
+  font-weight:750;
+  font-variant-numeric:tabular-nums;
   text-align:right;
 }
 .xls-unit{
   color:#98a2b3;
+  font-size:11.5px;
+  font-weight:500;
   text-align:left;
   white-space:nowrap;
 }
 .xls-num{
   white-space:nowrap;
   color:var(--green-strong);
+  font-size:12.5px;
+  font-weight:700;
+  line-height:1.1;
   font-variant-numeric:tabular-nums;
+  letter-spacing:-.01em;
 }
 .xls-price-main{
   display:block;
@@ -1022,9 +1032,9 @@ h1{margin:0;font-size:28px;line-height:1.1}
 }
 .xls-promo-note{
   display:block;
-  margin-top:2px;
+  margin-top:3px;
   color:#84620e;
-  font-size:8px;
+  font-size:9.5px;
   font-weight:800;
   line-height:1;
   white-space:nowrap;
@@ -1057,5 +1067,24 @@ h1{margin:0;font-size:28px;line-height:1.1}
 
 @media(max-width:700px){
   .xls-table-wrap{margin-left:10px;margin-right:10px}
-  .xls-price-table{min-width:720px}
+  .xls-price-table{
+    min-width:760px;
+    font-size:12.5px;
+  }
+  .xls-price-table th{
+    font-size:10px;
+  }
+  .xls-price-table td{
+    height:44px;
+  }
+  .xls-name{
+    font-size:13px;
+  }
+  .xls-qc-main,
+  .xls-num{
+    font-size:13px;
+  }
+  .xls-unit{
+    font-size:12px;
+  }
 }

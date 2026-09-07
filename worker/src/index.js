@@ -31,6 +31,12 @@ function canonicalBhx(raw){
 function pathParts(url){
   return new URL(url).pathname.split("/").filter(Boolean);
 }
+\nfunction browserBhxUrl(url){
+  const canonical=canonicalBhx(url);
+  const u=new URL(canonical);
+  return "https://www.bachhoaxanh.com"+u.pathname;
+}
+
 
 function heuristicType(url){
   return pathParts(url).length<=1?"category":"product";
@@ -310,7 +316,7 @@ function discoverChildren(inputUrl,html,categoryName){
 async function renderBhxHtml(env,url){
   if(!env.BROWSER||typeof env.BROWSER.quickAction!=="function")throw new Error("browser_binding_missing");
   const response=await env.BROWSER.quickAction("content",{
-    url,
+    url:browserBhxUrl(url),
     gotoOptions:{waitUntil:"networkidle2",timeout:30000},
     rejectResourceTypes:["image","media","font"]
   });

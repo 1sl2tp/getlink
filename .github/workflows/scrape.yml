@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: getlink-bhx
+  group: getlink-bhx-${{ inputs.request_id || github.run_id }}
   cancel-in-progress: false
 
 jobs:
@@ -32,6 +32,8 @@ jobs:
       BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
       INPUT_URL: ${{ inputs.url }}
       INPUT_REQUEST_ID: ${{ inputs.request_id }}
+      GETLINK_API_BASE: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+      GETLINK_CALLBACK_TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -74,18 +76,14 @@ jobs:
               > "data/jobs/$INPUT_REQUEST_ID.json"
           fi
 
-      - name: Lưu response API về GitHub
+      - name: Gửi response thẳng về GETLINK Worker
         if: always()
         run: |
-          git config user.name "getlink-bot"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/jobs
-          if git diff --cached --quiet; then
-            echo "Không có thay đổi"
-            exit 0
-          fi
-          git commit -m "data: lưu response BHX từ Bright Data"
-          git push origin HEAD:main
+          set -euo pipefail
+          test -n "$INPUT_REQUEST_ID"
+          test -s "data/jobs/$INPUT_REQUEST_ID.json"
+          test -n "$GETLINK_CALLBACK_TOKEN"
+          curl --fail --silent --show-error             --retry 5 --retry-delay 2 --retry-all-errors             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data-binary @"data/jobs/$INPUT_REQUEST_ID.json"             "$GETLINK_API_BASE/api/complete" | jq .
 
       - name: Báo trạng thái
         if: steps.scrape.outputs.code != '0'

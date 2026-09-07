@@ -501,6 +501,12 @@ function inferSheetPack(row){
   const text=[row.name,row.packaging].filter(Boolean).join(" ");
   const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp";
+  const bonusMatch=plain.match(
+    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
+  const bonusWithUnits=plain.match(
+    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
   const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
   const explicitKind=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
   const singleUnit=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
@@ -510,7 +516,23 @@ function inferSheetPack(row){
   let unit=String(row.pack_unit||"").trim();
   let kind=String(row.pack_kind||"").trim();
 
-  if(countMatch){
+  if(bonusMatch){
+    const base=Number(String(bonusMatch[1]).replace(",","."));
+    const bonus=Number(String(bonusMatch[2]).replace(",","."));
+    if(base>0&&bonus>0){
+      qty=base+bonus;
+      unit=sheetNormalizeUnit(bonusMatch[3]);
+    }
+  }else if(bonusWithUnits){
+    const base=Number(String(bonusWithUnits[1]).replace(",","."));
+    const bonus=Number(String(bonusWithUnits[3]).replace(",","."));
+    const unitA=sheetNormalizeUnit(bonusWithUnits[2]);
+    const unitB=sheetNormalizeUnit(bonusWithUnits[4]);
+    if(base>0&&bonus>0&&unitA===unitB){
+      qty=base+bonus;
+      unit=unitA;
+    }
+  }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
     if(parsed>1&&qty<=1)qty=parsed;
     if(!unit||unit.toLowerCase()==="đơn vị"||Number(row.pack_quantity)<=1){

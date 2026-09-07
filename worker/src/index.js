@@ -1685,15 +1685,15 @@ function winmartTextKey(value){
 }
 
 function winmartLeafUnit(product){
+  if(String(product&&product.unit_evidence||"")!=="detail_type"){
+    return "";
+  }
   const direct=normalizePackWord(product&&product.unit||"");
   const allowed=new Set([
     "Hộp","Chai","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô",
     "Khoanh","Thanh","Cây","Viên","Tuýp","Can"
   ]);
-  if(allowed.has(direct))return direct;
-  return rawPackUnit(
-    [product&&product.name,product&&product.packaging].filter(Boolean).join(" ")
-  );
+  return allowed.has(direct)?direct:"";
 }
 
 async function loadBhxTaxonomyForWinmart(env){
@@ -1881,7 +1881,7 @@ async function persistWinmartResponse(env,job,requestId,raw){
     );
     const original=originalRaw&&originalRaw>current?originalRaw:null;
     const unit=winmartLeafUnit(rawProduct);
-    const packaging=cleanText(rawProduct.packaging||unit||"");
+    const packaging=cleanText(unit||"");
     const hierarchy={
       keep:true,reason:"",
       label1:"",qty1:0,

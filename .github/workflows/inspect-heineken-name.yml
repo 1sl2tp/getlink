@@ -1,0 +1,54 @@
+name: Inspect Heineken BHX raw naming
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/inspect-heineken-name.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r scraper/requirements.txt
+
+      - name: Inspect category raw row
+        run: |
+          set -euo pipefail
+          python scraper/brightdata_bhx.py \
+            --url "https://bachhoaxanh.com/bia" \
+            --request-id inspect-heineken-name \
+            --output /tmp/heineken.json
+
+          jq '
+            .bhx_response.data.products[]
+            | select((.url // "" | ascii_downcase | contains("thung-24-lon-bia-heineken-silver-330ml")))
+            | {
+                url,
+                name,
+                fullName,
+                title,
+                canonical,
+                unit,
+                packageItemCount,
+                packageItemUnit,
+                brandName,
+                productPrices
+              }
+          ' /tmp/heineken.json

@@ -359,8 +359,60 @@ h1{margin:0;font-size:28px;line-height:1.1}
   font-weight:800;padding:0 20px;min-height:42px;
 }
 .input-row button:disabled{opacity:.55;cursor:wait}
-.status-row{display:flex;justify-content:space-between;gap:10px;margin-top:9px}
+.status-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-top:9px;
+}
+.status-main{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+.status-stage{
+  flex:0 0 auto;
+  padding:3px 7px;
+  border-radius:999px;
+  background:#f2f4f7;
+  color:#667085;
+  font-size:10px;
+  font-weight:800;
+  white-space:nowrap;
+}
+.status-stage[data-stage="checking"],
+.status-stage[data-stage="queued"]{
+  background:#fff8df;
+  color:#84620e;
+}
+.status-stage[data-stage="runner"],
+.status-stage[data-stage="brightdata"],
+.status-stage[data-stage="saving"]{
+  background:#edf8f2;
+  color:var(--green-strong);
+}
+.status-stage[data-stage="complete"]{
+  background:#e8f7ef;
+  color:var(--green-strong);
+}
+.status-stage[data-stage="error"]{
+  background:#fff1f0;
+  color:var(--red);
+}
 .status{color:#475569;font-size:12px;min-height:18px}
+.status-meta{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  white-space:nowrap;
+}
+.status-elapsed{
+  color:#98a2b3;
+  font-size:11px;
+  font-variant-numeric:tabular-nums;
+}
 .registry-count{font-size:12px;color:var(--green-strong);white-space:nowrap}
 
 /* Comparison detail */
@@ -427,7 +479,9 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .input-row button{height:42px}
   .meta-grid,.price-grid{grid-template-columns:1fr}
   .result-head{flex-direction:column}
-  .status-row{flex-direction:column}
+  .status-row{align-items:flex-start;flex-direction:column}
+  .status-main{width:100%}
+  .status-meta{width:100%;justify-content:space-between}
   .child-row{align-items:flex-start}
 }
 

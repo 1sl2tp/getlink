@@ -8,6 +8,7 @@ let pollUntil=0;
 let activeComparison=null;
 let activeGroupUrl="";
 let activeBrand="";
+let activePackKind="";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
@@ -64,9 +65,67 @@ function searchKey(value){
     .trim();
 }
 
+
+function escapeRegex(value){
+  return String(value||"").replace(/[.*+?^$\{\}()|[\]\\]/g,"\\function productSearchKey(row){");
+}
+
+function normalizedBaseName(row){
+  const stored=String(row.base_name||"").trim();
+  if(stored&&stored!==String(row.name||"").trim())return stored;
+
+  const source=String(row.source_name||row.name||"").trim();
+  if(!source)return "Sản phẩm";
+
+  let value=source
+    .replace(/^(thùng|lốc|cụm|combo|bộ)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
+    .replace(/\s+\d+(?:[.,]\d+)?\s*(ml|lít|lit|l|kg|g)\s*$/iu,"")
+    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s*$/iu,"");
+
+  const brand=String(row.brand_name||row.branch_name||"").trim();
+  if(brand){
+    value=value.replace(
+      new RegExp("(^|\\\\s)"+escapeRegex(brand)+"(?=\\\\s|$)","iu"),
+      " "
+    );
+
+    const tokens=brand.split(/\s+/).filter(Boolean).sort((a,b)=>b.length-a.length);
+    for(const token of tokens){
+      if(token.length<3&&!/^[A-ZĐ]{2,}$/u.test(token))continue;
+      value=value.replace(
+        new RegExp("(^|\\\\s)"+escapeRegex(token)+"(?=\\\\s|$)","giu"),
+        " "
+      );
+    }
+  }
+
+  value=value
+    .replace(/\s*[-–—·,]+\s*/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+
+  if(!value)value=source;
+  return value.charAt(0).toUpperCase()+value.slice(1);
+}
+
+function packSortRank(kind){
+  const ranks={
+    "Thùng":1,"Lốc":2,"Cụm":3,"Combo":4,"Bộ":5,
+    "Chai":6,"Lon":7,"Hộp":8,"Gói":9,"Bịch":10,
+    "Túi":11,"Can":12,"Hũ":13,"Thanh":14,"Cây":15,
+    "Viên":16,"Tuýp":17,"Đơn":90
+  };
+  return ranks[kind]||50;
+}
+
 function productSearchKey(row){
+  const pack=inferSheetPack(row);
   return searchKey([
-    row.name,row.group_name,row.branch_name,row.packaging,row.canonical_url
+    normalizedBaseName(row),row.name,row.source_name,
+    row.group_name,row.branch_name,row.brand_name,row.packaging,
+    pack.kind,pack.qty,pack.unit,pack.sizeValue,pack.sizeUnit,
+    row.canonical_url
   ].filter(Boolean).join(" "));
 }
 
@@ -495,7 +554,7 @@ function productCard(row){
     '<div class="product-main">'+
       '<div class="product-thumb">'+thumb+'</div>'+
       '<div class="product-name-wrap">'+
-        '<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3>'+
+        '<h3 title="'+escapeAttr(row.source_name||row.name||"")+'">'+escapeHtml(normalizedBaseName(row))+'</h3>'+
         '<div class="row-actions">'+
           '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
           '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
@@ -557,7 +616,8 @@ async function ensureLibraryCache(force=false){
   libraryLoaded=true;
 }
 
-function filteredLibraryProducts(){
+
+function visibleRowsBeforePack(){
   let products=libraryCache.slice();
 
   if(libraryState==="watch"){
@@ -579,6 +639,69 @@ function filteredLibraryProducts(){
   if(libraryQuery){
     products=products.filter(row=>matchesSearch(row,libraryQuery));
   }
+  return products;
+}
+
+function renderPackTabs(){
+  const host=$("#packTabs");
+  if(!host)return;
+
+  const base=visibleRowsBeforePack();
+  const counts=new Map();
+  for(const row of base){
+    const kind=inferSheetPack(row).kind||"Đơn";
+    counts.set(kind,(counts.get(kind)||0)+1);
+  }
+
+  const kinds=[...counts.entries()].sort((a,b)=>{
+    const rank=packSortRank(a[0])-packSortRank(b[0]);
+    return rank||a[0].localeCompare(b[0],"vi");
+  });
+
+  if(!kinds.length){
+    activePackKind="";
+    host.hidden=true;
+    host.innerHTML="";
+    return;
+  }
+
+  if(activePackKind&&!counts.has(activePackKind))activePackKind="";
+  host.hidden=false;
+  host.innerHTML=
+    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả QC <small>'+base.length+'</small></button>'+
+    kinds.map(([kind,count])=>
+      '<button class="pack-chip '+(activePackKind===kind?"active":"")+'" data-pack="'+escapeAttr(kind)+'" type="button">'+
+        escapeHtml(kind)+' <small>'+count+'</small>'+
+      '</button>'
+    ).join("");
+}
+
+function filteredLibraryProducts(){
+  let products=visibleRowsBeforePack();
+
+  if(activePackKind){
+    products=products.filter(row=>inferSheetPack(row).kind===activePackKind);
+  }
+
+  products.sort((a,b)=>{
+    const nameA=normalizedBaseName(a);
+    const nameB=normalizedBaseName(b);
+    let d=nameA.localeCompare(nameB,"vi");
+    if(d)return d;
+
+    d=String(a.brand_name||a.branch_name||"").localeCompare(
+      String(b.brand_name||b.branch_name||""),"vi"
+    );
+    if(d)return d;
+
+    const pa=inferSheetPack(a);
+    const pb=inferSheetPack(b);
+    d=packSortRank(pa.kind)-packSortRank(pb.kind);
+    if(d)return d;
+    d=Number(pa.qty||1)-Number(pb.qty||1);
+    if(d)return d;
+    return Number(pa.sizeValue||0)-Number(pb.sizeValue||0);
+  });
 
   return products;
 }
@@ -628,6 +751,7 @@ function renderBrandTabs(){
 
 function renderLibraryProducts(){
   renderBrandTabs();
+  renderPackTabs();
   const products=filteredLibraryProducts();
   if(libraryQuery){
     $("#libraryTitle").textContent='Kết quả cho “'+libraryQuery+'”';
@@ -697,6 +821,7 @@ async function refreshCatalog(selectUrl=""){
   if(selectUrl){
     activeGroupUrl=categoryRoot(selectUrl);
     activeBrand="";
+    activePackKind="";
     libraryQuery="";
     $("#librarySearch").value="";
   }
@@ -722,6 +847,7 @@ $("#categoryTabs").addEventListener("click",e=>{
   if(!chip)return;
   activeGroupUrl=chip.dataset.group||"";
   activeBrand="";
+  activePackKind="";
   libraryQuery="";
   $("#librarySearch").value="";
   document.querySelectorAll(".category-chip").forEach(x=>x.classList.remove("active"));
@@ -734,7 +860,18 @@ $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
   if(!chip)return;
   activeBrand=chip.dataset.brand||"";
+  activePackKind="";
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
+  chip.classList.add("active");
+  renderLibraryProducts();
+});
+
+
+$("#packTabs").addEventListener("click",e=>{
+  const chip=e.target.closest(".pack-chip");
+  if(!chip)return;
+  activePackKind=chip.dataset.pack||"";
+  document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
 });

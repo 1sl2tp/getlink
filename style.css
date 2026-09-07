@@ -3011,3 +3011,13 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .grid-price.source-price-winmart{
   color:#d92d20!important;
 }
+
+
+/* Source 3: GO! Hà Nam */
+.xls-source.source-go{
+  color:#e85d04!important;
+}
+.grid-product.source-go .grid-price,
+.grid-price.source-price-go{
+  color:#e85d04!important;
+}

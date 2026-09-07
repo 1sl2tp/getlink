@@ -65,6 +65,26 @@ h1{margin:0;font-size:28px;line-height:1.1}
   background:var(--green);border-color:var(--green);color:#fff;
 }
 .category-chip.active small{color:#d9f2e4}
+.state-filters{
+  display:flex;
+  gap:7px;
+  align-items:center;
+  padding:10px 20px 0;
+}
+.state-chip{
+  border:1px solid #dfe3e8;
+  background:#fff;
+  color:#667085;
+  border-radius:9px;
+  padding:6px 10px;
+  font-size:11px;
+  font-weight:750;
+}
+.state-chip.active{
+  background:#eef8f2;
+  border-color:#b9ddca;
+  color:var(--green-strong);
+}
 .catalog-subhead{
   display:flex;justify-content:space-between;gap:10px;align-items:center;
   padding:14px 20px 10px;
@@ -192,6 +212,48 @@ h1{margin:0;font-size:28px;line-height:1.1}
 }
 .deal-badge{background:#fff1f0;color:var(--red)}
 .normal-badge{background:#f2f4f7;color:#667085}
+.watch-badge,.hidden-badge{
+  display:inline-flex;
+  align-items:center;
+  border-radius:999px;
+  padding:2px 6px;
+  margin-left:4px;
+  font-size:9px;
+  font-weight:850;
+  letter-spacing:.02em;
+}
+.watch-badge{background:#eef8f2;color:var(--green-strong)}
+.hidden-badge{background:#f2f4f7;color:#667085}
+.product-card.is-hidden{opacity:.68}
+.row-actions{
+  display:flex;
+  gap:4px;
+  margin-top:5px;
+}
+.pref-action{
+  width:25px;
+  height:25px;
+  display:grid;
+  place-items:center;
+  border:1px solid #e4e7ec;
+  border-radius:7px;
+  background:#fff;
+  color:#98a2b3;
+  font-size:12px;
+  line-height:1;
+  padding:0;
+}
+.pref-action:hover{border-color:#b9ddca;color:var(--green-strong)}
+.pref-action.active{
+  background:#eef8f2;
+  border-color:#b9ddca;
+  color:var(--green-strong);
+}
+.hide-action.active{
+  background:#f2f4f7;
+  border-color:#d0d5dd;
+  color:#475467;
+}
 .catalog-loading,.library-empty,.library-error{
   padding:24px;text-align:center;color:var(--muted);
 }
@@ -312,6 +374,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .catalog-toolbar{align-items:flex-start}
   .catalog-toolbar,.catalog-search{padding-left:12px;padding-right:12px}
   .category-tabs{padding-left:12px;padding-right:12px}
+  .state-filters{padding-left:12px;padding-right:12px}
   .catalog-subhead{padding-left:12px;padding-right:12px}
   .input-row{flex-direction:column}
   .input-row button{height:42px}

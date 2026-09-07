@@ -77,9 +77,9 @@ function firstH1(html){
 }
 
 function metaContent(html,key){
-  const escaped=String(key).replace(/[.*+?^$()|[\\]{}]/g,"\\$&");
-  const a=new RegExp('<meta[^>]+(?:property|name|itemprop)=["\\\']'+escaped+'["\\\'][^>]+content=["\\\']([^"\\\']+)["\\\']','i');
-  const b=new RegExp('<meta[^>]+content=["\\\']([^"\\\']+)["\\\'][^>]+(?:property|name|itemprop)=["\\\']'+escaped+'["\\\']','i');
+  const escaped=String(key||"");
+  const a=new RegExp("<meta[^>]+(?:property|name|itemprop)=[\\"']"+escaped+"[\\"'][^>]+content=[\\"']([^\\"']+)[\\"']","i");
+  const b=new RegExp("<meta[^>]+content=[\\"']([^\\"']+)[\\"'][^>]+(?:property|name|itemprop)=[\\"']"+escaped+"[\\"']","i");
   const m=String(html||"").match(a)||String(html||"").match(b);
   return m?decodeEntities(m[1]).trim():"";
 }
@@ -260,7 +260,7 @@ function parseProduct(url,html,roots){
 }
 
 function anchorAttr(attrs,name){
-  const re=new RegExp('\\b'+name+'\\s*=\\s*(?:"([^"]*)"|\\\'([^\\\']*)\\\'|([^\\s>]+))','i');
+  const re=new RegExp("\\b"+name+"\\s*=\\s*(?:\\"([^\\"]*)\\"|'([^']*)'|([^\\s>]+))","i");
   const m=String(attrs||"").match(re);
   return m?(m[1]||m[2]||m[3]||""):"";
 }

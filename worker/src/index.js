@@ -584,11 +584,18 @@ async function ensureSourceParent(env,parentUrl,categoryName,requestId,checked,s
 async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,checked,categoryName){
   const prepared=[];
   const activeUrls=[];
+  const hiddenRows=await env.DB.prepare(
+    "SELECT p.link_url FROM link_preferences p JOIN links l ON l.canonical_url=p.link_url WHERE p.state='hidden' AND l.parent_url=?"
+  ).bind(parentUrl).all();
+  const hidden=new Set((hiddenRows.results||[]).map(x=>x.link_url));
 
   for(const child of children||[]){
     let childUrl;
     try{childUrl=canonicalBhx(child.url);}catch{continue;}
     activeUrls.push(childUrl);
+    if(hidden.has(childUrl)){
+      continue;
+    }
 
     const p={
       ...child,

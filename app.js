@@ -404,44 +404,85 @@ function renderPayload(payload){
   return renderProduct(payload);
 }
 
-function sheetPriceKey(url){
-  return "getlink:sheet-price:"+canonical(url);
+function sheetOwnKey(url,type){
+  return "getlink:sheet-own-"+type+":"+canonical(url);
 }
 
-function readSheetPrice(url){
-  const direct=localStorage.getItem(sheetPriceKey(url));
-  if(direct!==null&&direct!=="")return Number(String(direct).replace(/\D/g,""))||0;
-  try{
-    const legacy=JSON.parse(localStorage.getItem("getlink:"+canonical(url))||"null");
-    return Number(String(legacy&&legacy.myPrice||"").replace(/\D/g,""))||0;
-  }catch{return 0}
+function readOwnPrice(url,type){
+  const direct=localStorage.getItem(sheetOwnKey(url,type));
+  if(direct!==null&&direct!==""){
+    return Number(String(direct).replace(/\D/g,""))||0;
+  }
+
+  // Legacy one-price input is only safe to reuse as a carton price.
+  if(type==="carton"){
+    const legacy=localStorage.getItem("getlink:sheet-price:"+canonical(url));
+    if(legacy!==null&&legacy!==""){
+      return Number(String(legacy).replace(/\D/g,""))||0;
+    }
+  }
+  return 0;
 }
 
-function writeSheetPrice(url,value){
+function writeOwnPrice(url,type,value){
   const n=Number(String(value||"").replace(/\D/g,""))||0;
-  if(n>0)localStorage.setItem(sheetPriceKey(url),String(n));
-  else localStorage.removeItem(sheetPriceKey(url));
+  const key=sheetOwnKey(url,type);
+  if(n>0)localStorage.setItem(key,String(n));
+  else localStorage.removeItem(key);
   return n;
 }
 
-function sheetDiffText(webUnit,mineUnit){
-  if(!webUnit||!mineUnit)return "—";
-  const d=Math.round(webUnit-mineUnit);
+function sheetDiffText(webValue,mineValue){
+  if(!webValue||!mineValue)return "—";
+  const d=Math.round(webValue-mineValue);
   if(Math.abs(d)<1)return "Bằng";
   return d>0
     ?"BHX +"+money(d)
     :"Mình +"+money(Math.abs(d));
 }
 
-function updateSheetRow(card,minePack){
+function updateSheetRow(card){
   if(!card)return;
   const qty=Math.max(1,Number(card.dataset.packQty)||1);
+  const packKind=String(card.dataset.packKind||"");
+  const webPack=Number(card.dataset.webPack)||0;
   const webUnit=Number(card.dataset.webUnit)||0;
-  const mineUnit=minePack>0?Math.round(minePack/qty):0;
-  const mineCell=card.querySelector(".sheet-mine-unit");
+  const cartonInput=card.querySelector(".sheet-my-carton");
+  const retailInput=card.querySelector(".sheet-my-retail");
   const diffCell=card.querySelector(".sheet-diff");
-  if(mineCell)mineCell.textContent=mineUnit?money(mineUnit):"—";
-  if(diffCell)diffCell.textContent=sheetDiffText(webUnit,mineUnit);
+
+  const mineCarton=cartonInput
+    ?Number(String(cartonInput.value||"").replace(/\D/g,""))||0
+    :0;
+  const manualRetail=retailInput
+    ?Number(String(retailInput.value||"").replace(/\D/g,""))||0
+    :0;
+
+  const canBorrowCartonQty=packKind==="Thùng"&&qty>1;
+  const derivedRetail=canBorrowCartonQty&&mineCarton
+    ?Math.round(mineCarton/qty)
+    :0;
+  const mineRetail=manualRetail||derivedRetail;
+
+  if(retailInput){
+    retailInput.placeholder=derivedRetail
+      ?"≈ "+money(derivedRetail)+" từ thùng"
+      :"Giá/Lẻ";
+  }
+
+  const lines=[];
+  if(canBorrowCartonQty&&webPack&&mineCarton){
+    lines.push("Thùng: "+sheetDiffText(webPack,mineCarton));
+  }
+  if(webUnit&&mineRetail){
+    lines.push("Lẻ: "+sheetDiffText(webUnit,mineRetail));
+  }
+
+  if(diffCell){
+    diffCell.innerHTML=lines.length
+      ?lines.map(x=>'<span>'+escapeHtml(x)+'</span>').join("")
+      :"—";
+  }
 }
 
 function sheetNormalizeUnit(value){

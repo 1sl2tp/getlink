@@ -85,6 +85,18 @@ def parse_money(value):
     return n if n > 0 else None
 
 
+def clean_go_product_name(value: str) -> str:
+    text = clean_text(value)
+    text = re.sub(
+        r"\s+tại\s+Siêu\s+thị\s+GO!.*$",
+        "",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(r"\s*-\s*\d{4,}\s*$", "", text)
+    return clean_text(text)
+
+
 def category_name_from_url(url: str) -> str:
     slug = (urlparse(url).path.strip("/").split("/")[-1] or "go")
     slug = re.sub(r"-i\.\d+$", "", slug, flags=re.I)

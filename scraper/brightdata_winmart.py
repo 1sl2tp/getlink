@@ -549,7 +549,7 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             async def extract_dom_products(category_label: str):
                 rows = await page.locator("a[href]").evaluate_all(
                     """els => {
-                      const clean=v=>String(v||"").replace(/\s+/g," ").trim();
+                      const clean=v=>String(v||"").replace(/\\s+/g," ").trim();
                       const UNIT_MAP = {
                         "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
                         "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
@@ -951,62 +951,6 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                 "winmart_products": len(products),
                 "missing_listing_units": len(products) - listing_unit_count,
                 "detail_pages_opened": 0,
-            }, ensure_ascii=False))
-
-            return {
-                            unit:best&&best.score>=20?best.label:"",
-                            body:(document.body&&document.body.innerText||"").slice(0,12000)
-                          };
-                        }"""
-                    )
-                except Exception:
-                    result = {"unit": "", "body": ""}
-
-                unit = normalize_unit((result or {}).get("unit") or "")
-                if not unit:
-                    match = UNIT_PATTERN.search((result or {}).get("body") or "")
-                    if match:
-                        unit = normalize_unit(match.group(1))
-
-                if unit:
-                    product["unit"] = unit
-                    product["unit_evidence"] = "detail_type"
-                    product["packaging"] = unit
-
-            detail_pages = [await prepare_detail_page() for _ in range(8)]
-            queue = asyncio.Queue()
-            for product in products:
-                queue.put_nowait(product)
-
-            async def detail_worker(detail):
-                while True:
-                    try:
-                        product = queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        return
-                    try:
-                        await read_detail_unit(detail, product)
-                    finally:
-                        queue.task_done()
-
-            try:
-                await asyncio.gather(*[
-                    detail_worker(detail) for detail in detail_pages
-                ])
-            finally:
-                await asyncio.gather(*[
-                    detail.close() for detail in detail_pages
-                ], return_exceptions=True)
-
-            detail_unit_count = sum(
-                1 for p in products
-                if p.get("unit_evidence") == "detail_type"
-                and normalize_unit(p.get("unit") or "")
-            )
-            print(json.dumps({
-                "winmart_detail_units": detail_unit_count,
-                "winmart_products": len(products),
-                "missing_detail_units": len(products) - detail_unit_count,
             }, ensure_ascii=False))
 
             return {

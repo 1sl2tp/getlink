@@ -212,9 +212,19 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
   const original=cleanText(text||"");
   const plain=original.normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"")
+    .replace(/đ/g,"d")
     .toLowerCase();
 
-  const re=/mua\s+([0-9]+(?:[.,][0-9]+)?)\s*(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\s+(?:chi\s*)?([0-9]+(?:[.,][0-9]+)*)\s*(k|nghin|ngan|d)?/g;
+  const unitPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";
+  const buyFirst=new RegExp(
+    "mua\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s+(?:chi\\s*)?([0-9]+(?:[.,][0-9]+)*)\\s*(k|nghin|ngan|d)?",
+    "g"
+  );
+  const priceFirst=new RegExp(
+    "([0-9]+(?:[.,][0-9]+)*)\\s*(k|nghin|ngan|d)\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b",
+    "g"
+  );
+
   const wrapperKinds=new Set(["Thùng","Lốc","Combo","Bộ"]);
   const packKind=normalizePackWord(pack&&pack.pack_kind||"");
   const packUnit=normalizePackWord(pack&&pack.pack_unit||"");
@@ -223,43 +233,43 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
 
   let structured=false;
   let best=null;
-  let match;
-  while((match=re.exec(plain))){
-    structured=true;
-    const promoQty=Number(String(match[1]).replace(",","."));
-    const promoUnit=normalizePackWord(match[2]);
-    const priceToken=String(match[3]||"");
-    const suffix=String(match[4]||"").toLowerCase();
 
-    let total=0;
-    if(suffix==="k"||suffix==="nghin"||suffix==="ngan"){
-      const kValue=Number(priceToken.replace(",","."));
-      total=Number.isFinite(kValue)?Math.round(kValue*1000):0;
-    }else{
-      total=parseMoney(priceToken)||0;
+  function parseTotal(priceToken,suffix){
+    const unit=String(suffix||"").toLowerCase();
+    if(unit==="k"||unit==="nghin"||unit==="ngan"){
+      const kValue=Number(String(priceToken||"").replace(",","."));
+      return Number.isFinite(kValue)?Math.round(kValue*1000):0;
     }
-    if(!(promoQty>0&&total>0))continue;
+    return parseMoney(priceToken)||0;
+  }
+
+  function consider(promoQty,promoUnitRaw,priceToken,suffix){
+    structured=true;
+    const qty=Number(String(promoQty||"").replace(",","."));
+    const promoUnit=normalizePackWord(promoUnitRaw);
+    const total=parseTotal(priceToken,suffix);
+    if(!(qty>0&&total>0))return;
 
     let requiredPacks=0;
     if(wrapperKinds.has(packKind)&&promoUnit===packKind){
-      requiredPacks=promoQty;
+      requiredPacks=qty;
     }else if(promoUnit===packUnit){
-      const ratio=promoQty/packQty;
+      const ratio=qty/packQty;
       if(ratio>=1&&Math.abs(ratio-Math.round(ratio))<1e-9){
         requiredPacks=Math.round(ratio);
       }
     }
-    if(!(requiredPacks>=1))continue;
+    if(!(requiredPacks>=1))return;
 
     const effectivePack=Math.round(total/requiredPacks);
     const effectiveUnit=Math.round(total/(requiredPacks*packQty));
-    if(basePack>0&&effectivePack>=basePack)continue;
+    if(basePack>0&&effectivePack>=basePack)return;
 
     const candidate={
       matched:true,
       structured:true,
       required_packs:requiredPacks,
-      required_quantity:promoQty,
+      required_quantity:qty,
       required_unit:promoUnit,
       total_price:total,
       effective_pack_price:effectivePack,
@@ -268,6 +278,14 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
     if(!best||candidate.effective_pack_price<best.effective_pack_price){
       best=candidate;
     }
+  }
+
+  let match;
+  while((match=buyFirst.exec(plain))){
+    consider(match[1],match[2],match[3],match[4]);
+  }
+  while((match=priceFirst.exec(plain))){
+    consider(match[3],match[4],match[1],match[2]);
   }
 
   return best||{matched:false,structured};
@@ -331,7 +349,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<11)return null;
+    if(Number(payload&&payload.schema_version||0)<12)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -556,7 +574,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:11,
+    schema_version:12,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -585,7 +603,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:11,
+    schema_version:12,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1611,7 +1629,30 @@ async function handleLibrary(url,env,origin){
     binds.push(limit);
 
     const result=await env.DB.prepare(sql).bind(...binds).all();
-    let products=result.results||[];
+    let products=(result.results||[]).map(row=>{
+      const fresh=comparisonData({
+        name:row.name||"",
+        packagingText:row.packaging||"",
+        featureText:"",
+        packCount:row.pack_quantity||1,
+        packUnit:row.pack_unit||"",
+        current:row.current_price,
+        sysPrice:row.original_price||row.current_price,
+        discount:0,
+        promoText:row.promotion_text||""
+      });
+      return {
+        ...row,
+        promo_pack_price:fresh.promo_pack_price,
+        promo_unit_price:fresh.promo_unit_price,
+        promotion_active:fresh.promotion_active?1:0,
+        has_promo:fresh.promotion_active?1:0,
+        unit_price:fresh.promo_unit_price||fresh.regular_unit_price,
+        quantity_offer_active:fresh.quantity_offer_active?1:0,
+        quantity_offer_min_packs:fresh.quantity_offer_min_packs,
+        quantity_offer_total_price:fresh.quantity_offer_total_price
+      };
+    });
     if(view==="search"){
       products=products.filter(x=>isCategoryRootUrl(x.parent_url||""));
     }
@@ -1629,7 +1670,7 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=6){
+        if(Number(payload&&payload.schema_version||0)>=12){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -1667,33 +1708,15 @@ async function handleLibrary(url,env,origin){
     `).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
-    const hasComparison=Boolean(
-      row.cmp_pack_kind||
-      row.cmp_pack_unit||
-      row.cmp_regular_pack_price||
-      row.cmp_promo_pack_price
-    );
-    const mainComparison=hasComparison?{
-      pack_kind:row.cmp_pack_kind||"",
-      pack_quantity:Number(row.cmp_pack_quantity)||1,
-      pack_unit:row.cmp_pack_unit||"",
-      size_value:row.cmp_size_value??null,
-      size_unit:row.cmp_size_unit||"",
-      regular_pack_price:row.cmp_regular_pack_price??row.current_price??null,
-      promo_pack_price:row.cmp_promo_pack_price??null,
-      regular_unit_price:row.cmp_regular_unit_price??null,
-      promo_unit_price:row.cmp_promo_unit_price??null,
-      promotion_active:Boolean(row.cmp_promotion_active),
-      promotion_text:row.promotion_text||""
-    }:comparisonData({
+    const mainComparison=comparisonData({
       name:row.name||"",
       packagingText:row.packaging||"",
       featureText:"",
-      packCount:1,
-      packUnit:"",
+      packCount:row.cmp_pack_quantity||1,
+      packUnit:row.cmp_pack_unit||"",
       current:row.current_price,
       sysPrice:row.original_price||row.current_price,
-      discount:row.promotion_price?1:0,
+      discount:0,
       promoText:row.promotion_text||""
     });
 
@@ -1706,9 +1729,9 @@ async function handleLibrary(url,env,origin){
       comparison:mainComparison,
       price:{current:row.current_price||null,original:row.original_price||null},
       promotion:{
-        active:Boolean(row.promotion_price||row.promotion_text),
-        price:row.promotion_price||null,
-        text:row.promotion_text||""
+        active:Boolean(mainComparison.promotion_active),
+        price:mainComparison.promo_pack_price||null,
+        text:mainComparison.promotion_text||""
       },
       url:itemUrl,
       image:row.stored_image||"",
@@ -1720,7 +1743,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:11,
+        schema_version:12,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

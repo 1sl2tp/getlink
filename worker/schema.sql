@@ -146,3 +146,18 @@ ON daily_variant_prices(snapshot_date DESC,variant_id);
 
 CREATE INDEX IF NOT EXISTS idx_daily_variant_parent
 ON daily_variant_prices(parent_url,snapshot_date DESC);
+
+
+CREATE TABLE IF NOT EXISTS link_preferences(
+  link_url TEXT PRIMARY KEY,
+  state TEXT NOT NULL DEFAULT 'normal'
+    CHECK(state IN ('normal','watch','hidden')),
+  auto_refresh INTEGER NOT NULL DEFAULT 0,
+  refresh_hours INTEGER NOT NULL DEFAULT 24,
+  pinned INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_preferences_state
+ON link_preferences(state,auto_refresh,updated_at);

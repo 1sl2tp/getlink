@@ -108,7 +108,7 @@ jobs:
           set -euo pipefail
 
           echo "Queue/read parent:"
-          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$PARENT" '{url:$url}')"             > /tmp/parent-create.json
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$PARENT" '{url:$url,force:true}')"             > /tmp/parent-create.json
 
           jq '{request_id,status,engine,cache_hit,link_type}' /tmp/parent-create.json
           RID="$(jq -r '.request_id // empty' /tmp/parent-create.json)"
@@ -133,13 +133,13 @@ jobs:
 
           test "$STATUS" = "complete"
           jq '{name:.payload.category_name,child_count:(.payload.products|length),discovered:(.payload.discovered_links|length)}' /tmp/parent-result.json
-          test "$(jq '.payload.products|length' /tmp/parent-result.json)" -ge 2
+          test "$(jq '.payload.products|length' /tmp/parent-result.json)" -gt 10
 
           PARENT_CANONICAL="https://bachhoaxanh.com/dau-an"
           curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             --get             --data-urlencode "view=products"             --data-urlencode "parent=$PARENT_CANONICAL"             --data-urlencode "limit=500"             "$API/api/library" > /tmp/parent-products.json
 
           jq '{count:(.products|length),sample:(.products[0]|{name,canonical_url,parent_url,current_price})}' /tmp/parent-products.json
-          test "$(jq '.products|length' /tmp/parent-products.json)" -ge 2
+          test "$(jq '.products|length' /tmp/parent-products.json)" -gt 10
           test "$(jq -r '.products[0].parent_url' /tmp/parent-products.json)" = "$PARENT_CANONICAL"
 
       - name: Verify child updates source parent

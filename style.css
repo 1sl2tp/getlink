@@ -853,6 +853,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .xls-price-table th:nth-child(7){width:11%}
 .xls-price-table th:nth-child(8){width:11%}
 .xls-price-table th.th-num{text-align:right}
+.xls-price-table td:nth-child(n+4){text-align:right}
 
 .xls-price-table .product-card{
   display:table-row!important;

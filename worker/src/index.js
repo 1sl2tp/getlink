@@ -863,6 +863,7 @@ async function persistPayload(env,payload){
 }
 
 
+
 async function handleCreate(request,env,origin){
   let body;
   try{body=await request.json();}catch{return json({error:"invalid_json"},400,origin);}
@@ -876,7 +877,7 @@ async function handleCreate(request,env,origin){
   await env.DB.prepare(`
     INSERT INTO jobs(request_id,input_url,canonical_url,link_type,status,created_at,updated_at)
     VALUES(?,?,?,?,?,?,?)
-  `).bind(requestId,url,url,initialType,"running",now,now).run();
+  `).bind(requestId,url,url,initialType,"queued",now,now).run();
 
   await upsertLink(env,{
     canonical_url:url,
@@ -885,79 +886,55 @@ async function handleCreate(request,env,origin){
     parent_url:initialType==="product"?"https://bachhoaxanh.com/"+(pathParts(url)[0]||""):null,
     name:"",
     last_checked_at:now,
-    last_status:"running",
+    last_status:"queued",
     last_request_id:requestId
   });
 
-  const hasCredentials=Boolean(env.BHX_BEARER_TOKEN&&env.BHX_XAPIKEY&&env.BHX_DEVICE_ID);
-  if(!hasCredentials){
-    const message="bhx_credentials_missing";
+  if(!env.GITHUB_TOKEN){
+    const detail="GETLINK Worker chưa có GITHUB_TOKEN dispatcher.";
     await env.DB.prepare(
       "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
-    ).bind(message,new Date().toISOString(),requestId).run();
+    ).bind(detail,new Date().toISOString(),requestId).run();
+    return json({error:"github_dispatcher_missing",detail,request_id:requestId},503,origin);
+  }
+
+  try{
+    const r=await dispatchGithub(env,browserBhxUrl(url),requestId);
+    if(!r.ok){
+      const detail=(await r.text()).slice(0,900);
+      throw new Error("github_dispatch_"+r.status+":"+detail);
+    }
+    await env.DB.prepare(
+      "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
+    ).bind(new Date().toISOString(),requestId).run();
+
+    return json({
+      request_id:requestId,
+      status:"queued",
+      input_url:url,
+      link_type:initialType,
+      engine:"brightdata-browser-api"
+    },202,origin);
+  }catch(error){
+    const detail=String(error&&error.message||error).slice(0,1000);
+    await env.DB.prepare(
+      "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+    ).bind(detail,new Date().toISOString(),requestId).run();
     await env.DB.prepare(
       "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
     ).bind(new Date().toISOString(),url).run();
-    return json({
-      error:message,
-      request_id:requestId,
-      detail:"GETLINK cần BHX_BEARER_TOKEN, BHX_XAPIKEY và BHX_DEVICE_ID để gọi API BHX."
-    },428,origin);
+    return json({error:"github_dispatch_failed",detail,request_id:requestId},502,origin);
   }
-
-  const diagnostics=[];
-  try{
-    const payload=await fetchBhxApiPayload(url,requestId,env);
-    const saved=await persistPayload(env,payload);
-    return json({
-      request_id:requestId,
-      status:"complete",
-      input_url:url,
-      link_type:payload.input_type,
-      registry_count:saved.registry_count,
-      payload,
-      engine:"bhx-api-direct"
-    },200,origin);
-  }catch(error){
-    diagnostics.push("direct:"+String(error&&error.message||error).slice(0,300));
-  }
-
-  try{
-    const payload=await fetchSupabaseBhxPayload(url,requestId,env);
-    const saved=await persistPayload(env,payload);
-    return json({
-      request_id:requestId,
-      status:"complete",
-      input_url:url,
-      link_type:payload.input_type,
-      registry_count:saved.registry_count,
-      payload,
-      engine:"supabase-api-proxy"
-    },200,origin);
-  }catch(error){
-    diagnostics.push("proxy:"+String(error&&error.message||error).slice(0,300));
-  }
-
-  const detail=diagnostics.join(" | ").slice(0,1200);
-  await env.DB.prepare(
-    "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
-  ).bind(detail,new Date().toISOString(),requestId).run();
-  await env.DB.prepare(
-    "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
-  ).bind(new Date().toISOString(),url).run();
-
-  return json({
-    error:"bhx_api_failed",
-    request_id:requestId,
-    detail
-  },502,origin);
 }
+
 
 async function handleResult(url,env,origin){
   const id=String(url.searchParams.get("id")||"").replace(/[^a-zA-Z0-9_-]/g,"");
   if(!id)return json({error:"missing_id"},400,origin);
+
   const job=await env.DB.prepare("SELECT * FROM jobs WHERE request_id=?").bind(id).first();
   if(!job)return json({error:"not_found"},404,origin);
+
   if(job.status==="complete"&&job.result_json){
     const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
     return json({
@@ -966,30 +943,58 @@ async function handleResult(url,env,origin){
       registry_count:Number(count&&count.n||0)
     },200,origin);
   }
-  if(job.status==="error")return json({status:"error",error:job.error||"unknown"},200,origin);
 
   try{
-    const payload=await readGithubJob(id);
-    if(payload){
-      if(payload.status==="error"){
-        const message=String(payload.error||payload.detail||"Không lấy được dữ liệu từ Bách Hóa XANH").slice(0,900);
+    const raw=await readGithubJob(id);
+    if(raw){
+      if(raw.status==="error"){
+        const message=String(raw.error||raw.detail||"Bright Data chưa lấy được API Bách Hóa XANH").slice(0,1200);
         await env.DB.prepare(
           "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
         ).bind(message,new Date().toISOString(),id).run();
-        return json({status:"error",error:message},200,origin);
+        await env.DB.prepare(
+          "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+        ).bind(new Date().toISOString(),job.canonical_url).run();
+        return json({status:"error",error:message,detail:raw.detail||""},200,origin);
       }
-      if(!payload.request_id)payload.request_id=id;
-      const saved=await persistPayload(env,payload);
-      return json({status:"complete",...saved},200,origin);
+
+      if(raw.bhx_response&&raw.bhx_response.data){
+        const inputUrl=raw.input_url||job.input_url||job.canonical_url;
+        const kind=raw.kind||job.link_type;
+        const normalized=kind==="product"
+          ? productDetailPayload(inputUrl,id,raw.bhx_response.data)
+          : categoryPayload(inputUrl,id,raw.bhx_response.data);
+        normalized.capture_engine=raw.engine||"brightdata-browser-api";
+        normalized.capture_country=raw.country||"";
+        normalized.response_url=raw.response_url||"";
+
+        const saved=await persistPayload(env,normalized);
+        return json({
+          status:"complete",
+          ...saved,
+          engine:raw.engine||"brightdata-browser-api",
+          country:raw.country||""
+        },200,origin);
+      }
+
+      if(raw.input_type||raw.product||Array.isArray(raw.products)){
+        if(!raw.request_id)raw.request_id=id;
+        const saved=await persistPayload(env,raw);
+        return json({status:"complete",...saved},200,origin);
+      }
     }
   }catch(error){
     return json({
-      status:"running",
+      status:job.status||"queued",
       request_id:id,
-      detail:String(error&&error.message||error).slice(0,500)
+      detail:String(error&&error.message||error).slice(0,700)
     },200,origin);
   }
-  return json({status:job.status||"running",request_id:id},200,origin);
+
+  if(job.status==="error"){
+    return json({status:"error",error:job.error||"unknown"},200,origin);
+  }
+  return json({status:job.status||"queued",request_id:id},200,origin);
 }
 
 async function handleLinks(url,env,origin){
@@ -1034,7 +1039,7 @@ export default {
       if(request.method==="GET"&&url.pathname==="/api/links")return handleLinks(url,env,origin||"*");
       if(request.method==="GET"&&url.pathname==="/health"){
         const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
-        return json({ok:true,mode:"api-only",bhx_credentials:Boolean(env.BHX_BEARER_TOKEN&&env.BHX_XAPIKEY&&env.BHX_DEVICE_ID),proxy:"supabase",links:Number(count&&count.n||0)},200,origin||"*");
+        return json({ok:true,mode:"brightdata-browser-api",dispatcher:Boolean(env.GITHUB_TOKEN),links:Number(count&&count.n||0)},200,origin||"*");
       }
       return json({error:"not_found"},404,origin||"*");
     }catch(error){

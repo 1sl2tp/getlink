@@ -1,0 +1,119 @@
+name: Refresh GETLINK library images
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/refresh-library-images.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+      GETLINK_API_BASE: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+      GETLINK_CALLBACK_TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cài Playwright client
+        run: pip install -r scraper/requirements.txt
+
+      - name: Lấy danh sách link cần cập nhật ảnh
+        run: |
+          set -euo pipefail
+          test -n "$GETLINK_CALLBACK_TOKEN"
+          curl --silent --show-error --fail \
+            --retry 10 --retry-delay 3 --retry-all-errors \
+            -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN" \
+            "$GETLINK_API_BASE/api/image-refresh-targets" \
+            > /tmp/image-targets.json
+          jq '{target_count, sample:(.targets[:5])}' /tmp/image-targets.json
+          test "$(jq -r '.ok' /tmp/image-targets.json)" = "true"
+
+      - name: Cập nhật toàn bộ ảnh thư viện
+        run: |
+          set -u
+          mkdir -p /tmp/getlink-image-refresh
+
+          TOTAL="$(jq '.targets|length' /tmp/image-targets.json)"
+          UPDATED=0
+          FAILED=0
+          INDEX=0
+
+          while IFS=$'\t' read -r KIND URL; do
+            INDEX=$((INDEX+1))
+            REQUEST_ID="img$(date +%s)${INDEX}"
+            OUT="/tmp/getlink-image-refresh/${REQUEST_ID}.json"
+            LOG="/tmp/getlink-image-refresh/${REQUEST_ID}.log"
+
+            echo "[${INDEX}/${TOTAL}] ${KIND} ${URL}"
+
+            set +e
+            python scraper/brightdata_bhx.py \
+              --url "$URL" \
+              --request-id "$REQUEST_ID" \
+              --output "$OUT" \
+              >"$LOG" 2>&1
+            CODE=$?
+            set -e
+
+            if [ "$CODE" -ne 0 ] || [ ! -s "$OUT" ]; then
+              echo "  -> scrape lỗi"
+              tail -10 "$LOG" || true
+              FAILED=$((FAILED+1))
+              continue
+            fi
+
+            TMP="${OUT}.tmp"
+            jq --arg kind "$KIND" '.kind=$kind' "$OUT" > "$TMP" && mv "$TMP" "$OUT"
+
+            HTTP_CODE="$(curl --silent --show-error \
+              --retry 4 --retry-delay 2 --retry-all-errors \
+              -o /tmp/image-refresh-response.json \
+              -w '%{http_code}' \
+              -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data-binary @"$OUT" \
+              "$GETLINK_API_BASE/api/image-refresh")"
+
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              COUNT="$(jq -r '.updated // 0' /tmp/image-refresh-response.json)"
+              UPDATED=$((UPDATED+COUNT))
+              echo "  -> cập nhật $COUNT ảnh"
+            else
+              echo "  -> lưu lỗi HTTP $HTTP_CODE"
+              cat /tmp/image-refresh-response.json || true
+              FAILED=$((FAILED+1))
+            fi
+          done < <(jq -r '.targets[] | [.kind,.url] | @tsv' /tmp/image-targets.json)
+
+          echo "IMAGE_REFRESH_TOTAL_TARGETS=$TOTAL" >> "$GITHUB_ENV"
+          echo "IMAGE_REFRESH_UPDATED=$UPDATED" >> "$GITHUB_ENV"
+          echo "IMAGE_REFRESH_FAILED=$FAILED" >> "$GITHUB_ENV"
+
+          echo "Đã cập nhật: $UPDATED ảnh; target lỗi: $FAILED/$TOTAL"
+
+      - name: Tổng kết
+        if: always()
+        run: |
+          echo "Targets: ${IMAGE_REFRESH_TOTAL_TARGETS:-0}"
+          echo "Ảnh cập nhật: ${IMAGE_REFRESH_UPDATED:-0}"
+          echo "Target lỗi: ${IMAGE_REFRESH_FAILED:-0}"

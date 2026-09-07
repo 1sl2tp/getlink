@@ -538,7 +538,7 @@ async function handleCreate(request,env,origin){
     }
 
     try{
-      const r=await dispatchGithub(env,url,requestId);
+      const r=await dispatchGithub(env,browserBhxUrl(url),requestId);
       if(!r.ok){
         const detail=(await r.text()).slice(0,700);
         throw new Error("github_dispatch_"+r.status+":"+detail);

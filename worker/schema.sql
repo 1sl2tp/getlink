@@ -171,3 +171,22 @@ CREATE TABLE IF NOT EXISTS link_assets(
 
 CREATE INDEX IF NOT EXISTS idx_link_assets_updated
 ON link_assets(updated_at);
+
+
+CREATE TABLE IF NOT EXISTS link_comparison(
+  link_url TEXT PRIMARY KEY,
+  pack_kind TEXT,
+  pack_quantity REAL NOT NULL DEFAULT 1,
+  pack_unit TEXT,
+  size_value REAL,
+  size_unit TEXT,
+  regular_pack_price INTEGER,
+  promo_pack_price INTEGER,
+  regular_unit_price REAL,
+  promo_unit_price REAL,
+  promotion_active INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_comparison_kind
+ON link_comparison(pack_kind,pack_unit,updated_at);

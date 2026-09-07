@@ -642,11 +642,23 @@ function rowIsCarton(row){
   return rowCartonStructure(row).isPureCarton;
 }
 
+function rowHasMixedBundle(row){
+  const name=searchKey(row.source_name||row.name||"");
+  const units="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
+  // Only treat "và" as a mixed bundle when a SECOND explicit pack starts
+  // after it, e.g. "24 lon ... và 24 lon ...". Normal product wording
+  // such as "hương nhài trắng và tuyết tùng" must not trigger this.
+  return new RegExp(
+    "\\bva\\s+[0-9]+(?:[.,][0-9]+)?\\s+("+units+")\\b"
+  ).test(name);
+}
+
 function simpleRowPrice(row){
   const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
   const structure=rowCartonStructure(row);
   const hasCarton=structure.isPureCarton;
+  const mixedBundle=!hasCarton&&rowHasMixedBundle(row);
 
   const ownPrice=Number(
     row.current_price||
@@ -675,12 +687,23 @@ function simpleRowPrice(row){
     ?Math.round(promoOwn/Math.max(1,structure.cartonCount))
     :0;
 
+  // Retail multi-packs are normalized to ONE retail unit.
+  // Example: 6 lon = 139 => 23.167/lon.
+  // Exception: "24 lon A và 24 lon B" is a mixed bundle, so there is no
+  // single meaningful QC divisor; keep its raw link price for debugging.
+  const retailDivisor=(!hasCartonMath&&!mixedBundle&&Number(inferred.qty)>1)
+    ?Number(inferred.qty)
+    :1;
   const retailPrice=hasCartonMath&&structure.itemCount>0&&cartonPrice
     ?Math.round(cartonPrice/structure.itemCount)
-    :(!hasCartonMath?ownPrice:0);
+    :(!hasCartonMath
+      ?Math.round(ownPrice/Math.max(1,retailDivisor))
+      :0);
   const promoRetailPrice=hasCartonMath&&structure.itemCount>0&&promoCartonPrice
     ?Math.round(promoCartonPrice/structure.itemCount)
-    :(!hasCartonMath?promoOwn:0);
+    :(!hasCartonMath&&promoOwn
+      ?Math.round(promoOwn/Math.max(1,retailDivisor))
+      :0);
 
   const cartonQty=hasCarton
     ?(structure.itemCount||Number(row.pack_quantity)||Number(inferred.qty)||1)
@@ -691,21 +714,26 @@ function simpleRowPrice(row){
   const retailUnit=structure.itemUnit||
     String(row.pack_unit||inferred.unit||"đơn vị").trim();
 
-  const displayQty=hasCarton
-    ?cartonQty
-    :(structure.cartonCount>1
-      ?structure.cartonCount
-      :(Number(row.pack_quantity)||Number(inferred.qty)||1));
-  const displayUnit=hasCarton
-    ?cartonUnit
-    :(structure.cartonCount>1
-      ?"Thùng"
-      :String(row.pack_unit||inferred.unit||"đơn vị").trim());
+  const displayQty=mixedBundle
+    ?0
+    :(hasCarton
+      ?cartonQty
+      :(structure.cartonCount>1
+        ?structure.cartonCount
+        :(Number(inferred.qty)||1)));
+  const displayUnit=mixedBundle
+    ?""
+    :(hasCarton
+      ?cartonUnit
+      :(structure.cartonCount>1
+        ?"Thùng"
+        :String(inferred.unit||row.pack_unit||"đơn vị").trim()));
 
   return {
     rawName:rawName||"Sản phẩm",
     hasCarton,
     hasPromo:Boolean(promoOwn),
+    mixedBundle,
     cartonCount:structure.cartonCount,
     cartonPrice,
     promoCartonPrice,

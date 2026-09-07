@@ -18,6 +18,11 @@ let libraryLoaded=false;
 let libraryState="visible";
 let activePreferenceState="normal";
 let selectedLibraryUrl="";
+let libraryGroups=[];
+let categoryPage=1;
+let libraryPage=1;
+let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
+let lastMobileLayout=window.innerWidth<=700;
 
 function canonical(url){
   try{
@@ -999,28 +1004,108 @@ function productCard(row){
     '</tr>';
 }
 
+function categoryPageSize(){
+  return window.innerWidth<=700?8:18;
+}
+
+function resultPageSize(){
+  return window.innerWidth<=700?20:36;
+}
+
+function pagerButtons(page,total){
+  if(total<=1)return "";
+  const out=[];
+  const start=Math.max(1,Math.min(page-2,total-4));
+  const end=Math.min(total,start+4);
+  out.push('<button type="button" data-page="'+Math.max(1,page-1)+'" '+(page<=1?'disabled':'')+' aria-label="Trang trước">‹</button>');
+  for(let p=start;p<=end;p++){
+    out.push('<button type="button" data-page="'+p+'" class="'+(p===page?'active':'')+'">'+p+'</button>');
+  }
+  out.push('<button type="button" data-page="'+Math.min(total,page+1)+'" '+(page>=total?'disabled':'')+' aria-label="Trang sau">›</button>');
+  return out.join("");
+}
+
+function renderCategoryMenu(){
+  const host=$("#categoryTabs");
+  const pager=$("#categoryPager");
+  if(!host)return;
+
+  const pageSize=categoryPageSize();
+  const totalPages=Math.max(1,Math.ceil(libraryGroups.length/pageSize));
+
+  if(activeGroupUrl){
+    const activeIndex=libraryGroups.findIndex(g=>g.url===activeGroupUrl);
+    if(activeIndex>=0)categoryPage=Math.floor(activeIndex/pageSize)+1;
+  }
+  categoryPage=Math.min(Math.max(1,categoryPage),totalPages);
+
+  const start=(categoryPage-1)*pageSize;
+  const visible=libraryGroups.slice(start,start+pageSize);
+
+  host.innerHTML=
+    '<button class="category-chip '+(!activeGroupUrl?"active":"")+'" data-group="" type="button">'+
+      'Tất cả <small>'+libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden").length+'</small>'+
+    '</button>'+
+    visible.map(g=>
+      '<button class="category-chip '+(activeGroupUrl===g.url?"active":"")+'" data-group="'+escapeAttr(g.url)+'" type="button">'+
+        escapeHtml(g.name)+' <small>'+Number(g.product_count||0)+'</small>'+
+      '</button>'
+    ).join("");
+
+  if(pager){
+    pager.innerHTML=pagerButtons(categoryPage,totalPages);
+    pager.hidden=totalPages<=1;
+  }
+}
+
+function gridProductCard(row){
+  const simple=simpleRowPrice(row);
+  const displayName=retailDisplayName(row,simple);
+  const price=simple.hasCarton
+    ?(simple.promoCartonPrice||simple.cartonPrice)
+    :(simple.promoRetailPrice||simple.retailPrice);
+  const image=String(row.image||"").trim();
+  const qc=simple.displayQty>0
+    ?String(simple.displayQty)+" "+String(simple.displayUnit||"").trim()
+    :String(simple.displayUnit||"").trim();
+
+  return '<article class="grid-product product-card '+
+    (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
+    (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
+    '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
+      '<div class="grid-product-image">'+
+        (image
+          ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">'
+          :'<span class="grid-product-fallback">GL</span>')+
+      '</div>'+
+      '<div class="grid-product-body">'+
+        '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(displayName)+'</button>'+
+        '<div class="grid-product-bottom">'+
+          '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<strong class="grid-price">'+money(price)+'</strong>'+
+        '</div>'+
+      '</div>'+
+    '</article>';
+}
+
+
 async function loadLibraryGroups(){
   if(!API)return;
   try{
     const r=await fetch(API+"/api/library?view=groups",{cache:"no-store"});
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||"library_error");
-    const groups=Array.isArray(data.groups)?data.groups:[];
+    libraryGroups=Array.isArray(data.groups)?data.groups:[];
 
-    $("#categoryTabs").innerHTML=
-      '<button class="category-chip '+(!activeGroupUrl?"active":"")+'" data-group="" type="button">Tất cả</button>'+
-      groups.map(g=>
-        '<button class="category-chip '+(activeGroupUrl===g.url?"active":"")+'" data-group="'+escapeAttr(g.url)+'" type="button">'+
-          escapeHtml(g.name)+' <small>'+Number(g.product_count||0)+'</small>'+
-        '</button>'
-      ).join("");
-
-    if(activeGroupUrl&&!groups.some(g=>g.url===activeGroupUrl)){
+    if(activeGroupUrl&&!libraryGroups.some(g=>g.url===activeGroupUrl)){
       activeGroupUrl="";
     }
+    renderCategoryMenu();
   }catch{
+    libraryGroups=[];
     $("#categoryTabs").innerHTML=
       '<span class="library-error">Chưa đọc được nhóm từ D1.</span>';
+    if($("#categoryPager"))$("#categoryPager").hidden=true;
   }
 }
 
@@ -1202,43 +1287,75 @@ function renderBrandTabs(){
     ).join("");
 }
 
+function renderResultPager(total,pageCount){
+  const host=$("#resultPager");
+  if(!host)return;
+  host.innerHTML=pagerButtons(libraryPage,pageCount);
+  host.hidden=pageCount<=1;
+}
+
+function syncViewMode(){
+  const grid=$("#productGrid");
+  const table=$("#tableView");
+  if(grid)grid.hidden=libraryView!=="grid";
+  if(table)table.hidden=libraryView!=="table";
+  document.querySelectorAll(".view-button").forEach(button=>{
+    button.classList.toggle("active",button.dataset.view===libraryView);
+  });
+}
+
 function renderLibraryProducts(){
   renderBrandTabs();
   renderPackTabs();
   const products=filteredLibraryProducts();
+
   if(libraryQuery){
     $("#libraryTitle").textContent='Kết quả cho “'+libraryQuery+'”';
   }else if(activeGroupUrl){
-    const chip=[...document.querySelectorAll(".category-chip")]
-      .find(x=>x.dataset.group===activeGroupUrl);
-    $("#libraryTitle").textContent=chip
-      ?chip.textContent.replace(/\s+\d+$/,"").trim()
-      :"Sản phẩm";
+    const group=libraryGroups.find(g=>g.url===activeGroupUrl);
+    $("#libraryTitle").textContent=group?group.name:"Sản phẩm";
   }else{
     $("#libraryTitle").textContent=libraryState==="watch"
       ?"Sản phẩm quan tâm"
       :(libraryState==="hidden"?"Sản phẩm đang ẩn":"Tất cả sản phẩm đang dùng");
   }
 
-  $("#libraryCount").textContent=products.length+" sản phẩm";
-  $("#libraryProducts").innerHTML=products.map(productCard).join("");
+  const size=resultPageSize();
+  const pageCount=Math.max(1,Math.ceil(products.length/size));
+  libraryPage=Math.min(Math.max(1,libraryPage),pageCount);
+  const start=(libraryPage-1)*size;
+  const visible=products.slice(start,start+size);
+
+  $("#libraryCount").textContent=products.length
+    ?products.length+" sản phẩm · "+libraryPage+"/"+pageCount
+    :"0 sản phẩm";
+
+  $("#productGrid").innerHTML=visible.map(gridProductCard).join("");
+  $("#libraryProducts").innerHTML=visible.map(productCard).join("");
   $("#libraryEmpty").hidden=products.length!==0;
+
   if(!products.length){
     $("#libraryEmpty").textContent=libraryQuery
       ?"Không có sản phẩm khớp tất cả từ đang tìm."
       :"Chưa có sản phẩm trong nhóm này.";
   }
+
+  renderResultPager(products.length,pageCount);
+  syncViewMode();
 }
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
   $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="8">Đang đọc thư viện D1...</td></tr>';
+  $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện D1...</div>';
   $("#libraryEmpty").hidden=true;
   try{
     await ensureLibraryCache(force);
+    renderCategoryMenu();
     renderLibraryProducts();
   }catch{
     $("#libraryProducts").innerHTML="";
+    $("#productGrid").innerHTML="";
     $("#libraryCount").textContent="";
     $("#libraryEmpty").hidden=false;
     $("#libraryEmpty").textContent="Chưa đọc được thư viện giá.";

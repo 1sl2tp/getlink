@@ -493,7 +493,7 @@ function inferSheetPack(row){
   const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|loc|thanh|cay|vien|tuyp";
 
   const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
   const body=explicitKind

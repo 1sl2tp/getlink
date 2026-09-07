@@ -1469,7 +1469,85 @@ async function handleLibrary(url,env,origin){
             FROM daily_variant_prices d
             WHERE d.parent_url=l.canonical_url
           )
-        ) AS has_promo
+        ) AS has_promo,
+        (
+          SELECT pv.current_price
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
+          LIMIT 1
+        ) AS carton_price,
+        (
+          SELECT pv.sys_price
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
+          LIMIT 1
+        ) AS carton_sys_price,
+        (
+          SELECT pv.package_item_count
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
+          LIMIT 1
+        ) AS carton_quantity,
+        (
+          SELECT pv.package_item_unit
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY pv.package_item_count DESC,pv.updated_at DESC
+          LIMIT 1
+        ) AS carton_unit,
+        (
+          SELECT pv.current_price
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND NOT (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY
+            CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,
+            COALESCE(pv.package_item_count,1) ASC,
+            pv.updated_at DESC
+          LIMIT 1
+        ) AS retail_price,
+        (
+          SELECT pv.package_item_unit
+          FROM product_variants pv
+          WHERE pv.parent_url=l.canonical_url
+            AND NOT (
+              TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%' OR
+              TRIM(COALESCE(pv.name,'')) LIKE 'Thùng%'
+            )
+          ORDER BY
+            CASE WHEN COALESCE(pv.package_item_count,1)=1 THEN 0 ELSE 1 END,
+            COALESCE(pv.package_item_count,1) ASC,
+            pv.updated_at DESC
+          LIMIT 1
+        ) AS retail_unit
       FROM links l
       LEFT JOIN link_preferences pref
         ON pref.link_url=l.canonical_url

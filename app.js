@@ -618,6 +618,14 @@ function canonicalDisplayName(row){
   );
 }
 
+function sourceDisplayLabel(row){
+  const raw=String(row&&row.source||"").trim();
+  const key=searchKey(raw);
+  if(!raw||key.includes("bach hoa xanh"))return "BHX";
+  if(key.includes("winmart"))return "WinMart";
+  return raw;
+}
+
 function rowPrimaryQc(row){
   const h=rowPackHierarchy(row);
   if(h.label1==="Thùng"){
@@ -671,6 +679,7 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(levels.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
+      '<td class="xls-source" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label1
           ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
@@ -1021,7 +1030,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="11">Đang đọc thư viện D1...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="12">Đang đọc thư viện D1...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện D1...</div>';
   $("#libraryEmpty").hidden=true;
   try{

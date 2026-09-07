@@ -103,6 +103,28 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 {
+  const input="https://bachhoaxanh.com/mi-an-lien/30-goi-mi-3-mien";
+  const data={
+    categoryName:"Mì ăn liền",
+    boxBuys:[{
+      id:10,
+      url:"/mi-an-lien/30-goi-mi-3-mien",
+      name:"30 gói mì 3 Miền tôm chua cay 65g",
+      title:"30 Gói",
+      packageItemCount:5,
+      packageItemUnit:"Thùng",
+      productPrices:[{price:470000,sysPrice:470000,discountPercent:0,quantity:5,isCanBuy:true}]
+    }]
+  };
+  const payload=productDetailPayload(input,"test-price-unit",data);
+  assert.equal(payload.schema_version,8);
+  assert.equal(payload.product.comparison.pack_kind,"Thùng");
+  assert.equal(payload.product.comparison.pack_quantity,5);
+  assert.equal(payload.product.comparison.pack_unit,"Thùng");
+  assert.match(payload.product.packaging.text,/Thùng/i);
+}
+
+{
   const c = comparisonData({
     name:"Thùng 24 + 4 lon Bia Budweiser 250ml",
     packagingText:"",
@@ -169,7 +191,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,7);
+  assert.equal(payload.schema_version,8);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

@@ -40,12 +40,20 @@ jobs:
         with:
           ref: main
 
+      - name: Báo runner đã bắt đầu
+        run: |
+          curl --silent --show-error --fail             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data "{\"request_id\":\"$INPUT_REQUEST_ID\",\"stage\":\"runner\"}"             "$GETLINK_API_BASE/api/progress" >/dev/null
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Cài Playwright client
         run: pip install -r scraper/requirements.txt
+
+      - name: Báo đang mở Bright Data / BHX
+        run: |
+          curl --silent --show-error --fail             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data "{\"request_id\":\"$INPUT_REQUEST_ID\",\"stage\":\"brightdata\"}"             "$GETLINK_API_BASE/api/progress" >/dev/null
 
       - name: Mở link qua Bright Data và bắt API BHX
         id: scrape
@@ -60,6 +68,12 @@ jobs:
           CODE=${PIPESTATUS[0]}
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           exit 0
+
+      - name: Báo đang lưu kết quả
+        if: always()
+        continue-on-error: true
+        run: |
+          curl --silent --show-error             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data "{\"request_id\":\"$INPUT_REQUEST_ID\",\"stage\":\"saving\"}"             "$GETLINK_API_BASE/api/progress" >/dev/null || true
 
       - name: Đảm bảo có kết quả lỗi nếu runner dừng bất thường
         if: always()

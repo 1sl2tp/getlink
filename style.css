@@ -2934,3 +2934,19 @@ h1{margin:0;font-size:28px;line-height:1.1}
     background:#fff;
   }
 }
+
+
+/* Sticky XLS column header v1: keep labels visible while table rows scroll */
+@media(min-width:901px){
+  .xls-table-wrap{
+    max-height:calc(100vh - 210px);
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  .xls-price-table thead th{
+    position:sticky;
+    top:0;
+    z-index:4;
+    box-shadow:0 1px 0 #dfe3e8;
+  }
+}

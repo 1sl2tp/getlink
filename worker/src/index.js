@@ -580,6 +580,77 @@ async function ensureSourceParent(env,parentUrl,categoryName,requestId,checked,s
   });
 }
 
+
+async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,checked,categoryName){
+  const prepared=[];
+  const activeUrls=[];
+
+  for(const child of children||[]){
+    let childUrl;
+    try{childUrl=canonicalBhx(child.url);}catch{continue;}
+    activeUrls.push(childUrl);
+
+    const p={
+      ...child,
+      group:child.group||categoryName||""
+    };
+    const price=p.price||{};
+    const promo=p.promotion||{};
+    const id=await idForUrl(childUrl);
+    const now=new Date().toISOString();
+
+    prepared.push(env.DB.prepare(`
+      INSERT INTO links(
+        id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,
+        packaging,current_price,original_price,promotion_price,promotion_text,
+        last_checked_at,last_status,last_request_id,created_at,updated_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(canonical_url) DO UPDATE SET
+        source=excluded.source,
+        link_type='product',
+        parent_url=excluded.parent_url,
+        group_name=COALESCE(NULLIF(excluded.group_name,''),links.group_name),
+        branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),
+        name=COALESCE(NULLIF(excluded.name,''),links.name),
+        packaging=COALESCE(NULLIF(excluded.packaging,''),links.packaging),
+        current_price=COALESCE(excluded.current_price,links.current_price),
+        original_price=COALESCE(excluded.original_price,links.original_price),
+        promotion_price=COALESCE(excluded.promotion_price,links.promotion_price),
+        promotion_text=COALESCE(NULLIF(excluded.promotion_text,''),links.promotion_text),
+        last_checked_at=excluded.last_checked_at,
+        last_status='ok',
+        last_request_id=excluded.last_request_id,
+        updated_at=excluded.updated_at
+    `).bind(
+      id,childUrl,p.source&&p.source.name||"Bách Hóa XANH","product",
+      parentUrl,p.group||"",p.branch||"",p.name||"",
+      p.packaging&&p.packaging.text||"",
+      Number(price.current)||null,Number(price.original)||null,
+      Number(promo.price)||null,promo.text||"",
+      p.last_checked_at||checked,"ok",requestId,now,now
+    ));
+
+    if(Number(price.current)||Number(promo.price)){
+      prepared.push(env.DB.prepare(`
+        INSERT OR IGNORE INTO price_snapshots(
+          link_id,request_id,checked_at,current_price,original_price,
+          promotion_price,promotion_text,result_json
+        ) VALUES(?,?,?,?,?,?,?,?)
+      `).bind(
+        id,requestId,p.last_checked_at||checked,
+        Number(price.current)||null,Number(price.original)||null,
+        Number(promo.price)||null,promo.text||"",JSON.stringify(p)
+      ));
+    }
+  }
+
+  for(let i=0;i<prepared.length;i+=80){
+    await env.DB.batch(prepared.slice(i,i+80));
+  }
+
+  return activeUrls;
+}
+
 async function markMissingChildrenUnlisted(env,parentUrl,activeUrls,checked){
   const existing=await env.DB.prepare(
     "SELECT canonical_url FROM links WHERE link_type='product' AND parent_url=?"
@@ -619,19 +690,10 @@ async function repairCachedGraph(env,payload){
       env,inputUrl,payload.category_name||slugTitle(inputUrl),
       requestId,checked,"ok"
     );
-    const activeUrls=[];
-    for(const child of payload.products||[]){
-      let childUrl;
-      try{childUrl=canonicalBhx(child.url);}catch{continue;}
-      activeUrls.push(childUrl);
-      await persistEntry(
-        env,{
-          ...child,
-          group:child.group||payload.category_name||""
-        },
-        inputUrl,requestId,checked,"product"
-      );
-    }
+    const activeUrls=await persistCategoryChildrenBatch(
+      env,payload.products||[],inputUrl,requestId,checked,
+      payload.category_name||""
+    );
     if(activeUrls.length){
       await markMissingChildrenUnlisted(env,inputUrl,activeUrls,checked);
     }
@@ -685,19 +747,10 @@ async function persistPayload(env,payload){
       payload.request_id,checked,"ok"
     );
 
-    const activeUrls=[];
-    for(const child of payload.products||[]){
-      let childUrl;
-      try{childUrl=canonicalBhx(child.url);}catch{continue;}
-      activeUrls.push(childUrl);
-      await persistEntry(
-        env,{
-          ...child,
-          group:child.group||payload.category_name||""
-        },
-        inputUrl,payload.request_id,checked,"product"
-      );
-    }
+    const activeUrls=await persistCategoryChildrenBatch(
+      env,payload.products||[],inputUrl,payload.request_id,checked,
+      payload.category_name||""
+    );
 
     if(activeUrls.length){
       await markMissingChildrenUnlisted(

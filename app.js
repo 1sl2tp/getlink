@@ -736,23 +736,8 @@ function rowPackHierarchy(row){
     qty2:Number(row&&row.pack_qty_2)||0,
     label3:String(row&&row.pack_label_3||"").trim(),
     qty3:Number(row&&row.pack_qty_3)||0,
-    evidence:String(row&&row.pack_evidence||"").trim()
-  };
-}
-
-function rowCartonStructure(row){
-  const h=rowPackHierarchy(row);
-  const isPureCarton=h.label1==="Thùng";
-
-  // UI no longer parses name/URL/QC to decide Thùng.
-  // It only consumes the hierarchy contract emitted by the Worker.
-  return {
-    isPureCarton,
-    cartonCount:isPureCarton?1:0,
-    itemCount:isPureCarton?Math.max(0,Number(h.qty2)||0):0,
-    itemUnit:isPureCarton?h.label2:"",
-    subItemCount:isPureCarton?Math.max(0,Number(h.qty3)||0):0,
-    subItemUnit:isPureCarton?h.label3:""
+    evidence:String(row&&row.pack_evidence||"").trim(),
+    locked:Number(row&&row.hierarchy_locked||0)>0
   };
 }
 
@@ -760,125 +745,36 @@ function rowIsCarton(row){
   return rowPackHierarchy(row).label1==="Thùng";
 }
 
-function rowHasMixedBundle(row){
-  const name=searchKey(row.source_name||row.name||"");
-  const units="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
-  // Only treat "và" as a mixed bundle when a SECOND explicit pack starts
-  // after it, e.g. "24 lon ... và 24 lon ...". Normal product wording
-  // such as "hương nhài trắng và tuyết tùng" must not trigger this.
-  return new RegExp(
-    "\\bva\\s+[0-9]+(?:[.,][0-9]+)?\\s+("+units+")\\b"
-  ).test(name);
-}
+function rowPriceLevels(row){
+  const h=rowPackHierarchy(row);
+  const carton=Number(row.web_carton_price||0);
+  const middle=Number(row.web_middle_price||0);
+  const leaf=Number(row.web_leaf_price||0);
+  const promoCarton=Number(row.promo_carton_price||0);
+  const promoMiddle=Number(row.promo_middle_price||0);
+  const promoLeaf=Number(row.promo_leaf_price||0);
 
-function simpleRowPrice(row){
-  const rawName=String(row.source_name||row.name||"").trim();
-  const inferred=inferSheetPack(row);
-  const structure=rowCartonStructure(row);
-  const hasCarton=structure.isPureCarton;
-  const mixedBundle=!hasCarton&&rowHasMixedBundle(row);
-
-  const ownPrice=Number(
-    row.current_price||
-    row.regular_pack_price||
-    row.original_price||
-    0
+  const hasPromo=Boolean(
+    (promoCarton>0&&carton>0&&promoCarton<carton)||
+    (promoMiddle>0&&middle>0&&promoMiddle<middle)||
+    (promoLeaf>0&&leaf>0&&promoLeaf<leaf)||
+    Number(row.has_promo||row.promotion_active||0)>0
   );
-  const rawPromo=Number(
-    row.promo_pack_price||
-    row.promotion_price||
-    0
-  );
-  const promoOwn=(Number(row.has_promo||row.quantity_offer_active||row.promotion_active)>0&&
-    rawPromo>0&&ownPrice>0&&rawPromo<ownPrice)
-    ?rawPromo
-    :0;
-
-  // "Thùng xx chai/lon/..." = one carton.
-  // "2 thùng..." / "Combo 5 thùng..." = multi-carton offer:
-  // normalize current and promo prices to one carton for comparison.
-  const hasCartonMath=hasCarton||structure.cartonCount>1;
-  const cartonPrice=hasCartonMath&&ownPrice
-    ?Math.round(ownPrice/Math.max(1,structure.cartonCount))
-    :0;
-  const promoCartonPrice=hasCartonMath&&promoOwn
-    ?Math.round(promoOwn/Math.max(1,structure.cartonCount))
-    :0;
-
-  // Retail multi-packs are normalized to ONE retail unit.
-  // Example: 6 lon = 139 => 23.167/lon.
-  // Exception: "24 lon A và 24 lon B" is a mixed bundle, so there is no
-  // single meaningful QC divisor; keep its raw link price for debugging.
-  const retailDivisor=(!hasCartonMath&&!mixedBundle&&Number(inferred.qty)>1)
-    ?Number(inferred.qty)
-    :1;
-  const retailPrice=hasCartonMath&&structure.itemCount>0&&cartonPrice
-    ?Math.round(cartonPrice/structure.itemCount)
-    :(!hasCartonMath
-      ?Math.round(ownPrice/Math.max(1,retailDivisor))
-      :0);
-  const promoRetailPrice=hasCartonMath&&structure.itemCount>0&&promoCartonPrice
-    ?Math.round(promoCartonPrice/structure.itemCount)
-    :(!hasCartonMath&&promoOwn
-      ?Math.round(promoOwn/Math.max(1,retailDivisor))
-      :0);
-
-  const cartonQty=hasCarton
-    ?(structure.itemCount||Number(row.pack_quantity)||Number(inferred.qty)||1)
-    :(structure.cartonCount>1?structure.cartonCount:0);
-  const cartonUnit=hasCarton
-    ?(structure.itemUnit||String(row.pack_unit||inferred.unit||"đơn vị").trim())
-    :(structure.cartonCount>1?"Thùng":"");
-  const retailUnit=structure.itemUnit||
-    String(row.pack_unit||inferred.unit||"đơn vị").trim();
-
-  const retailNormalized=
-    !hasCartonMath&&
-    !mixedBundle&&
-    Number(inferred.qty)>1;
-
-  // Once a non-Thùng QC>1 price has been divided to one retail unit,
-  // the visible QC must also represent that normalized unit: QC = 1.
-  // Thùng/multi-Thùng keep their real carton relationship.
-  const displayQty=mixedBundle
-    ?0
-    :(hasCarton
-      ?cartonQty
-      :(structure.cartonCount>1
-        ?structure.cartonCount
-        :1));
-  const displayUnit=mixedBundle
-    ?""
-    :(hasCarton
-      ?cartonUnit
-      :(structure.cartonCount>1
-        ?"Thùng"
-        :String(inferred.unit||row.pack_unit||"đơn vị").trim()));
 
   return {
-    rawName:rawName||"Sản phẩm",
-    hasCarton,
-    hasPromo:Boolean(promoOwn),
-    mixedBundle,
-    retailNormalized,
-    cartonCount:structure.cartonCount,
-    cartonPrice,
-    promoCartonPrice,
-    cartonQty,
-    cartonUnit:cartonUnit||"đơn vị",
-    retailPrice,
-    promoRetailPrice,
-    retailUnit:retailUnit||"đơn vị",
-    displayQty,
-    displayUnit:displayUnit||"đơn vị"
+    rawName:String(row.source_name||row.name||"Sản phẩm").trim()||"Sản phẩm",
+    hierarchy:h,
+    hasCarton:h.label1==="Thùng",
+    hasMiddle:Boolean(h.label2),
+    hasLeaf:Boolean(h.label3),
+    hasPromo,
+    cartonPrice:carton,
+    middlePrice:middle,
+    leafPrice:leaf,
+    promoCartonPrice:promoCarton,
+    promoMiddlePrice:promoMiddle,
+    promoLeafPrice:promoLeaf
   };
-}
-
-function xlsWebPrice(main,promo){
-  return '<span class="xls-price-main">'+money(main)+'</span>'+
-    (promo&&promo<main
-      ?'<small class="xls-promo-note">ƯĐ '+money(promo)+'</small>'
-      :'');
 }
 
 function capitalizeDisplayName(value){
@@ -887,26 +783,23 @@ function capitalizeDisplayName(value){
   return text.charAt(0).toLocaleUpperCase("vi-VN")+text.slice(1);
 }
 
-function retailDisplayName(row,simple){
-  const raw=String(simple&&simple.rawName||row.source_name||row.name||"").trim();
-  if(!raw)return "Sản phẩm";
-
-  const shouldStrip=Boolean(
-    simple&&
-    simple.retailNormalized&&
-    !simple.hasCarton&&
-    !simple.mixedBundle
+function canonicalDisplayName(row){
+  return capitalizeDisplayName(
+    String(row&&row.source_name||row&&row.name||"Sản phẩm")
   );
+}
 
-  if(!shouldStrip)return capitalizeDisplayName(raw);
-
-  const units="lốc|túi|bịch|chai|hộp|gói|can|lon|hũ|ly|tô|khoanh|thanh|cây|viên|tuýp";
-  const cleaned=raw.replace(
-    new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s*(?:"+units+")\\s+","iu"),
-    ""
-  ).trim();
-
-  return capitalizeDisplayName(cleaned||raw);
+function rowPrimaryQc(row){
+  const h=rowPackHierarchy(row);
+  if(h.label1==="Thùng"){
+    if(h.label2)return packHierarchyText(h.qty2,h.label2);
+    if(h.label3)return packHierarchyText(h.qty3,h.label3);
+    return "1 Thùng";
+  }
+  if(h.label2&&h.label3)return packHierarchyText(h.qty3,h.label3);
+  if(h.label3)return packHierarchyText(h.qty3||1,h.label3);
+  if(h.label2)return packHierarchyText(h.qty2||1,h.label2);
+  return "—";
 }
 
 function packHierarchyText(qty,label){

@@ -1,5 +1,3 @@
-const BAD_PATH=["tin-tuc","blog","khuyen-mai","kinh-nghiem-hay"];
-const PROMO_WORDS=["ưu đãi","khuyến mãi","giảm","tặng","mua ","combo","quà"];
 const OWNER="1sl2tp";
 const REPO="getlink";
 const WORKFLOW="scrape.yml";
@@ -18,167 +16,37 @@ function json(data,status=200,origin=""){
 function allowedOrigin(request,env){
   const origin=request.headers.get("origin")||"";
   if(!origin)return "";
-  const configured=String(env.ALLOWED_ORIGINS||"https://get.taphoa.xyz,https://1sl2tp.github.io")
-    .split(",").map(x=>x.trim()).filter(Boolean);
+  const configured=String(
+    env.ALLOWED_ORIGINS||"https://get.taphoa.xyz,https://1sl2tp.github.io"
+  ).split(",").map(x=>x.trim()).filter(Boolean);
   return configured.includes(origin)?origin:null;
 }
 
 function canonicalBhx(raw){
   const u=new URL(String(raw||""));
   const host=u.hostname.toLowerCase();
-  if(host!=="bachhoaxanh.com"&&host!=="www.bachhoaxanh.com")throw new Error("invalid_bhx_url");
+  if(host!=="bachhoaxanh.com"&&host!=="www.bachhoaxanh.com"){
+    throw new Error("invalid_bhx_url");
+  }
   const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/+$/,"")||"/";
   return "https://bachhoaxanh.com"+path;
+}
+
+function browserBhxUrl(raw){
+  const u=new URL(canonicalBhx(raw));
+  return "https://www.bachhoaxanh.com"+u.pathname;
 }
 
 function pathParts(url){
   return new URL(url).pathname.split("/").filter(Boolean);
 }
 
-function browserBhxUrl(url){
-  const canonical=canonicalBhx(url);
-  const u=new URL(canonical);
-  return "https://www.bachhoaxanh.com"+u.pathname;
-}
-
-
 function heuristicType(url){
   return pathParts(url).length<=1?"category":"product";
 }
 
-function idForUrl(url){
-  const bytes=new TextEncoder().encode(url);
-  return crypto.subtle.digest("SHA-256",bytes).then(buf=>
-    Array.from(new Uint8Array(buf)).slice(0,12).map(x=>x.toString(16).padStart(2,"0")).join("")
-  );
-}
-
-async function dispatchGithub(env,url,requestId){
-  if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
-  return fetch("https://api.github.com/repos/"+OWNER+"/"+REPO+"/actions/workflows/"+WORKFLOW+"/dispatches",{
-    method:"POST",
-    headers:{
-      "accept":"application/vnd.github+json",
-      "authorization":"Bearer "+env.GITHUB_TOKEN,
-      "content-type":"application/json",
-      "x-github-api-version":"2026-03-10",
-      "user-agent":"getlink-worker"
-    },
-    body:JSON.stringify({ref:"main",inputs:{url,request_id:requestId}})
-  });
-}
-
-async function readGithubJob(requestId){
-  const safe=String(requestId||"").replace(/[^A-Za-z0-9_-]/g,"");
-  if(!safe)return null;
-  const raw="https://raw.githubusercontent.com/"+OWNER+"/"+REPO+"/main/data/jobs/"+safe+".json?ts="+Date.now();
-  const r=await fetch(raw,{headers:{"user-agent":"getlink-worker"}});
-  if(r.status===404)return null;
-  if(!r.ok)throw new Error("github_result_"+r.status);
-  return r.json();
-}
-
 function cleanText(v){
   return String(v||"").replace(/\s+/g," ").trim();
-}
-
-function decodeEntities(v){
-  return String(v||"")
-    .replace(/&nbsp;/gi," ")
-    .replace(/&amp;/gi,"&")
-    .replace(/&quot;/gi,'"')
-    .replace(/&#39;|&apos;/gi,"'")
-    .replace(/&lt;/gi,"<")
-    .replace(/&gt;/gi,">")
-    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32))
-    .replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)||32));
-}
-
-function stripTags(v){
-  return cleanText(decodeEntities(String(v||"").replace(/<[^>]*>/g," ")));
-}
-
-function slugTitle(url){
-  try{
-    const parts=pathParts(url);
-    const slug=parts[parts.length-1]||"Danh mục";
-    return slug.split("-").filter(Boolean).map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" ");
-  }catch{return "Danh mục";}
-}
-
-function firstH1(html){
-  const m=String(html||"").match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  return m?stripTags(m[1]):"";
-}
-
-function metaContent(html,key){
-  const escaped=String(key||"");
-  const a=new RegExp("<meta[^>]+(?:property|name|itemprop)=[\"']"+escaped+"[\"'][^>]+content=[\"']([^\"']+)[\"']","i");
-  const b=new RegExp("<meta[^>]+content=[\"']([^\"']+)[\"'][^>]+(?:property|name|itemprop)=[\"']"+escaped+"[\"']","i");
-  const m=String(html||"").match(a)||String(html||"").match(b);
-  return m?decodeEntities(m[1]).trim():"";
-}
-
-function jsonLdRoots(html){
-  const out=[];
-  const re=/<script\b[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-  let m;
-  while((m=re.exec(String(html||"")))){
-    const raw=m[1].trim();
-    if(!raw)continue;
-    try{
-      const parsed=JSON.parse(raw);
-      if(Array.isArray(parsed))out.push(...parsed);
-      else out.push(parsed);
-    }catch{}
-  }
-  return out;
-}
-
-function collectType(value,wanted,out=[]){
-  if(Array.isArray(value)){
-    for(const x of value)collectType(x,wanted,out);
-    return out;
-  }
-  if(!value||typeof value!=="object")return out;
-  const kind=value["@type"];
-  const kinds=Array.isArray(kind)?kind:[kind];
-  if(kinds.includes(wanted))out.push(value);
-  for(const child of Object.values(value))collectType(child,wanted,out);
-  return out;
-}
-
-function sameBhxUrl(a,b){
-  try{return canonicalBhx(a)===canonicalBhx(b);}catch{return false;}
-}
-
-function matchingProduct(roots,url,h1){
-  const products=[];
-  for(const root of roots)collectType(root,"Product",products);
-  for(const p of products){
-    const candidates=[p.url,p["@id"],p.mainEntityOfPage&&p.mainEntityOfPage["@id"]].filter(Boolean);
-    if(candidates.some(x=>sameBhxUrl(x,url)))return p;
-  }
-  if(products.length===1){
-    const name=cleanText(products[0].name||"");
-    if(name&&h1&&name.toLowerCase()===h1.toLowerCase())return products[0];
-  }
-  return null;
-}
-
-function breadcrumbs(roots){
-  const found=[];
-  for(const root of roots)collectType(root,"BreadcrumbList",found);
-  const list=found[0]&&Array.isArray(found[0].itemListElement)?found[0].itemListElement:[];
-  const out=[];
-  for(const item of list){
-    if(!item||typeof item!=="object")continue;
-    let name=item.name;
-    if(!name&&item.item&&typeof item.item==="object")name=item.item.name;
-    name=cleanText(name||"");
-    if(name&&!out.includes(name))out.push(name);
-  }
-  return out;
 }
 
 function parseMoney(v){
@@ -190,186 +58,77 @@ function parseMoney(v){
   return Number.isFinite(n)&&n>0?n:null;
 }
 
-function offerPrice(product){
-  let offers=product&&product.offers;
-  if(Array.isArray(offers))offers=offers[0];
-  if(!offers||typeof offers!=="object")return null;
-  for(const k of ["price","lowPrice","highPrice"]){
-    const n=parseMoney(offers[k]);
-    if(n)return n;
-  }
-  return null;
-}
-
-function visibleLines(html){
-  let s=String(html||"")
-    .replace(/<script\b[\s\S]*?<\/script>/gi," ")
-    .replace(/<style\b[\s\S]*?<\/style>/gi," ")
-    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi," ");
-  s=s.replace(/<\/?(?:div|p|li|section|article|header|footer|main|span|br|h[1-6])\b[^>]*>/gi,"\n");
-  s=decodeEntities(s.replace(/<[^>]*>/g," "));
-  return s.split(/\n+/).map(cleanText).filter(Boolean);
-}
-
-function moneyCandidates(text){
-  const out=[];
-  const re=/(?:^|[^0-9])(\d{1,3}(?:[.\s]\d{3})+|\d{4,9})\s*(?:₫|đ|vnđ)/gi;
-  let m;
-  while((m=re.exec(String(text||"")))){
-    const n=parseMoney(m[1]);
-    if(n&&!out.includes(n))out.push(n);
-  }
-  return out;
-}
-
-function promotionInfo(lines,current){
-  const found=[];
-  const values=[];
-  for(const line of lines){
-    const low=line.toLowerCase();
-    if(!PROMO_WORDS.some(w=>low.includes(w)))continue;
-    if(line.length>240)continue;
-    if(!found.includes(line))found.push(line);
-    for(const n of moneyCandidates(line))if(!values.includes(n))values.push(n);
-    if(found.length>=4)break;
-  }
-  const plausible=values.filter(x=>x>=1000);
-  const below=current?plausible.filter(x=>x<=current):plausible;
-  return {
-    active:found.length>0,
-    price:(below[0]||plausible[0]||null),
-    text:found.slice(0,3).join(" · ")
-  };
-}
-
-function packagingInfo(name){
-  const text=cleanText(name).toLowerCase();
-  const pack=text.match(/\b(thùng|lốc|hộp|túi|khay|combo)\s*(\d+)\s*(gói|chai|lon|hộp|túi|cái|viên|ly|hũ|thùng|lốc|khay|can)?\b/i);
-  const size=text.match(/\b\d+(?:[.,]\d+)?\s*(?:kg|g|mg|lít|lit|l|ml)\b/i);
-  const parts=[];
-  if(pack)parts.push(cleanText(pack[1]+" "+pack[2]+" "+(pack[3]||"")));
-  if(size)parts.push(cleanText(size[0]));
-  return {text:parts.join(" × ")};
-}
-
-function classifyGroup(url,crumbs,name){
-  const filtered=crumbs.filter(x=>!["trang chủ","bách hóa xanh"].includes(x.toLowerCase()));
-  if(filtered.length&&name&&filtered[filtered.length-1].toLowerCase()===name.toLowerCase())filtered.pop();
-  const fallback=(pathParts(url)[0]||"").split("-").map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" ");
-  if(filtered.length>=2)return {group:filtered[0],branch:filtered[filtered.length-1]};
-  if(filtered.length===1)return {group:filtered[0],branch:fallback||filtered[0]};
-  return {group:fallback,branch:fallback};
-}
-
-function parseProduct(url,html,roots){
-  const h1=firstH1(html)||metaContent(html,"og:title");
-  const product=matchingProduct(roots,url,h1);
-  const metaPrice=parseMoney(metaContent(html,"price"));
-  let current=offerPrice(product)||metaPrice;
-  const lines=visibleLines(html);
-  if(!current){
-    const prices=moneyCandidates(lines.slice(0,180).join(" "));
-    current=prices[0]||null;
-  }
-  if(!product&&!(h1&&current))return null;
-  const name=cleanText((product&&product.name)||h1||slugTitle(url));
-  const crumbs=breadcrumbs(roots);
-  const cls=classifyGroup(url,crumbs,name);
-  let image=product&&product.image||metaContent(html,"og:image")||"";
-  if(Array.isArray(image))image=image[0]||"";
-  if(image&&typeof image==="object")image=image.url||"";
-  const promo=promotionInfo(lines,current);
-  return {
-    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-    group:cls.group,
-    branch:cls.branch,
-    name,
-    packaging:packagingInfo(name),
-    price:{current,original:null},
-    promotion:promo,
-    url:canonicalBhx(url),
-    image:String(image||""),
-    breadcrumbs:crumbs,
-    last_checked_at:new Date().toISOString()
-  };
-}
-
-function anchorAttr(attrs,name){
-  const re=new RegExp("\\b"+name+"\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))","i");
-  const m=String(attrs||"").match(re);
-  return m?(m[1]||m[2]||m[3]||""):"";
-}
-
-function discoverChildren(inputUrl,html,categoryName){
-  const base=canonicalBhx(inputUrl);
-  const baseFirst=pathParts(base)[0]||"";
-  const out=[];
-  const seen=new Set();
-  const re=/<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
-  let m;
-  while((m=re.exec(String(html||"")))){
-    const href=anchorAttr(m[1],"href");
-    if(!href)continue;
-    let absolute;
-    try{absolute=new URL(decodeEntities(href),base).toString();}catch{continue;}
-    let url;
-    try{url=canonicalBhx(absolute);}catch{continue;}
-    if(url===base||seen.has(url))continue;
+function slugTitle(url){
+  try{
     const parts=pathParts(url);
-    if(parts.length<2||parts[0]!==baseFirst)continue;
-    if(BAD_PATH.some(x=>parts.includes(x)))continue;
-    let name=stripTags(m[2]);
-    if(name.length<3)name=slugTitle(url);
-    if(name.length>180)name=name.slice(0,177)+"...";
-    const price=moneyCandidates(name)[0]||null;
-    seen.add(url);
-    out.push({
-      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-      link_type:"product",
-      group:categoryName,
-      branch:categoryName,
-      name,
-      packaging:{text:""},
-      price:{current:price,original:null},
-      promotion:{active:false,price:null,text:""},
-      url,
-      image:"",
-      breadcrumbs:[],
-      last_checked_at:new Date().toISOString()
-    });
-    if(out.length>=60)break;
+    const slug=parts[parts.length-1]||"Danh mục";
+    return slug.split("-").filter(Boolean)
+      .map(x=>x.charAt(0).toUpperCase()+x.slice(1)).join(" ");
+  }catch{
+    return "Danh mục";
   }
-  return out;
 }
 
+function sameBhxUrl(a,b){
+  try{return canonicalBhx(a)===canonicalBhx(b);}
+  catch{return false;}
+}
 
-function bhxApiHeaders(env,referer){
-  const bearer=String(env.BHX_BEARER_TOKEN||"").trim();
-  const xapikey=String(env.BHX_XAPIKEY||"").trim();
-  const deviceId=String(env.BHX_DEVICE_ID||"").trim();
-  const reverseHost=String(env.BHX_REVERSE_HOST||"http://bhxapi.live").trim();
-  if(!bearer||!xapikey||!deviceId)throw new Error("bhx_credentials_missing");
-  return {
-    "accept":"application/json, text/plain, */*",
-    "content-type":"application/json",
-    "authorization":bearer.toLowerCase().startsWith("bearer ")?bearer:"Bearer "+bearer,
-    "deviceid":deviceId,
-    "xapikey":xapikey,
-    "platform":"webnew",
-    "reversehost":reverseHost,
-    "origin":"https://www.bachhoaxanh.com",
-    "referer":referer,
-    "referer-url":referer,
-    "customer-id":"",
-    "user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
-  };
+async function idForUrl(value){
+  const bytes=new TextEncoder().encode(String(value||""));
+  const buf=await crypto.subtle.digest("SHA-256",bytes);
+  return Array.from(new Uint8Array(buf)).slice(0,12)
+    .map(x=>x.toString(16).padStart(2,"0")).join("");
+}
+
+async function dispatchGithub(env,url,requestId){
+  if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
+  return fetch(
+    "https://api.github.com/repos/"+OWNER+"/"+REPO+
+    "/actions/workflows/"+WORKFLOW+"/dispatches",
+    {
+      method:"POST",
+      headers:{
+        "accept":"application/vnd.github+json",
+        "authorization":"Bearer "+env.GITHUB_TOKEN,
+        "content-type":"application/json",
+        "x-github-api-version":"2026-03-10",
+        "user-agent":"getlink-worker"
+      },
+      body:JSON.stringify({
+        ref:"main",
+        inputs:{url,request_id:requestId}
+      })
+    }
+  );
+}
+
+async function readGithubJob(requestId){
+  const safe=String(requestId||"").replace(/[^A-Za-z0-9_-]/g,"");
+  if(!safe)return null;
+  const raw=
+    "https://raw.githubusercontent.com/"+OWNER+"/"+REPO+
+    "/main/data/jobs/"+safe+".json?ts="+Date.now();
+  const r=await fetch(raw,{
+    headers:{"user-agent":"getlink-worker"},
+    cf:{cacheTtl:0,cacheEverything:false}
+  });
+  if(r.status===404)return null;
+  if(!r.ok)throw new Error("github_result_"+r.status);
+  return r.json();
 }
 
 function apiProductToPayloadProduct(raw){
   if(!raw||typeof raw!=="object"||!raw.url)return null;
   let url;
-  try{url=canonicalBhx(new URL(String(raw.url),"https://www.bachhoaxanh.com").toString());}
-  catch{return null;}
+  try{
+    url=canonicalBhx(
+      new URL(String(raw.url),"https://www.bachhoaxanh.com").toString()
+    );
+  }catch{
+    return null;
+  }
+
   const prices=Array.isArray(raw.productPrices)?raw.productPrices:[];
   const priceRow=prices[0]&&typeof prices[0]==="object"?prices[0]:{};
   const current=parseMoney(priceRow.price||raw.price);
@@ -382,7 +141,7 @@ function apiProductToPayloadProduct(raw){
     raw.promotionText||raw.promotionTextFS||raw.textPromtionNonBlue||""
   );
   const discount=Number(priceRow.discountPercent||0);
-  const promoActive=Boolean(promoText||discount>0);
+
   return {
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group,
@@ -391,8 +150,8 @@ function apiProductToPayloadProduct(raw){
     packaging:{text:cleanText(raw.canonical||raw.unit||"")},
     price:{current,original},
     promotion:{
-      active:promoActive,
-      price:promoActive?current:null,
+      active:Boolean(promoText||discount>0),
+      price:discount>0?current:null,
       text:promoText
     },
     url,
@@ -402,12 +161,17 @@ function apiProductToPayloadProduct(raw){
   };
 }
 
-
 function apiBoxBuyToProduct(raw,data){
   if(!raw||typeof raw!=="object"||!raw.url)return null;
   let url;
-  try{url=canonicalBhx(new URL(String(raw.url),"https://www.bachhoaxanh.com").toString());}
-  catch{return null;}
+  try{
+    url=canonicalBhx(
+      new URL(String(raw.url),"https://www.bachhoaxanh.com").toString()
+    );
+  }catch{
+    return null;
+  }
+
   const prices=Array.isArray(raw.productPrices)?raw.productPrices:[];
   const priceRow=prices[0]&&typeof prices[0]==="object"?prices[0]:{};
   const current=parseMoney(priceRow.price);
@@ -415,15 +179,15 @@ function apiBoxBuyToProduct(raw,data){
   const discount=Number(priceRow.discountPercent||0);
   const promoText=cleanText(
     raw.promotionText||
-    (Array.isArray(data&&data.promotionTexts)?data.promotionTexts.join(" · "):"")||
-    ""
+    (Array.isArray(data&&data.promotionTexts)?data.promotionTexts.join(" · "):"")
   );
   const packaging=cleanText(
     raw.title||
-    ([raw.packageItemCount,raw.packageItemUnit].filter(Boolean).join(" "))||
+    [raw.packageItemCount,raw.packageItemUnit].filter(Boolean).join(" ")||
     raw.textAvgPriceUnit||
     ""
   );
+
   return {
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group:cleanText(data&&data.categoryName||""),
@@ -453,7 +217,7 @@ function apiBoxBuyToProduct(raw,data){
       text_status:cleanText(priceRow.textStatus||""),
       store_id:Number(priceRow.storeId)||null,
       po_date:String(priceRow.poDate||""),
-      raw:raw
+      raw
     }
   };
 }
@@ -463,7 +227,9 @@ function productDetailPayload(inputUrl,requestId,data){
   const variants=(Array.isArray(data&&data.boxBuys)?data.boxBuys:[])
     .map(x=>apiBoxBuyToProduct(x,data))
     .filter(Boolean);
+
   if(!variants.length)throw new Error("bhx_detail_empty");
+
   const exact=variants.find(v=>sameBhxUrl(v.url,canonical))||variants[0];
   return {
     schema_version:3,
@@ -474,7 +240,8 @@ function productDetailPayload(inputUrl,requestId,data){
     checked_at:new Date().toISOString(),
     category_name:cleanText(data&&data.categoryName||exact.group||""),
     category_id:Number(data&&data.categoryId)||null,
-    parent_category_ids:Array.isArray(data&&data.categoryParentIds)?data.categoryParentIds:[],
+    parent_category_ids:Array.isArray(data&&data.categoryParentIds)
+      ?data.categoryParentIds:[],
     product:exact,
     products:[exact],
     variants,
@@ -487,10 +254,12 @@ function categoryPayload(inputUrl,requestId,data){
   const rawProducts=Array.isArray(data&&data.products)?data.products:[];
   const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
   if(!products.length)throw new Error("bhx_category_empty");
+
   const categoryName=cleanText(
     (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
     slugTitle(canonical)
   );
+
   return {
     schema_version:3,
     request_id:requestId,
@@ -504,186 +273,6 @@ function categoryPayload(inputUrl,requestId,data){
     variants:[],
     discovered_links:products.map(p=>p.url)
   };
-}
-
-async function fetchBhxApiPayload(inputUrl,requestId,env){
-  const canonical=canonicalBhx(inputUrl);
-  const parts=pathParts(canonical);
-  if(!parts.length)throw new Error("missing_category");
-  const categorySlug=parts[0];
-  const referer=browserBhxUrl(canonical);
-  const params=new URLSearchParams({
-    provinceId:"1027",
-    wardId:"0",
-    districtId:"0",
-    storeId:"2546"
-  });
-  let api;
-  if(parts.length>=2){
-    params.set("CategoryUrl",categorySlug);
-    params.set("ProductUrl",parts.slice(1).join("/"));
-    api="https://api.bachhoaxanh.com/gw/Product/GetProductDetail?"+params.toString();
-  }else{
-    params.set("categoryUrl",categorySlug);
-    params.set("isMobile","true");
-    params.set("isV2","true");
-    params.set("pageSize","300");
-    api="https://api.bachhoaxanh.com/gw/Category/V2/GetCate?"+params.toString();
-  }
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),15000);
-  let response;
-  try{
-    response=await fetch(api,{
-      headers:bhxApiHeaders(env,referer),
-      signal:controller.signal
-    });
-  }finally{
-    clearTimeout(timer);
-  }
-  if(!response.ok)throw new Error("bhx_api_http_"+response.status);
-  const envelope=await response.json();
-  if(!envelope||Number(envelope.code)!==0||!envelope.data)throw new Error("bhx_api_invalid");
-  return parts.length>=2
-    ? productDetailPayload(canonical,requestId,envelope.data)
-    : categoryPayload(canonical,requestId,envelope.data);
-}
-
-async function fetchSupabaseBhxPayload(inputUrl,requestId,env){
-  bhxApiHeaders(env,browserBhxUrl(inputUrl));
-  const endpoint="https://gcnoahqsrquxkwkjbuxy.supabase.co/functions/v1/getlink-bhx-proxy";
-  const key="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),20000);
-  let response;
-  try{
-    response=await fetch(endpoint,{
-      method:"POST",
-      headers:{
-        "content-type":"application/json",
-        "apikey":key,
-        "authorization":"Bearer "+key,
-        "x-getlink-bhx-bearer":String(env.BHX_BEARER_TOKEN||""),
-        "x-getlink-bhx-xapikey":String(env.BHX_XAPIKEY||""),
-        "x-getlink-bhx-deviceid":String(env.BHX_DEVICE_ID||""),
-        "x-getlink-bhx-reversehost":String(env.BHX_REVERSE_HOST||"http://bhxapi.live")
-      },
-      body:JSON.stringify({url:browserBhxUrl(inputUrl)}),
-      signal:controller.signal
-    });
-  }finally{
-    clearTimeout(timer);
-  }
-  if(!response.ok)throw new Error("supabase_proxy_http_"+response.status);
-  const result=await response.json();
-  if(!result||result.ok!==true||!result.payload||!result.payload.data){
-    throw new Error("supabase_proxy_"+String(result&&result.error||"failed"));
-  }
-  return result.kind==="product"
-    ? productDetailPayload(inputUrl,requestId,result.payload.data)
-    : categoryPayload(inputUrl,requestId,result.payload.data);
-}
-
-function mirrorRowToProduct(row){
-  if(!row||typeof row!=="object"||!row.product_url)return null;
-  let url;
-  try{url=canonicalBhx(row.product_url);}catch{return null;}
-  const current=parseMoney(row.price_vnd);
-  const rawOriginal=parseMoney(row.original_price_vnd);
-  const original=rawOriginal&&current&&rawOriginal>current?rawOriginal:null;
-  const discount=Number(row.discount_pct||0);
-  return {
-    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-    group:cleanText(row.category_name||""),
-    branch:cleanText(row.brand||row.category_name||""),
-    name:cleanText(row.product_name||slugTitle(url)),
-    packaging:{text:cleanText(row.canonical_weight_raw||row.unit_type||"")},
-    price:{current,original},
-    promotion:{
-      active:discount>0,
-      price:discount>0?current:null,
-      text:discount>0?("Giảm "+discount+"%"):""
-    },
-    url,
-    image:String(row.image_url||""),
-    breadcrumbs:[row.category_name,row.brand].filter(Boolean),
-    last_checked_at:String(row.scrape_ts||"2026-04-12T00:00:00+07:00"),
-    snapshot_date:String(row.scrape_date||"2026-04-12")
-  };
-}
-
-async function fetchMirrorSnapshotPayload(inputUrl,requestId){
-  const canonical=canonicalBhx(inputUrl);
-  const parts=pathParts(canonical);
-  if(!parts.length)throw new Error("mirror_missing_category");
-  const categorySlug=parts.length>=2?parts[0]:parts[0];
-  const raw=
-    "https://raw.githubusercontent.com/1sl2tp/getlink/main/"+
-    "data/snapshots/bhx/2026-04-12/"+
-    encodeURIComponent(categorySlug)+".json";
-  const response=await fetch(raw,{
-    headers:{"user-agent":"getlink-worker"},
-    cf:{cacheTtl:3600,cacheEverything:true}
-  });
-  if(!response.ok)throw new Error("mirror_http_"+response.status);
-  const rows=await response.json();
-  if(!Array.isArray(rows)||!rows.length)throw new Error("mirror_empty");
-  const products=rows.map(mirrorRowToProduct).filter(Boolean);
-  if(!products.length)throw new Error("mirror_no_products");
-  const snapshotDate=String(rows[0].scrape_date||"2026-04-12");
-
-  if(parts.length>=2){
-    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
-    if(!exact)throw new Error("mirror_product_not_found");
-    return {
-      schema_version:2,
-      request_id:requestId,
-      input_url:canonical,
-      input_type:"product",
-      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-      checked_at:exact.last_checked_at,
-      category_name:exact.group||"",
-      product:exact,
-      products:[exact],
-      discovered_links:[],
-      data_mode:"snapshot",
-      snapshot_date:snapshotDate,
-      snapshot_source:"public-bhx-mirror"
-    };
-  }
-
-  const categoryName=products[0].group||slugTitle(canonical);
-  return {
-    schema_version:2,
-    request_id:requestId,
-    input_url:canonical,
-    input_type:"category",
-    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-    checked_at:products[0].last_checked_at,
-    category_name:categoryName,
-    product:null,
-    products,
-    discovered_links:products.map(p=>p.url),
-    data_mode:"snapshot",
-    snapshot_date:snapshotDate,
-    snapshot_source:"public-bhx-mirror"
-  };
-}
-
-async function renderBhxHtml(env,url){
-  if(!env.BROWSER||typeof env.BROWSER.quickAction!=="function")throw new Error("browser_binding_missing");
-  const response=await env.BROWSER.quickAction("content",{
-    url:browserBhxUrl(url),
-    gotoOptions:{waitUntil:"networkidle2",timeout:30000},
-    rejectResourceTypes:["image","media","font"]
-  });
-  if(!response.ok){
-    const detail=(await response.text()).slice(0,500);
-    throw new Error("browser_run_"+response.status+":"+detail);
-  }
-  const data=await response.json();
-  if(!data||data.success!==true||typeof data.result!=="string")throw new Error("browser_run_invalid_result");
-  return data.result;
 }
 
 async function upsertLink(env,row){
@@ -711,12 +300,13 @@ async function upsertLink(env,row){
       last_request_id=excluded.last_request_id,
       updated_at=excluded.updated_at
   `).bind(
-    id,row.canonical_url,row.source||"Bách Hóa XANH",row.link_type,row.parent_url||null,
-    row.group_name||"",row.branch_name||"",row.name||"",row.packaging||"",
-    row.current_price??null,row.original_price??null,row.promotion_price??null,
-    row.promotion_text||"",row.last_checked_at||new Date().toISOString(),
-    row.last_status||"ok",row.last_request_id||"",row.created_at||new Date().toISOString(),
-    new Date().toISOString()
+    id,row.canonical_url,row.source||"Bách Hóa XANH",row.link_type,
+    row.parent_url||null,row.group_name||"",row.branch_name||"",row.name||"",
+    row.packaging||"",row.current_price??null,row.original_price??null,
+    row.promotion_price??null,row.promotion_text||"",
+    row.last_checked_at||new Date().toISOString(),
+    row.last_status||"ok",row.last_request_id||"",
+    row.created_at||new Date().toISOString(),new Date().toISOString()
   ).run();
   return id;
 }
@@ -742,23 +332,29 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
     last_status:"ok",
     last_request_id:requestId
   });
+
   if(linkType==="product"&&(Number(price.current)||Number(promo.price))){
     await env.DB.prepare(`
       INSERT OR IGNORE INTO price_snapshots(
-        link_id,request_id,checked_at,current_price,original_price,promotion_price,promotion_text,result_json
+        link_id,request_id,checked_at,current_price,original_price,
+        promotion_price,promotion_text,result_json
       ) VALUES(?,?,?,?,?,?,?,?)
     `).bind(
-      id,requestId,p.last_checked_at||checked,Number(price.current)||null,
-      Number(price.original)||null,Number(promo.price)||null,promo.text||"",JSON.stringify(p)
+      id,requestId,p.last_checked_at||checked,
+      Number(price.current)||null,Number(price.original)||null,
+      Number(promo.price)||null,promo.text||"",JSON.stringify(p)
     ).run();
   }
+  return id;
 }
-
 
 async function persistVariant(env,p,parentUrl,requestId,checked){
   const meta=p&&p.variant||{};
   const variantUrl=canonicalBhx(p.url);
-  const key=parentUrl+"|"+variantUrl+"|"+String(meta.product_code||"")+"|"+String(meta.bhx_product_id||"");
+  const key=[
+    parentUrl,variantUrl,String(meta.product_code||""),
+    String(meta.bhx_product_id||"")
+  ].join("|");
   const id=await idForUrl(key);
   const now=new Date().toISOString();
   const price=p.price||{};
@@ -793,29 +389,30 @@ async function persistVariant(env,p,parentUrl,requestId,checked){
       last_checked_at=excluded.last_checked_at,
       updated_at=excluded.updated_at
   `).bind(
-    id,parentUrl,variantUrl,meta.bhx_product_id??null,String(meta.product_code||""),
-    p.name||"",meta.title||"",p.packaging&&p.packaging.text||"",
-    meta.package_item_count??null,meta.package_item_unit||"",
-    Number(price.current)||null,meta.sys_price??null,meta.discount_percent??0,
-    meta.stock??0,meta.is_can_buy?1:0,meta.text_status||"",
-    meta.store_id??null,meta.po_date||"",p.image||"",JSON.stringify(meta.raw||{}),
+    id,parentUrl,variantUrl,meta.bhx_product_id??null,
+    String(meta.product_code||""),p.name||"",meta.title||"",
+    p.packaging&&p.packaging.text||"",meta.package_item_count??null,
+    meta.package_item_unit||"",Number(price.current)||null,
+    meta.sys_price??null,meta.discount_percent??0,meta.stock??0,
+    meta.is_can_buy?1:0,meta.text_status||"",meta.store_id??null,
+    meta.po_date||"",p.image||"",JSON.stringify(meta.raw||{}),
     p.last_checked_at||checked,now,now
   ).run();
 
   await env.DB.prepare(`
     INSERT OR IGNORE INTO variant_price_snapshots(
-      variant_id,request_id,checked_at,current_price,sys_price,discount_percent,
-      stock,is_can_buy,po_date,raw_json
+      variant_id,request_id,checked_at,current_price,sys_price,
+      discount_percent,stock,is_can_buy,po_date,raw_json
     ) VALUES(?,?,?,?,?,?,?,?,?,?)
   `).bind(
-    id,requestId,p.last_checked_at||checked,Number(price.current)||null,
-    meta.sys_price??null,meta.discount_percent??0,meta.stock??0,
+    id,requestId,p.last_checked_at||checked,
+    Number(price.current)||null,meta.sys_price??null,
+    meta.discount_percent??0,meta.stock??0,
     meta.is_can_buy?1:0,meta.po_date||"",JSON.stringify(meta.raw||{})
   ).run();
 
   return id;
 }
-
 
 async function persistPayload(env,payload){
   const checked=payload.checked_at||new Date().toISOString();
@@ -823,15 +420,23 @@ async function persistPayload(env,payload){
 
   if(payload.input_type==="product"&&payload.product){
     const parts=pathParts(inputUrl);
-    const categoryParent=parts.length?"https://bachhoaxanh.com/"+parts[0]:null;
-    await persistEntry(env,{...payload.product,url:inputUrl},categoryParent,payload.request_id,checked,"product");
+    const categoryParent=parts.length
+      ?"https://bachhoaxanh.com/"+parts[0]
+      :null;
+
+    await persistEntry(
+      env,{...payload.product,url:inputUrl},
+      categoryParent,payload.request_id,checked,"product"
+    );
 
     const variants=Array.isArray(payload.variants)?payload.variants:[];
     for(const variant of variants){
       await persistVariant(env,variant,inputUrl,payload.request_id,checked);
       const variantUrl=canonicalBhx(variant.url);
       if(variantUrl!==inputUrl){
-        await persistEntry(env,variant,inputUrl,payload.request_id,checked,"product");
+        await persistEntry(
+          env,variant,inputUrl,payload.request_id,checked,"product"
+        );
       }
     }
   }else{
@@ -848,42 +453,57 @@ async function persistPayload(env,payload){
       last_status:"ok",
       last_request_id:payload.request_id
     });
+
     for(const child of payload.products||[]){
-      await persistEntry(env,child,inputUrl,payload.request_id,checked,child.link_type==="category"?"category":"product");
+      await persistEntry(
+        env,child,inputUrl,payload.request_id,checked,
+        child.link_type==="category"?"category":"product"
+      );
     }
   }
 
   const resultJson=JSON.stringify(payload);
   await env.DB.prepare(
     "UPDATE jobs SET link_type=?,status='complete',result_json=?,error=NULL,updated_at=? WHERE request_id=?"
-  ).bind(payload.input_type,resultJson,new Date().toISOString(),payload.request_id).run();
+  ).bind(
+    payload.input_type,resultJson,new Date().toISOString(),payload.request_id
+  ).run();
 
   const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
-  return {payload,registry_count:Number(count&&count.n||0)};
+  return {
+    payload,
+    registry_count:Number(count&&count.n||0)
+  };
 }
-
-
 
 async function handleCreate(request,env,origin){
   let body;
-  try{body=await request.json();}catch{return json({error:"invalid_json"},400,origin);}
+  try{body=await request.json();}
+  catch{return json({error:"invalid_json"},400,origin);}
+
   let url;
-  try{url=canonicalBhx(body.url);}catch{return json({error:"invalid_bhx_url"},400,origin);}
+  try{url=canonicalBhx(body.url);}
+  catch{return json({error:"invalid_bhx_url"},400,origin);}
 
   const requestId=crypto.randomUUID().replace(/-/g,"");
   const now=new Date().toISOString();
   const initialType=heuristicType(url);
 
   await env.DB.prepare(`
-    INSERT INTO jobs(request_id,input_url,canonical_url,link_type,status,created_at,updated_at)
-    VALUES(?,?,?,?,?,?,?)
-  `).bind(requestId,url,url,initialType,"queued",now,now).run();
+    INSERT INTO jobs(
+      request_id,input_url,canonical_url,link_type,status,created_at,updated_at
+    ) VALUES(?,?,?,?,?,?,?)
+  `).bind(
+    requestId,url,url,initialType,"queued",now,now
+  ).run();
 
   await upsertLink(env,{
     canonical_url:url,
     source:"Bách Hóa XANH",
     link_type:initialType,
-    parent_url:initialType==="product"?"https://bachhoaxanh.com/"+(pathParts(url)[0]||""):null,
+    parent_url:initialType==="product"
+      ?"https://bachhoaxanh.com/"+(pathParts(url)[0]||"")
+      :null,
     name:"",
     last_checked_at:now,
     last_status:"queued",
@@ -895,7 +515,11 @@ async function handleCreate(request,env,origin){
     await env.DB.prepare(
       "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
     ).bind(detail,new Date().toISOString(),requestId).run();
-    return json({error:"github_dispatcher_missing",detail,request_id:requestId},503,origin);
+    return json({
+      error:"github_dispatcher_missing",
+      detail,
+      request_id:requestId
+    },503,origin);
   }
 
   try{
@@ -904,9 +528,6 @@ async function handleCreate(request,env,origin){
       const detail=(await r.text()).slice(0,900);
       throw new Error("github_dispatch_"+r.status+":"+detail);
     }
-    await env.DB.prepare(
-      "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
-    ).bind(new Date().toISOString(),requestId).run();
 
     return json({
       request_id:requestId,
@@ -923,20 +544,29 @@ async function handleCreate(request,env,origin){
     await env.DB.prepare(
       "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
     ).bind(new Date().toISOString(),url).run();
-    return json({error:"github_dispatch_failed",detail,request_id:requestId},502,origin);
+
+    return json({
+      error:"github_dispatch_failed",
+      detail,
+      request_id:requestId
+    },502,origin);
   }
 }
 
-
 async function handleResult(url,env,origin){
-  const id=String(url.searchParams.get("id")||"").replace(/[^a-zA-Z0-9_-]/g,"");
+  const id=String(url.searchParams.get("id")||"")
+    .replace(/[^A-Za-z0-9_-]/g,"");
   if(!id)return json({error:"missing_id"},400,origin);
 
-  const job=await env.DB.prepare("SELECT * FROM jobs WHERE request_id=?").bind(id).first();
+  const job=await env.DB.prepare(
+    "SELECT * FROM jobs WHERE request_id=?"
+  ).bind(id).first();
   if(!job)return json({error:"not_found"},404,origin);
 
   if(job.status==="complete"&&job.result_json){
-    const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
+    const count=await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM links"
+    ).first();
     return json({
       status:"complete",
       payload:JSON.parse(job.result_json),
@@ -948,23 +578,35 @@ async function handleResult(url,env,origin){
     const raw=await readGithubJob(id);
     if(raw){
       if(raw.status==="error"){
-        const message=String(raw.error||raw.detail||"Bright Data chưa lấy được API Bách Hóa XANH").slice(0,1200);
+        const message=String(
+          raw.error||raw.detail||
+          "Bright Data chưa lấy được API Bách Hóa XANH"
+        ).slice(0,1200);
+
         await env.DB.prepare(
           "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
         ).bind(message,new Date().toISOString(),id).run();
+
         await env.DB.prepare(
           "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
         ).bind(new Date().toISOString(),job.canonical_url).run();
-        return json({status:"error",error:message,detail:raw.detail||""},200,origin);
+
+        return json({
+          status:"error",
+          error:message,
+          detail:raw.detail||""
+        },200,origin);
       }
 
       if(raw.bhx_response&&raw.bhx_response.data){
         const inputUrl=raw.input_url||job.input_url||job.canonical_url;
         const kind=raw.kind||job.link_type;
         const normalized=kind==="product"
-          ? productDetailPayload(inputUrl,id,raw.bhx_response.data)
-          : categoryPayload(inputUrl,id,raw.bhx_response.data);
-        normalized.capture_engine=raw.engine||"brightdata-browser-api";
+          ?productDetailPayload(inputUrl,id,raw.bhx_response.data)
+          :categoryPayload(inputUrl,id,raw.bhx_response.data);
+
+        normalized.capture_engine=
+          raw.engine||"brightdata-browser-api";
         normalized.capture_country=raw.country||"";
         normalized.response_url=raw.response_url||"";
 
@@ -976,12 +618,6 @@ async function handleResult(url,env,origin){
           country:raw.country||""
         },200,origin);
       }
-
-      if(raw.input_type||raw.product||Array.isArray(raw.products)){
-        if(!raw.request_id)raw.request_id=id;
-        const saved=await persistPayload(env,raw);
-        return json({status:"complete",...saved},200,origin);
-      }
     }
   }catch(error){
     return json({
@@ -992,31 +628,57 @@ async function handleResult(url,env,origin){
   }
 
   if(job.status==="error"){
-    return json({status:"error",error:job.error||"unknown"},200,origin);
+    return json({
+      status:"error",
+      error:job.error||"unknown"
+    },200,origin);
   }
-  return json({status:job.status||"queued",request_id:id},200,origin);
+
+  return json({
+    status:job.status||"queued",
+    request_id:id
+  },200,origin);
 }
 
 async function handleLinks(url,env,origin){
-  const limit=Math.min(200,Math.max(1,Number(url.searchParams.get("limit")||50)));
+  const limit=Math.min(
+    200,Math.max(1,Number(url.searchParams.get("limit")||50))
+  );
   const type=String(url.searchParams.get("type")||"");
   const q=String(url.searchParams.get("q")||"").trim();
   const parent=String(url.searchParams.get("parent")||"").trim();
+
   let sql=`
     SELECT l.*,
-      (SELECT COUNT(*) FROM links c WHERE c.parent_url=l.canonical_url) AS child_count
-    FROM links l WHERE 1=1
+      (SELECT COUNT(*) FROM links c WHERE c.parent_url=l.canonical_url)
+        AS child_count
+    FROM links l
+    WHERE 1=1
   `;
   const binds=[];
-  if(type==="product"||type==="category"){sql+=" AND l.link_type=?";binds.push(type);}
-  if(parent){sql+=" AND l.parent_url=?";binds.push(canonicalBhx(parent));}
+
+  if(type==="product"||type==="category"){
+    sql+=" AND l.link_type=?";
+    binds.push(type);
+  }
+  if(parent){
+    sql+=" AND l.parent_url=?";
+    binds.push(canonicalBhx(parent));
+  }
   if(q){
-    sql+=" AND (l.name LIKE ? OR l.group_name LIKE ? OR l.branch_name LIKE ? OR l.canonical_url LIKE ?)";
+    sql+=`
+      AND (
+        l.name LIKE ? OR l.group_name LIKE ? OR
+        l.branch_name LIKE ? OR l.canonical_url LIKE ?
+      )
+    `;
     const like="%"+q+"%";
     binds.push(like,like,like,like);
   }
+
   sql+=" ORDER BY l.updated_at DESC LIMIT ?";
   binds.push(limit);
+
   const result=await env.DB.prepare(sql).bind(...binds).all();
   return json({links:result.results||[]},200,origin);
 }
@@ -1024,26 +686,49 @@ async function handleLinks(url,env,origin){
 export default {
   async fetch(request,env){
     const origin=allowedOrigin(request,env);
-    if(origin===null)return json({error:"origin_not_allowed"},403,"");
-    if(request.method==="OPTIONS"){
-      return new Response(null,{status:204,headers:{
-        "access-control-allow-origin":origin||"*",
-        "access-control-allow-methods":"GET,POST,OPTIONS",
-        "access-control-allow-headers":"content-type"
-      }});
+    if(origin===null){
+      return json({error:"origin_not_allowed"},403,"");
     }
+
+    if(request.method==="OPTIONS"){
+      return new Response(null,{
+        status:204,
+        headers:{
+          "access-control-allow-origin":origin||"*",
+          "access-control-allow-methods":"GET,POST,OPTIONS",
+          "access-control-allow-headers":"content-type"
+        }
+      });
+    }
+
     const url=new URL(request.url);
     try{
-      if(request.method==="POST"&&url.pathname==="/api/get-price")return handleCreate(request,env,origin||"*");
-      if(request.method==="GET"&&url.pathname==="/api/result")return handleResult(url,env,origin||"*");
-      if(request.method==="GET"&&url.pathname==="/api/links")return handleLinks(url,env,origin||"*");
+      if(request.method==="POST"&&url.pathname==="/api/get-price"){
+        return handleCreate(request,env,origin||"*");
+      }
+      if(request.method==="GET"&&url.pathname==="/api/result"){
+        return handleResult(url,env,origin||"*");
+      }
+      if(request.method==="GET"&&url.pathname==="/api/links"){
+        return handleLinks(url,env,origin||"*");
+      }
       if(request.method==="GET"&&url.pathname==="/health"){
-        const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
-        return json({ok:true,mode:"brightdata-browser-api",dispatcher:Boolean(env.GITHUB_TOKEN),links:Number(count&&count.n||0)},200,origin||"*");
+        const count=await env.DB.prepare(
+          "SELECT COUNT(*) AS n FROM links"
+        ).first();
+        return json({
+          ok:true,
+          mode:"brightdata-browser-api",
+          dispatcher:Boolean(env.GITHUB_TOKEN),
+          links:Number(count&&count.n||0)
+        },200,origin||"*");
       }
       return json({error:"not_found"},404,origin||"*");
     }catch(error){
-      return json({error:"server_error",detail:String(error&&error.message||error)},500,origin||"*");
+      return json({
+        error:"server_error",
+        detail:String(error&&error.message||error)
+      },500,origin||"*");
     }
   }
 };

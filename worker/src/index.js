@@ -582,18 +582,14 @@ async function ensureSourceParent(env,parentUrl,categoryName,requestId,checked,s
 
 
 async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,checked,categoryName){
+  const prepared=[];
   const activeUrls=[];
-  const hiddenRows=await env.DB.prepare(
-    "SELECT p.link_url FROM link_preferences p JOIN links l ON l.canonical_url=p.link_url WHERE p.state='hidden' AND l.parent_url=?"
-  ).bind(parentUrl).all();
-  const hidden=new Set((hiddenRows.results||[]).map(x=>x.link_url));
-  const rows=[];
+  const now=new Date().toISOString();
 
   for(const child of children||[]){
     let childUrl;
     try{childUrl=canonicalBhx(child.url);}catch{continue;}
     activeUrls.push(childUrl);
-    if(hidden.has(childUrl))continue;
 
     const p={
       ...child,
@@ -602,99 +598,68 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
     const price=p.price||{};
     const promo=p.promotion||{};
     const id=await idForUrl(childUrl);
-    const now=new Date().toISOString();
 
-    rows.push({
-      id,childUrl,
-      source:p.source&&p.source.name||"Bách Hóa XANH",
-      parentUrl,
-      group:p.group||"",
-      branch:p.branch||"",
-      name:p.name||"",
-      packaging:p.packaging&&p.packaging.text||"",
-      current:Number(price.current)||null,
-      original:Number(price.original)||null,
-      promoPrice:Number(promo.price)||null,
-      promoText:promo.text||"",
-      checked:p.last_checked_at||checked,
-      requestId,
-      now,
-      raw:JSON.stringify(p)
-    });
+    prepared.push(env.DB.prepare(`
+      INSERT INTO links(
+        id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,
+        packaging,current_price,original_price,promotion_price,promotion_text,
+        last_checked_at,last_status,last_request_id,created_at,updated_at
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ON CONFLICT(canonical_url) DO UPDATE SET
+        source=excluded.source,
+        link_type='product',
+        parent_url=excluded.parent_url,
+        group_name=COALESCE(NULLIF(excluded.group_name,''),links.group_name),
+        branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),
+        name=COALESCE(NULLIF(excluded.name,''),links.name),
+        packaging=COALESCE(NULLIF(excluded.packaging,''),links.packaging),
+        current_price=COALESCE(excluded.current_price,links.current_price),
+        original_price=COALESCE(excluded.original_price,links.original_price),
+        promotion_price=COALESCE(excluded.promotion_price,links.promotion_price),
+        promotion_text=COALESCE(NULLIF(excluded.promotion_text,''),links.promotion_text),
+        last_checked_at=excluded.last_checked_at,
+        last_status='ok',
+        last_request_id=excluded.last_request_id,
+        updated_at=excluded.updated_at
+    `).bind(
+      id,childUrl,p.source&&p.source.name||"Bách Hóa XANH","product",
+      parentUrl,p.group||"",p.branch||"",p.name||"",
+      p.packaging&&p.packaging.text||"",
+      Number(price.current)||null,Number(price.original)||null,
+      Number(promo.price)||null,promo.text||"",
+      p.last_checked_at||checked,"ok",requestId,now,now
+    ));
   }
 
-  for(let i=0;i<rows.length;i+=20){
-    const chunk=rows.slice(i,i+20);
-    const values=chunk.map(()=>"(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").join(",");
-    const binds=[];
-
-    for(const r of chunk){
-      binds.push(
-        r.id,r.childUrl,r.source,"product",r.parentUrl,r.group,r.branch,r.name,
-        r.packaging,r.current,r.original,r.promoPrice,r.promoText,
-        r.checked,"ok",r.requestId,r.now,r.now
-      );
-    }
-
-    await env.DB.prepare(
-      "INSERT INTO links("+
-      "id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,"+
-      "packaging,current_price,original_price,promotion_price,promotion_text,"+
-      "last_checked_at,last_status,last_request_id,created_at,updated_at"+
-      ") VALUES "+values+
-      " ON CONFLICT(canonical_url) DO UPDATE SET "+
-      "source=excluded.source,"+
-      "link_type='product',"+
-      "parent_url=excluded.parent_url,"+
-      "group_name=COALESCE(NULLIF(excluded.group_name,''),links.group_name),"+
-      "branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),"+
-      "name=COALESCE(NULLIF(excluded.name,''),links.name),"+
-      "packaging=COALESCE(NULLIF(excluded.packaging,''),links.packaging),"+
-      "current_price=COALESCE(excluded.current_price,links.current_price),"+
-      "original_price=COALESCE(excluded.original_price,links.original_price),"+
-      "promotion_price=COALESCE(excluded.promotion_price,links.promotion_price),"+
-      "promotion_text=COALESCE(NULLIF(excluded.promotion_text,''),links.promotion_text),"+
-      "last_checked_at=excluded.last_checked_at,"+
-      "last_status='ok',"+
-      "last_request_id=excluded.last_request_id,"+
-      "updated_at=excluded.updated_at"
-    ).bind(...binds).run();
-
-    const priced=chunk.filter(r=>r.current||r.promoPrice);
-    if(priced.length){
-      const snapValues=priced.map(()=>"(?,?,?,?,?,?,?,?)").join(",");
-      const snapBinds=[];
-      for(const r of priced){
-        snapBinds.push(
-          r.id,r.requestId,r.checked,r.current,r.original,
-          r.promoPrice,r.promoText,r.raw
-        );
-      }
-      await env.DB.prepare(
-        "INSERT OR IGNORE INTO price_snapshots("+
-        "link_id,request_id,checked_at,current_price,original_price,"+
-        "promotion_price,promotion_text,result_json"+
-        ") VALUES "+snapValues
-      ).bind(...snapBinds).run();
-    }
+  // Keep D1 batches deliberately small: category roots can contain hundreds of children.
+  for(let i=0;i<prepared.length;i+=30){
+    await env.DB.batch(prepared.slice(i,i+30));
   }
 
   return activeUrls;
 }
 
-
 async function markMissingChildrenUnlisted(env,parentUrl,activeUrls,checked){
-  if(!activeUrls.length)return;
-  const placeholders=activeUrls.map(()=>"?").join(",");
-  await env.DB.prepare(
-    "UPDATE links SET last_status='unlisted',updated_at=? "+
-    "WHERE link_type='product' AND parent_url=? "+
-    "AND canonical_url NOT IN ("+placeholders+")"
-  ).bind(
-    new Date().toISOString(),parentUrl,...activeUrls
-  ).run();
-}
+  const existing=await env.DB.prepare(
+    "SELECT canonical_url FROM links WHERE link_type='product' AND parent_url=?"
+  ).bind(parentUrl).all();
+  const active=new Set(activeUrls);
+  const now=new Date().toISOString();
+  const statements=[];
 
+  for(const row of existing.results||[]){
+    if(active.has(row.canonical_url))continue;
+    statements.push(
+      env.DB.prepare(
+        "UPDATE links SET last_status='unlisted',updated_at=? WHERE canonical_url=? AND parent_url=?"
+      ).bind(now,row.canonical_url,parentUrl)
+    );
+  }
+
+  for(let i=0;i<statements.length;i+=30){
+    await env.DB.batch(statements.slice(i,i+30));
+  }
+}
 
 async function repairCachedGraph(env,payload){
   if(!payload||!payload.input_url)return;
@@ -924,6 +889,7 @@ async function handleComplete(request,env){
     return json({error:"unauthorized"},401,"");
   }
 
+  try{
   let raw;
   try{raw=await request.json();}
   catch{return json({error:"invalid_json"},400,"");}
@@ -970,6 +936,13 @@ async function handleComplete(request,env){
     engine:normalized.capture_engine,
     country:normalized.capture_country
   },200,"");
+  }catch(error){
+    const detail=String(error&&error.stack||error&&error.message||error).slice(0,1800);
+    return json({
+      error:"complete_failed",
+      detail
+    },500,"");
+  }
 }
 
 async function handleResult(url,env,origin){

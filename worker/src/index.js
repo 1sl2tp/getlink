@@ -31,7 +31,8 @@ function canonicalBhx(raw){
 function pathParts(url){
   return new URL(url).pathname.split("/").filter(Boolean);
 }
-\nfunction browserBhxUrl(url){
+
+function browserBhxUrl(url){
   const canonical=canonicalBhx(url);
   const u=new URL(canonical);
   return "https://www.bachhoaxanh.com"+u.pathname;

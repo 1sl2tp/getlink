@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
 from playwright.async_api import async_playwright
 
 WINMART_HOSTS = {"winmart.vn", "www.winmart.vn"}
-BLOCK_TYPES = {"image", "media", "font"}
+BLOCK_TYPES = {"media", "font"}
 
 
 def canonical_winmart(raw: str, store_code: str = "") -> str:

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260907-workspace58">
+  <link rel="stylesheet" href="style.css?v=20260907-workspace59">
 </head>
 <body>
 <main class="wrap">
@@ -50,24 +50,11 @@
       <div id="categoryTabs" class="category-tabs nav-list">
         <button class="category-chip active" type="button">Đang tải...</button>
       </div>
+      <div id="categoryPager" class="category-pager" aria-label="Phân trang danh mục"></div>
 
-      <div class="nav-section">
+      <div class="nav-section brand-section">
         <span class="nav-label">Hãng</span>
         <div id="brandTabs" class="brand-tabs nav-list" hidden></div>
-      </div>
-
-      <div class="nav-section">
-        <span class="nav-label">Quy cách</span>
-        <div id="packTabs" class="pack-tabs nav-list" hidden></div>
-      </div>
-
-      <div class="nav-section">
-        <span class="nav-label">Trạng thái</span>
-        <div id="stateFilters" class="state-filters nav-list" aria-label="Trạng thái thư viện">
-          <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
-          <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
-          <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
-        </div>
       </div>
     </aside>
 
@@ -80,11 +67,26 @@
         <span id="libraryCount"></span>
       </div>
 
+      <div class="catalog-controls">
+        <div id="packTabs" class="pack-tabs catalog-pack-tabs"></div>
+        <div id="stateFilters" class="state-filters catalog-state-filters" aria-label="Trạng thái thư viện">
+          <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
+          <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
+          <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
+        </div>
+        <div class="view-switch" aria-label="Kiểu hiển thị">
+          <button class="view-button active" data-view="grid" type="button" title="Xem ảnh">▦ <span>Ảnh</span></button>
+          <button class="view-button" data-view="table" type="button" title="Xem bảng">☷ <span>Bảng</span></button>
+        </div>
+      </div>
+
       <div class="catalog-search">
         <input id="librarySearch" autocomplete="off" placeholder="Tìm tên sản phẩm, hãng, quy cách...">
       </div>
 
-      <div class="xls-table-wrap">
+      <div id="productGrid" class="product-grid" aria-live="polite"></div>
+
+      <div id="tableView" class="xls-table-wrap" hidden>
         <table class="xls-price-table">
           <thead>
             <tr>
@@ -101,6 +103,7 @@
           <tbody id="libraryProducts"></tbody>
         </table>
       </div>
+      <div id="resultPager" class="result-pager" aria-label="Phân trang sản phẩm"></div>
       <div id="libraryEmpty" class="library-empty" hidden>Chưa có sản phẩm trong nhóm này.</div>
     </section>
 
@@ -182,7 +185,7 @@
 <script>
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
-<script src="config.js?v=20260907-workspace58"></script>
-<script src="app.js?v=20260907-workspace58"></script>
+<script src="config.js?v=20260907-workspace59"></script>
+<script src="app.js?v=20260907-workspace59"></script>
 </body>
 </html>

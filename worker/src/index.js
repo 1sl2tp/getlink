@@ -58,6 +58,77 @@ function parseMoney(v){
   return Number.isFinite(n)&&n>0?n:null;
 }
 
+function vnDate(iso){
+  const d=iso?new Date(iso):new Date();
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    timeZone:"Asia/Ho_Chi_Minh",
+    year:"numeric",month:"2-digit",day:"2-digit"
+  }).formatToParts(d);
+  const map=Object.fromEntries(parts.map(x=>[x.type,x.value]));
+  return map.year+"-"+map.month+"-"+map.day;
+}
+
+function parseSize(text){
+  const s=cleanText(text).toLowerCase().replace(/,/g,".");
+  const m=s.match(/(\d+(?:\.\d+)?)\s*(ml|lít|lit|l|kg|g)\b/i);
+  if(!m)return {value:null,unit:""};
+  const value=Number(m[1]);
+  const unit=m[2].toLowerCase();
+  if(!Number.isFinite(value)||value<=0)return {value:null,unit:""};
+  if(unit==="l"||unit==="lit"||unit==="lít"){
+    return {value:Math.round(value*1000),unit:"ml"};
+  }
+  if(unit==="kg"){
+    return {value:Math.round(value*1000),unit:"g"};
+  }
+  return {value,unit};
+}
+
+function comparisonData({name,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
+  const quantity=Number(packCount)>0?Number(packCount):1;
+  const regular=Number(sysPrice)>0?Number(sysPrice):(Number(current)||null);
+  const currentPrice=Number(current)||null;
+  const promoActive=Boolean(
+    Number(discount)>0||
+    (regular&&currentPrice&&currentPrice<regular)||
+    cleanText(promoText)
+  );
+  const promo=promoActive?currentPrice:null;
+  const size=parseSize([name,featureText].filter(Boolean).join(" "));
+  return {
+    pack_quantity:quantity,
+    pack_unit:cleanText(packUnit||""),
+    size_value:size.value,
+    size_unit:size.unit,
+    regular_pack_price:regular,
+    promo_pack_price:promo,
+    regular_unit_price:regular?Math.round(regular/quantity):null,
+    promo_unit_price:promo?Math.round(promo/quantity):null,
+    promotion_active:promoActive,
+    promotion_text:cleanText(promoText||""),
+    price_kind:promoActive?"promotion":"regular"
+  };
+}
+
+async function loadFreshCache(env,url,maxAgeMs=86400000){
+  const row=await env.DB.prepare(
+    "SELECT result_json,updated_at FROM jobs WHERE canonical_url=? AND status='complete' AND result_json IS NOT NULL ORDER BY updated_at DESC LIMIT 1"
+  ).bind(url).first();
+  if(!row||!row.result_json||!row.updated_at)return null;
+  const checked=Date.parse(row.updated_at);
+  if(!Number.isFinite(checked))return null;
+  const ageMs=Date.now()-checked;
+  if(ageMs<0||ageMs>=maxAgeMs)return null;
+  try{
+    return {
+      payload:JSON.parse(row.result_json),
+      age_seconds:Math.max(0,Math.round(ageMs/1000))
+    };
+  }catch{
+    return null;
+  }
+}
+
 function slugTitle(url){
   try{
     const parts=pathParts(url);
@@ -148,6 +219,16 @@ function apiProductToPayloadProduct(raw){
     branch,
     name:cleanText(raw.fullName||raw.name||slugTitle(url)),
     packaging:{text:cleanText(raw.canonical||raw.unit||"")},
+    comparison:comparisonData({
+      name:cleanText(raw.fullName||raw.name||slugTitle(url)),
+      featureText:"",
+      packCount:raw.packageItemCount,
+      packUnit:raw.packageItemUnit||raw.unit,
+      current,
+      sysPrice:sys,
+      discount,
+      promoText
+    }),
     price:{current,original},
     promotion:{
       active:Boolean(promoText||discount>0),
@@ -187,13 +268,25 @@ function apiBoxBuyToProduct(raw,data){
     raw.textAvgPriceUnit||
     ""
   );
+  const name=cleanText(raw.name||slugTitle(url));
+  const comparison=comparisonData({
+    name,
+    featureText:data&&data.productBo&&data.productBo.featureSpecification||"",
+    packCount:raw.packageItemCount,
+    packUnit:raw.packageItemUnit,
+    current,
+    sysPrice,
+    discount,
+    promoText
+  });
 
   return {
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group:cleanText(data&&data.categoryName||""),
     branch:cleanText(data&&data.brandUrl||data&&data.categoryName||""),
-    name:cleanText(raw.name||slugTitle(url)),
+    name,
     packaging:{text:packaging},
+    comparison,
     price:{current,original:null,sys_price:sysPrice},
     promotion:{
       active:Boolean(promoText||discount>0),

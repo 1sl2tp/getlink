@@ -1149,12 +1149,14 @@ function isTemporaryErrorFilteredRow(row){
   const name=searchKey(row.source_name||row.name||"");
   if(!name)return false;
 
-  // 1) Combo... is not a canonical single product/carton row.
-  if(/^combo\b/.test(name))return true;
+  // 1) Any title STARTING with a number is temporarily hidden.
+  //    Examples: "2 túi...", "5 lốc...", "12 chai...", "10 bịch...",
+  //    "24 lon...", "2 thùng...". This audit pass wants only canonical
+  //    rows whose product name does not begin with quantity.
+  if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(name))return true;
 
-  // 2) "2 thùng...", "5 thùng..." etc. are multi-carton offers.
-  //    A valid carton row is expected to START with "Thùng ...", not "N thùng ...".
-  if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(name))return true;
+  // 2) Combo... is not a canonical single product/carton row.
+  if(/^combo\b/.test(name))return true;
 
   // 3) For this audit pass, remove every title containing the word "và".
   //    This is deliberately broader than mixed-bundle detection so the

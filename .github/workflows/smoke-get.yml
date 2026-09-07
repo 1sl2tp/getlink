@@ -1,4 +1,5 @@
 name: Smoke GETLINK
+# callback smoke
 # local-snapshot smoke
 
 on:

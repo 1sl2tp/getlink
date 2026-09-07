@@ -16,6 +16,8 @@ body{
   background:var(--bg);
   color:var(--text);
   font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  -webkit-font-smoothing:auto;
+  text-rendering:optimizeLegibility;
 }
 button,input{font:inherit}
 button{cursor:pointer}
@@ -529,11 +531,11 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .nav-label{
   display:block;
   margin-bottom:6px;
-  color:#667085;
-  font-size:9px;
-  font-weight:850;
+  color:#475467;
+  font-size:10px;
+  font-weight:800;
   text-transform:uppercase;
-  letter-spacing:.05em;
+  letter-spacing:.02em;
 }
 .workspace-nav .nav-list{
   display:flex;
@@ -555,7 +557,8 @@ h1{margin:0;font-size:28px;line-height:1.1}
   border-radius:7px;
   padding:6px 7px;
   text-align:left;
-  font-size:10px;
+  font-size:11px;
+  font-weight:700;
 }
 .workspace-nav .category-chip small,
 .workspace-nav .brand-chip small,
@@ -570,16 +573,18 @@ h1{margin:0;font-size:28px;line-height:1.1}
   padding:12px 14px 7px;
 }
 .workspace-list .catalog-toolbar h2{font-size:17px}
-.workspace-list .catalog-toolbar p{font-size:10px}
+.workspace-list .catalog-toolbar p{font-size:11px;color:#5f6877}
 .workspace-list .catalog-toolbar>#libraryCount{
-  color:var(--muted);
-  font-size:10px;
+  color:#667085;
+  font-size:11px;
+  font-weight:600;
   white-space:nowrap;
 }
 .workspace-list .catalog-search{padding:0 14px 9px}
 .workspace-list .catalog-search input{
-  height:38px;
-  font-size:11px;
+  height:40px;
+  font-size:12.5px;
+  color:#202124;
 }
 
 .compact-table-head,
@@ -927,10 +932,11 @@ h1{margin:0;font-size:28px;line-height:1.1}
   top:0;
   z-index:2;
   background:#f8faf9;
-  color:#667085;
-  font-size:9.5px;
+  color:#475467;
+  font-size:10px;
   font-weight:800;
   text-transform:uppercase;
+  letter-spacing:0;
   white-space:nowrap;
 }
 .xls-price-table th:nth-child(1){width:34%}
@@ -959,10 +965,10 @@ h1{margin:0;font-size:28px;line-height:1.1}
   overflow:hidden;
   text-overflow:ellipsis;
   white-space:nowrap;
-  font-size:12.5px;
-  line-height:1.25;
-  font-weight:650;
-  color:#202124;
+  font-size:13px;
+  line-height:1.28;
+  font-weight:700;
+  color:#111827;
 }
 .xls-open-detail{
   display:block;
@@ -997,27 +1003,27 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .xls-qc-main{
   display:block;
   line-height:1.05;
-  color:#202124;
-  font-size:12.5px;
-  font-weight:750;
+  color:#111827;
+  font-size:13px;
+  font-weight:800;
   font-variant-numeric:tabular-nums;
   text-align:right;
 }
 .xls-unit{
-  color:#98a2b3;
-  font-size:11.5px;
-  font-weight:500;
+  color:#667085;
+  font-size:12px;
+  font-weight:600;
   text-align:left;
   white-space:nowrap;
 }
 .xls-num{
   white-space:nowrap;
-  color:var(--green-strong);
-  font-size:12.5px;
-  font-weight:700;
+  color:#087a40;
+  font-size:13px;
+  font-weight:750;
   line-height:1.1;
   font-variant-numeric:tabular-nums;
-  letter-spacing:-.01em;
+  letter-spacing:0;
 }
 .xls-price-main{
   display:block;

@@ -50,7 +50,8 @@ jobs:
             SUFFIX="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | cut -c1-8)"
             SUBDOMAIN="taphoa-$SUFFIX"
             echo "Tạo workers.dev account subdomain"
-            PAYLOAD="$(jq -nc --arg sub "$SUBDOMAIN" '{subdomain:$sub}')"\n            curl --fail --silent --show-error -X PUT               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"               --data "$PAYLOAD"               | jq -e '.success == true' >/dev/null
+            PAYLOAD="$(jq -nc --arg sub "$SUBDOMAIN" '{subdomain:$sub}')"
+            curl --fail --silent --show-error -X PUT               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"               --data "$PAYLOAD"               | jq -e '.success == true' >/dev/null
           else
             echo "workers.dev đã có sẵn"
           fi

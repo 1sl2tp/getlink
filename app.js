@@ -10,6 +10,8 @@ let activeGroupUrl="";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
+let libraryState="visible";
+let activePreferenceState="normal";
 
 function canonical(url){
   try{
@@ -108,8 +110,7 @@ function saveLocal(){
   if(!key)return;
   localStorage.setItem("getlink:"+key,JSON.stringify({
     myPrice:$("#myPrice").value.trim(),
-    myPackQty:$("#myPackQty").value.trim(),
-    watch:$("#watch").checked
+    myPackQty:$("#myPackQty").value.trim()
   }));
 }
 
@@ -118,11 +119,9 @@ function restoreLocal(url){
     const x=JSON.parse(localStorage.getItem("getlink:"+canonical(url))||"null");
     $("#myPrice").value=x&&x.myPrice||"";
     $("#myPackQty").value=x&&x.myPackQty||"1";
-    $("#watch").checked=Boolean(x&&x.watch);
   }catch{
     $("#myPrice").value="";
     $("#myPackQty").value="1";
-    $("#watch").checked=false;
   }
   updateCompare();
 }
@@ -169,7 +168,58 @@ function updateCompare(){
 
 $("#myPrice").addEventListener("input",()=>{saveLocal();updateCompare()});
 $("#myPackQty").addEventListener("input",()=>{saveLocal();updateCompare()});
-$("#watch").addEventListener("change",saveLocal);
+
+
+function preferenceStateForUrl(url){
+  const key=canonical(url);
+  const row=libraryCache.find(x=>canonical(x.canonical_url)===key);
+  return row&&row.preference_state||"normal";
+}
+
+function syncWatchCheckbox(state){
+  activePreferenceState=state||"normal";
+  $("#watch").checked=activePreferenceState==="watch";
+}
+
+async function updatePreference(url,state,refreshHours=6){
+  const r=await fetch(API+"/api/preference",{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({
+      url,
+      state,
+      refresh_hours:refreshHours
+    })
+  });
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.error||"preference_error");
+
+  const key=canonical(url);
+  const row=libraryCache.find(x=>canonical(x.canonical_url)===key);
+  if(row){
+    row.preference_state=data.preference&&data.preference.state||state;
+    row.auto_refresh=Number(data.preference&&data.preference.auto_refresh||0);
+    row.refresh_hours=Number(data.preference&&data.preference.refresh_hours||24);
+  }
+  if(canonical(wantedUrl)===key){
+    syncWatchCheckbox(data.preference&&data.preference.state||state);
+  }
+  renderLibraryProducts();
+  return data.preference;
+}
+
+$("#watch").addEventListener("change",async()=>{
+  if(!wantedUrl)return;
+  const desired=$("#watch").checked?"watch":"normal";
+  $("#watch").disabled=true;
+  try{
+    await updatePreference(wantedUrl,desired,6);
+  }catch{
+    $("#watch").checked=activePreferenceState==="watch";
+  }finally{
+    $("#watch").disabled=false;
+  }
+});
 
 function renderProduct(payload){
   const p=payload&&payload.product?payload.product:payload;
@@ -212,6 +262,7 @@ function renderProduct(payload){
   wantedUrl=p.url||payload.input_url||wantedUrl;
   $("#url").value=wantedUrl||$("#url").value;
   restoreLocal(wantedUrl);
+  syncWatchCheckbox(preferenceStateForUrl(wantedUrl));
 
   if(variants.length){
     $("#productVariants").hidden=false;
@@ -297,17 +348,26 @@ function productCard(row){
   const image=String(row.image||"");
   const stamp=formatAge(row.last_checked_at||row.updated_at);
   const pack=String(row.packaging||"").trim();
+  const pref=String(row.preference_state||"normal");
   const badge=hasPromo
     ?'<span class="deal-badge">ƯU ĐÃI</span>'
     :'<span class="normal-badge">THƯỜNG</span>';
   const thumb=image
     ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy">'
     :'<div class="thumb-fallback">GL</div>';
+  const stateBadge=pref==="watch"
+    ?'<span class="watch-badge">★ QUAN TÂM</span>'
+    :(pref==="hidden"?'<span class="hidden-badge">ẨN</span>':"");
 
-  return '<button class="product-card" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  const watchTitle=pref==="watch"?"Bỏ quan tâm":"Đánh dấu quan tâm";
+  const watchNext=pref==="watch"?"normal":"watch";
+  const hideTitle=pref==="hidden"?"Hiện lại":"Ẩn khỏi thư viện";
+  const hideNext=pref==="hidden"?"normal":"hidden";
+
+  return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="product-main">'+
       '<div class="product-thumb">'+thumb+'</div>'+
-      '<div class="product-name-wrap">'+badge+'<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3></div>'+
+      '<div class="product-name-wrap">'+badge+stateBadge+'<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3></div>'+
     '</div>'+
     '<div class="product-cell product-pack-cell" data-label="Quy cách">'+
       escapeHtml(pack||row.group_name||"—")+
@@ -324,8 +384,14 @@ function productCard(row){
     '<div class="product-cell product-unit" data-label="Giá lẻ">'+
       (unit?'<strong>'+money(unit)+'</strong><small>/ đơn vị</small>':'<span>—</span>')+
     '</div>'+
-    '<div class="product-cell product-updated" data-label="Cập nhật">'+escapeHtml(stamp||"—")+'</div>'+
-  '</button>';
+    '<div class="product-cell product-updated" data-label="Cập nhật">'+
+      '<span>'+escapeHtml(stamp||"—")+'</span>'+
+      '<div class="row-actions">'+
+        '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
+        '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
 }
 
 async function loadLibraryGroups(){
@@ -355,7 +421,7 @@ async function loadLibraryGroups(){
 
 async function ensureLibraryCache(force=false){
   if(libraryLoaded&&!force)return;
-  const r=await fetch(API+"/api/library?view=search&limit=2000",{cache:"no-store"});
+  const r=await fetch(API+"/api/library?view=search&limit=2000&include_hidden=1",{cache:"no-store"});
   const data=await r.json();
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];
@@ -363,12 +429,23 @@ async function ensureLibraryCache(force=false){
 }
 
 function filteredLibraryProducts(){
-  let products=libraryCache;
-  if(libraryQuery){
-    products=products.filter(row=>matchesSearch(row,libraryQuery));
-  }else if(activeGroupUrl){
+  let products=libraryCache.slice();
+
+  if(libraryState==="watch"){
+    products=products.filter(row=>String(row.preference_state||"normal")==="watch");
+  }else if(libraryState==="hidden"){
+    products=products.filter(row=>String(row.preference_state||"normal")==="hidden");
+  }else{
+    products=products.filter(row=>String(row.preference_state||"normal")!=="hidden");
+  }
+
+  if(activeGroupUrl){
     products=products.filter(row=>row.parent_url===activeGroupUrl);
   }
+  if(libraryQuery){
+    products=products.filter(row=>matchesSearch(row,libraryQuery));
+  }
+
   return products;
 }
 
@@ -383,7 +460,9 @@ function renderLibraryProducts(){
       ?chip.textContent.replace(/\s+\d+$/,"").trim()
       :"Sản phẩm";
   }else{
-    $("#libraryTitle").textContent="Tất cả sản phẩm đã lưu";
+    $("#libraryTitle").textContent=libraryState==="watch"
+      ?"Sản phẩm quan tâm"
+      :(libraryState==="hidden"?"Sản phẩm đang ẩn":"Tất cả sản phẩm đang dùng");
   }
 
   $("#libraryCount").textContent=products.length+" sản phẩm";
@@ -425,6 +504,7 @@ async function openLibraryItem(url){
     wantedUrl=url;
     $("#url").value=url;
     renderPayload(data.payload);
+    syncWatchCheckbox(data.preference&&data.preference.state||preferenceStateForUrl(url));
     $("#result").scrollIntoView({behavior:"smooth",block:"start"});
   }catch{
     $("#importCard").hidden=false;
@@ -448,6 +528,16 @@ async function refreshCatalog(selectUrl=""){
   ]);
 }
 
+
+$("#stateFilters").addEventListener("click",e=>{
+  const chip=e.target.closest(".state-chip");
+  if(!chip)return;
+  libraryState=chip.dataset.state||"visible";
+  document.querySelectorAll(".state-chip").forEach(x=>x.classList.remove("active"));
+  chip.classList.add("active");
+  renderLibraryProducts();
+});
+
 $("#categoryTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".category-chip");
   if(!chip)return;
@@ -464,10 +554,36 @@ $("#librarySearch").addEventListener("input",e=>{
   renderLibraryProducts();
 });
 
-$("#libraryProducts").addEventListener("click",e=>{
+$("#libraryProducts").addEventListener("click",async e=>{
+  const action=e.target.closest(".pref-action");
   const card=e.target.closest(".product-card");
   if(!card)return;
+
+  if(action){
+    e.stopPropagation();
+    action.disabled=true;
+    try{
+      await updatePreference(
+        card.dataset.url||"",
+        action.dataset.state||"normal",
+        6
+      );
+    }finally{
+      action.disabled=false;
+    }
+    return;
+  }
+
   openLibraryItem(card.dataset.url||"");
+});
+
+$("#libraryProducts").addEventListener("keydown",e=>{
+  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")){
+    const card=e.target.closest(".product-card");
+    if(!card)return;
+    e.preventDefault();
+    openLibraryItem(card.dataset.url||"");
+  }
 });
 
 $("#childList").addEventListener("click",e=>{

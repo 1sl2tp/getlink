@@ -56,6 +56,28 @@ const {parsePackStructure,comparisonData} = get();
 }
 
 {
+  const p = parsePackStructure(
+    "Lốc 6 lon Bia Blanc 1664 330ml","","",1,""
+  );
+  assert.equal(p.pack_kind,"Lốc");
+  assert.equal(p.pack_quantity,6);
+  assert.equal(p.pack_unit,"Lon");
+  assert.equal(p.size_value,330);
+  assert.equal(p.size_unit,"ml");
+}
+
+{
+  const p = parsePackStructure(
+    "Bia 333 lon 330ml","","",1,""
+  );
+  assert.equal(p.pack_kind,"Lon");
+  assert.equal(p.pack_quantity,1);
+  assert.equal(p.pack_unit,"Lon");
+  assert.equal(p.size_value,330);
+  assert.equal(p.size_unit,"ml");
+}
+
+{
   const c = comparisonData({
     name:"Thùng 24 + 4 lon Bia Budweiser 250ml",
     packagingText:"",

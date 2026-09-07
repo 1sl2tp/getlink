@@ -25,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
       BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
       BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
       BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
@@ -48,7 +50,11 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          python scraper/brightdata_bhx.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --output "data/jobs/$INPUT_REQUEST_ID.json"             2>&1 | tee /tmp/getlink-brightdata.log
+          python scraper/brightdata_bhx.py \
+            --url "$INPUT_URL" \
+            --request-id "$INPUT_REQUEST_ID" \
+            --output "data/jobs/$INPUT_REQUEST_ID.json" \
+            2>&1 | tee /tmp/getlink-brightdata.log
           CODE=${PIPESTATUS[0]}
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           exit 0
@@ -59,7 +65,13 @@ jobs:
           if [ -n "$INPUT_REQUEST_ID" ] && [ ! -s "data/jobs/$INPUT_REQUEST_ID.json" ]; then
             mkdir -p data/jobs
             DETAIL="$(tail -50 /tmp/getlink-brightdata.log 2>/dev/null | tr '\n' ' ' | cut -c1-1800)"
-            jq -n               --arg status "error"               --arg error "brightdata_runner_failed"               --arg detail "$DETAIL"               --arg request_id "$INPUT_REQUEST_ID"               '{status:$status,error:$error,detail:$detail,request_id:$request_id}'               > "data/jobs/$INPUT_REQUEST_ID.json"
+            jq -n \
+              --arg status "error" \
+              --arg error "brightdata_runner_failed" \
+              --arg detail "$DETAIL" \
+              --arg request_id "$INPUT_REQUEST_ID" \
+              '{status:$status,error:$error,detail:$detail,request_id:$request_id}' \
+              > "data/jobs/$INPUT_REQUEST_ID.json"
           fi
 
       - name: Lưu response API về GitHub

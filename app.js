@@ -602,19 +602,30 @@ function inferSheetPack(row){
   };
 }
 
+function rowCartonStartText(row){
+  // Safety rule: if ANY own authoritative field starts with "Thùng",
+  // this row is a carton and must never be suppressed as an intermediate
+  // retail multi-pack.
+  const fields=[row.name,row.source_name,row.packaging]
+    .map(searchKey)
+    .filter(Boolean);
+  return fields.find(value=>/^thung\b/.test(value))||"";
+}
+
 function rowCartonStructure(row){
-  const name=searchKey(row.source_name||row.name||"");
+  const names=[row.name,row.source_name].map(searchKey).filter(Boolean);
+  const name=names[0]||"";
   const packaging=searchKey(row.packaging||"");
   const units="hop|chai|goi|bich|tui|lon|hu|ly|to|can|thanh|cay|vien|tuyp|loc";
 
-  // A pure BHX carton must START with "Thùng".
-  // Exception: if the product name itself is neutral (e.g. "24 lon",
-  // "4 túi") the first price label may start with "Thùng" and is then
-  // authoritative for this link. A name starting "2 thùng" or "Combo..."
-  // is a multi-carton offer, not a pure Thùng row.
-  const multiName=name.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s+thung\b/);
-  const nameIsCombo=/^combo\b/.test(name);
-  const pureByName=/^thung\b/.test(name);
+  // Pure carton rule: any own name/price label STARTING with "Thùng".
+  // "2 thùng..." and "Combo..." are still multi-carton offers.
+  const multiName=names
+    .map(value=>value.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s+thung\b/))
+    .find(Boolean)||null;
+  const nameIsCombo=names.some(value=>/^combo\b/.test(value));
+  const cartonStart=rowCartonStartText(row);
+  const pureByName=Boolean(cartonStart&&names.includes(cartonStart));
   const pureByPrice=!pureByName&&!multiName&&!nameIsCombo&&/^thung\b/.test(packaging);
   const isPureCarton=pureByName||pureByPrice;
 
@@ -623,13 +634,17 @@ function rowCartonStructure(row){
     cartonCount=Math.max(1,Number(String(multiName[1]).replace(",","."))||1);
   }
 
-  const innerText=pureByName?name:(/^thung\b/.test(packaging)?packaging:name);
+  const innerText=pureByName
+    ?cartonStart
+    :(pureByPrice?packaging:name);
   const pureInner=innerText.match(
     new RegExp("^thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
   );
-  const multiInner=name.match(
-    new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s+thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
-  );
+  const multiInner=names
+    .map(value=>value.match(
+      new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s+thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
+    ))
+    .find(Boolean)||null;
   const inner=pureInner||multiInner;
 
   return {
@@ -870,6 +885,10 @@ function suppressRedundantMultiPacks(products){
   }
 
   return products.filter(row=>{
+    // Hard safety gate: rows starting with "Thùng" are NEVER hidden by
+    // redundant retail-pack cleanup.
+    if(rowCartonStartText(row))return true;
+
     const pack=inferSheetPack(row);
     const simple=simpleRowPrice(row);
     const isIntermediateMulti=

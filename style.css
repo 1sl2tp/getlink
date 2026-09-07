@@ -2812,3 +2812,45 @@ h1{margin:0;font-size:28px;line-height:1.1}
     max-height:148px!important;
   }
 }
+
+
+/* Pack hierarchy table v1: Thùng -> Lẻ -> < Lẻ */
+.xls-price-table th:nth-child(1){width:34%}
+.xls-price-table th:nth-child(2){width:7%}
+.xls-price-table th:nth-child(3){width:8%}
+.xls-price-table th:nth-child(4){width:8%}
+.xls-price-table th:nth-child(5){width:8%}
+.xls-price-table th:nth-child(6){width:8%}
+.xls-price-table th:nth-child(7){width:9%}
+.xls-price-table th:nth-child(8){width:9%}
+.xls-price-table th:nth-child(9){width:9%}
+.xls-price-table td:nth-child(2),
+.xls-price-table td:nth-child(3),
+.xls-price-table td:nth-child(4){
+  text-align:left!important;
+}
+.xls-price-table td:nth-child(n+5){
+  text-align:right!important;
+}
+.xls-pack-level{
+  color:#475467;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.xls-pack-level:nth-child(2){
+  color:#087a40;
+  font-weight:800;
+}
+
+@media(min-width:1400px){
+  .xls-price-table th:nth-child(1){width:36%}
+  .xls-price-table th:nth-child(2){width:7%}
+  .xls-price-table th:nth-child(3){width:8%}
+  .xls-price-table th:nth-child(4){width:8%}
+  .xls-price-table th:nth-child(5){width:8%}
+  .xls-price-table th:nth-child(6){width:8%}
+  .xls-price-table th:nth-child(7){width:8%}
+  .xls-price-table th:nth-child(8){width:8%}
+  .xls-price-table th:nth-child(9){width:9%}
+}

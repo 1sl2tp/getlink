@@ -112,19 +112,35 @@ function getlinkUrlIsCarton(value){
   }
 }
 
+function getlinkCartonEvidence(name,url,packagingText){
+  const namePlain=getlinkPlain(name||"");
+  const packagingPlain=getlinkPlain(packagingText||"");
+
+  // ONE OWNER for Nhãn 1 = Thùng.
+  // Evidence priority belongs to this exact product only:
+  // 1) own product name, 2) own packaging/price option, 3) own detail URL.
+  if(/^thung\b/.test(namePlain)){
+    return {is_carton:true,source:"name"};
+  }
+  if(/^thung\b/.test(packagingPlain)){
+    return {is_carton:true,source:"packaging"};
+  }
+  if(getlinkUrlIsCarton(url)){
+    return {is_carton:true,source:"url"};
+  }
+  return {is_carton:false,source:""};
+}
+
 function getlinkProductIdentity(name,url,packagingText){
   const sourceName=cleanText(name||"");
   const sourcePackaging=cleanText(packagingText||"");
   const namePlain=getlinkPlain(sourceName);
   const packagingPlain=getlinkPlain(sourcePackaging);
 
-  // FIRST CONDITION: carton evidence belongs to THIS exact product link.
-  // BHX can expose it in the title/price option, or in the dedicated
-  // product slug: .../thung-24-lon-ca-phe-sua-highlands-235ml.
-  const authoritativeCarton=
-    /^thung\b/.test(namePlain)||
-    /^thung\b/.test(packagingPlain)||
-    getlinkUrlIsCarton(url);
+  const cartonEvidence=getlinkCartonEvidence(
+    sourceName,url,sourcePackaging
+  );
+  const authoritativeCarton=cartonEvidence.is_carton;
 
   // Temporary audit exclusions are enforced BEFORE persistence.
   if(/^combo\b/.test(namePlain)){
@@ -164,8 +180,109 @@ function getlinkProductIdentity(name,url,packagingText){
     keep:true,
     reason:"",
     authoritativeCarton,
+    cartonEvidence:cartonEvidence.source,
     name:normalizedName,
     packaging:normalizedPackaging
+  };
+}
+
+function packHierarchyData(name,url,packagingText,rawCount,rawUnit){
+  const identity=getlinkProductIdentity(name,url,packagingText);
+  if(!identity.keep){
+    return {
+      keep:false,
+      reason:identity.reason,
+      label1:"",
+      qty1:0,
+      label2:"",
+      qty2:0,
+      label3:"",
+      qty3:0,
+      evidence:""
+    };
+  }
+
+  // Phase 1: Nhãn 1 = Thùng only. Non-carton hierarchy is intentionally
+  // left empty until the Lẻ phase, so there is no second guessing here.
+  if(!identity.authoritativeCarton){
+    return {
+      keep:true,
+      reason:"",
+      label1:"",
+      qty1:0,
+      label2:"",
+      qty2:0,
+      label3:"",
+      qty3:0,
+      evidence:""
+    };
+  }
+
+  const units="hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can";
+  const namePlain=getlinkPlain(identity.name);
+  const packagingPlain=getlinkPlain(identity.packaging);
+  const structural=/^thung\b/.test(namePlain)
+    ?namePlain.replace(/^thung\s*/,"")
+    :(/^thung\b/.test(packagingPlain)
+      ?packagingPlain.replace(/^thung\s*/,"")
+      :"");
+
+  let qty2=0;
+  let label2="";
+  let qty3=0;
+  let label3="";
+
+  const bonus=structural.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
+  );
+  const bonusUnits=structural.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
+  );
+  const chain=structural.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b(?:\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b)?")
+  );
+
+  if(bonus){
+    qty2=Number(String(bonus[1]).replace(",","."))+
+      Number(String(bonus[2]).replace(",","."));
+    label2=normalizePackWord(bonus[3]);
+  }else if(bonusUnits&&normalizePackWord(bonusUnits[2])===normalizePackWord(bonusUnits[4])){
+    qty2=Number(String(bonusUnits[1]).replace(",","."))+
+      Number(String(bonusUnits[3]).replace(",","."));
+    label2=normalizePackWord(bonusUnits[2]);
+  }else if(chain){
+    qty2=Number(String(chain[1]).replace(",","."));
+    label2=normalizePackWord(chain[2]);
+    if(chain[3]&&chain[4]){
+      qty3=Number(String(chain[3]).replace(",","."));
+      label3=normalizePackWord(chain[4]);
+    }
+  }
+
+  // If the carton marker is authoritative but the text does not expose
+  // the inner QC, use BHX's own package count/unit as the last source.
+  if((!qty2||!label2)){
+    const fallbackQty=Number(rawCount);
+    const fallbackUnit=normalizePackWord(rawUnit||"");
+    if(
+      Number.isFinite(fallbackQty)&&fallbackQty>0&&fallbackQty<=300&&
+      fallbackUnit&&fallbackUnit!=="Thùng"
+    ){
+      qty2=fallbackQty;
+      label2=fallbackUnit;
+    }
+  }
+
+  return {
+    keep:true,
+    reason:"",
+    label1:"Thùng",
+    qty1:1,
+    label2,
+    qty2:qty2||0,
+    label3,
+    qty3:qty3||0,
+    evidence:identity.cartonEvidence||""
   };
 }
 

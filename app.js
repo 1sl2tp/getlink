@@ -519,7 +519,7 @@ function inferSheetPack(row){
   if(bonusMatch){
     const base=Number(String(bonusMatch[1]).replace(",","."));
     const bonus=Number(String(bonusMatch[2]).replace(",","."));
-    if(base>0&&bonus>0){
+    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300){
       qty=base+bonus;
       unit=sheetNormalizeUnit(bonusMatch[3]);
     }
@@ -528,13 +528,13 @@ function inferSheetPack(row){
     const bonus=Number(String(bonusWithUnits[3]).replace(",","."));
     const unitA=sheetNormalizeUnit(bonusWithUnits[2]);
     const unitB=sheetNormalizeUnit(bonusWithUnits[4]);
-    if(base>0&&bonus>0&&unitA===unitB){
+    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300&&unitA===unitB){
       qty=base+bonus;
       unit=unitA;
     }
   }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
-    if(parsed>1&&qty<=1)qty=parsed;
+    if(parsed>1&&parsed<=300&&qty<=1)qty=parsed;
     if(!unit||unit.toLowerCase()==="đơn vị"||Number(row.pack_quantity)<=1){
       unit=sheetNormalizeUnit(countMatch[2]);
     }

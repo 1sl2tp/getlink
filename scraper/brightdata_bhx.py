@@ -7,7 +7,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import quote, unquote, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, unquote, urlparse, urlunparse
 
 from playwright.async_api import async_playwright
 
@@ -214,6 +214,7 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                 merged: dict[str, dict] = {}
                 idle_rounds = 0
                 rounds = 0
+                terminal_short_page = False
                 deadline = time.monotonic() + 75
 
                 def item_key(item: dict) -> str:
@@ -249,6 +250,20 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                             for item in products:
                                 merged[item_key(item)] = item
 
+                            # V2 GetCate exposes pageSize in its URL. If the first real
+                            # category page contains fewer products than pageSize, there
+                            # cannot be another lazy page: stop immediately instead of
+                            # doing several defensive scroll/idle rounds.
+                            low_url = response.url.lower()
+                            if "/category/v2/getcate" in low_url:
+                                try:
+                                    query = parse_qs(urlparse(response.url).query.lower())
+                                    page_size = int((query.get("pagesize") or ["0"])[0] or 0)
+                                except Exception:
+                                    page_size = 0
+                                if page_size > 0 and len(products) < page_size:
+                                    terminal_short_page = True
+
                     after = len(merged)
                     if after > before:
                         idle_rounds = 0
@@ -263,6 +278,18 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         )
                     else:
                         idle_rounds += 1
+
+                    if merged and terminal_short_page:
+                        print(
+                            json.dumps(
+                                {
+                                    "category_terminal_short_page": True,
+                                    "products": len(merged),
+                                },
+                                ensure_ascii=False,
+                            )
+                        )
+                        break
 
                     try:
                         await page.evaluate(

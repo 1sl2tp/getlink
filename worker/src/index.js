@@ -470,6 +470,77 @@ async function fetchBhxApiPayload(inputUrl,requestId){
   };
 }
 
+
+async function fetchSupabaseBhxPayload(inputUrl,requestId){
+  const endpoint="https://gcnoahqsrquxkwkjbuxy.supabase.co/functions/v1/getlink-bhx-proxy";
+  const key="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),18000);
+  let response;
+  try{
+    response=await fetch(endpoint,{
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "apikey":key,
+        "authorization":"Bearer "+key
+      },
+      body:JSON.stringify({url:browserBhxUrl(inputUrl)}),
+      signal:controller.signal
+    });
+  }finally{
+    clearTimeout(timer);
+  }
+  if(!response.ok)throw new Error("supabase_proxy_http_"+response.status);
+  const envelope=await response.json();
+  if(!envelope||envelope.ok!==true||!envelope.payload)throw new Error(
+    "supabase_proxy_"+String(envelope&&envelope.status||envelope&&envelope.error||"failed")
+  );
+  const data=envelope.payload;
+  if(!data||Number(data.code)!==0||!data.data)throw new Error("supabase_bhx_invalid");
+
+  const canonical=canonicalBhx(inputUrl);
+  const parts=pathParts(canonical);
+  const rawProducts=Array.isArray(data.data.products)?data.data.products:[];
+  const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
+  if(!products.length)throw new Error("supabase_bhx_empty");
+  const checked=new Date().toISOString();
+
+  if(parts.length>=2){
+    const exact=products.find(p=>sameBhxUrl(p.url,canonical));
+    if(!exact)throw new Error("supabase_bhx_product_not_found");
+    return {
+      schema_version:2,
+      request_id:requestId,
+      input_url:canonical,
+      input_type:"product",
+      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+      checked_at:checked,
+      category_name:exact.group||"",
+      product:exact,
+      products:[exact],
+      discovered_links:[]
+    };
+  }
+
+  const categoryName=cleanText(
+    (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
+    slugTitle(canonical)
+  );
+  return {
+    schema_version:2,
+    request_id:requestId,
+    input_url:canonical,
+    input_type:"category",
+    source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+    checked_at:checked,
+    category_name:categoryName,
+    product:null,
+    products,
+    discovered_links:products.map(p=>p.url)
+  };
+}
+
 async function renderBhxHtml(env,url){
   if(!env.BROWSER||typeof env.BROWSER.quickAction!=="function")throw new Error("browser_binding_missing");
   const response=await env.BROWSER.quickAction("content",{
@@ -623,7 +694,23 @@ async function handleCreate(request,env,origin){
       engine:"bhx-api"
     },200,origin);
   }catch(apiError){
-    // BHX có thể chặn một số datacenter; tiếp tục qua Browser/GitHub fallback.
+    // BHX có thể chặn một số datacenter; thử qua Supabase edge trước.
+  }
+
+  try{
+    const supaPayload=await fetchSupabaseBhxPayload(url,requestId);
+    const supaSaved=await persistPayload(env,supaPayload);
+    return json({
+      request_id:requestId,
+      status:"complete",
+      input_url:url,
+      link_type:supaPayload.input_type,
+      registry_count:supaSaved.registry_count,
+      payload:supaPayload,
+      engine:"supabase-bhx-api"
+    },200,origin);
+  }catch(supabaseError){
+    // Tiếp tục Browser/GitHub fallback.
   }
 
   try{

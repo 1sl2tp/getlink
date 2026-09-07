@@ -1,6 +1,7 @@
 const OWNER="1sl2tp";
 const REPO="getlink";
-const WORKFLOW="scrape.yml";
+const WORKFLOW_BHX="scrape.yml";
+const WORKFLOW_WINMART="scrape-winmart.yml";
 
 function json(data,status=200,origin=""){
   const headers={
@@ -37,11 +38,58 @@ function browserBhxUrl(raw){
   return "https://www.bachhoaxanh.com"+u.pathname;
 }
 
+function canonicalWinmart(raw){
+  const u=new URL(String(raw||""));
+  const host=u.hostname.toLowerCase();
+  if(host!=="winmart.vn"&&host!=="www.winmart.vn"){
+    throw new Error("invalid_winmart_url");
+  }
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/+$/,"")||"/";
+  const out=new URL("https://winmart.vn"+path);
+  const store=String(u.searchParams.get("storeCode")||"").trim();
+  const cate2=String(u.searchParams.get("cate2")||"").trim();
+  if(store)out.searchParams.set("storeCode",store);
+  if(cate2)out.searchParams.set("cate2",cate2);
+  return out.toString().replace(/\?$/,"");
+}
+
+function sourceKeyForUrl(raw){
+  const host=new URL(String(raw||"")).hostname.toLowerCase();
+  if(host==="bachhoaxanh.com"||host==="www.bachhoaxanh.com")return "bachhoaxanh";
+  if(host==="winmart.vn"||host==="www.winmart.vn")return "winmart";
+  throw new Error("unsupported_source_url");
+}
+
+function sourceNameForKey(key){
+  return key==="winmart"?"WinMart":"Bách Hóa XANH";
+}
+
+function canonicalSource(raw){
+  return sourceKeyForUrl(raw)==="winmart"
+    ?canonicalWinmart(raw)
+    :canonicalBhx(raw);
+}
+
+function browserSourceUrl(raw){
+  return sourceKeyForUrl(raw)==="winmart"
+    ?canonicalWinmart(raw)
+    :browserBhxUrl(raw);
+}
+
 function pathParts(url){
   return new URL(url).pathname.split("/").filter(Boolean);
 }
 
 function heuristicType(url){
+  let source="bachhoaxanh";
+  try{source=sourceKeyForUrl(url);}catch{}
+  if(source==="winmart"){
+    const u=new URL(url);
+    const last=pathParts(url).slice(-1)[0]||"";
+    return /--c\d+$/i.test(last)||u.searchParams.has("cate2")
+      ?"category"
+      :"product";
+  }
   return pathParts(url).length<=1?"category":"product";
 }
 
@@ -700,11 +748,12 @@ async function idForUrl(value){
     .map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 
-async function dispatchGithub(env,url,requestId){
+async function dispatchGithub(env,url,requestId,sourceKey="bachhoaxanh"){
   if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
+  const workflow=sourceKey==="winmart"?WORKFLOW_WINMART:WORKFLOW_BHX;
   return fetch(
     "https://api.github.com/repos/"+OWNER+"/"+REPO+
-    "/actions/workflows/"+WORKFLOW+"/dispatches",
+    "/actions/workflows/"+workflow+"/dispatches",
     {
       method:"POST",
       headers:{
@@ -1627,19 +1676,320 @@ async function persistPayload(env,payload){
   };
 }
 
+
+function winmartTextKey(value){
+  return getlinkPlain(value||"")
+    .replace(/\b(?:winmart|win mart)\b/g," ")
+    .replace(/\s+/g," ")
+    .trim();
+}
+
+function winmartLeafUnit(product){
+  const direct=normalizePackWord(product&&product.unit||"");
+  const allowed=new Set([
+    "Hộp","Chai","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô",
+    "Khoanh","Thanh","Cây","Viên","Tuýp","Can"
+  ]);
+  if(allowed.has(direct))return direct;
+  return rawPackUnit(
+    [product&&product.name,product&&product.packaging].filter(Boolean).join(" ")
+  );
+}
+
+async function loadBhxTaxonomyForWinmart(env){
+  const cats=await env.DB.prepare(
+    "SELECT canonical_url,name,group_name FROM links WHERE source='Bách Hóa XANH' AND link_type='category' AND COALESCE(last_status,'')<>'unlisted'"
+  ).all();
+  const products=await env.DB.prepare(
+    "SELECT canonical_url,parent_url,group_name,name FROM links WHERE source='Bách Hóa XANH' AND link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(last_status,'')<>'unlisted' LIMIT 6000"
+  ).all();
+  return {
+    categories:cats.results||[],
+    products:products.results||[]
+  };
+}
+
+function matchBhxTaxonomyForWinmart(product,taxonomy){
+  const productKey=winmartTextKey(product&&product.name||"");
+  if(productKey){
+    const exact=(taxonomy.products||[]).find(
+      row=>winmartTextKey(row.name)===productKey
+    );
+    if(exact&&exact.parent_url){
+      return {
+        parent_url:exact.parent_url,
+        group_name:cleanText(exact.group_name||""),
+        evidence:"same_product"
+      };
+    }
+  }
+
+  const categoryKey=winmartTextKey(
+    product&&product.category_name||
+    product&&product.category||
+    ""
+  );
+  if(categoryKey){
+    const exactCat=(taxonomy.categories||[]).find(row=>{
+      const keys=[
+        winmartTextKey(row.name),
+        winmartTextKey(row.group_name)
+      ].filter(Boolean);
+      return keys.includes(categoryKey);
+    });
+    if(exactCat){
+      return {
+        parent_url:exactCat.canonical_url,
+        group_name:cleanText(exactCat.name||exactCat.group_name||""),
+        evidence:"same_category"
+      };
+    }
+
+    const closeCat=(taxonomy.categories||[]).find(row=>{
+      const keys=[
+        winmartTextKey(row.name),
+        winmartTextKey(row.group_name)
+      ].filter(Boolean);
+      return keys.some(key=>
+        key.length>=4&&categoryKey.length>=4&&
+        (key.includes(categoryKey)||categoryKey.includes(key))
+      );
+    });
+    if(closeCat){
+      return {
+        parent_url:closeCat.canonical_url,
+        group_name:cleanText(closeCat.name||closeCat.group_name||""),
+        evidence:"category_near"
+      };
+    }
+  }
+
+  return {
+    parent_url:null,
+    group_name:cleanText(
+      product&&product.category_name||
+      product&&product.category||
+      "Chưa phân nhóm"
+    ),
+    evidence:"unmapped"
+  };
+}
+
+async function persistWinmartResponse(env,job,requestId,raw){
+  const response=raw&&raw.winmart_response||{};
+  const inputUrl=canonicalWinmart(
+    raw&&raw.input_url||
+    job&&job.input_url||
+    job&&job.canonical_url
+  );
+  const checked=String(
+    raw&&raw.checked_at||
+    response.checked_at||
+    new Date().toISOString()
+  );
+  const storeCode=cleanText(
+    response.store_code||
+    new URL(inputUrl).searchParams.get("storeCode")||
+    ""
+  );
+  const taxonomy=await loadBhxTaxonomyForWinmart(env);
+  const products=Array.isArray(response.products)?response.products:[];
+  const normalized=[];
+  let mapped=0;
+  let unmapped=0;
+
+  for(const rawProduct of products){
+    const name=cleanText(
+      rawProduct&&(
+        rawProduct.name||
+        rawProduct.product_name||
+        rawProduct.title
+      )||""
+    );
+    const current=parseMoney(
+      rawProduct&&(
+        rawProduct.current_price||
+        rawProduct.sale_price||
+        rawProduct.price
+      )
+    );
+    if(!name||!current)continue;
+
+    let productUrl;
+    try{
+      const candidate=new URL(
+        String(rawProduct.url||rawProduct.link||""),
+        inputUrl
+      );
+      if(storeCode&&!candidate.searchParams.get("storeCode")){
+        candidate.searchParams.set("storeCode",storeCode);
+      }
+      productUrl=canonicalWinmart(candidate.toString());
+    }catch{
+      continue;
+    }
+
+    const originalRaw=parseMoney(
+      rawProduct.original_price||
+      rawProduct.list_price||
+      rawProduct.base_price
+    );
+    const original=originalRaw&&originalRaw>current?originalRaw:null;
+    const unit=winmartLeafUnit(rawProduct);
+    const packaging=cleanText(rawProduct.packaging||unit||"");
+    const hierarchy={
+      keep:true,reason:"",
+      label1:"",qty1:0,
+      label2:"",qty2:0,
+      label3:unit,qty3:unit?1:0,
+      evidence:unit?"winmart_leaf":"",
+      locked:Boolean(unit)
+    };
+    const comparison=comparisonData({
+      name,
+      url:productUrl,
+      packagingText:packaging,
+      featureText:"",
+      packCount:1,
+      packUnit:unit,
+      current,
+      sysPrice:original||current,
+      discount:0,
+      promoText:cleanText(rawProduct.promotion_text||""),
+      hierarchy
+    });
+    const tax=matchBhxTaxonomyForWinmart(rawProduct,taxonomy);
+    if(tax.parent_url)mapped+=1;
+    else unmapped+=1;
+
+    const brand=cleanText(rawProduct.brand||rawProduct.brand_name||"");
+    const image=String(rawProduct.image||rawProduct.image_url||"").trim();
+    const promoText=cleanText(rawProduct.promotion_text||"");
+    const id=await upsertLink(env,{
+      canonical_url:productUrl,
+      source:"WinMart",
+      link_type:"product",
+      parent_url:tax.parent_url,
+      group_name:tax.group_name,
+      branch_name:brand,
+      name,
+      packaging,
+      current_price:current,
+      original_price:original,
+      promotion_price:null,
+      promotion_text:promoText,
+      last_checked_at:checked,
+      last_status:"ok",
+      last_request_id:requestId
+    });
+
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO price_snapshots(link_id,request_id,checked_at,current_price,original_price,promotion_price,promotion_text,result_json) VALUES(?,?,?,?,?,?,?,?)"
+    ).bind(
+      id,requestId,checked,current,original,null,promoText,
+      JSON.stringify({
+        source:"WinMart",
+        category:tax.group_name,
+        taxonomy_evidence:tax.evidence,
+        raw:rawProduct
+      })
+    ).run();
+
+    if(image){
+      await persistLinkAsset(env,productUrl,image,checked);
+    }
+    await persistLinkComparison(env,productUrl,comparison,checked);
+    await persistLinkHierarchy(env,productUrl,hierarchy,checked);
+
+    normalized.push({
+      source:{key:"winmart",name:"WinMart",host:"winmart.vn"},
+      group:tax.group_name,
+      branch:brand,
+      name,
+      packaging:{text:packaging},
+      hierarchy,
+      comparison,
+      price:{current,original},
+      promotion:{active:false,price:null,text:promoText},
+      url:productUrl,
+      image,
+      taxonomy_match:tax.evidence,
+      winmart_category:cleanText(
+        rawProduct.category_name||rawProduct.category||""
+      ),
+      last_checked_at:checked
+    });
+  }
+
+  const categoryName=cleanText(
+    response.category_name||
+    slugTitle(inputUrl)||
+    "WinMart"
+  );
+  await upsertLink(env,{
+    canonical_url:inputUrl,
+    source:"WinMart",
+    link_type:"category",
+    parent_url:null,
+    group_name:categoryName,
+    branch_name:"",
+    name:categoryName,
+    packaging:"",
+    last_checked_at:checked,
+    last_status:"ok",
+    last_request_id:requestId
+  });
+
+  const payload={
+    schema_version:20,
+    request_id:requestId,
+    input_url:inputUrl,
+    input_type:"category",
+    checked_at:checked,
+    source:{key:"winmart",name:"WinMart",host:"winmart.vn"},
+    category_name:categoryName,
+    store_code:storeCode,
+    products:normalized,
+    variants:[],
+    discovered_links:normalized.map(x=>x.url),
+    child_count:normalized.length,
+    mapped_to_bhx:mapped,
+    unmapped_to_bhx:unmapped
+  };
+  const resultJson=JSON.stringify(payload);
+  await env.DB.prepare(
+    "UPDATE jobs SET link_type='category',status='complete',result_json=?,error=NULL,updated_at=? WHERE request_id=?"
+  ).bind(resultJson,new Date().toISOString(),requestId).run();
+
+  const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
+  return {
+    payload,
+    registry_count:Number(count&&count.n||0),
+    mapped_to_bhx:mapped,
+    unmapped_to_bhx:unmapped
+  };
+}
+
 async function handleCreate(request,env,origin){
   let body;
   try{body=await request.json();}
   catch{return json({error:"invalid_json"},400,origin);}
 
   let url;
-  try{url=canonicalBhx(body.url);}
-  catch{return json({error:"invalid_bhx_url"},400,origin);}
+  let sourceKey;
+  try{
+    url=canonicalSource(body.url);
+    sourceKey=sourceKeyForUrl(url);
+  }catch{
+    return json({error:"unsupported_source_url"},400,origin);
+  }
 
   const force=Boolean(body&&body.force);
   const cached=force?null:await loadFreshCache(env,url);
   if(cached){
-    await repairCachedGraph(env,cached.payload);
+    if(sourceKey==="bachhoaxanh"){
+      await repairCachedGraph(env,cached.payload);
+    }
     const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
     return json({
       request_id:cached.payload.request_id||"",
@@ -1666,7 +2016,7 @@ async function handleCreate(request,env,origin){
     requestId,url,url,initialType,"queued",now,now
   ).run();
 
-  const initialParent=initialType==="product"
+  const initialParent=sourceKey==="bachhoaxanh"&&initialType==="product"
     ?sourceParentUrl(url)
     :null;
 
@@ -1678,7 +2028,7 @@ async function handleCreate(request,env,origin){
 
   await upsertLink(env,{
     canonical_url:url,
-    source:"Bách Hóa XANH",
+    source:sourceNameForKey(sourceKey),
     link_type:initialType,
     parent_url:initialParent,
     name:"",
@@ -1700,7 +2050,9 @@ async function handleCreate(request,env,origin){
   }
 
   try{
-    const r=await dispatchGithub(env,browserBhxUrl(url),requestId);
+    const r=await dispatchGithub(
+      env,browserSourceUrl(url),requestId,sourceKey
+    );
     if(!r.ok){
       const detail=(await r.text()).slice(0,900);
       throw new Error("github_dispatch_"+r.status+":"+detail);
@@ -1711,7 +2063,9 @@ async function handleCreate(request,env,origin){
       status:"queued",
       input_url:url,
       link_type:initialType,
-      engine:"brightdata-browser-api"
+      engine:sourceKey==="winmart"
+        ?"brightdata-browser-winmart"
+        :"brightdata-browser-api"
     },202,origin);
   }catch(error){
     const detail=String(error&&error.message||error).slice(0,1000);
@@ -1802,8 +2156,18 @@ async function handleComplete(request,env){
     return json({status:"error",error:message},200,"");
   }
 
+  if(raw.winmart_response){
+    const saved=await persistWinmartResponse(env,job,id,raw);
+    return json({
+      status:"complete",
+      ...saved,
+      engine:raw.engine||"brightdata-browser-winmart",
+      country:raw.country||""
+    },200,"");
+  }
+
   if(!raw.bhx_response||!raw.bhx_response.data){
-    return json({error:"missing_bhx_response"},400,"");
+    return json({error:"missing_source_response"},400,"");
   }
 
   const inputUrl=raw.input_url||job.input_url||job.canonical_url;
@@ -1877,6 +2241,16 @@ async function handleResult(url,env,origin){
         },200,origin);
       }
 
+      if(raw.winmart_response){
+        const saved=await persistWinmartResponse(env,job,id,raw);
+        return json({
+          status:"complete",
+          ...saved,
+          engine:raw.engine||"brightdata-browser-winmart",
+          country:raw.country||""
+        },200,origin);
+      }
+
       if(raw.bhx_response&&raw.bhx_response.data){
         const inputUrl=raw.input_url||job.input_url||job.canonical_url;
         const kind=raw.kind||job.link_type;
@@ -1935,7 +2309,7 @@ async function getPreference(env,url){
 }
 
 async function setPreference(env,url,state,refreshHours){
-  const normalized=canonicalBhx(url);
+  const normalized=canonicalSource(url);
   const allowed=new Set(["normal","watch","hidden"]);
   if(!allowed.has(state))throw new Error("invalid_preference_state");
 
@@ -1965,8 +2339,8 @@ async function handlePreference(request,env,origin){
   catch{return json({error:"invalid_json"},400,origin);}
 
   let url;
-  try{url=canonicalBhx(body.url);}
-  catch{return json({error:"invalid_bhx_url"},400,origin);}
+  try{url=canonicalSource(body.url);}
+  catch{return json({error:"invalid_source_url"},400,origin);}
 
   const link=await env.DB.prepare(
     "SELECT canonical_url FROM links WHERE canonical_url=? LIMIT 1"
@@ -2436,15 +2810,12 @@ async function handleLibrary(url,env,origin){
         quantity_offer_total_price:fresh.quantity_offer_total_price
       };
     });
-    if(view==="search"){
-      products=products.filter(x=>isCategoryRootUrl(x.parent_url||""));
-    }
     return json({products},200,origin);
   }
 
   if(view==="item"){
     let itemUrl;
-    try{itemUrl=canonicalBhx(url.searchParams.get("url")||"");}
+    try{itemUrl=canonicalSource(url.searchParams.get("url")||"");}
     catch{return json({error:"invalid_url"},400,origin);}
 
     const cached=await env.DB.prepare(
@@ -2518,7 +2889,9 @@ async function handleLibrary(url,env,origin){
     });
 
     const main={
-      source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+      source:String(row.source||"").toLowerCase().includes("winmart")
+        ?{key:"winmart",name:"WinMart",host:"winmart.vn"}
+        :{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
       group:row.group_name||"",
       branch:row.branch_name||"",
       name:row.name||slugTitle(itemUrl),
@@ -2581,7 +2954,7 @@ async function handleLinks(url,env,origin){
   }
   if(parent){
     sql+=" AND l.parent_url=?";
-    binds.push(canonicalBhx(parent));
+    binds.push(canonicalSource(parent));
   }
   if(q){
     sql+=`

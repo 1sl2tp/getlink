@@ -714,10 +714,18 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     if detail_image:
                         product["image"] = detail_image
 
-            # Enrich every product so the detail "Chọn loại" can override
-            # a misleading unit in the title, while using small batches.
-            for start in range(0, len(products), 40):
-                await enrich_detail_batch(products[start:start + 40])
+            # Only open detail HTML when the listing/API still lacks a
+            # reliable retail unit or a real image. Most WinMart rows already
+            # expose these on the category page; avoiding 200+ detail fetches
+            # keeps the total-category GET fast. When detail is fetched,
+            # "Chọn loại" remains authoritative and overrides guesses.
+            detail_candidates = [
+                p for p in products
+                if not normalize_unit(p.get("unit") or "")
+                or not image_url(p.get("image") or "", p.get("url") or target_url)
+            ]
+            for start in range(0, len(detail_candidates), 40):
+                await enrich_detail_batch(detail_candidates[start:start + 40])
 
             return {
                 "category_name": root_label,

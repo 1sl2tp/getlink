@@ -41,9 +41,16 @@ assert.equal(money(0),"—");
   assert.equal(
     rowCartonStartText({
       name:"24 lon cà phê sữa Highlands 235ml",
-      canonical_url:"https://bachhoaxanh.com/ca-phe/ca-phe-sua-highlands-235ml-thung"
+      canonical_url:"https://www.bachhoaxanh.com/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml"
     }),
     "thung"
+  );
+  assert.equal(
+    rowCartonStartText({
+      name:"6 lon cà phê sữa Highlands 235ml",
+      canonical_url:"https://www.bachhoaxanh.com/ca-phe-lon/6-lon-ca-phe-sua-highlands-235ml"
+    }),
+    ""
   );
   assert.equal(
     rowCartonStartText({name:"6 lon cà phê sữa Highlands 235ml"}),

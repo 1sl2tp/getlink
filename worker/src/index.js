@@ -1852,7 +1852,11 @@ async function persistWinmartResponse(env,job,requestId,raw){
       label1:"",qty1:0,
       label2:"",qty2:0,
       label3:unit,qty3:unit?1:0,
-      evidence:unit?"winmart_leaf":"",
+      evidence:unit
+        ?(String(rawProduct.unit_evidence||"")==="detail_type"
+          ?"winmart_detail_type"
+          :"winmart_leaf")
+        :"",
       locked:Boolean(unit)
     };
     const size=parseSize(name);

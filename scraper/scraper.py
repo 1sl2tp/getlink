@@ -471,7 +471,7 @@ def merge_product(old, observed, my_price=None, watch_override=None):
     return merged
 
 
-def save_db(db):
+def save_db(db, latest_url=None):
     DATA_DIR.mkdir(exist_ok=True)
     db["schema_version"] = 2
     db["updated_at"] = now_iso()
@@ -485,7 +485,13 @@ def save_db(db):
     )
     PRODUCTS_JSON.write_text(json.dumps(db, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    latest = db["products"][-1] if db["products"] else None
+    latest = None
+    if latest_url:
+        target = canonical_url(latest_url)
+        latest = next(
+            (p for p in db["products"] if canonical_url(p.get("url", "")) == target),
+            None,
+        )
     LATEST_JSON.write_text(
         json.dumps(
             {"updated_at": db["updated_at"], "product": latest},
@@ -564,7 +570,8 @@ async def main_async(args):
         )
 
     db["products"] = list(by_url.values())
-    save_db(db)
+    latest_url = observations[-1]["url"] if observations else None
+    save_db(db, latest_url=latest_url)
     print("updated_products=", len(observations))
     print("total_products=", len(db["products"]))
     return len(observations)

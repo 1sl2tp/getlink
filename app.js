@@ -581,30 +581,19 @@ function inferSheetPack(row){
 function simpleRowPrice(row){
   const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
-  const rowStartsCarton=/^thùng\b/iu.test(rawName);
 
-  let cartonPrice=Number(row.carton_price||0);
-  let cartonQty=Math.max(1,Number(row.carton_quantity)||0);
-  let cartonUnit=String(row.carton_unit||"").trim();
-
-  if(!cartonPrice&&rowStartsCarton){
-    cartonPrice=Number(
-      row.promo_pack_price||
-      row.current_price||
-      row.regular_pack_price||
-      row.original_price||
-      0
-    );
-    cartonQty=Math.max(1,Number(inferred.qty)||1);
-    cartonUnit=inferred.unit||"đơn vị";
-  }
-
+  // Carton is authoritative only when the API library exposes a carton
+  // variant whose BHX-visible title/packaging explicitly starts with "Thùng".
+  const cartonPrice=Number(row.carton_price||0);
+  const cartonQty=Number(row.carton_quantity)||0;
+  const cartonUnit=String(row.carton_unit||"").trim();
   const hasCarton=cartonPrice>0;
+
   let retailPrice=Number(row.retail_price||0);
   let retailUnit=String(row.retail_unit||"").trim();
 
-  // If there is no detail variant yet, a non-carton row itself is the retail row.
-  if(!retailPrice&&!rowStartsCarton){
+  // No explicit carton in detail => the row is retail by default.
+  if(!retailPrice&&!hasCarton){
     retailPrice=Number(
       row.promo_pack_price||
       row.current_price||
@@ -615,7 +604,7 @@ function simpleRowPrice(row){
     retailUnit=inferred.unit||"đơn vị";
   }
 
-  // Only as a fallback for a carton-only row, expose a calculated retail figure.
+  // Explicit carton + known carton quantity may be normalized to retail.
   if(!retailPrice&&hasCarton&&cartonQty>1){
     retailPrice=Math.round(cartonPrice/cartonQty);
     retailUnit=cartonUnit||"đơn vị";
@@ -628,7 +617,7 @@ function simpleRowPrice(row){
     cartonQty,
     cartonUnit:cartonUnit||"đơn vị",
     retailPrice,
-    retailUnit:retailUnit||cartonUnit||"đơn vị"
+    retailUnit:retailUnit||cartonUnit||inferred.unit||"đơn vị"
   };
 }
 
@@ -648,11 +637,11 @@ function productCard(row){
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
-    'data-pack-qty="'+simple.cartonQty+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
+    'data-pack-qty="'+(simple.cartonQty||0)+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
       '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(simple.rawName)+'</button>'+
       '</td>'+
-      '<td class="xls-qc">'+(simple.hasCarton?escapeHtml(simple.cartonQty+" "+simple.cartonUnit):"—")+'</td>'+
+      '<td class="xls-qc">'+(simple.hasCarton&&simple.cartonQty>0?escapeHtml(simple.cartonQty+" "+simple.cartonUnit):"—")+'</td>'+
       '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
       '<td class="xls-num">'+money(simple.retailPrice)+'</td>'+
       '<td>'+

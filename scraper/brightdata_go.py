@@ -221,6 +221,57 @@ async def extract_products(page, category_label: str):
     return rows or []
 
 
+async def click_load_more_products(page) -> bool:
+    # GO! does not infinite-scroll the whole category. It appends the next
+    # batch only after clicking the visible "Xem thêm sản phẩm" control.
+    patterns = [
+        re.compile(r"^\s*Xem\s+thêm\s+sản\s+phẩm\s*$", re.I),
+        re.compile(r"^\s*Xem\s+thêm\s*$", re.I),
+    ]
+    for pattern in patterns:
+        locator = page.get_by_text(pattern)
+        try:
+            count = await locator.count()
+        except Exception:
+            count = 0
+        for i in range(count):
+            el = locator.nth(i)
+            try:
+                if not await el.is_visible():
+                    continue
+                await el.scroll_into_view_if_needed(timeout=3000)
+                await page.wait_for_timeout(150)
+                await el.click(timeout=5000)
+                await page.wait_for_timeout(1100)
+                return True
+            except Exception:
+                continue
+
+    # Fallback for sites wrapping the label in nested spans.
+    try:
+        clicked = await page.evaluate(
+            """() => {
+              const clean=v=>String(v||"").replace(/\s+/g," ").trim();
+              const nodes=[...document.querySelectorAll("button,a,[role='button']")];
+              const hit=nodes.find(el =>
+                /^Xem thêm sản phẩm$/i.test(clean(el.innerText||el.textContent)) &&
+                el.getBoundingClientRect().width>0 &&
+                el.getBoundingClientRect().height>0
+              );
+              if(!hit)return false;
+              hit.scrollIntoView({block:"center"});
+              hit.click();
+              return true;
+            }"""
+        )
+        if clicked:
+            await page.wait_for_timeout(1100)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 async def capture_go(ws_url: str, target_url: str) -> dict:
     async with async_playwright() as pw:
         browser = await pw.chromium.connect_over_cdp(ws_url, timeout=60000)
@@ -235,9 +286,18 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
             previous_count = -1
             previous_height = -1
 
-            for _ in range(28):
+            load_more_clicks = 0
+            for _ in range(60):
                 for row in await extract_products(page, category_label):
                     products[row["url"]] = row
+
+                clicked_more = await click_load_more_products(page)
+                if clicked_more:
+                    load_more_clicks += 1
+                    stable = 0
+                    previous_count = len(products)
+                    previous_height = -1
+                    continue
 
                 try:
                     height = await page.evaluate(
@@ -248,7 +308,7 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
                     )
                 except Exception:
                     height = previous_height
-                await page.wait_for_timeout(900)
+                await page.wait_for_timeout(800)
 
                 count = len(products)
                 if count == previous_count and height == previous_height:
@@ -257,8 +317,13 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
                     stable = 0
                 previous_count = count
                 previous_height = height
-                if stable >= 4:
+                if stable >= 3:
                     break
+
+            print(json.dumps({
+                "go_products_loaded": len(products),
+                "go_load_more_clicks": load_more_clicks,
+            }, ensure_ascii=False))
 
             if not products:
                 raise RuntimeError("go_no_products_captured")

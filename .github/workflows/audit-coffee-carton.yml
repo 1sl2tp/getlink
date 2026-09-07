@@ -1,0 +1,67 @@
+name: Audit coffee carton ingestion
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/audit-coffee-carton.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+      CATEGORY: "https://bachhoaxanh.com/ca-phe-lon"
+
+    steps:
+      - name: Force GETLINK category refresh
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --silent --show-error --fail             -H "Content-Type: application/json"             --data '{"url":"https://bachhoaxanh.com/ca-phe-lon","force":true}'             "$API/api/get-price")"
+          echo "$RESPONSE" | jq .
+          REQUEST_ID="$(echo "$RESPONSE" | jq -r '.request_id // empty')"
+          test -n "$REQUEST_ID"
+          echo "REQUEST_ID=$REQUEST_ID" >> "$GITHUB_ENV"
+
+      - name: Wait for GETLINK completion
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 120); do
+            RESPONSE="$(curl --silent --show-error --fail               "$API/api/result?request_id=$REQUEST_ID")"
+            STATUS="$(echo "$RESPONSE" | jq -r '.status // empty')"
+            echo "[$i] $STATUS"
+            if [ "$STATUS" = "complete" ]; then
+              echo "$RESPONSE" > /tmp/result.json
+              jq '{status,payload:{schema_version:.payload.schema_version,filter_summary:.payload.filter_summary,child_count:.payload.child_count}}' /tmp/result.json
+              exit 0
+            fi
+            if [ "$STATUS" = "error" ]; then
+              echo "$RESPONSE" | jq .
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "Timeout waiting for GETLINK"
+          exit 1
+
+      - name: Verify Highlands carton survived ingestion
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail             "$API/api/library?view=products&parent=https%3A%2F%2Fbachhoaxanh.com%2Fca-phe-lon&limit=500&include_hidden=1"             > /tmp/coffee.json
+
+          jq '[.products[] | select((.name|ascii_downcase|contains("highlands")) and (.name|ascii_downcase|contains("235ml")))]' /tmp/coffee.json
+
+          MATCH="$(jq '[.products[] | select(
+            (.canonical_url|ascii_downcase|contains("thung-24-lon-ca-phe-sua-highlands-235ml"))
+            and (.pack_kind=="Thùng")
+            and ((.pack_quantity|tonumber)==24)
+            and (.pack_unit=="Lon")
+          )] | length' /tmp/coffee.json)"
+
+          test "$MATCH" -ge 1
+          echo "PASS: Highlands 24 lon is persisted as Thùng 24 Lon."

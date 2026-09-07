@@ -570,10 +570,15 @@ function inferSheetPack(row){
     .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const namePlain=plainOf(primary);
   const packagingPlain=plainOf(packaging);
+  const nameRaw=String(primary||"").toLowerCase();
+  const packagingRaw=String(packaging||"").toLowerCase();
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|loc|khoanh|thanh|cay|vien|tuyp";
-  const unitRe=new RegExp("\\b("+unitPattern+")\\b");
+  // Accent-sensitive retail-unit detection avoids collisions such as
+  // Vietnamese "lớn" -> "lon" after accent stripping.
+  const rawUnitPattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
+  const rawUnitRe=new RegExp("\\b("+rawUnitPattern+")\\b","iu");
 
   // Same priority as the Worker:
   // Thùng -> structural retail QC in name -> explicit retail unit in name
@@ -599,8 +604,8 @@ function inferSheetPack(row){
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
 
-  const nameUnit=namePlain.match(unitRe);
-  const packagingUnit=packagingPlain.match(unitRe);
+  const nameUnit=nameRaw.match(rawUnitRe);
+  const packagingUnit=packagingRaw.match(rawUnitRe);
 
   let qty=1;
   let unit="";

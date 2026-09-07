@@ -721,49 +721,6 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                 "missing_detail_units": len(products) - detail_unit_count,
             }, ensure_ascii=False))
 
-            return {url:item.url,unit,image};
-                            } catch {
-                              return {url:item.url};
-                            }
-                          };
-                          const out = [];
-                          for (let i=0;i<items.length;i+=12) {
-                            const part = await Promise.all(items.slice(i,i+12).map(one));
-                            out.push(...part);
-                          }
-                          return out;
-                        }""",
-                        payload,
-                    )
-                except Exception:
-                    return
-
-                by_url = {
-                    str(row.get("url") or ""): row
-                    for row in rows or []
-                    if row and row.get("url")
-                }
-                for product in batch:
-                    row = by_url.get(str(product.get("url") or ""))
-                    if not row:
-                        continue
-                    detail_unit = normalize_unit(row.get("unit") or "")
-                    if detail_unit:
-                        # Authoritative: the visible "Chọn loại" button wins.
-                        product["unit"] = detail_unit
-                        product["unit_evidence"] = "detail_type"
-                        product["packaging"] = detail_unit
-                    detail_image = image_url(row.get("image") or "", product.get("url") or target_url)
-                    if detail_image:
-                        product["image"] = detail_image
-
-            # Every product must be checked against the detail-page
-            # "Chọn loại" control. This is the only authoritative WinMart
-            # retail unit source; titles such as "... gói 2kg" are descriptive
-            # text only and must never define the unit.
-            for start in range(0, len(products), 48):
-                await enrich_detail_batch(products[start:start + 48])
-
             return {
                 "category_name": root_label,
                 "store_code": store_code,

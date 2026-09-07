@@ -38,7 +38,9 @@ function canonical(url){
     if(host==="winmart.vn"){
       const out=new URL("https://winmart.vn"+path);
       const store=u.searchParams.get("storeCode");
+      const cate2=u.searchParams.get("cate2");
       if(store)out.searchParams.set("storeCode",store);
+      if(cate2)out.searchParams.set("cate2",cate2);
       return out.toString().replace(/\?$/,"").toLowerCase();
     }
     return (u.origin+path).toLowerCase();
@@ -1394,11 +1396,11 @@ async function pollOnce(){
       }else if(data.status==="runner"){
         setJobStage("runner","Đang khởi tạo phiên lấy dữ liệu...");
       }else if(data.status==="brightdata"){
-        setJobStage("brightdata","Đang truy xuất dữ liệu từ Bách Hóa XANH...");
+        setJobStage("brightdata","Đang truy xuất dữ liệu từ "+(inputSourceName(wantedUrl)||"nguồn")+"...");
       }else if(data.status==="saving"){
         setJobStage("saving","Đã có response · đang chuẩn hóa và lưu vào D1...");
       }else if(data.status==="running"){
-        setJobStage("brightdata","Đang xử lý response API Bách Hóa XANH...");
+        setJobStage("brightdata","Đang xử lý response từ "+(inputSourceName(wantedUrl)||"nguồn")+"...");
       }else{
         setJobStage("queued","Đang chờ tiến trình lấy giá...");
       }
@@ -1434,11 +1436,29 @@ function startPolling(){
   },2500);
 }
 
+function supportedSourceUrl(raw){
+  try{
+    const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
+    return host==="bachhoaxanh.com"||host==="winmart.vn";
+  }catch{
+    return false;
+  }
+}
+
+function inputSourceName(raw){
+  try{
+    const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
+    return host==="winmart.vn"?"WinMart":"Bách Hóa XANH";
+  }catch{
+    return "";
+  }
+}
+
 $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
-  if(!/^https?:\/\/(www\.)?bachhoaxanh\.com\//i.test(url)){
-    setJobStage("error","Link chưa đúng bachhoaxanh.com.");
+  if(!supportedSourceUrl(url)){
+    setJobStage("error","Chỉ hỗ trợ link bachhoaxanh.com hoặc winmart.vn.");
     return;
   }
   if(!API){

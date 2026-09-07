@@ -751,6 +751,7 @@ async function handleCreate(request,env,origin){
   const requestId=crypto.randomUUID().replace(/-/g,"");
   const now=new Date().toISOString();
   const initialType=heuristicType(url);
+  const diagnostics=[];
 
   await env.DB.prepare(`
     INSERT INTO jobs(request_id,input_url,canonical_url,link_type,status,created_at,updated_at)
@@ -781,7 +782,7 @@ async function handleCreate(request,env,origin){
       engine:"bhx-api"
     },200,origin);
   }catch(apiError){
-    // BHX có thể chặn một số datacenter; thử qua Supabase edge trước.
+    diagnostics.push("bhx-api:"+String(apiError&&apiError.message||apiError).slice(0,220));
   }
 
   try{
@@ -797,7 +798,7 @@ async function handleCreate(request,env,origin){
       engine:"supabase-bhx-api"
     },200,origin);
   }catch(supabaseError){
-    // Live API vẫn bị chặn; dùng snapshot công khai chỉ để có dữ liệu fallback minh bạch.
+    diagnostics.push("supabase:"+String(supabaseError&&supabaseError.message||supabaseError).slice(0,220));
   }
 
   try{
@@ -814,7 +815,7 @@ async function handleCreate(request,env,origin){
       snapshot_date:mirrorPayload.snapshot_date
     },200,origin);
   }catch(mirrorError){
-    // Không có snapshot phù hợp thì tiếp tục Browser/GitHub fallback.
+    diagnostics.push("snapshot:"+String(mirrorError&&mirrorError.message||mirrorError).slice(0,220));
   }
 
   try{
@@ -890,7 +891,8 @@ async function handleCreate(request,env,origin){
         input_url:url,
         link_type:initialType,
         engine:"github",
-        browser_error:browserError
+        browser_error:browserError,
+        detail:diagnostics.concat(["browser:"+browserError]).join(" | ").slice(0,1200)
       },202,origin);
     }catch(dispatchError){
       const detail=String(dispatchError&&dispatchError.message||dispatchError).slice(0,900);

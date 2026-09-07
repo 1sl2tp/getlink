@@ -1,0 +1,80 @@
+name: BHX price tracker
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "URL sản phẩm hoặc danh mục Bách Hóa XANH"
+        required: true
+        type: string
+      my_price:
+        description: "Giá của mình (chỉ áp dụng khi URL trả về 1 sản phẩm)"
+        required: false
+        type: string
+      watch:
+        description: "Trạng thái theo dõi"
+        required: true
+        default: keep
+        type: choice
+        options:
+          - keep
+          - "true"
+          - "false"
+      max_products:
+        description: "Tối đa sản phẩm nếu nhập URL danh mục"
+        required: true
+        default: "40"
+        type: string
+  schedule:
+    - cron: "30 1 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: getlink-price-tracker
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install -r scraper/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Verify helpers
+        run: python -m unittest discover -s tests -v
+      - name: Scrape manual URL
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          INPUT_URL: ${{ inputs.url }}
+          INPUT_MY_PRICE: ${{ inputs.my_price }}
+          INPUT_WATCH: ${{ inputs.watch }}
+          INPUT_MAX: ${{ inputs.max_products }}
+        run: |
+          python scraper/scraper.py \
+            --url "$INPUT_URL" \
+            --my-price "$INPUT_MY_PRICE" \
+            --watch "$INPUT_WATCH" \
+            --max-products "$INPUT_MAX"
+      - name: Refresh watchlist
+        if: github.event_name == 'schedule'
+        run: python scraper/scraper.py --watchlist --max-products 100
+      - name: Commit data
+        run: |
+          git config user.name "getlink-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/products.json data/products.csv
+          if git diff --cached --quiet; then
+            echo "No data changes"
+            exit 0
+          fi
+          git commit -m "data: refresh BHX prices"
+          git push origin HEAD:main

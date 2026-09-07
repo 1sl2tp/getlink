@@ -10,25 +10,25 @@
 <main class="wrap">
   <header>
     <div class="logo">GL</div>
-    <div><h1>GETLINK</h1><p>Lấy giá Bách Hóa XANH từ link sản phẩm</p></div>
+    <div><h1>GETLINK</h1><p>Lấy giá Bách Hóa XANH từ link nhóm hoặc link chi tiết</p></div>
   </header>
 
   <section class="card">
-    <label for="url">Link sản phẩm</label>
+    <label for="url">Link Bách Hóa XANH</label>
     <div class="input-row">
       <input id="url" autocomplete="off" placeholder="https://www.bachhoaxanh.com/...">
       <button id="get" type="button">Lấy giá</button>
     </div>
-    <div id="status" class="status">Dán link sản phẩm rồi bấm Lấy giá.</div>
-    <div class="steps" id="steps" hidden>
-      <b>GitHub Actions đã mở.</b> Link đã được copy; dán vào ô URL → Run workflow. Khi quay lại đây, trang sẽ tự kiểm tra kết quả.
+    <div class="status-row">
+      <div id="status" class="status">Dán link rồi bấm Lấy giá.</div>
+      <div id="registryCount" class="registry-count"></div>
     </div>
   </section>
 
   <section class="card result" id="result" hidden>
     <div class="result-head">
       <div>
-        <small id="source">Bách Hóa XANH</small>
+        <div class="result-kicker"><span id="source">Bách Hóa XANH</span><span id="linkType" class="type-badge"></span></div>
         <h2 id="name"></h2>
       </div>
       <a id="productLink" target="_blank" rel="noopener">Mở link</a>
@@ -37,19 +37,27 @@
     <div class="meta-grid">
       <div><small>Nhóm</small><strong id="group">—</strong></div>
       <div><small>Nhánh</small><strong id="branch">—</strong></div>
-      <div><small>Quy cách</small><strong id="packaging">—</strong></div>
+      <div><small>Quy cách / số link</small><strong id="packaging">—</strong></div>
     </div>
 
-    <div class="price-grid">
+    <div class="price-grid" id="priceGrid">
       <div class="price"><small>1 · Giá của họ</small><strong id="webPrice">—</strong></div>
       <div class="price promo"><small>2 · Ưu đãi</small><strong id="promoPrice">—</strong><span id="promoText"></span></div>
       <div class="price mine"><small>3 · Giá của mình</small><input id="myPrice" inputmode="numeric" placeholder="Nhập giá"></div>
     </div>
 
-    <label class="watch"><input id="watch" type="checkbox"> Theo dõi sản phẩm này</label>
-    <div id="compare" class="compare"></div>
+    <div id="productPersonal">
+      <label class="watch"><input id="watch" type="checkbox"> Theo dõi sản phẩm này</label>
+      <div id="compare" class="compare"></div>
+    </div>
+
+    <div id="categoryChildren" class="children" hidden>
+      <div class="children-title"><strong>Link chi tiết đã phát hiện</strong><span id="childCount"></span></div>
+      <div id="childList" class="child-list"></div>
+    </div>
   </section>
 </main>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

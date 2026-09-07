@@ -64,8 +64,12 @@ function updateCompare(){
 $("#myPrice").addEventListener("input",()=>{saveLocal();updateCompare()});
 $("#watch").addEventListener("change",saveLocal);
 
-function renderProduct(p){
+
+function renderProduct(payload){
+  const p=payload&&payload.product?payload.product:payload;
   if(!p)return false;
+  const variants=Array.isArray(payload&&payload.variants)?payload.variants:[];
+
   $("#result").hidden=false;
   $("#priceGrid").hidden=false;
   $("#productPersonal").hidden=false;
@@ -76,14 +80,33 @@ function renderProduct(p){
   $("#group").textContent=p.group||"—";
   $("#branch").textContent=p.branch||"—";
   $("#packaging").textContent=(p.packaging&&p.packaging.text)||"—";
+
   const web=Number(p.price&&p.price.current||0);
   $("#webPrice").dataset.value=String(web||"");
   $("#webPrice").textContent=money(web);
+
   const promo=p.promotion||{};
   $("#promoPrice").textContent=promo.price?money(promo.price):(promo.active?"Có ưu đãi":"—");
   $("#promoText").textContent=promo.text||"";
   $("#productLink").href=p.url||"#";
   restoreLocal(p.url||wantedUrl);
+
+  if(variants.length){
+    $("#productVariants").hidden=false;
+    $("#variantCount").textContent=variants.length+" quy cách";
+    $("#variantList").innerHTML=variants.map(v=>{
+      const meta=v.variant||{};
+      const pack=(v.packaging&&v.packaging.text)||meta.title||"Quy cách";
+      const stock=meta.is_can_buy===false?" · Hết hàng":(meta.stock?" · Tồn "+meta.stock:"");
+      const href=escapeAttr(v.url||"#");
+      return '<a class="child-row" href="'+href+'" target="_blank" rel="noopener">'+
+        '<span><b>'+escapeHtml(pack)+'</b><small>'+escapeHtml(v.name||"")+'</small></span>'+
+        '<strong>'+money(v.price&&v.price.current)+escapeHtml(stock)+'</strong></a>';
+    }).join("");
+  }else{
+    $("#productVariants").hidden=true;
+    $("#variantList").innerHTML="";
+  }
   return true;
 }
 
@@ -93,6 +116,7 @@ function renderCategory(payload){
   $("#result").hidden=false;
   $("#priceGrid").hidden=true;
   $("#productPersonal").hidden=true;
+  $("#productVariants").hidden=true;
   $("#categoryChildren").hidden=false;
   $("#linkType").textContent="Link nhóm";
   $("#source").textContent=(payload.source&&payload.source.name)||"Bách Hóa XANH";
@@ -118,7 +142,7 @@ function renderPayload(payload){
     renderCategory(payload);
     return true;
   }
-  return renderProduct(payload.product||(Array.isArray(payload.products)?payload.products[0]:null));
+  return renderProduct(payload);
 }
 
 async function pollOnce(){
@@ -173,7 +197,7 @@ $("#get").addEventListener("click",async()=>{
   wantedUrl=url;
   $("#result").hidden=true;
   $("#get").disabled=true;
-  setStatus("Đang gửi yêu cầu lấy giá...");
+  setStatus("Đang gọi API Bách Hóa XANH...");
   try{
     const r=await fetch(API+"/api/get-price",{
       method:"POST",
@@ -193,15 +217,16 @@ $("#get").addEventListener("click",async()=>{
       return;
     }
 
-    localStorage.setItem("getlink:request-id",requestId);
-    if(data.engine==="github"){
-      setStatus("Bách Hóa XANH chặn kết nối trực tiếp. Đã chuyển sang luồng dự phòng, đang chờ kết quả...");
-    }else{
-      setStatus(data.link_type==="category"?"Đang quét link nhóm...":"Đang lấy giá sản phẩm...");
-    }
-    startPolling();
+    throw new Error(data.detail||data.error||"API chưa trả kết quả.");
   }catch(error){
-    setStatus("Không gửi được yêu cầu: "+String(error&&error.message||error));
+    const message=String(error&&error.message||error);
+    if(message.includes("bhx_credentials_missing")){
+      setStatus("GETLINK đã chuyển sang API. Cần cấu hình phiên BHX hợp lệ trước khi Lấy giá.");
+    }else if(message.includes("bhx_api_failed")){
+      setStatus("API BHX chưa trả dữ liệu. Phiên BHX có thể đã hết hạn hoặc bị giới hạn; cần cập nhật phiên API.");
+    }else{
+      setStatus("Không lấy được giá: "+message);
+    }
   }finally{
     $("#get").disabled=false;
   }

@@ -644,54 +644,27 @@ function productCard(row){
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
-  const watchTitle=pref==="watch"?"Bỏ quan tâm":"Đánh dấu quan tâm";
-  const watchNext=pref==="watch"?"normal":"watch";
-  const hideTitle=pref==="hidden"?"Hiện lại":"Ẩn khỏi thư viện";
-  const hideNext=pref==="hidden"?"normal":"hidden";
-
-  return '<div class="product-card compact-row '+(pref==="hidden"?"is-hidden ":"")+
+  return '<tr class="product-card xls-row '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
-    '" role="button" tabindex="0" '+
+    '" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+(simple.hasCarton?"Thùng":"Lẻ")+'" '+
     'data-pack-qty="'+simple.cartonQty+'" data-web-pack="'+simple.cartonPrice+'" data-web-unit="'+simple.retailPrice+'">'+
-
-    '<div class="compact-name">'+
-      '<div class="compact-title" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(simple.rawName)+'</div>'+
-      '<div class="compact-meta">'+
+      '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+escapeHtml(simple.rawName)+'</td>'+
+      '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
+      '<td class="xls-num">'+money(simple.retailPrice)+'</td>'+
+      '<td>'+
         (simple.hasCarton
-          ?'Thùng '+simple.cartonQty+' '+escapeHtml(simple.cartonUnit)
-          :'Lẻ')+
-      '</div>'+
-      '<div class="row-actions">'+
-        '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
-        '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="compact-price bhx-compact">'+
-      '<div><small>Thùng</small><strong>'+money(simple.cartonPrice)+'</strong></div>'+
-      '<div><small>Lẻ</small><strong>'+money(simple.retailPrice)+'</strong><em>/ '+escapeHtml(simple.retailUnit)+'</em></div>'+
-    '</div>'+
-
-    '<div class="compact-price mine-compact">'+
-      '<div>'+
-        '<small>Thùng</small>'+
-        (simple.hasCarton
-          ?'<input class="sheet-my-carton" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="Giá thùng">'
-          :'<strong class="muted-price">—</strong>')+
-      '</div>'+
-      '<div>'+
-        '<small>Lẻ</small>'+
-        '<input class="sheet-my-retail" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="'+
-          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail))+' từ thùng':'Giá lẻ')+'">'+
-      '</div>'+
-    '</div>'+
-
-    '<div class="bargain-cell">'+
-      '<input class="sheet-bargain" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Khách nhập">'+
-      '<small>/ '+escapeHtml(simple.hasCarton?"thùng":"lẻ")+'</small>'+
-    '</div>'+
-  '</div>';
+          ?'<input class="sheet-my-carton xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="—">'
+          :'<span class="xls-empty">—</span>')+
+      '</td>'+
+      '<td>'+
+        '<input class="sheet-my-retail xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="'+
+          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail)):'—')+'">'+
+      '</td>'+
+      '<td>'+
+        '<input class="sheet-bargain xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="—">'+
+      '</td>'+
+    '</tr>';
 }
 
 async function loadLibraryGroups(){
@@ -868,7 +841,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<div class="catalog-loading">Đang đọc thư viện D1...</div>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="6">Đang đọc thư viện D1...</td></tr>';
   $("#libraryEmpty").hidden=true;
   try{
     await ensureLibraryCache(force);

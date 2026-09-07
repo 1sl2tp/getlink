@@ -212,7 +212,7 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
   const original=cleanText(text||"");
   const plain=original.normalize("NFD")
     .replace(/[\u0300-\u036f]/g,"")
-    .replace(/đ/g,"d")
+    .replace(/đ/gi,"d")
     .toLowerCase();
 
   const unitPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";

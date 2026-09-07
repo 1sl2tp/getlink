@@ -1779,7 +1779,8 @@ function matchBhxTaxonomyForWinmart(product,taxonomy){
     product&&product.category||
     ""
   );
-  if(categoryKey){
+  const broadWinmartCategory=new Set(["gia vi","winmart"]);
+  if(categoryKey&&!broadWinmartCategory.has(categoryKey)){
     const exactCat=taxonomy.categoryByKey.get(categoryKey);
     if(exactCat){
       return {

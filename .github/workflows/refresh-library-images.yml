@@ -1,10 +1,6 @@
 name: Refresh GETLINK library images
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/refresh-library-images.yml"
   workflow_dispatch:
 
 permissions:

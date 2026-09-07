@@ -441,6 +441,50 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   return id;
 }
 
+
+async function persistDailyVariant(env,variantId,p,parentUrl,checked){
+  const cmp=p&&p.comparison||{};
+  const meta=p&&p.variant||{};
+  const snapshotDate=vnDate(checked);
+  const dailyId=await idForUrl(variantId+"|"+snapshotDate);
+  const now=new Date().toISOString();
+
+  await env.DB.prepare(`
+    INSERT INTO daily_variant_prices(
+      id,variant_id,parent_url,snapshot_date,product_name,packaging,
+      pack_quantity,pack_unit,size_value,size_unit,
+      regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price,
+      promotion_active,promotion_text,checked_at,raw_json,created_at,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(variant_id,snapshot_date) DO UPDATE SET
+      product_name=excluded.product_name,
+      packaging=excluded.packaging,
+      pack_quantity=excluded.pack_quantity,
+      pack_unit=excluded.pack_unit,
+      size_value=excluded.size_value,
+      size_unit=excluded.size_unit,
+      regular_pack_price=excluded.regular_pack_price,
+      promo_pack_price=excluded.promo_pack_price,
+      regular_unit_price=excluded.regular_unit_price,
+      promo_unit_price=excluded.promo_unit_price,
+      promotion_active=excluded.promotion_active,
+      promotion_text=excluded.promotion_text,
+      checked_at=excluded.checked_at,
+      raw_json=excluded.raw_json,
+      updated_at=excluded.updated_at
+  `).bind(
+    dailyId,variantId,parentUrl,snapshotDate,p.name||"",
+    p.packaging&&p.packaging.text||"",
+    Number(cmp.pack_quantity)||Number(meta.package_item_count)||1,
+    cmp.pack_unit||meta.package_item_unit||"",
+    cmp.size_value??null,cmp.size_unit||"",
+    cmp.regular_pack_price??null,cmp.promo_pack_price??null,
+    cmp.regular_unit_price??null,cmp.promo_unit_price??null,
+    cmp.promotion_active?1:0,cmp.promotion_text||"",
+    checked,JSON.stringify({comparison:cmp,variant:meta}),now,now
+  ).run();
+}
+
 async function persistVariant(env,p,parentUrl,requestId,checked){
   const meta=p&&p.variant||{};
   const variantUrl=canonicalBhx(p.url);
@@ -503,6 +547,10 @@ async function persistVariant(env,p,parentUrl,requestId,checked){
     meta.discount_percent??0,meta.stock??0,
     meta.is_can_buy?1:0,meta.po_date||"",JSON.stringify(meta.raw||{})
   ).run();
+
+  await persistDailyVariant(
+    env,id,p,parentUrl,p.last_checked_at||checked
+  );
 
   return id;
 }
@@ -577,6 +625,22 @@ async function handleCreate(request,env,origin){
   let url;
   try{url=canonicalBhx(body.url);}
   catch{return json({error:"invalid_bhx_url"},400,origin);}
+
+  const cached=await loadFreshCache(env,url);
+  if(cached){
+    const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
+    return json({
+      request_id:cached.payload.request_id||"",
+      status:"complete",
+      input_url:url,
+      link_type:cached.payload.input_type||heuristicType(url),
+      registry_count:Number(count&&count.n||0),
+      payload:cached.payload,
+      engine:"d1-cache",
+      cache_hit:true,
+      cache_age_seconds:cached.age_seconds
+    },200,origin);
+  }
 
   const requestId=crypto.randomUUID().replace(/-/g,"");
   const now=new Date().toISOString();

@@ -302,23 +302,34 @@ function renderProduct(payload){
   const cmp=p.comparison||{};
   activeComparison=cmp;
 
-  const regular=Number(cmp.regular_pack_price||p.price&&p.price.original||p.price&&p.price.current||0);
-  $("#webPrice").dataset.value=String(regular||"");
-  $("#webPrice").dataset.unitValue=String(cmp.regular_unit_price||0);
-  $("#webPrice").textContent=money(regular);
-  if(cmp.regular_unit_price){
-    $("#webPrice").textContent+=" · "+money(cmp.regular_unit_price)+"/"+unitLabel(cmp);
+  const currentBhx=Number(
+    p.price&&p.price.current||
+    cmp.regular_pack_price||
+    0
+  );
+  const currentUnit=Number(
+    cmp.regular_unit_price||
+    (currentBhx&&cmp.pack_quantity
+      ?Math.round(currentBhx/Math.max(1,Number(cmp.pack_quantity)||1))
+      :0)
+  );
+  $("#webPrice").dataset.value=String(currentBhx||"");
+  $("#webPrice").dataset.unitValue=String(currentUnit||0);
+  $("#webPrice").textContent=money(currentBhx);
+  if(currentUnit){
+    $("#webPrice").textContent+=" · "+money(currentUnit)+"/"+unitLabel(cmp);
   }
 
-  const promo=p.promotion||{};
-  const promoPack=Number(cmp.promo_pack_price||promo.price||0);
-  $("#promoPrice").textContent=promoPack
-    ?money(promoPack)
-    :(cmp.promotion_active||promo.active?"Có ưu đãi":"—");
-  if(cmp.promo_unit_price){
-    $("#promoPrice").textContent+=" · "+money(cmp.promo_unit_price)+"/"+unitLabel(cmp);
+  // "Ưu đãi" is only an extra quantity condition for this exact pack.
+  // A normal BHX markdown (e.g. 86k -> 65k) stays in Giá BHX as 65k.
+  const quantityPromo=Boolean(cmp.quantity_offer_active);
+  const promoPack=quantityPromo?Number(cmp.quantity_offer_pack_price||cmp.promo_pack_price||0):0;
+  const promoUnit=quantityPromo?Number(cmp.quantity_offer_unit_price||cmp.promo_unit_price||0):0;
+  $("#promoPrice").textContent=promoPack?money(promoPack):"—";
+  if(promoUnit){
+    $("#promoPrice").textContent+=" · "+money(promoUnit)+"/"+unitLabel(cmp);
   }
-  $("#promoText").textContent=cmp.promotion_text||promo.text||"";
+  $("#promoText").textContent=quantityPromo?(cmp.promotion_text||""):"";
   $("#productLink").href=p.url||payload.input_url||"#";
 
   wantedUrl=p.url||payload.input_url||wantedUrl;

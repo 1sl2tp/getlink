@@ -283,8 +283,8 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .bhx-pack strong,.bhx-unit strong{color:var(--green-strong)}
 .product-promo strong{color:var(--red)}
 .product-promo>span{color:#98a2b3}
-.mine-pack-cell{padding:6px 7px}
-.sheet-my-price{
+.mine-pack-cell,.mine-retail-cell{padding:6px 7px}
+.sheet-my-carton,.sheet-my-retail{
   width:100%;
   min-width:0;
   height:32px;
@@ -295,12 +295,14 @@ h1{margin:0;font-size:28px;line-height:1.1}
   outline:none;
   font-size:11px;
 }
-.sheet-my-price:focus{
+.sheet-my-carton:focus,.sheet-my-retail:focus{
   border-color:#9bcbb4;
   box-shadow:0 0 0 2px #0a8f4d0d;
 }
-.sheet-mine-unit{font-weight:750;color:#344054}
+.not-comparable{color:#98a2b3}
 .sheet-diff{font-weight:750;color:#475467}
+.sheet-diff span{display:block;white-space:nowrap}
+.sheet-diff span+span{margin-top:2px}
 .row-actions{
   display:flex;
   gap:4px;

@@ -351,6 +351,20 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
         "packaging": packaging,
         "category_name": category,
         "promotion_text": promo,
+
+        # Keep source identity fields untouched for the later matching layer.
+        # These are metadata only; the scraper must not use them to discard,
+        # merge or "correct" products.
+        "source_product_id": clean_text(obj.get("id") or ""),
+        "source_item_no": clean_text(obj.get("itemNo") or obj.get("item_no") or ""),
+        "source_sku": clean_text(obj.get("sku") or ""),
+        "barcode": clean_text(obj.get("barcode") or ""),
+        "source_seo_name": clean_text(obj.get("seoName") or ""),
+        "source_description": clean_text(obj.get("description") or ""),
+        "source_short_description": clean_text(obj.get("shortDescription") or ""),
+        "source_uom": clean_text(obj.get("uom") or ""),
+        "source_uom_name": clean_text(obj.get("uomName") or ""),
+        "source_quantity_per_unit": obj.get("quantityPerUnit"),
     }
 
 

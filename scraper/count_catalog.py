@@ -282,6 +282,48 @@ def valid_go_body(body) -> bool:
     )
 
 
+async def click_go_more(page) -> bool:
+    patterns = [
+        re.compile(r"^\\s*Xem\\s+thêm\\s+sản\\s+phẩm\\s*$", re.I),
+        re.compile(r"^\\s*Xem\\s+thêm\\s*$", re.I),
+    ]
+    for pattern in patterns:
+        locator = page.get_by_text(pattern)
+        try:
+            count = await locator.count()
+        except Exception:
+            count = 0
+        for i in range(count):
+            el = locator.nth(i)
+            try:
+                if not await el.is_visible():
+                    continue
+                await el.scroll_into_view_if_needed(timeout=3000)
+                await page.wait_for_timeout(120)
+                await el.click(timeout=5000)
+                return True
+            except Exception:
+                continue
+    try:
+        return bool(await page.evaluate(
+            """() => {
+              const clean=v=>String(v||"").replace(/\\s+/g," ").trim();
+              const nodes=[...document.querySelectorAll("button,a,[role='button']")];
+              const hit=nodes.find(el =>
+                /^(Xem thêm sản phẩm|Xem thêm)$/i.test(clean(el.innerText||el.textContent)) &&
+                el.getBoundingClientRect().width>0 &&
+                el.getBoundingClientRect().height>0
+              );
+              if(!hit)return false;
+              hit.scrollIntoView({block:"center"});
+              hit.click();
+              return true;
+            }"""
+        ))
+    except Exception:
+        return False
+
+
 async def count_go(ws_url: str, target_url: str) -> dict:
     started = time.monotonic()
     async with async_playwright() as pw:
@@ -293,30 +335,21 @@ async def count_go(ws_url: str, target_url: str) -> dict:
             tasks = set()
 
             async def consume(response):
-                try:
-                    if response.status != 200 or "/api/order2_listProduct" not in response.url:
-                        return
-                    body = await response.json()
-                    if not valid_go_body(body):
-                        return
-                    try:
-                        payload = response.request.post_data_json
-                    except Exception:
-                        payload = {}
-                    if not isinstance(payload, dict):
-                        payload = {}
-                    try:
-                        headers = await response.request.all_headers()
-                    except Exception:
-                        headers = {}
-                    await queue.put({
-                        "url": response.url,
-                        "body": body,
-                        "payload": payload,
-                        "headers": headers,
-                    })
-                except Exception:
+                if "/api/order2_listProduct" not in response.url:
                     return
+                event = {
+                    "url": response.url,
+                    "http": response.status,
+                    "body": None,
+                }
+                if response.status == 200:
+                    try:
+                        body = await response.json()
+                    except Exception:
+                        body = None
+                    if valid_go_body(body):
+                        event["body"] = body
+                await queue.put(event)
 
             def on_response(response):
                 task = asyncio.create_task(consume(response))
@@ -324,117 +357,70 @@ async def count_go(ws_url: str, target_url: str) -> dict:
                 task.add_done_callback(tasks.discard)
 
             page.on("response", on_response)
+            try:
+                await page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
+            except Exception:
+                pass
 
-            async def open_and_get_first():
-                while not queue.empty():
-                    try:
-                        queue.get_nowait()
-                    except Exception:
-                        break
-                try:
-                    await page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
-                except Exception:
-                    pass
-                return await wait_queue(
-                    queue,
-                    15,
-                    lambda ev: int(((ev.get("body") or {}).get("pagination") or {}).get("current_page") or 1) == 1,
-                )
-
-            first = await open_and_get_first()
-            pagination = first["body"].get("pagination") or {}
+            first = await wait_queue(
+                queue,
+                15,
+                lambda ev: (
+                    ev.get("http") == 200
+                    and isinstance(ev.get("body"), dict)
+                    and int(((ev["body"].get("pagination") or {}).get("current_page") or 1)) == 1
+                ),
+            )
+            first_body = first["body"]
+            pagination = first_body.get("pagination") or {}
             total_pages = max(1, int(pagination.get("total_pages") or 1))
             page_size = int(pagination.get("page_size") or 0)
-            first_page = int(pagination.get("current_page") or 1)
-            counts = {first_page: len(first["body"].get("products") or [])}
+            counts = {1: len(first_body.get("products") or [])}
+            errors = {}
 
-            def safe_fetch_headers(raw):
-                out = {}
-                for key, value in (raw or {}).items():
-                    low = str(key).lower()
-                    if low == "content-type" or low == "accept" or low.startswith("x-"):
-                        if str(value or "").strip():
-                            out[key] = str(value)
-                if not any(str(k).lower() == "content-type" for k in out):
-                    out["content-type"] = "application/json"
-                if not any(str(k).lower() == "accept" for k in out):
-                    out["accept"] = "application/json, text/plain, */*"
-                return out
+            while len(counts) < total_pages:
+                clicked = await click_go_more(page)
+                if not clicked:
+                    break
 
-            async def browser_fetch(event, n: int):
-                payload = dict(event.get("payload") or {})
-                payload["page"] = n
-                headers = safe_fetch_headers(event.get("headers") or {})
-                result = await page.evaluate(
-                    """async ({url,payload,headers}) => {
-                      try {
-                        const ctKey = Object.keys(headers).find(k => k.toLowerCase() === "content-type");
-                        const ct = ctKey ? String(headers[ctKey]).toLowerCase() : "application/json";
-                        let body;
-                        if (ct.includes("application/x-www-form-urlencoded")) {
-                          body = new URLSearchParams(Object.entries(payload).map(([k,v]) => [
-                            k,
-                            Array.isArray(v) ? JSON.stringify(v) : (v === null ? "" : String(v))
-                          ])).toString();
-                        } else {
-                          body = JSON.stringify(payload);
-                        }
-                        const r = await fetch(url, {
-                          method: "POST",
-                          credentials: "include",
-                          headers,
-                          body
-                        });
-                        let data = null;
-                        try { data = await r.json(); } catch {}
-                        return {
-                          http: r.status,
-                          ok: r.ok,
-                          success: !!(data && data.status === "success"),
-                          count: data && Array.isArray(data.products) ? data.products.length : -1,
-                          current_page: data && data.pagination ? Number(data.pagination.current_page || 0) : 0,
-                          total_pages: data && data.pagination ? Number(data.pagination.total_pages || 0) : 0
-                        };
-                      } catch (e) {
-                        return {http:0,ok:false,success:false,count:-1,error:String(e)};
-                      }
-                    }""",
-                    {"url": event["url"], "payload": payload, "headers": headers},
-                )
-                if result.get("ok") and result.get("success") and int(result.get("count", -1)) >= 0:
-                    return n, int(result["count"]), ""
-                return n, None, f"http_{result.get('http', 0)}"
+                known = set(counts)
+                try:
+                    event = await wait_queue(
+                        queue,
+                        8,
+                        lambda ev: (
+                            ev.get("http") != 200
+                            or (
+                                isinstance(ev.get("body"), dict)
+                                and int(((ev["body"].get("pagination") or {}).get("current_page") or 0)) not in known
+                            )
+                        ),
+                    )
+                except Exception:
+                    break
 
-            missing = []
-            # GO được gọi tuần tự trong chính browser/session đang sống.
-            for n in range(1, total_pages + 1):
-                if n == first_page:
-                    continue
-                _, count, error = await browser_fetch(first, n)
-                if count is None:
-                    missing.append(n)
-                else:
-                    counts[n] = count
+                if event.get("http") != 200 or not isinstance(event.get("body"), dict):
+                    next_page = max(counts) + 1
+                    errors[next_page] = f"http_{event.get('http', 0)}"
+                    break
 
-            # Nếu có lỗi, reload để lấy request/session mới rồi retry CHỈ page thiếu.
-            if missing:
-                await page.wait_for_timeout(700)
-                fresh = await open_and_get_first()
-                retry_missing = []
-                for n in missing:
-                    _, count, error = await browser_fetch(fresh, n)
-                    if count is None:
-                        retry_missing.append(n)
-                    else:
-                        counts[n] = count
-                missing = retry_missing
-                first = fresh
+                body = event["body"]
+                p = body.get("pagination") or {}
+                current = int(p.get("current_page") or 0)
+                if current <= 0:
+                    break
+                counts[current] = len(body.get("products") or [])
+                print(json.dumps({
+                    "go_page": current,
+                    "pages_total": total_pages,
+                    "items": counts[current],
+                }, ensure_ascii=False))
+                await page.wait_for_timeout(250)
 
+            missing = [n for n in range(1, total_pages + 1) if n not in counts]
             pages_ok = len(counts)
             raw_count = sum(counts.values())
-            body = first.get("body") or {}
-            metadata = body.get("metadata") or {}
-            # GO API không có total_count riêng; số raw đếm qua tất cả page là kết quả cần test.
+            metadata = first_body.get("metadata") or {}
             return {
                 "source": "GO",
                 "url": target_url,
@@ -442,12 +428,13 @@ async def count_go(ws_url: str, target_url: str) -> dict:
                 "category": metadata.get("category"),
                 "pages_total": total_pages,
                 "pages_ok": pages_ok,
-                "missing_pages": sorted(missing),
+                "missing_pages": missing,
+                "page_errors": errors,
                 "page_size": page_size,
                 "raw_items_across_pages": raw_count,
                 "complete_page_scan": pages_ok == total_pages,
                 "seconds": round(time.monotonic() - started, 2),
-                "transport": "in_page_fetch_same_browser_session",
+                "transport": "site_native_load_more_observed",
             }
         finally:
             await browser.close()

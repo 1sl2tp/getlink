@@ -15,6 +15,7 @@ DATA_DIR = Path("data")
 PRODUCTS_JSON = DATA_DIR / "products.json"
 PRODUCTS_CSV = DATA_DIR / "products.csv"
 LATEST_JSON = DATA_DIR / "latest.json"
+JOBS_DIR = DATA_DIR / "jobs"
 BAD_PATH = ("tin-tuc", "blog", "khuyen-mai", "kinh-nghiem-hay")
 PROMO_WORDS = ("ưu đãi", "khuyến mãi", "giảm", "tặng", "mua ", "combo", "quà")
 UNIT_WORDS = "gói|chai|lon|hộp|túi|cái|viên|ly|hũ|thùng|lốc|khay"
@@ -532,6 +533,51 @@ def save_db(db, latest_url=None):
             })
 
 
+def result_type(input_url, observations):
+    target = canonical_url(input_url)
+    if (
+        len(observations) == 1
+        and canonical_url(observations[0].get("url", "")) == target
+    ):
+        return "product"
+    return "category"
+
+
+def write_job_result(request_id, input_url, observations):
+    kind = result_type(input_url, observations)
+    checked_at = now_iso()
+    product = observations[0] if kind == "product" and observations else None
+    payload = {
+        "schema_version": 1,
+        "request_id": str(request_id or ""),
+        "input_url": canonical_url(input_url),
+        "input_type": kind,
+        "source": source_info(input_url),
+        "checked_at": checked_at,
+        "category_name": (
+            observations[0].get("group", "")
+            if kind == "category" and observations
+            else ""
+        ),
+        "product": product,
+        "products": observations,
+        "discovered_links": (
+            [canonical_url(p.get("url", "")) for p in observations if p.get("url")]
+            if kind == "category"
+            else []
+        ),
+    }
+    text = json.dumps(payload, ensure_ascii=False, indent=2)
+    LATEST_JSON.write_text(text, encoding="utf-8")
+
+    if request_id:
+        safe_id = re.sub(r"[^A-Za-z0-9_-]", "", str(request_id))
+        if safe_id:
+            JOBS_DIR.mkdir(parents=True, exist_ok=True)
+            (JOBS_DIR / f"{safe_id}.json").write_text(text, encoding="utf-8")
+    return payload
+
+
 async def main_async(args):
     db = load_db()
     existing = {
@@ -572,6 +618,9 @@ async def main_async(args):
     db["products"] = list(by_url.values())
     latest_url = observations[-1]["url"] if observations else None
     save_db(db, latest_url=latest_url)
+    write_job_result(args.request_id, args.url, observations)
+    print("request_id=", args.request_id or "manual")
+    print("result_type=", result_type(args.url, observations))
     print("updated_products=", len(observations))
     print("total_products=", len(db["products"]))
     return len(observations)
@@ -584,6 +633,7 @@ def main():
     parser.add_argument("--my-price", default="")
     parser.add_argument("--watch", choices=("keep", "true", "false"), default="keep")
     parser.add_argument("--watchlist", action="store_true")
+    parser.add_argument("--request-id", default="")
     args = parser.parse_args()
     asyncio.run(main_async(args))
 

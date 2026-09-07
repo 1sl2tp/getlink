@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s);
-const WORKFLOW="https://github.com/1sl2tp/getlink/actions/workflows/scrape.yml";
+const API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
 let wantedUrl="";
+let requestId="";
 let pollTimer=0;
 let pollUntil=0;
 
@@ -15,6 +16,7 @@ function money(v){
   return n>0?n.toLocaleString("vi-VN")+"₫":"—";
 }
 function setStatus(text){$("#status").textContent=text}
+function stopPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=0}
 function saveLocal(){
   const key=canonical(wantedUrl||$("#url").value.trim());
   if(!key)return;
@@ -49,6 +51,10 @@ $("#watch").addEventListener("change",saveLocal);
 function renderProduct(p){
   if(!p)return false;
   $("#result").hidden=false;
+  $("#priceGrid").hidden=false;
+  $("#productPersonal").hidden=false;
+  $("#categoryChildren").hidden=true;
+  $("#linkType").textContent="Link chi tiết";
   $("#source").textContent=(p.source&&p.source.name)||"Bách Hóa XANH";
   $("#name").textContent=p.name||"Sản phẩm";
   $("#group").textContent=p.group||"—";
@@ -65,32 +71,71 @@ function renderProduct(p){
   return true;
 }
 
-async function checkLatest(){
+function renderCategory(payload){
+  const products=Array.isArray(payload.products)?payload.products:[];
+  const first=products[0]||{};
+  $("#result").hidden=false;
+  $("#priceGrid").hidden=true;
+  $("#productPersonal").hidden=true;
+  $("#categoryChildren").hidden=false;
+  $("#linkType").textContent="Link nhóm";
+  $("#source").textContent=(payload.source&&payload.source.name)||"Bách Hóa XANH";
+  $("#name").textContent=payload.category_name||first.group||"Nhóm sản phẩm";
+  $("#group").textContent=first.group||"—";
+  $("#branch").textContent="—";
+  $("#packaging").textContent=products.length+" link chi tiết";
+  $("#productLink").href=payload.input_url||wantedUrl||"#";
+  $("#childCount").textContent=products.length+" sản phẩm";
+  $("#childList").innerHTML=products.length?products.map(p=>{
+    const price=money(p&&p.price&&p.price.current);
+    const title=escapeHtml(p.name||p.url||"Sản phẩm");
+    const href=escapeAttr(p.url||"#");
+    return '<a class="child-row" href="'+href+'" target="_blank" rel="noopener"><span>'+title+'</span><strong>'+price+'</strong></a>';
+  }).join(""):'<div class="child-empty">Chưa phát hiện link chi tiết.</div>';
+}
+function escapeHtml(v){return String(v||"").replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]))}
+function escapeAttr(v){return escapeHtml(v).replace(/'/g,"&#39;")}
+
+function renderPayload(payload){
+  if(!payload)return false;
+  if(payload.input_type==="category"){
+    renderCategory(payload);
+    return true;
+  }
+  return renderProduct(payload.product||(Array.isArray(payload.products)?payload.products[0]:null));
+}
+
+async function pollOnce(){
+  if(!API||!requestId)return false;
   try{
-    const r=await fetch("data/latest.json?ts="+Date.now(),{cache:"no-store"});
-    if(!r.ok)return false;
+    const r=await fetch(API+"/api/result?id="+encodeURIComponent(requestId),{cache:"no-store"});
     const data=await r.json();
-    const p=data.product;
-    if(!p)return false;
-    if(wantedUrl&&canonical(p.url)!==canonical(wantedUrl))return false;
-    renderProduct(p);
-    setStatus("Đã lấy xong dữ liệu thật từ Bách Hóa XANH.");
-    clearInterval(pollTimer);pollTimer=0;
+    if(data.status==="error"){
+      stopPolling();
+      setStatus("Lấy giá lỗi: "+(data.error||"không rõ lỗi"));
+      return false;
+    }
+    if(data.status!=="complete")return false;
+    stopPolling();
+    renderPayload(data.payload);
+    if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
+    localStorage.removeItem("getlink:request-id");
+    setStatus("Đã lấy xong và lưu link vào kho.");
     return true;
   }catch{return false}
 }
 function startPolling(){
-  clearInterval(pollTimer);
-  pollUntil=Date.now()+180000;
-  checkLatest();
+  stopPolling();
+  pollUntil=Date.now()+240000;
+  pollOnce();
   pollTimer=setInterval(async()=>{
     if(Date.now()>pollUntil){
-      clearInterval(pollTimer);pollTimer=0;
-      setStatus("Chưa thấy kết quả mới. Kiểm tra GitHub Actions xem workflow đã chạy xong chưa.");
+      stopPolling();
+      setStatus("Quá thời gian chờ. Có thể GitHub Actions vẫn đang chạy; bấm Lấy giá để thử lại.");
       return;
     }
-    await checkLatest();
-  },3000);
+    await pollOnce();
+  },2500);
 }
 
 $("#get").addEventListener("click",async()=>{
@@ -99,19 +144,39 @@ $("#get").addEventListener("click",async()=>{
     setStatus("Link chưa đúng bachhoaxanh.com.");
     return;
   }
+  if(!API){
+    setStatus("GETLINK Worker chưa được triển khai. Cần cấu hình Worker một lần trước khi dùng 1 nút.");
+    return;
+  }
   wantedUrl=url;
-  localStorage.setItem("getlink:last-url",url);
-  try{await navigator.clipboard.writeText(url)}catch{}
-  $("#steps").hidden=false;
   $("#result").hidden=true;
-  setStatus("Đang chờ GitHub Actions lấy giá...");
-  window.open(WORKFLOW,"_blank","noopener");
-  startPolling();
-});
-document.addEventListener("visibilitychange",()=>{
-  if(!document.hidden&&wantedUrl)startPolling();
+  $("#get").disabled=true;
+  setStatus("Đang gửi yêu cầu lấy giá...");
+  try{
+    const r=await fetch(API+"/api/get-price",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({url})
+    });
+    const data=await r.json();
+    if(!r.ok||!data.request_id)throw new Error(data.error||"Không tạo được yêu cầu");
+    requestId=data.request_id;
+    localStorage.setItem("getlink:last-url",url);
+    localStorage.setItem("getlink:request-id",requestId);
+    setStatus(data.link_type==="category"?"Đang quét link nhóm...":"Đang lấy giá sản phẩm...");
+    startPolling();
+  }catch(error){
+    setStatus("Không gửi được yêu cầu: "+String(error&&error.message||error));
+  }finally{
+    $("#get").disabled=false;
+  }
 });
 
 const saved=localStorage.getItem("getlink:last-url")||"";
 if(saved)$("#url").value=saved;
-checkLatest();
+requestId=localStorage.getItem("getlink:request-id")||"";
+wantedUrl=saved;
+if(requestId&&API){
+  setStatus("Đang tiếp tục chờ kết quả lần trước...");
+  startPolling();
+}

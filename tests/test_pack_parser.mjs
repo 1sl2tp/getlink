@@ -367,6 +367,31 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
   assert.equal(c.quantity_offer_unit_price,124875);
 }
 
+{
+  const c = comparisonData({
+    name:"Lốc 4 hộp sữa tươi tiệt trùng socola TH true MILK 180ml",
+    packagingText:"Lốc 4 Hộp",
+    featureText:"",
+    packCount:4,
+    packUnit:"Hộp",
+    current:40500,
+    sysPrice:40500,
+    discount:0,
+    promoText:"GIẢM 5.000Đ TỪ 2 LỐC. GIẢM 20.000Đ 5 LỐC"
+  });
+  assert.equal(c.pack_kind,"Lốc");
+  assert.equal(c.pack_quantity,4);
+  assert.equal(c.pack_unit,"Hộp");
+  assert.equal(c.quantity_offer_active,true);
+  assert.equal(c.quantity_offer_min_packs,5);
+  assert.equal(c.quantity_offer_total_price,182500);
+  assert.equal(c.quantity_offer_pack_price,36500);
+  assert.equal(c.quantity_offer_unit_price,9125);
+  assert.equal(c.promo_pack_price,36500);
+  assert.equal(c.promo_unit_price,9125);
+}
+
+
 
 {
   const input="https://bachhoaxanh.com/bia/thung-24-lon-heineken-silver-330ml";

@@ -355,6 +355,15 @@ $("#watch").addEventListener("change",async()=>{
   }
 });
 
+function resetDetailImage(){
+  const image=$("#detailImage");
+  const fallback=$("#detailImageFallback");
+  image.hidden=true;
+  image.removeAttribute("src");
+  image.alt="";
+  fallback.hidden=false;
+}
+
 function renderProduct(payload){
   const p=payload&&payload.product?payload.product:payload;
   if(!p)return false;
@@ -363,9 +372,19 @@ function renderProduct(payload){
   $("#result").hidden=false;
   $("#detailEmpty").hidden=true;
   const detailImage=String(p.image||"");
-  $("#detailImage").hidden=!detailImage;
-  $("#detailImageFallback").hidden=Boolean(detailImage);
-  if(detailImage)$("#detailImage").src=detailImage;
+  resetDetailImage();
+  if(detailImage){
+    const image=$("#detailImage");
+    image.alt=p.name||"Sản phẩm";
+    image.onload=()=>{
+      image.hidden=false;
+      $("#detailImageFallback").hidden=true;
+    };
+    image.onerror=()=>{
+      resetDetailImage();
+    };
+    image.src=detailImage;
+  }
   $("#priceGrid").hidden=false;
   $("#productPersonal").hidden=false;
   $("#categoryChildren").hidden=true;
@@ -452,8 +471,7 @@ function renderCategory(payload){
 
   $("#result").hidden=false;
   $("#detailEmpty").hidden=true;
-  $("#detailImage").hidden=true;
-  $("#detailImageFallback").hidden=false;
+  resetDetailImage();
   $("#priceGrid").hidden=true;
   $("#productPersonal").hidden=true;
   $("#productVariants").hidden=true;
@@ -1224,6 +1242,11 @@ async function loadLibraryProducts(force=false){
 async function openLibraryItem(url){
   if(!API||!url)return;
   selectedLibraryUrl=url;
+
+  // Never leave the previous product image visible while the next detail
+  // request is still loading.
+  resetDetailImage();
+
   document.querySelectorAll(".product-card").forEach(x=>x.classList.remove("selected"));
   const card=document.querySelector('.product-card[data-url="'+CSS.escape(url)+'"]');
   if(card){

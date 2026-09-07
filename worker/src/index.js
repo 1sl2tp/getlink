@@ -365,7 +365,7 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
   while((match=priceFirst.exec(plain))){
     // Do not misread "GIẢM 20.000Đ 5 LỐC" as a total price of 20k.
     const before=plain.slice(Math.max(0,match.index-12),match.index);
-    if(/\\bgiam\\s*$/.test(before))continue;
+    if(/\bgiam\s*$/.test(before))continue;
     consider(match[3],match[4],match[1],match[2]);
   }
   while((match=discountFirst.exec(plain))){

@@ -381,6 +381,72 @@ function updateSheetRow(card,minePack){
   if(diffCell)diffCell.textContent=sheetDiffText(webUnit,mineUnit);
 }
 
+function sheetNormalizeUnit(value){
+  const raw=String(value||"").trim();
+  const key=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const map={
+    hop:"Hộp",chai:"Chai",goi:"Gói",bich:"Bịch",tui:"Túi",
+    lon:"Lon",hu:"Hũ",can:"Can",thanh:"Thanh",cay:"Cây",
+    vien:"Viên",tuyp:"Tuýp",thung:"Thùng",loc:"Lốc",
+    combo:"Combo",bo:"Bộ"
+  };
+  return map[key]||raw;
+}
+
+function inferSheetPack(row){
+  const text=[row.name,row.packaging].filter(Boolean).join(" ");
+  const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp";
+  const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
+  const explicitKind=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
+  const singleUnit=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
+  const sizeMatch=plain.match(/([0-9]+(?:[.,][0-9]+)?)\s*(ml|lit|l|kg|g)\b/);
+
+  let qty=Math.max(1,Number(row.pack_quantity)||1);
+  let unit=String(row.pack_unit||"").trim();
+  let kind=String(row.pack_kind||"").trim();
+
+  if(countMatch){
+    const parsed=Number(String(countMatch[1]).replace(",","."));
+    if(parsed>1&&qty<=1)qty=parsed;
+    if(!unit||unit.toLowerCase()==="đơn vị"||Number(row.pack_quantity)<=1){
+      unit=sheetNormalizeUnit(countMatch[2]);
+    }
+  }else if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnit){
+    unit=sheetNormalizeUnit(singleUnit[1]);
+  }
+
+  if(explicitKind){
+    kind=sheetNormalizeUnit(explicitKind[1]);
+  }else if((!kind||/^(đơn|lẻ|đơn vị)$/i.test(kind))&&qty>1){
+    kind="Cụm";
+  }else if(!kind||/^đơn vị$/i.test(kind)){
+    kind=unit&&unit.toLowerCase()!=="đơn vị"?unit:"Đơn";
+  }
+
+  let sizeValue=Number(row.size_value)||0;
+  let sizeUnit=String(row.size_unit||"");
+  if(!sizeValue&&sizeMatch){
+    sizeValue=Number(String(sizeMatch[1]).replace(",","."));
+    sizeUnit=sizeMatch[2].toLowerCase();
+    if(sizeUnit==="l"||sizeUnit==="lit"){
+      sizeValue=Math.round(sizeValue*1000);
+      sizeUnit="ml";
+    }else if(sizeUnit==="kg"){
+      sizeValue=Math.round(sizeValue*1000);
+      sizeUnit="g";
+    }
+  }
+
+  return {
+    qty,
+    unit:unit||"đơn vị",
+    kind:kind||"Đơn",
+    sizeValue,
+    sizeUnit
+  };
+}
+
 function productCard(row){
   const hasPromo=Boolean(
     Number(row.promotion_active)||
@@ -401,17 +467,15 @@ function productCard(row){
     0
   );
   const effectivePack=promoPack||current||regularPack;
-  const qty=Math.max(1,Number(row.pack_quantity)||1);
-  const unitName=String(row.pack_unit||"đơn vị").trim()||"đơn vị";
-  const webUnit=Number(
-    row.promo_unit_price||
-    row.regular_unit_price||
-    row.unit_price||
-    (effectivePack?Math.round(effectivePack/qty):0)
-  );
-  const packKind=String(row.pack_kind||"Đơn").trim()||"Đơn";
-  const size=row.size_value
-    ?String(row.size_value)+" "+String(row.size_unit||"")
+  const inferred=inferSheetPack(row);
+  const qty=inferred.qty;
+  const unitName=inferred.unit;
+  const webUnit=effectivePack
+    ?Math.round(effectivePack/qty)
+    :Number(row.promo_unit_price||row.regular_unit_price||row.unit_price||0);
+  const packKind=inferred.kind;
+  const size=inferred.sizeValue
+    ?String(inferred.sizeValue)+" "+String(inferred.sizeUnit||"")
     :"—";
   const image=String(row.image||"");
   const pref=String(row.preference_state||"normal");

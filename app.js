@@ -662,6 +662,17 @@ function simpleRowPrice(row){
   const retailUnit=structure.itemUnit||
     String(row.pack_unit||inferred.unit||"đơn vị").trim();
 
+  const displayQty=hasCarton
+    ?cartonQty
+    :(structure.cartonCount>1
+      ?structure.cartonCount
+      :(Number(row.pack_quantity)||Number(inferred.qty)||1));
+  const displayUnit=hasCarton
+    ?cartonUnit
+    :(structure.cartonCount>1
+      ?"Thùng"
+      :String(row.pack_unit||inferred.unit||"đơn vị").trim());
+
   return {
     rawName:rawName||"Sản phẩm",
     hasCarton,
@@ -670,7 +681,9 @@ function simpleRowPrice(row){
     cartonQty,
     cartonUnit:cartonUnit||"đơn vị",
     retailPrice,
-    retailUnit:retailUnit||"đơn vị"
+    retailUnit:retailUnit||"đơn vị",
+    displayQty,
+    displayUnit:displayUnit||"đơn vị"
   };
 }
 
@@ -694,9 +707,14 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(simple.rawName)+'</button>'+
       '</td>'+
-      '<td class="xls-qc">'+
-        (simple.hasCarton&&simple.cartonQty>0
-          ?'<span class="xls-qc-main">'+escapeHtml(simple.cartonQty)+'</span><small class="xls-qc-unit">'+escapeHtml(simple.cartonUnit)+'</small>'
+      '<td class="xls-qc xls-num-cell">'+
+        (simple.displayQty>0
+          ?'<span class="xls-qc-main">'+escapeHtml(simple.displayQty)+'</span>'
+          :'<span class="xls-empty">—</span>')+
+      '</td>'+
+      '<td class="xls-unit">'+
+        (simple.displayUnit
+          ?escapeHtml(simple.displayUnit)
           :'<span class="xls-empty">—</span>')+
       '</td>'+
       '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
@@ -893,7 +911,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="7">Đang đọc thư viện D1...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="8">Đang đọc thư viện D1...</td></tr>';
   $("#libraryEmpty").hidden=true;
   try{
     await ensureLibraryCache(force);

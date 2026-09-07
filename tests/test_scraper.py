@@ -53,6 +53,26 @@ class ScraperHelpersTest(unittest.TestCase):
         self.assertEqual(merged["short_name"],"mì test")
         self.assertEqual(len(merged["history"]),1)
 
+    def test_result_type_product_and_category(self):
+        product={
+            "url":"https://bachhoaxanh.com/mi/mi-hao-hao-75g",
+            "group":"Mì"
+        }
+        self.assertEqual(
+            scraper.result_type(
+                "https://www.bachhoaxanh.com/mi/mi-hao-hao-75g",
+                [product]
+            ),
+            "product"
+        )
+        self.assertEqual(
+            scraper.result_type(
+                "https://www.bachhoaxanh.com/mi",
+                [product]
+            ),
+            "category"
+        )
+
 
 if __name__=="__main__":
     unittest.main()

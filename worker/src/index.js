@@ -115,13 +115,10 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const multiCartonMatch=
     namePlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/)||
     packagingPlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/);
-  const explicitCarton=Boolean(
-    /^thung\b/.test(namePlain)||
-    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s*thung\b/.test(namePlain)||
-    /^thung\b/.test(packagingPlain)||
-    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s*thung\b/.test(packagingPlain)||
-    rawUnitPlain==="thung"
-  );
+  const nameIsCombo=/^combo\b/.test(namePlain);
+  const pureByName=/^thung\b/.test(namePlain);
+  const pureByPrice=!pureByName&&!multiCartonMatch&&!nameIsCombo&&/^thung\b/.test(packagingPlain);
+  const explicitCarton=Boolean(pureByName||pureByPrice);
 
   // Only the beginning of the authoritative text may define pack quantity.
   // This prevents product/model numbers such as 1664, 333, C2, 7Up...
@@ -248,7 +245,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<8)return null;
+    if(Number(payload&&payload.schema_version||0)<9)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -471,7 +468,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:8,
+    schema_version:9,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -500,7 +497,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:8,
+    schema_version:9,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1635,7 +1632,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:8,
+        schema_version:9,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

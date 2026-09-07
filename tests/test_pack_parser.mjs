@@ -215,11 +215,10 @@ const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,ge
       productPrices:[{price:470000,sysPrice:470000,discountPercent:0,quantity:5,isCanBuy:true}]
     }]
   };
-  const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,17);
-  assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
-  assert.equal(payload.product.comparison.pack_quantity,30);
-  assert.equal(payload.product.comparison.pack_unit,"Gói");
+  assert.throws(
+    ()=>productDetailPayload(input,"test-price-unit",data),
+    /bhx_detail_filtered_or_empty/
+  );
 }
 
 {
@@ -428,7 +427,7 @@ const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,ge
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,17);
+  assert.equal(payload.schema_version,18);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

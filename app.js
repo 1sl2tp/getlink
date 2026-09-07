@@ -605,8 +605,14 @@ function productCard(row){
     :"—";
   const image=String(row.image||"");
   const pref=String(row.preference_state||"normal");
-  const minePack=readSheetPrice(row.canonical_url);
-  const mineUnit=minePack?Math.round(minePack/qty):0;
+  const mineCarton=packKind==="Thùng"
+    ?readOwnPrice(row.canonical_url,"carton")
+    :0;
+  const mineRetail=readOwnPrice(row.canonical_url,"retail");
+  const derivedRetail=packKind==="Thùng"&&qty>1&&mineCarton
+    ?Math.round(mineCarton/qty)
+    :0;
+  const effectiveMineRetail=mineRetail||derivedRetail;
   const thumb=image
     ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy">'
     :'<div class="thumb-fallback">GL</div>';
@@ -617,7 +623,8 @@ function productCard(row){
   const hideNext=pref==="hidden"?"normal":"hidden";
 
   return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" '+
-    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-qty="'+qty+'" data-web-unit="'+webUnit+'">'+
+    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-kind="'+escapeAttr(packKind)+'" '+
+    'data-pack-qty="'+qty+'" data-web-pack="'+effectivePack+'" data-web-unit="'+webUnit+'">'+
     '<div class="product-main">'+
       '<div class="product-thumb">'+thumb+'</div>'+
       '<div class="product-name-wrap">'+
@@ -641,11 +648,24 @@ function productCard(row){
     '</div>'+
     '<div class="product-cell bhx-unit"><strong>'+money(webUnit)+'</strong><small>/ '+escapeHtml(unitName)+'</small></div>'+
     '<div class="product-cell mine-pack-cell">'+
-      '<input class="sheet-my-price" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
-        'value="'+(minePack||"")+'" placeholder="Giá/'+escapeAttr(packKind)+'">'+
+      (packKind==="Thùng"
+        ?'<input class="sheet-my-carton" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
+          'value="'+(mineCarton||"")+'" placeholder="Giá/Thùng">'
+        :'<span class="not-comparable">—</span>')+
     '</div>'+
-    '<div class="product-cell sheet-mine-unit">'+(mineUnit?money(mineUnit):"—")+'</div>'+
-    '<div class="product-cell sheet-diff">'+sheetDiffText(webUnit,mineUnit)+'</div>'+
+    '<div class="product-cell mine-retail-cell">'+
+      '<input class="sheet-my-retail" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
+        'value="'+(mineRetail||"")+'" placeholder="'+
+          (derivedRetail?'≈ '+escapeAttr(money(derivedRetail))+' từ thùng':'Giá/Lẻ')+'">'+
+    '</div>'+
+    '<div class="product-cell sheet-diff">'+
+      ((packKind==="Thùng"&&effectivePack&&mineCarton)
+        ?'<span>Thùng: '+escapeHtml(sheetDiffText(effectivePack,mineCarton))+'</span>'
+        :'')+
+      ((webUnit&&effectiveMineRetail)
+        ?'<span>Lẻ: '+escapeHtml(sheetDiffText(webUnit,effectiveMineRetail))+'</span>'
+        :'—')+
+    '</div>'+
   '</div>';
 }
 

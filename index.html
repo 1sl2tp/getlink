@@ -12,20 +12,20 @@
     <div class="logo">GL</div>
     <div>
       <h1>GETLINK</h1>
-      <p>Thư viện giá Bách Hóa XANH · Tra cứu và so sánh theo quy cách</p>
+      <p>Thư viện giá BHX + WM · Tra cứu và so sánh theo quy cách</p>
     </div>
   </header>
 
   <section class="card import-card" id="importCard" hidden>
     <div class="import-head">
       <div>
-        <strong>Thêm / cập nhật link Bách Hóa XANH</strong>
+        <strong>Thêm / cập nhật link nguồn giá</strong>
         <small>Link đã lấy trong vòng 24 giờ sẽ đọc lại từ D1, không gọi Bright Data.</small>
       </div>
       <button id="closeImport" class="icon-button" type="button" aria-label="Đóng">×</button>
     </div>
     <div class="input-row">
-      <input id="url" autocomplete="off" placeholder="https://www.bachhoaxanh.com/...">
+      <input id="url" autocomplete="off" placeholder="Dán link Bách Hóa XANH hoặc WinMart">
       <button id="get" type="button">Lấy giá</button>
     </div>
     <div class="status-row">
@@ -68,7 +68,7 @@
       <div class="catalog-toolbar">
         <div>
           <h2 id="libraryTitle">Danh sách giá</h2>
-          <p>Trọng tâm: giá BHX · giá của mình · giá mặc cả.</p>
+          <p>Trọng tâm: giá theo nguồn · giá của mình · giá mặc cả.</p>
         </div>
         <span id="libraryCount"></span>
       </div>
@@ -151,7 +151,7 @@
 
         <div class="price-grid" id="priceGrid">
           <div class="price">
-            <small>Giá BHX</small>
+            <small>Giá nguồn</small>
             <strong id="webPrice">—</strong>
           </div>
           <div class="price promo">

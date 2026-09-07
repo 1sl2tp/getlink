@@ -385,6 +385,9 @@ async def run(args) -> int:
         except Exception as exc:
             errors.append({"country": label, "error": str(exc)[:900]})
 
+    print(json.dumps({
+        "go_capture_errors": errors,
+    }, ensure_ascii=False))
     out_path.write_text(
         json.dumps({
             "status": "error",

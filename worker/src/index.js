@@ -276,34 +276,39 @@ function quantityPromotionForPack(text,pack,currentPackPrice){
 function comparisonData({name,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
   const pack=parsePackStructure(name,packagingText,featureText,packCount,packUnit);
   const quantity=Math.max(1,Number(pack.pack_quantity)||1);
-  const regular=Number(sysPrice)>0?Number(sysPrice):(Number(current)||null);
   const currentPrice=Number(current)||null;
+  const sys=Number(sysPrice)>0?Number(sysPrice):null;
+
+  // BHX current selling price is the main price. sysPrice is only the
+  // crossed-out/original reference price and must not become "Ưu đãi".
+  const currentPack=currentPrice||sys;
+  const originalPack=sys&&currentPack&&sys>currentPack?sys:null;
   const discountActive=Boolean(
     Number(discount)>0||
-    (regular&&currentPrice&&currentPrice<regular)
+    (originalPack&&currentPack&&currentPack<originalPack)
   );
+
+  // "Ưu đãi" is reserved for an extra condition that matches this exact
+  // product pack, e.g. 1 túi 115k + "Mua 2 túi 199k" => 99.5k/túi.
   const quantityOffer=quantityPromotionForPack(
-    promoText,pack,currentPrice||regular
+    promoText,pack,currentPack
   );
-
-  const promoCandidates=[];
-  if(discountActive&&currentPrice)promoCandidates.push(currentPrice);
-  if(quantityOffer.matched)promoCandidates.push(quantityOffer.effective_pack_price);
-  const promo=promoCandidates.length?Math.min(...promoCandidates):null;
-  const promoActive=Boolean(promo);
-
-  const safePromoText=quantityOffer.matched
-    ?cleanText(promoText||"")
-    :(discountActive&&!quantityOffer.structured?cleanText(promoText||""):"");
+  const promo=quantityOffer.matched
+    ?quantityOffer.effective_pack_price
+    :null;
+  const promoActive=Boolean(quantityOffer.matched);
 
   return {
     ...pack,
-    regular_pack_price:regular,
+    regular_pack_price:currentPack,
+    original_pack_price:originalPack,
     promo_pack_price:promo,
-    regular_unit_price:regular?Math.round(regular/quantity):null,
+    regular_unit_price:currentPack?Math.round(currentPack/quantity):null,
     promo_unit_price:promo?Math.round(promo/quantity):null,
     promotion_active:promoActive,
-    promotion_text:safePromoText,
+    promotion_text:promoActive?cleanText(promoText||""):"",
+    discount_active:discountActive,
+    discount_percent:Number(discount)||0,
     quantity_offer_active:Boolean(quantityOffer.matched),
     quantity_offer_min_packs:quantityOffer.matched?quantityOffer.required_packs:null,
     quantity_offer_quantity:quantityOffer.matched?quantityOffer.required_quantity:null,
@@ -311,7 +316,7 @@ function comparisonData({name,packagingText,featureText,packCount,packUnit,curre
     quantity_offer_total_price:quantityOffer.matched?quantityOffer.total_price:null,
     quantity_offer_pack_price:quantityOffer.matched?quantityOffer.effective_pack_price:null,
     quantity_offer_unit_price:quantityOffer.matched?quantityOffer.effective_unit_price:null,
-    price_kind:promoActive?"promotion":"regular"
+    price_kind:promoActive?"quantity_promotion":"current"
   };
 }
 
@@ -326,7 +331,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<10)return null;
+    if(Number(payload&&payload.schema_version||0)<11)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -551,7 +556,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:10,
+    schema_version:11,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -580,7 +585,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:10,
+    schema_version:11,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1715,7 +1720,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:10,
+        schema_version:11,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

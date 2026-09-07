@@ -643,26 +643,40 @@ function simpleRowPrice(row){
   const inferred=inferSheetPack(row);
   const structure=rowCartonStructure(row);
   const hasCarton=structure.isPureCarton;
+
   const ownPrice=Number(
-    row.promotion_price||
     row.current_price||
-    row.promo_pack_price||
     row.regular_pack_price||
     row.original_price||
     0
   );
+  const rawPromo=Number(
+    row.promo_pack_price||
+    row.promotion_price||
+    0
+  );
+  const promoOwn=(Number(row.has_promo||row.quantity_offer_active||row.promotion_active)>0&&
+    rawPromo>0&&ownPrice>0&&rawPromo<ownPrice)
+    ?rawPromo
+    :0;
 
   // "Thùng xx chai/lon/..." = one carton.
   // "2 thùng..." / "Combo 5 thùng..." = multi-carton offer:
-  // normalize total price to one carton, but DO NOT classify it as a
-  // pure Thùng row in the filter.
+  // normalize current and promo prices to one carton for comparison.
   const hasCartonMath=hasCarton||structure.cartonCount>1;
   const cartonPrice=hasCartonMath&&ownPrice
     ?Math.round(ownPrice/Math.max(1,structure.cartonCount))
     :0;
+  const promoCartonPrice=hasCartonMath&&promoOwn
+    ?Math.round(promoOwn/Math.max(1,structure.cartonCount))
+    :0;
+
   const retailPrice=hasCartonMath&&structure.itemCount>0&&cartonPrice
     ?Math.round(cartonPrice/structure.itemCount)
     :(!hasCartonMath?ownPrice:0);
+  const promoRetailPrice=hasCartonMath&&structure.itemCount>0&&promoCartonPrice
+    ?Math.round(promoCartonPrice/structure.itemCount)
+    :(!hasCartonMath?promoOwn:0);
 
   const cartonQty=hasCarton
     ?(structure.itemCount||Number(row.pack_quantity)||Number(inferred.qty)||1)
@@ -687,15 +701,25 @@ function simpleRowPrice(row){
   return {
     rawName:rawName||"Sản phẩm",
     hasCarton,
+    hasPromo:Boolean(promoOwn),
     cartonCount:structure.cartonCount,
     cartonPrice,
+    promoCartonPrice,
     cartonQty,
     cartonUnit:cartonUnit||"đơn vị",
     retailPrice,
+    promoRetailPrice,
     retailUnit:retailUnit||"đơn vị",
     displayQty,
     displayUnit:displayUnit||"đơn vị"
   };
+}
+
+function xlsWebPrice(main,promo){
+  return '<span class="xls-price-main">'+money(main)+'</span>'+
+    (promo&&promo<main
+      ?'<small class="xls-promo-note">ƯĐ '+money(promo)+'</small>'
+      :'');
 }
 
 function productCard(row){
@@ -728,8 +752,8 @@ function productCard(row){
           ?escapeHtml(simple.displayUnit)
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-num">'+money(simple.cartonPrice)+'</td>'+
-      '<td class="xls-num">'+money(simple.retailPrice)+'</td>'+
+      '<td class="xls-num">'+xlsWebPrice(simple.cartonPrice,simple.promoCartonPrice)+'</td>'+
+      '<td class="xls-num">'+xlsWebPrice(simple.retailPrice,simple.promoRetailPrice)+'</td>'+
       '<td>'+
         (simple.hasCarton
           ?'<input class="sheet-my-carton xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="—">'
@@ -812,6 +836,7 @@ function renderPackTabs(){
   const base=visibleRowsBeforePack();
   const cartonCount=base.filter(row=>simpleRowPrice(row).hasCarton).length;
   const retailCount=base.length-cartonCount;
+  const promoCount=base.filter(row=>simpleRowPrice(row).hasPromo).length;
 
   if(!base.length){
     activePackKind="";
@@ -820,7 +845,7 @@ function renderPackTabs(){
     return;
   }
 
-  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ"){
+  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ"&&activePackKind!=="Ưu đãi"){
     activePackKind="";
     localStorage.removeItem("getlink:filter-pack");
   }
@@ -828,7 +853,8 @@ function renderPackTabs(){
   host.innerHTML=
     '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
     '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button">Thùng <small>'+cartonCount+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
+    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Ưu đãi"?"active":"")+'" data-pack="Ưu đãi" type="button">Ưu đãi <small>'+promoCount+'</small></button>';
 }
 
 function filteredLibraryProducts(){
@@ -838,6 +864,8 @@ function filteredLibraryProducts(){
     products=products.filter(row=>simpleRowPrice(row).hasCarton);
   }else if(activePackKind==="Lẻ"){
     products=products.filter(row=>!simpleRowPrice(row).hasCarton);
+  }else if(activePackKind==="Ưu đãi"){
+    products=products.filter(row=>simpleRowPrice(row).hasPromo);
   }
 
   products.sort((a,b)=>{

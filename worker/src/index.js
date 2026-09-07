@@ -1474,6 +1474,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.current_price
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
@@ -1485,6 +1486,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.sys_price
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
@@ -1496,6 +1498,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.package_item_count
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
@@ -1507,6 +1510,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.package_item_unit
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
@@ -1518,6 +1522,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.current_price
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND NOT (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'
@@ -1532,6 +1537,7 @@ async function handleLibrary(url,env,origin){
           SELECT pv.package_item_unit
           FROM product_variants pv
           WHERE pv.parent_url=l.canonical_url
+            AND pv.variant_url=l.canonical_url
             AND NOT (
               TRIM(COALESCE(pv.title,'')) LIKE 'Thùng%' OR
               TRIM(COALESCE(pv.packaging,'')) LIKE 'Thùng%'

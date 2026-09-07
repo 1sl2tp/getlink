@@ -919,6 +919,14 @@ h1{margin:0;font-size:28px;line-height:1.1}
 }
 .xls-price-main{
   display:block;
+  width:100%;
+  margin-left:auto;
+  text-align:right;
+}
+.xls-num .xls-promo-note{
+  width:100%;
+  margin-left:auto;
+  text-align:right;
 }
 .xls-promo-note{
   display:block;

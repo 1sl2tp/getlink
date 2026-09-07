@@ -256,3 +256,15 @@ jobs:
           test "$(jq '.products|length' /tmp/milk-products.json)" -ge 100
           test "$(jq '[.products[].brand_name|select(length>0)]|unique|length' /tmp/milk-products.json)" -ge 4
           test "$(jq '[.products[].image|select(type=="string" and startswith("http"))]|length' /tmp/milk-products.json)" -ge 80
+
+          echo "Verify normalized Thùng/Lốc/Gói fields:"
+          jq '[.products[] | select((.name // "") | startswith("Thùng 48 hộp"))][0]
+              | {name,pack_kind,pack_quantity,pack_unit,size_value,size_unit,
+                 regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price}'             /tmp/milk-products.json > /tmp/milk-pack.json
+          jq . /tmp/milk-pack.json
+          test "$(jq -r '.pack_kind' /tmp/milk-pack.json)" = "Thùng"
+          test "$(jq -r '.pack_quantity' /tmp/milk-pack.json)" = "48"
+          test "$(jq -r '.pack_unit' /tmp/milk-pack.json)" = "Hộp"
+          test "$(jq -r '.size_value' /tmp/milk-pack.json)" = "180"
+          test "$(jq -r '.size_unit' /tmp/milk-pack.json)" = "ml"
+          test "$(jq -r '(.regular_pack_price / .pack_quantity | round) == .regular_unit_price' /tmp/milk-pack.json)" = "true"

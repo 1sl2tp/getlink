@@ -143,6 +143,8 @@ def normalize_unit(value: str) -> str:
         "vien": "Viên",
         "tuýp": "Tuýp",
         "tuyp": "Tuýp",
+        "vỉ": "Vỉ",
+        "vi": "Vỉ",
     }
     for key, label in aliases.items():
         if re.search(rf"(^|\W){re.escape(key)}($|\W)", text, re.I):
@@ -318,8 +320,8 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     if isinstance(obj.get("brand"), dict):
         brand = clean_text(first_value(obj["brand"], ("name", "label")) or brand)
 
-    # WinMart's authoritative retail body is the visible "Chọn loại"
-    # control on the product detail page. Do not infer it from the title/API.
+    # WinMart's visible listing card is the authoritative retail-unit source
+    # for bulk ingestion. Do not use API uomName and do not infer from title.
     unit = ""
     unit_evidence = ""
     packaging = ""
@@ -546,39 +548,61 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
 
             async def extract_dom_products(category_label: str):
                 rows = await page.locator("a[href]").evaluate_all(
-                    """els => els.map(a => {
-                      const href = a.href || "";
-                      const root =
-                        a.closest("article,[class*='product'],[class*='Product'],li") ||
-                        a.parentElement ||
-                        a;
-                      const text = (root.innerText || root.textContent || "").trim();
-                      const img = root.querySelector("img");
-                      const title =
-                        (a.getAttribute("title") || "") ||
-                        (img && img.getAttribute("alt")) ||
-                        (a.innerText || "").trim();
-                      const imageCandidates = img ? [
-                        img.currentSrc || "",
-                        img.getAttribute("data-src") || "",
-                        img.getAttribute("data-original") || "",
-                        img.getAttribute("data-lazy-src") || "",
-                        img.getAttribute("data-image") || "",
-                        img.getAttribute("data-srcset") || "",
-                        img.getAttribute("srcset") || "",
-                        img.getAttribute("src") || ""
-                      ] : [];
-                      const realImage = imageCandidates
-                        .flatMap(v => String(v || "").split(","))
-                        .map(v => v.trim().split(/\s+/)[0])
-                        .find(v => v && !/^data:/i.test(v) && !/^blob:/i.test(v)) || "";
-                      return {
-                        href,
-                        text,
-                        title,
-                        image: realImage
+                    """els => {
+                      const clean=v=>String(v||"").replace(/\s+/g," ").trim();
+                      const UNIT_MAP = {
+                        "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
+                        "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
+                        "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
+                        "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
+                        "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp",
+                        "VỈ":"Vỉ","VI":"Vỉ"
                       };
-                    })"""
+                      const unitOf=root=>{
+                        const nodes=[...root.querySelectorAll(
+                          "div,span,p,small,label,strong"
+                        )];
+                        for(const node of nodes){
+                          const text=clean(node.textContent).toUpperCase();
+                          if(UNIT_MAP[text])return UNIT_MAP[text];
+                        }
+                        return "";
+                      };
+                      return els.map(a => {
+                        const href = a.href || "";
+                        const root =
+                          a.closest("article,[class*='product'],[class*='Product'],li") ||
+                          a.parentElement ||
+                          a;
+                        const text = (root.innerText || root.textContent || "").trim();
+                        const img = root.querySelector("img");
+                        const title =
+                          (a.getAttribute("title") || "") ||
+                          (img && img.getAttribute("alt")) ||
+                          (a.innerText || "").trim();
+                        const imageCandidates = img ? [
+                          img.currentSrc || "",
+                          img.getAttribute("data-src") || "",
+                          img.getAttribute("data-original") || "",
+                          img.getAttribute("data-lazy-src") || "",
+                          img.getAttribute("data-image") || "",
+                          img.getAttribute("data-srcset") || "",
+                          img.getAttribute("srcset") || "",
+                          img.getAttribute("src") || ""
+                        ] : [];
+                        const realImage = imageCandidates
+                          .flatMap(v => String(v || "").split(","))
+                          .map(v => v.trim().split(/\s+/)[0])
+                          .find(v => v && !/^data:/i.test(v) && !/^blob:/i.test(v)) || "";
+                        return {
+                          href,
+                          text,
+                          title,
+                          image: realImage,
+                          unit: unitOf(root)
+                        };
+                      });
+                    }"""
                 )
                 for row in rows:
                     href = normalize_product_url(
@@ -586,12 +610,35 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     )
                     if not href:
                         continue
-                    text = clean_text(row.get("text") or "")
+
+                    visible_unit = normalize_unit(row.get("unit") or "")
+                    if visible_unit and href in collector.products:
+                        collector.add({
+                            **collector.products[href],
+                            "unit": visible_unit,
+                            "unit_evidence": "listing_card",
+                            "packaging": visible_unit,
+                        })
+
+                    raw_text = str(row.get("text") or "")
+                    text = clean_text(raw_text)
                     title = clean_text(row.get("title") or "")
                     if len(title) < 4:
-                        lines = [clean_text(x) for x in text.split("\n") if clean_text(x)]
+                        lines = [
+                            clean_text(x)
+                            for x in raw_text.split("\n")
+                            if clean_text(x)
+                        ]
                         title = next(
-                            (x for x in lines if not re.search(r"\d[\d., ]*\s*(?:₫|đ|VND)", x, re.I)),
+                            (
+                                x for x in lines
+                                if not re.search(
+                                    r"\d[\d., ]*\s*(?:₫|đ|VND)",
+                                    x,
+                                    re.I,
+                                )
+                                and normalize_unit(x) == ""
+                            ),
                             title,
                         )
                     prices = [
@@ -606,7 +653,11 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     if not title or not prices:
                         continue
                     current = min(prices)
-                    original = max(prices) if len(prices) > 1 and max(prices) > current else None
+                    original = (
+                        max(prices)
+                        if len(prices) > 1 and max(prices) > current
+                        else None
+                    )
                     collector.add({
                         "url": href,
                         "name": title,
@@ -614,9 +665,9 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         "original_price": original,
                         "image": image_url(row.get("image") or "", page.url),
                         "brand": "",
-                        "unit": "",
-                        "unit_evidence": "",
-                        "packaging": "",
+                        "unit": visible_unit,
+                        "unit_evidence": "listing_card" if visible_unit else "",
+                        "packaging": visible_unit,
                         "category_name": category_label,
                         "promotion_text": "",
                     })
@@ -725,6 +776,41 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         + json.dumps(failed, ensure_ascii=False)
                     )
 
+            async def enrich_listing_cards(category_label: str):
+                stable = 0
+                previous_units = -1
+                previous_height = -1
+                for _ in range(40):
+                    await extract_dom_products(category_label)
+                    unit_count = sum(
+                        1 for product in collector.products.values()
+                        if product.get("unit_evidence") == "listing_card"
+                        and normalize_unit(product.get("unit") or "")
+                    )
+                    try:
+                        height = await page.evaluate(
+                            "() => Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0)"
+                        )
+                        await page.evaluate(
+                            "() => window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
+                        )
+                    except Exception:
+                        height = previous_height
+                    await page.wait_for_timeout(550)
+                    if unit_count == previous_units and height == previous_height:
+                        stable += 1
+                    else:
+                        stable = 0
+                    previous_units = unit_count
+                    previous_height = height
+                    if stable >= 3:
+                        break
+                return sum(
+                    1 for product in collector.products.values()
+                    if product.get("unit_evidence") == "listing_card"
+                    and normalize_unit(product.get("unit") or "")
+                )
+
             async def scan_page(url: str, category_label: str, discover_subcats: bool):
                 current_category["label"] = category_label
                 current_category["url"] = url
@@ -780,6 +866,11 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                 api_event = await wait_main_category_api(url)
                 if api_event:
                     await fetch_remaining_api_pages(api_event, url)
+                    listing_units = await enrich_listing_cards(category_label)
+                    print(json.dumps({
+                        "winmart_listing_units": listing_units,
+                        "page_url": url,
+                    }, ensure_ascii=False))
                     return True
 
                 # Safety fallback only. If WinMart changes its API shape we still
@@ -818,27 +909,30 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                 return False
 
             root_label = top_category_name(target_url)
-            root_api = await scan_page(target_url, root_label, True)
+            input_has_cate2 = bool(
+                parse_qs(urlparse(target_url).query).get("cate2")
+            )
+            root_api = await scan_page(target_url, root_label, not input_has_cate2)
 
-            subcats = list(collector.subcategories.items())[:80]
+            subcats = (
+                list(collector.subcategories.items())[:80]
+                if not input_has_cate2
+                else []
+            )
             print(json.dumps({
                 "winmart_root_api": bool(root_api),
                 "winmart_subcategories_found": len(subcats),
                 "winmart_products_after_root": len(collector.products),
             }, ensure_ascii=False))
 
-            # If the root page did not expose the catalog API, retain the old
-            # cate2 fallback. When root API works, it already paginates the full
-            # top-category inventory and avoids duplicate subcategory scans.
-            if not root_api:
-                for index, (url, label) in enumerate(subcats, 1):
-                    print(json.dumps({
-                        "winmart_subcategory": index,
-                        "label": label,
-                        "url": url,
-                        "products_before": len(collector.products),
-                    }, ensure_ascii=False))
-                    await scan_page(url, label or root_label, False)
+            for index, (url, label) in enumerate(subcats, 1):
+                print(json.dumps({
+                    "winmart_subcategory": index,
+                    "label": label,
+                    "url": url,
+                    "products_before": len(collector.products),
+                }, ensure_ascii=False))
+                await scan_page(url, label or root_label, False)
 
             if response_tasks:
                 await asyncio.gather(*list(response_tasks), return_exceptions=True)
@@ -847,81 +941,19 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             if not products:
                 raise RuntimeError("winmart_no_products_captured")
 
-            # WinMart's visible "Chọn loại" is the only authoritative
-            # retail-unit source. Use a small reusable page pool; creating
-            # hundreds of tabs in parallel can stall the Bright Data browser.
-            UNIT_PATTERN = re.compile(
-                r"(?:Chọn|Chon)\s+lo(?:ại|ai)\s+"
-                r"(CHAI|LON|GÓI|GOI|HỘP|HOP|TÚI|TUI|BỊCH|BICH|CAN|"
-                r"HŨ|HU|LY|CÂY|CAY|VIÊN|VIEN|TUÝP|TUYP)\b",
-                re.I,
+            listing_unit_count = sum(
+                1 for p in products
+                if p.get("unit_evidence") == "listing_card"
+                and normalize_unit(p.get("unit") or "")
             )
+            print(json.dumps({
+                "winmart_listing_units": listing_unit_count,
+                "winmart_products": len(products),
+                "missing_listing_units": len(products) - listing_unit_count,
+                "detail_pages_opened": 0,
+            }, ensure_ascii=False))
 
-            async def prepare_detail_page():
-                detail = await page.context.new_page()
-
-                async def detail_route(route):
-                    # Unit text needs HTML/JS/XHR, not heavy media.
-                    if route.request.resource_type in {"image", "media", "font"}:
-                        await route.abort()
-                    else:
-                        await route.continue_()
-
-                await detail.route("**/*", detail_route)
-                detail.set_default_timeout(5000)
-                return detail
-
-            async def read_detail_unit(detail, product):
-                url = product.get("url") or ""
-                if not url:
-                    return
-                try:
-                    await detail.goto(
-                        url,
-                        wait_until="domcontentloaded",
-                        timeout=12000,
-                    )
-                except Exception:
-                    # A navigation timeout can still leave enough rendered DOM
-                    # to read the "Chọn loại" control.
-                    pass
-
-                try:
-                    await detail.wait_for_timeout(350)
-                    result = await detail.evaluate(
-                        """() => {
-                          const MAP = {
-                            "CHAI":"Chai","LON":"Lon","GÓI":"Gói","GOI":"Gói",
-                            "HỘP":"Hộp","HOP":"Hộp","TÚI":"Túi","TUI":"Túi",
-                            "BỊCH":"Bịch","BICH":"Bịch","CAN":"Can",
-                            "HŨ":"Hũ","HU":"Hũ","LY":"Ly","CÂY":"Cây","CAY":"Cây",
-                            "VIÊN":"Viên","VIEN":"Viên","TUÝP":"Tuýp","TUYP":"Tuýp"
-                          };
-                          const clean=v=>String(v||"").replace(/\s+/g," ").trim();
-                          const upper=v=>clean(v).toUpperCase();
-                          const nodes=[...document.querySelectorAll(
-                            "button,[role='button'],label,a,span"
-                          )];
-                          let best=null;
-                          for(const el of nodes){
-                            const label=MAP[upper(el.textContent)];
-                            if(!label)continue;
-                            let score=0;
-                            if(el.matches("button"))score+=8;
-                            if(el.getAttribute("role")==="button")score+=5;
-                            const cls=clean(el.className).toLowerCase();
-                            if(/active|selected|type|variant|option|btn/.test(cls))score+=4;
-                            let ctx=el;
-                            for(let d=0;d<7&&ctx;d++,ctx=ctx.parentElement){
-                              const t=upper(ctx.textContent);
-                              if(t.includes("CHỌN LOẠI")||t.includes("CHON LOAI")){
-                                score+=20;
-                                break;
-                              }
-                            }
-                            if(!best||score>best.score)best={label,score};
-                          }
-                          return {
+            return {
                             unit:best&&best.score>=20?best.label:"",
                             body:(document.body&&document.body.innerText||"").slice(0,12000)
                           };

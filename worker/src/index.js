@@ -392,12 +392,24 @@ function apiBoxBuyToProduct(raw,data){
     raw.promotionText||
     (Array.isArray(data&&data.promotionTexts)?data.promotionTexts.join(" · "):"")
   );
-  const packaging=cleanText(
+  const priceUnitText=cleanText(
+    [raw.packageItemCount,raw.packageItemUnit].filter(Boolean).join(" ")
+  );
+  let packaging=cleanText(
     raw.title||
-    [raw.packageItemCount,raw.packageItemUnit].filter(Boolean).join(" ")||
+    priceUnitText||
     raw.textAvgPriceUnit||
     ""
   );
+  // If BHX marks "Thùng" on the price option/unit instead of the title,
+  // keep that authoritative marker visible in the stored packaging text.
+  const priceUnitKey=cleanText(raw.packageItemUnit||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const packagingKey=packaging
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  if(priceUnitKey==="thung"&&!/\bthung\b/.test(packagingKey)){
+    packaging=cleanText([packaging,priceUnitText].filter(Boolean).join(" · "));
+  }
   const name=cleanText(raw.name||slugTitle(url));
   const comparison=comparisonData({
     name,

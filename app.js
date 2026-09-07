@@ -30,13 +30,26 @@ let lastMobileLayout=isCompactBrowse();
 function canonical(url){
   try{
     const u=new URL(url);
-    return ("https://bachhoaxanh.com"+u.pathname.replace(/\/+$/,"")).toLowerCase();
+    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    const path=(u.pathname||"/").replace(/\/+$/,"")||"/";
+    if(host==="bachhoaxanh.com"){
+      return ("https://bachhoaxanh.com"+path).toLowerCase();
+    }
+    if(host==="winmart.vn"){
+      const out=new URL("https://winmart.vn"+path);
+      const store=u.searchParams.get("storeCode");
+      if(store)out.searchParams.set("storeCode",store);
+      return out.toString().replace(/\?$/,"").toLowerCase();
+    }
+    return (u.origin+path).toLowerCase();
   }catch{return ""}
 }
 
 function categoryRoot(url){
   try{
     const u=new URL(url);
+    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    if(host!=="bachhoaxanh.com")return "";
     const first=u.pathname.split("/").filter(Boolean)[0]||"";
     return first?"https://bachhoaxanh.com/"+first:"";
   }catch{return ""}

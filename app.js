@@ -32,15 +32,17 @@ function categoryRoot(url){
 }
 
 function money(v){
-  const n=Math.round(Number(v||0));
-  if(n<=0)return "—";
+  const n=Number(v||0);
+  if(!(n>0))return "—";
 
-  // Display prices in thousands everywhere:
-  // 738.000 -> 738, 61.500 -> 61.5, 46.833 -> 46.833.
+  // Display in thousands and round only the presentation to the nearest
+  // 0.5 thousand: 15.3 -> 15.5, 61.5 -> 61.5, 88.1 -> 88.
+  // Raw prices/calculations remain unchanged.
   const scaled=n/1000;
-  return scaled.toFixed(3)
-    .replace(/0+$/,"")
-    .replace(/\.$/,"");
+  const rounded=Math.round(scaled*2)/2;
+  return Number.isInteger(rounded)
+    ?String(rounded)
+    :rounded.toFixed(1);
 }
 
 function escapeHtml(v){

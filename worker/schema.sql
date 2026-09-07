@@ -161,3 +161,13 @@ CREATE TABLE IF NOT EXISTS link_preferences(
 
 CREATE INDEX IF NOT EXISTS idx_link_preferences_state
 ON link_preferences(state,auto_refresh,updated_at);
+
+
+CREATE TABLE IF NOT EXISTS link_assets(
+  link_url TEXT PRIMARY KEY,
+  image_url TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_link_assets_updated
+ON link_assets(updated_at);

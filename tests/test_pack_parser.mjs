@@ -135,7 +135,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,9);
+  assert.equal(payload.schema_version,10);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -170,6 +170,77 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     promoText:""
   });
   assert.equal(c.regular_unit_price,20000);
+}
+
+{
+  const c = comparisonData({
+    name:"Nước giặt OMO cửa trên hương Nhài trắng và Tuyết tùng túi 2.1kg",
+    packagingText:"Túi",
+    featureText:"",
+    packCount:1,
+    packUnit:"Túi",
+    current:115000,
+    sysPrice:115000,
+    discount:0,
+    promoText:"MUA 2 TÚI 199K"
+  });
+  assert.equal(c.quantity_offer_active,true);
+  assert.equal(c.quantity_offer_min_packs,2);
+  assert.equal(c.quantity_offer_total_price,199000);
+  assert.equal(c.promo_pack_price,99500);
+  assert.equal(c.promo_unit_price,99500);
+  assert.equal(c.promotion_text,"MUA 2 TÚI 199K");
+}
+
+{
+  const c = comparisonData({
+    name:"Thùng 24 lon Bia Heineken Silver 330ml",
+    packagingText:"Thùng 24 Lon",
+    featureText:"",
+    packCount:24,
+    packUnit:"Lon",
+    current:469000,
+    sysPrice:469000,
+    discount:0,
+    promoText:"MUA 2 TÚI 199K"
+  });
+  assert.equal(c.quantity_offer_active,false);
+  assert.equal(c.promotion_active,false);
+  assert.equal(c.promotion_text,"");
+}
+
+{
+  const c = comparisonData({
+    name:"4 túi nước xả vải Downy 3 lít",
+    packagingText:"4 Túi",
+    featureText:"",
+    packCount:4,
+    packUnit:"Túi",
+    current:716000,
+    sysPrice:716000,
+    discount:0,
+    promoText:"MUA 2 TÚI 199K"
+  });
+  assert.equal(c.quantity_offer_active,false);
+  assert.equal(c.promotion_active,false);
+}
+
+{
+  const c = comparisonData({
+    name:"4 túi nước xả vải Downy 3 lít",
+    packagingText:"4 Túi",
+    featureText:"",
+    packCount:4,
+    packUnit:"Túi",
+    current:716000,
+    sysPrice:716000,
+    discount:0,
+    promoText:"MUA 8 TÚI 999K"
+  });
+  assert.equal(c.quantity_offer_active,true);
+  assert.equal(c.quantity_offer_min_packs,2);
+  assert.equal(c.quantity_offer_pack_price,499500);
+  assert.equal(c.quantity_offer_unit_price,124875);
 }
 
 
@@ -208,7 +279,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,9);
+  assert.equal(payload.schema_version,10);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

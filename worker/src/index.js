@@ -1016,6 +1016,31 @@ async function persistLinkComparison(env,url,cmp,updatedAt){
   ).run();
 }
 
+async function persistLinkHierarchy(env,url,hierarchy,updatedAt){
+  if(!url||!hierarchy)return;
+  await env.DB.prepare(`
+    INSERT INTO link_pack_hierarchy(
+      link_url,label1,qty1,label2,qty2,label3,qty3,evidence,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(link_url) DO UPDATE SET
+      label1=excluded.label1,
+      qty1=excluded.qty1,
+      label2=excluded.label2,
+      qty2=excluded.qty2,
+      label3=excluded.label3,
+      qty3=excluded.qty3,
+      evidence=excluded.evidence,
+      updated_at=excluded.updated_at
+  `).bind(
+    url,
+    hierarchy.label1||"",Number(hierarchy.qty1)||0,
+    hierarchy.label2||"",Number(hierarchy.qty2)||0,
+    hierarchy.label3||"",Number(hierarchy.qty3)||0,
+    hierarchy.evidence||"",
+    updatedAt||new Date().toISOString()
+  ).run();
+}
+
 async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   const url=canonicalBhx(p.url);
 
@@ -1031,14 +1056,21 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
       ).bind(new Date().toISOString(),url).run();
       return null;
     }
+    const hierarchy=packHierarchyData(
+      identity.name,url,identity.packaging,
+      p.comparison&&p.comparison.pack_quantity,
+      p.comparison&&p.comparison.pack_unit
+    );
     p={
       ...p,
       name:identity.name,
-      packaging:{...(p.packaging||{}),text:identity.packaging}
+      packaging:{...(p.packaging||{}),text:identity.packaging},
+      hierarchy
     };
     if(identity.authoritativeCarton){
       p.comparison=comparisonData({
         name:p.name,
+        url,
         packagingText:p.packaging.text,
         featureText:"",
         packCount:p.comparison&&p.comparison.pack_quantity,
@@ -1046,7 +1078,8 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
         current:p.price&&p.price.current,
         sysPrice:p.price&&p.price.original,
         discount:0,
-        promoText:p.promotion&&p.promotion.text||""
+        promoText:p.promotion&&p.promotion.text||"",
+        hierarchy
       });
     }
   }
@@ -1091,6 +1124,11 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   if(linkType==="product"&&p.comparison){
     await persistLinkComparison(
       env,url,p.comparison,p.last_checked_at||checked
+    );
+  }
+  if(linkType==="product"&&p.hierarchy){
+    await persistLinkHierarchy(
+      env,url,p.hierarchy,p.last_checked_at||checked
     );
   }
   return id;

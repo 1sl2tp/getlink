@@ -554,23 +554,41 @@ function sheetDiffText(webValue,mineValue){
 
 function updateSheetRow(card){
   if(!card)return;
-  const qty=Math.max(1,Number(card.dataset.packQty)||1);
-  const packKind=String(card.dataset.packKind||"");
+  const middleQty=Math.max(1,Number(card.dataset.middleQty)||1);
+  const leafQty=Math.max(1,Number(card.dataset.leafQty)||1);
   const cartonInput=card.querySelector(".sheet-my-carton");
-  const retailInput=card.querySelector(".sheet-my-retail");
+  const middleInput=card.querySelector(".sheet-my-middle");
+  const leafInput=card.querySelector(".sheet-my-retail");
 
   const mineCarton=cartonInput
     ?Number(String(cartonInput.value||"").replace(/\D/g,""))||0
     :0;
-
-  const canBorrowCartonQty=packKind==="Thùng"&&qty>1;
-  const derivedRetail=canBorrowCartonQty&&mineCarton
-    ?Math.round(mineCarton/qty)
+  const mineMiddle=middleInput
+    ?Number(String(middleInput.value||"").replace(/\D/g,""))||0
     :0;
 
-  if(retailInput){
-    retailInput.placeholder=derivedRetail
-      ?"≈ "+money(derivedRetail)+" từ thùng"
+  const derivedMiddle=middleInput&&mineCarton
+    ?Math.round(mineCarton/middleQty)
+    :0;
+  const leafBase=mineMiddle||derivedMiddle||mineCarton;
+  const directLeafFromCarton=Boolean(
+    leafInput&&
+    !middleInput&&
+    cartonInput&&
+    mineCarton
+  );
+  const derivedLeaf=leafInput&&leafBase
+    ?Math.round(leafBase/(directLeafFromCarton?leafQty:leafQty))
+    :0;
+
+  if(middleInput){
+    middleInput.placeholder=derivedMiddle
+      ?"≈ "+money(derivedMiddle)+" từ thùng"
+      :"Giá/Giữa";
+  }
+  if(leafInput){
+    leafInput.placeholder=derivedLeaf
+      ?"≈ "+money(derivedLeaf)+(middleInput?" từ giữa":" từ thùng")
       :"Giá/Lẻ";
   }
 }

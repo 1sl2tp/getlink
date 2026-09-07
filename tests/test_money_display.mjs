@@ -74,4 +74,45 @@ assert.equal(money(0),"—");
   }),"Combo 24 lon A và 24 lon B");
 }
 
+
+{
+  const app=fs.readFileSync("app.js","utf8");
+  const normalizeMatch=app.match(/function sheetNormalizeUnit\(value\)\{[\s\S]*?\n\}/);
+  const inferMatch=app.match(/function inferSheetPack\(row\)\{[\s\S]*?\n\}/);
+  assert.ok(normalizeMatch&&inferMatch,"pack priority helpers not found");
+  const inferSheetPack=new Function(
+    normalizeMatch[0]+"\n"+inferMatch[0]+"\nreturn inferSheetPack;"
+  )();
+
+  assert.deepEqual(
+    inferSheetPack({
+      name:"Bột ngọt hạt lớn Ajinomoto gói 454g",
+      packaging:"Lon 454g",
+      pack_quantity:1,
+      pack_unit:"Lon"
+    }),
+    {qty:1,unit:"Gói",kind:"Gói",sizeValue:454,sizeUnit:"g"}
+  );
+
+  assert.deepEqual(
+    inferSheetPack({
+      name:"Cà phê MÊ Trang Robusta 500g",
+      packaging:"Gói 500g",
+      pack_quantity:1,
+      pack_unit:"Lon"
+    }),
+    {qty:1,unit:"Gói",kind:"Gói",sizeValue:500,sizeUnit:"g"}
+  );
+
+  assert.deepEqual(
+    inferSheetPack({
+      name:"Thùng 24 lon cà phê sữa Highlands 235ml",
+      packaging:"Lon 235ml",
+      pack_quantity:1,
+      pack_unit:"Lon"
+    }),
+    {qty:24,unit:"Lon",kind:"Thùng",sizeValue:235,sizeUnit:"ml"}
+  );
+}
+
 console.log("money display tests passed");

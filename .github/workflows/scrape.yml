@@ -1,0 +1,46 @@
+name: Lấy giá BHX
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: "Dán link sản phẩm Bách Hóa XANH"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: getlink-bhx
+  cancel-in-progress: false
+
+jobs:
+  get-price:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Cài Python + Chromium
+        run: |
+          pip install -r scraper/requirements.txt
+          python -m playwright install --with-deps chromium
+      - name: Lấy giá
+        env:
+          INPUT_URL: ${{ inputs.url }}
+        run: python scraper/scraper.py --url "$INPUT_URL" --max-products 1
+      - name: Lưu kết quả về GitHub
+        run: |
+          git config user.name "getlink-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/products.json data/products.csv data/latest.json
+          if git diff --cached --quiet; then
+            echo "Không có thay đổi"
+            exit 0
+          fi
+          git commit -m "data: cập nhật giá BHX"
+          git push origin HEAD:main

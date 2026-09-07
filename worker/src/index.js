@@ -96,8 +96,13 @@ function normalizePackWord(value){
 }
 
 function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
+  const plainOf=value=>cleanText(value||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const namePlain=plainOf(name);
+  const packagingPlain=plainOf(packagingText);
+  const rawUnitPlain=plainOf(rawUnit);
   const text=cleanText([name,packagingText,featureText].filter(Boolean).join(" "));
-  const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const plain=plainOf(text);
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can";
@@ -105,7 +110,20 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const kindMatch=plain.match(new RegExp("^("+kindPattern+")\\b"));
   let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
 
-  // Only the beginning of the name may define pack quantity.
+  // "Thùng" may be written in the product name OR in the first price
+  // option's own title/unit. Those are both authoritative for this link.
+  const multiCartonMatch=
+    namePlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/)||
+    packagingPlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/);
+  const explicitCarton=Boolean(
+    /^thung\b/.test(namePlain)||
+    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s*thung\b/.test(namePlain)||
+    /^thung\b/.test(packagingPlain)||
+    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s*thung\b/.test(packagingPlain)||
+    rawUnitPlain==="thung"
+  );
+
+  // Only the beginning of the authoritative text may define pack quantity.
   // This prevents product/model numbers such as 1664, 333, C2, 7Up...
   // from ever becoming SL/QC.
   const body=kindMatch
@@ -151,13 +169,28 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     }
   }
 
+  // "Combo 5 thùng..." or an API price unit "5 Thùng" means one link
+  // represents five cartons. Keep that 1:5 relationship explicitly.
+  if(multiCartonMatch){
+    const cartons=Number(String(multiCartonMatch[1]).replace(",","."));
+    if(cartons>0&&cartons<=300){
+      quantity=cartons;
+      unit="Thùng";
+    }
+  }else if(rawUnitPlain==="thung"&&rawQty>0&&rawQty<=300){
+    quantity=rawQty;
+    unit="Thùng";
+  }
+
   if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnitMatch){
     unit=normalizePackWord(singleUnitMatch[1]);
   }
 
   if(!quantity)quantity=1;
 
-  if(!packKind){
+  if(explicitCarton){
+    packKind="Thùng";
+  }else if(!packKind){
     const normalizedUnit=normalizePackWord(unit||rawUnit||"");
     packKind=quantity>1
       ?"Cụm"
@@ -215,7 +248,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<6)return null;
+    if(Number(payload&&payload.schema_version||0)<7)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -426,7 +459,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:6,
+    schema_version:7,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -455,7 +488,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:6,
+    schema_version:7,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1590,7 +1623,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:6,
+        schema_version:7,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

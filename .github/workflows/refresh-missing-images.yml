@@ -41,23 +41,6 @@ jobs:
       - name: Cài client
         run: pip install -r scraper/requirements.txt requests
 
-      - name: Chờ lượt cập nhật ảnh toàn thư viện hoàn tất
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 480); do
-            RUNNING="$(curl -fsSL               -H "Authorization: Bearer $GH_TOKEN"               -H "Accept: application/vnd.github+json"               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/refresh-library-images.yml/runs?status=in_progress&per_page=20"               | jq '.workflow_runs | length')"
-            if [ "$RUNNING" = "0" ]; then
-              echo "Lượt cập nhật chính đã hoàn tất."
-              exit 0
-            fi
-            echo "Đang chờ lượt cập nhật chính... ($RUNNING tác vụ)"
-            sleep 15
-          done
-          echo "Hết thời gian chờ lượt cập nhật chính."
-          exit 1
-
       - name: Lấy danh sách sản phẩm còn thiếu ảnh
         run: |
           set -euo pipefail

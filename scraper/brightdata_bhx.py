@@ -7,7 +7,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import parse_qs, parse_qsl, quote, unquote, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, unquote, urlparse, urlunparse
 
 from playwright.async_api import async_playwright
 
@@ -98,20 +98,33 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
         try:
             page = await browser.new_page()
             queue: asyncio.Queue = asyncio.Queue()
-            internal_bulk_urls: set[str] = set()
-            api_first_attempted = False
 
             async def route_handler(route):
                 if route.request.resource_type in BLOCK_TYPES:
                     await route.abort()
-                else:
-                    await route.continue_()
+                    return
+
+                # BHX category: keep the exact browser request/session, only enlarge
+                # pageSize on the first V2/GetCate request so the whole category is
+                # returned in one shot. No second API call, no extra page.
+                if kind == "category" and "/Category/V2/GetCate" in route.request.url:
+                    u = urlparse(route.request.url)
+                    q = parse_qs(u.query, keep_blank_values=True)
+                    q["pageSize"] = ["500"]
+                    query = "&".join(
+                        f"{quote(str(k), safe='')}={quote(str(v), safe='')}"
+                        for k, vals in q.items()
+                        for v in vals
+                    )
+                    url = urlunparse((u.scheme, u.netloc, u.path, u.params, query, u.fragment))
+                    await route.continue_(url=url)
+                    return
+
+                await route.continue_()
 
             await page.route("**/*", route_handler)
 
             def on_response(response):
-                if response.url in internal_bulk_urls:
-                    return
                 url = response.url.lower()
                 should_queue = marker_matches(response.url, kind)
                 if kind == "category" and "api.bachhoaxanh.com/" in url and "/gw/" in url:
@@ -199,170 +212,6 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     return payload
                 return None
 
-            async def try_api_first_category(response, payload):
-                nonlocal api_first_attempted
-                """
-                BHX V2/GetCate accepts an arbitrary pageSize. The storefront asks
-                for 10 by default, but a larger pageSize returns the whole
-                category in one response (confirmed with /sua-tuoi, total=113).
-                Reuse the exact live request and only increase pageSize.
-                """
-                low_url = str(response.url or "").lower()
-                if "/category/v2/getcate" not in low_url:
-                    return None
-                if api_first_attempted:
-                    return None
-                api_first_attempted = True
-
-                data = payload.get("data") if isinstance(payload, dict) else None
-                if not isinstance(data, dict):
-                    return None
-
-                first_products = category_products_from_payload(payload)
-                try:
-                    total = int(data.get("total") or 0)
-                except Exception:
-                    total = 0
-                if total <= 0:
-                    total = len(first_products)
-                if not first_products:
-                    return None
-
-                if len(first_products) >= total:
-                    data["_getlink_api_first"] = True
-                    data["_getlink_total"] = total
-                    data["_getlink_requested_page_size"] = len(first_products)
-                    print(json.dumps({
-                        "bhx_api_first": True,
-                        "total": total,
-                        "products": len(first_products),
-                        "requested_page_size": len(first_products),
-                        "bulk_request": False,
-                    }, ensure_ascii=False))
-                    return payload, response.url
-
-                # Request exactly the total BHX just reported. This is the same
-                # one-shot shape verified manually on /sua-tuoi (total=113).
-                # Cap only as a defensive guard; larger categories fall back to
-                # the existing scroll merger if BHX ever exceeds it.
-                requested_page_size = min(max(total, 1), 2000)
-
-                parsed = urlparse(response.url)
-                pairs = parse_qsl(parsed.query, keep_blank_values=True)
-                rebuilt = []
-                replaced = False
-                for key, value in pairs:
-                    if key.lower() == "pagesize":
-                        rebuilt.append((key, str(requested_page_size)))
-                        replaced = True
-                    else:
-                        rebuilt.append((key, value))
-                if not replaced:
-                    rebuilt.append(("pageSize", str(requested_page_size)))
-
-                bulk_url = urlunparse((
-                    parsed.scheme,
-                    parsed.netloc,
-                    parsed.path,
-                    parsed.params,
-                    urlencode(rebuilt),
-                    parsed.fragment,
-                ))
-                internal_bulk_urls.add(bulk_url)
-
-                # Reuse the already-open BHX page and call GetCate with fetch().
-                # This keeps the exact browser session/cookies/headers that produced
-                # the original 10-item request, while only changing pageSize.
-                bulk_payload = None
-                bulk_status = 0
-                last_error = ""
-                for attempt in range(3):
-                    try:
-                        result = await page.evaluate(
-                            """async ({url}) => {
-                              try {
-                                const res = await fetch(url, {
-                                  method: "GET",
-                                  credentials: "include",
-                                  headers: { "accept": "application/json, text/plain, */*" }
-                                });
-                                const text = await res.text();
-                                let body = null;
-                                try { body = JSON.parse(text); } catch {}
-                                return {ok:res.ok,status:res.status,body};
-                              } catch (e) {
-                                return {ok:false,status:0,error:String(e)};
-                              }
-                            }""",
-                            {"url": bulk_url},
-                        )
-                        bulk_status = int((result or {}).get("status") or 0)
-                        if (result or {}).get("ok") and isinstance((result or {}).get("body"), dict):
-                            bulk_payload = result["body"]
-                            break
-                        last_error = str((result or {}).get("error") or f"http_{bulk_status}")[:300]
-                    except Exception as exc:
-                        last_error = str(exc)[:300]
-                    await asyncio.sleep(0.6 * (attempt + 1))
-
-                if bulk_payload is None:
-                    print(json.dumps({
-                        "bhx_api_first": False,
-                        "reason": "bulk_browser_navigation_failed",
-                        "status": bulk_status,
-                        "detail": last_error,
-                        "url": bulk_url,
-                    }, ensure_ascii=False))
-                    return None
-
-                if not (
-                    isinstance(bulk_payload, dict)
-                    and int(bulk_payload.get("code", -1)) == 0
-                    and isinstance(bulk_payload.get("data"), dict)
-                ):
-                    return None
-
-                bulk_products = category_products_from_payload(bulk_payload)
-                unique = {}
-                for item in bulk_products:
-                    key = str(
-                        item.get("url")
-                        or item.get("id")
-                        or item.get("productCode")
-                        or json.dumps(item, ensure_ascii=False, sort_keys=True)[:500]
-                    )
-                    unique[key] = item
-                bulk_products = list(unique.values())
-
-                try:
-                    bulk_total = int(bulk_payload["data"].get("total") or total)
-                except Exception:
-                    bulk_total = total
-                expected = max(total, bulk_total)
-
-                print(json.dumps({
-                    "bhx_api_first": True,
-                    "total": expected,
-                    "products": len(bulk_products),
-                    "requested_page_size": requested_page_size,
-                    "bulk_request": True,
-                }, ensure_ascii=False))
-
-                if len(bulk_products) < expected:
-                    print(json.dumps({
-                        "bhx_api_first_incomplete": True,
-                        "expected": expected,
-                        "received": len(bulk_products),
-                        "fallback": "scroll_merge",
-                    }, ensure_ascii=False))
-                    return None
-
-                bulk_payload["data"]["products"] = bulk_products
-                bulk_payload["data"]["_getlink_api_first"] = True
-                bulk_payload["data"]["_getlink_total"] = expected
-                bulk_payload["data"]["_getlink_requested_page_size"] = requested_page_size
-                return bulk_payload, bulk_url
-
 
             if kind == "product":
                 deadline = time.monotonic() + 90
@@ -376,8 +225,9 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     if payload is not None:
                         return payload, response.url
             else:
-                # API-first: V2/GetCate can return the whole category when pageSize
-                # is increased. Keep the scroll merger below only as a safety fallback.
+                # The browser request is rewritten to pageSize=500 above.
+                # Usually one V2/GetCate response now contains the whole category.
+                # Keep the existing merger only as a harmless fallback.
                 first_product_payload = None
                 first_product_response_url = ""
                 merged: dict[str, dict] = {}
@@ -410,10 +260,6 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         payload = await valid_payload(response)
                         if payload is None:
                             continue
-
-                        api_first = await try_api_first_category(response, payload)
-                        if api_first is not None:
-                            return api_first
 
                         products = category_products_from_payload(payload)
                         if products:

@@ -406,6 +406,19 @@ async function upsertLink(env,row){
   return id;
 }
 
+
+async function persistLinkAsset(env,url,image,updatedAt){
+  const imageUrl=String(image||"").trim();
+  if(!url||!imageUrl)return;
+  await env.DB.prepare(`
+    INSERT INTO link_assets(link_url,image_url,updated_at)
+    VALUES(?,?,?)
+    ON CONFLICT(link_url) DO UPDATE SET
+      image_url=excluded.image_url,
+      updated_at=excluded.updated_at
+  `).bind(url,imageUrl,updatedAt||new Date().toISOString()).run();
+}
+
 async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   const url=canonicalBhx(p.url);
   const price=p.price||{};
@@ -439,6 +452,11 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
       Number(price.current)||null,Number(price.original)||null,
       Number(promo.price)||null,promo.text||"",JSON.stringify(p)
     ).run();
+  }
+  if(linkType==="product"&&p.image){
+    await persistLinkAsset(
+      env,url,p.image,p.last_checked_at||checked
+    );
   }
   return id;
 }
@@ -629,6 +647,18 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
       Number(promo.price)||null,promo.text||"",
       p.last_checked_at||checked,"ok",requestId,now,now
     ));
+
+    if(p.image){
+      prepared.push(
+        env.DB.prepare(`
+          INSERT INTO link_assets(link_url,image_url,updated_at)
+          VALUES(?,?,?)
+          ON CONFLICT(link_url) DO UPDATE SET
+            image_url=excluded.image_url,
+            updated_at=excluded.updated_at
+        `).bind(childUrl,String(p.image),p.last_checked_at||checked)
+      );
+    }
   }
 
   // Keep D1 batches deliberately small: category roots can contain hundreds of children.
@@ -1243,18 +1273,22 @@ async function handleLibrary(url,env,origin){
 
     let sql=`
       SELECT
-        l.id,l.canonical_url,l.parent_url,l.group_name,l.branch_name,l.name,
+        l.id,l.canonical_url,l.parent_url,l.group_name,l.branch_name,
+        l.branch_name AS brand_name,l.name,
         l.packaging,l.current_price,l.original_price,l.promotion_price,
         l.promotion_text,l.last_checked_at,l.last_status,l.updated_at,
         COALESCE(pref.state,'normal') AS preference_state,
         COALESCE(pref.auto_refresh,0) AS auto_refresh,
         COALESCE(pref.refresh_hours,24) AS refresh_hours,
-        (
-          SELECT pv.image
-          FROM product_variants pv
-          WHERE pv.parent_url=l.canonical_url
-          ORDER BY pv.updated_at DESC
-          LIMIT 1
+        COALESCE(
+          asset.image_url,
+          (
+            SELECT pv.image
+            FROM product_variants pv
+            WHERE pv.parent_url=l.canonical_url
+            ORDER BY pv.updated_at DESC
+            LIMIT 1
+          )
         ) AS image,
         (
           SELECT MIN(COALESCE(d.promo_unit_price,d.regular_unit_price))
@@ -1269,6 +1303,8 @@ async function handleLibrary(url,env,origin){
       FROM links l
       LEFT JOIN link_preferences pref
         ON pref.link_url=l.canonical_url
+      LEFT JOIN link_assets asset
+        ON asset.link_url=l.canonical_url
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
@@ -1324,7 +1360,7 @@ async function handleLibrary(url,env,origin){
     }
 
     const row=await env.DB.prepare(
-      "SELECT * FROM links WHERE canonical_url=? LIMIT 1"
+      "SELECT l.*,a.image_url AS stored_image FROM links l LEFT JOIN link_assets a ON a.link_url=l.canonical_url WHERE l.canonical_url=? LIMIT 1"
     ).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
@@ -1417,7 +1453,7 @@ async function handleLibrary(url,env,origin){
         text:row.promotion_text||""
       },
       url:itemUrl,
-      image:variantRows[0]&&variantRows[0].image||"",
+      image:variantRows[0]&&variantRows[0].image||row.stored_image||"",
       last_checked_at:row.last_checked_at||""
     };
     const preference=await getPreference(env,itemUrl);

@@ -916,6 +916,18 @@ h1{margin:0;font-size:28px;line-height:1.1}
   color:var(--green-strong);
   font-variant-numeric:tabular-nums;
 }
+.xls-price-main{
+  display:block;
+}
+.xls-promo-note{
+  display:block;
+  margin-top:2px;
+  color:#84620e;
+  font-size:8px;
+  font-weight:800;
+  line-height:1;
+  white-space:nowrap;
+}
 .xls-input{
   display:block;
   width:100%;

@@ -95,6 +95,38 @@ h1{margin:0;font-size:28px;line-height:1.1}
   color:var(--green-strong);
 }
 .brand-chip.active small{color:#6aa985}
+
+.pack-tabs{
+  display:flex;
+  gap:7px;
+  overflow:auto;
+  padding:8px 20px 0;
+  scrollbar-width:none;
+}
+.pack-tabs[hidden]{display:none}
+.pack-tabs::-webkit-scrollbar{display:none}
+.pack-chip{
+  flex:0 0 auto;
+  border:1px solid #dfe3e8;
+  background:#fff;
+  color:#475467;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:11px;
+  font-weight:750;
+}
+.pack-chip small{
+  margin-left:3px;
+  color:#98a2b3;
+  font-weight:650;
+}
+.pack-chip.active{
+  background:#eef8f2;
+  border-color:#9fcdb4;
+  color:var(--green-strong);
+}
+.pack-chip.active small{color:#6aa985}
+
 .state-filters{
   display:flex;
   gap:7px;
@@ -383,7 +415,7 @@ h1{margin:0;font-size:28px;line-height:1.1}
   .catalog-toolbar{align-items:flex-start;flex-direction:column}
   .secondary{width:100%}
   .catalog-toolbar,.catalog-search{padding-left:12px;padding-right:12px}
-  .category-tabs,.brand-tabs,.state-filters{
+  .category-tabs,.brand-tabs,.pack-tabs,.state-filters{
     padding-left:12px;
     padding-right:12px;
   }

@@ -116,7 +116,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   if(bonusMatch){
     const base=Number(String(bonusMatch[1]).replace(",","."));
     const bonus=Number(String(bonusMatch[2]).replace(",","."));
-    if(base>0&&bonus>0){
+    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300){
       quantity=base+bonus;
       unit=normalizePackWord(bonusMatch[3]);
     }
@@ -125,13 +125,13 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     const bonus=Number(String(bonusWithUnits[3]).replace(",","."));
     const unitA=normalizePackWord(bonusWithUnits[2]);
     const unitB=normalizePackWord(bonusWithUnits[4]);
-    if(base>0&&bonus>0&&unitA===unitB){
+    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300&&unitA===unitB){
       quantity=base+bonus;
       unit=unitA;
     }
   }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
-    if(parsed>0&&(quantity<=1||!unit||normalizePackWord(unit)===packKind)){
+    if(parsed>0&&parsed<=300&&(quantity<=1||!unit||normalizePackWord(unit)===packKind)){
       quantity=parsed;
       unit=normalizePackWord(countMatch[2]);
     }

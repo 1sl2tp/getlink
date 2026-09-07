@@ -726,88 +726,36 @@ function inferSheetPack(row){
   };
 }
 
-function rowUrlIsCarton(row){
-  try{
-    const path=new URL(String(row&&row.canonical_url||"")).pathname
-      .replace(/\/+$/,"")
-      .toLowerCase();
-    const slug=path.split("/").filter(Boolean).pop()||"";
-
-    // BHX carton product URLs are commonly:
-    //   /ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml
-    // Older/imported URLs may also end with "-thung".
-    // Treat only the product slug boundary as authoritative.
-    return /^thung(?:-|$)/.test(slug)||/-thung$/.test(slug);
-  }catch{
-    return false;
-  }
-}
-
-function rowCartonStartText(row){
-  // A visible own field starting with "Thùng" is authoritative.
-  const fields=[row.name,row.source_name,row.packaging]
-    .map(searchKey)
-    .filter(Boolean);
-  const explicit=fields.find(value=>/^thung\b/.test(value));
-  if(explicit)return explicit;
-
-  // Some BHX category rows expose "24 lon ..." while the detail link is
-  // the carton URL ending "-thung". Protect/classify that row as Thùng
-  // until its detail payload is fetched.
-  return rowUrlIsCarton(row)?"thung":"";
+function rowPackHierarchy(row){
+  return {
+    label1:String(row&&row.pack_label_1||"").trim(),
+    qty1:Number(row&&row.pack_qty_1)||0,
+    label2:String(row&&row.pack_label_2||"").trim(),
+    qty2:Number(row&&row.pack_qty_2)||0,
+    label3:String(row&&row.pack_label_3||"").trim(),
+    qty3:Number(row&&row.pack_qty_3)||0,
+    evidence:String(row&&row.pack_evidence||"").trim()
+  };
 }
 
 function rowCartonStructure(row){
-  const names=[row.name,row.source_name].map(searchKey).filter(Boolean);
-  const name=names[0]||"";
-  const packaging=searchKey(row.packaging||"");
-  const units="hop|chai|goi|bich|tui|lon|hu|ly|to|can|khoanh|thanh|cay|vien|tuyp|loc";
+  const h=rowPackHierarchy(row);
+  const isPureCarton=h.label1==="Thùng";
 
-  // Pure carton priority:
-  // 1) own text starts "Thùng"
-  // 2) detail URL is the dedicated ...-thung URL
-  // "2 thùng..." / "Combo..." remain multi-carton offers.
-  const multiName=names
-    .map(value=>value.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s+thung\b/))
-    .find(Boolean)||null;
-  const nameIsCombo=names.some(value=>/^combo\b/.test(value));
-  const cartonStart=rowCartonStartText(row);
-  const pureByName=Boolean(cartonStart&&cartonStart!=="thung"&&names.includes(cartonStart));
-  const pureByUrl=cartonStart==="thung"&&rowUrlIsCarton(row);
-  const pureByPrice=!pureByName&&!pureByUrl&&!multiName&&!nameIsCombo&&/^thung\b/.test(packaging);
-  const isPureCarton=pureByName||pureByUrl||pureByPrice;
-
-  let cartonCount=1;
-  if(multiName){
-    cartonCount=Math.max(1,Number(String(multiName[1]).replace(",", "."))||1);
-  }
-
-  const innerText=pureByName
-    ?cartonStart
-    :(pureByPrice?packaging:name);
-  const pureInner=innerText.match(
-    new RegExp("^thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
-  );
-  const urlInner=pureByUrl
-    ?name.match(new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b"))
-    :null;
-  const multiInner=names
-    .map(value=>value.match(
-      new RegExp("^(?:combo\\s+)?[0-9]+(?:[.,][0-9]+)?\\s+thung\\s+([0-9]+(?:[.,][0-9]+)?)\\s+("+units+")\\b")
-    ))
-    .find(Boolean)||null;
-  const inner=pureInner||urlInner||multiInner;
-
+  // UI no longer parses name/URL/QC to decide Thùng.
+  // It only consumes the hierarchy contract emitted by the Worker.
   return {
     isPureCarton,
-    cartonCount,
-    itemCount:inner?Math.max(1,Number(String(inner[1]).replace(",", "."))||1):0,
-    itemUnit:inner?sheetNormalizeUnit(inner[2]):""
+    cartonCount:isPureCarton?1:0,
+    itemCount:isPureCarton?Math.max(0,Number(h.qty2)||0):0,
+    itemUnit:isPureCarton?h.label2:"",
+    subItemCount:isPureCarton?Math.max(0,Number(h.qty3)||0):0,
+    subItemUnit:isPureCarton?h.label3:""
   };
 }
 
 function rowIsCarton(row){
-  return rowCartonStructure(row).isPureCarton;
+  return rowPackHierarchy(row).label1==="Thùng";
 }
 
 function rowHasMixedBundle(row){
@@ -1185,9 +1133,8 @@ function suppressRedundantMultiPacks(products){
   }
 
   return products.filter(row=>{
-    // Hard safety gate: rows starting with "Thùng" are NEVER hidden by
-    // redundant retail-pack cleanup.
-    if(rowCartonStartText(row))return true;
+    // Nhãn 1 is authoritative: cartons are never touched by retail cleanup.
+    if(rowIsCarton(row))return true;
 
     const pack=inferSheetPack(row);
     const simple=simpleRowPrice(row);

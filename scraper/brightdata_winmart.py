@@ -196,18 +196,49 @@ def normalize_product_url(raw: str, base_url: str, store_code: str) -> str:
 
 
 def image_url(value, base_url: str) -> str:
-    if isinstance(value, dict):
-        value = first_value(value, ("url", "src", "image", "imageUrl"))
-    if isinstance(value, list):
-        value = next((x for x in value if x), "")
-    value = clean_text(value)
-    if not value:
-        return ""
-    if value.startswith("//"):
-        return "https:" + value
-    if value.startswith("/"):
-        return urljoin(base_url, value)
-    return value
+    candidates = []
+
+    def collect(v):
+        if v in (None, ""):
+            return
+        if isinstance(v, dict):
+            for key in (
+                "url", "src", "image", "imageUrl", "image_url",
+                "thumbnail", "thumbnailUrl", "thumbnail_url",
+                "productImage", "product_image", "large", "medium", "small"
+            ):
+                if key in v:
+                    collect(v.get(key))
+            return
+        if isinstance(v, list):
+            for item in v:
+                collect(item)
+            return
+        text = clean_text(v)
+        if text:
+            candidates.append(text)
+
+    collect(value)
+
+    for raw in candidates:
+        # srcset / lazy-srcset may contain "url 1x, url2 2x".
+        parts = [x.strip().split(" ")[0] for x in raw.split(",") if x.strip()]
+        for part in parts or [raw]:
+            value = clean_text(part)
+            low = value.lower()
+            if not value:
+                continue
+            if low.startswith("data:") or low.startswith("blob:"):
+                continue
+            if "placeholder" in low or "transparent" in low:
+                continue
+            if value.startswith("//"):
+                value = "https:" + value
+            elif value.startswith("/"):
+                value = urljoin(base_url, value)
+            if value.startswith("http://") or value.startswith("https://"):
+                return value
+    return ""
 
 
 def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_label: str):
@@ -277,10 +308,14 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     packaging = clean_text(first_value(obj, (
         "packaging", "packSize", "pack_size", "unitText", "unit_text"
     )))
-    image = image_url(first_value(obj, (
-        "imageUrl", "image_url", "thumbnailUrl", "thumbnail_url",
-        "thumbnail", "image", "avatar", "picture"
-    )), base_url)
+    image = image_url([
+        obj.get("imageUrl"), obj.get("image_url"),
+        obj.get("thumbnailUrl"), obj.get("thumbnail_url"),
+        obj.get("thumbnail"), obj.get("image"),
+        obj.get("images"), obj.get("imageUrls"), obj.get("image_urls"),
+        obj.get("productImage"), obj.get("product_image"),
+        obj.get("avatar"), obj.get("picture")
+    ], base_url)
 
     promo = clean_text(first_value(obj, (
         "promotionText", "promotion_text", "promoText", "promo_text"
@@ -399,11 +434,25 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         (a.getAttribute("title") || "") ||
                         (img && img.getAttribute("alt")) ||
                         (a.innerText || "").trim();
+                      const imageCandidates = img ? [
+                        img.currentSrc || "",
+                        img.getAttribute("data-src") || "",
+                        img.getAttribute("data-original") || "",
+                        img.getAttribute("data-lazy-src") || "",
+                        img.getAttribute("data-image") || "",
+                        img.getAttribute("data-srcset") || "",
+                        img.getAttribute("srcset") || "",
+                        img.getAttribute("src") || ""
+                      ] : [];
+                      const realImage = imageCandidates
+                        .flatMap(v => String(v || "").split(","))
+                        .map(v => v.trim().split(/\s+/)[0])
+                        .find(v => v && !/^data:/i.test(v) && !/^blob:/i.test(v)) || "";
                       return {
                         href,
                         text,
                         title,
-                        image: img ? (img.currentSrc || img.src || "") : ""
+                        image: realImage
                       };
                     })"""
                 )
@@ -439,7 +488,7 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         "name": title,
                         "current_price": current,
                         "original_price": original,
-                        "image": clean_text(row.get("image") or ""),
+                        "image": image_url(row.get("image") or "", page.url),
                         "brand": "",
                         "unit": unit_from_name(title),
                         "packaging": "",

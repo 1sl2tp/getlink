@@ -22,7 +22,10 @@ let libraryGroups=[];
 let categoryPage=1;
 let libraryPage=1;
 let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
-let lastMobileLayout=window.innerWidth<=700;
+function isCompactBrowse(){
+  return window.matchMedia("(max-width: 900px)").matches;
+}
+let lastMobileLayout=isCompactBrowse();
 
 function canonical(url){
   try{
@@ -1005,11 +1008,11 @@ function productCard(row){
 }
 
 function categoryPageSize(){
-  return window.innerWidth<=700?8:18;
+  return isCompactBrowse()?8:18;
 }
 
 function resultPageSize(){
-  return window.innerWidth<=700?20:36;
+  return isCompactBrowse()?20:36;
 }
 
 function pagerButtons(page,total){
@@ -1025,12 +1028,18 @@ function pagerButtons(page,total){
   return out.join("");
 }
 
+function categoryPagerButtons(page,total){
+  if(total<=1)return "";
+  return '<button type="button" data-page="'+Math.max(1,page-1)+'" '+(page<=1?'disabled':'')+' aria-label="Nhóm trước">‹</button>'+
+    '<button type="button" data-page="'+Math.min(total,page+1)+'" '+(page>=total?'disabled':'')+' aria-label="Nhóm sau">›</button>';
+}
+
 function renderCategoryMenu(){
   const host=$("#categoryTabs");
   const pager=$("#categoryPager");
   if(!host)return;
 
-  const mobile=window.innerWidth<=700;
+  const mobile=isCompactBrowse();
   const pageSize=categoryPageSize();
   const totalPages=Math.max(1,Math.ceil(libraryGroups.length/pageSize));
 
@@ -1056,7 +1065,7 @@ function renderCategoryMenu(){
     ).join("");
 
   if(pager){
-    pager.innerHTML=mobile?"":pagerButtons(categoryPage,totalPages);
+    pager.innerHTML=mobile?"":categoryPagerButtons(categoryPage,totalPages);
     pager.hidden=mobile||totalPages<=1;
   }
 }
@@ -1258,11 +1267,13 @@ function filteredLibraryProducts(){
 function renderBrandTabs(){
   const host=$("#brandTabs");
   if(!host)return;
+  const section=host.closest(".brand-section");
 
   if(!activeGroupUrl){
     activeBrand="";
     host.hidden=true;
     host.innerHTML="";
+    if(section)section.hidden=true;
     return;
   }
 
@@ -1283,10 +1294,12 @@ function renderBrandTabs(){
     activeBrand="";
     host.hidden=true;
     host.innerHTML="";
+    if(section)section.hidden=true;
     return;
   }
 
   if(activeBrand&&!counts.has(activeBrand))activeBrand="";
+  if(section)section.hidden=false;
   host.hidden=false;
   host.innerHTML=
     '<button class="brand-chip '+(!activeBrand?"active":"")+'" data-brand="" type="button">Tất cả hãng <small>'+base.length+'</small></button>'+
@@ -1301,7 +1314,7 @@ function renderResultPager(total,pageCount){
   const host=$("#resultPager");
   if(!host)return;
 
-  if(window.innerWidth<=700){
+  if(isCompactBrowse()){
     const shown=Math.min(total,libraryPage*resultPageSize());
     const remaining=Math.max(0,total-shown);
     host.innerHTML=remaining
@@ -1328,6 +1341,7 @@ function syncViewMode(){
 function renderLibraryProducts(){
   renderBrandTabs();
   renderPackTabs();
+  syncStateControls();
   const products=filteredLibraryProducts();
 
   if(libraryQuery){
@@ -1344,7 +1358,7 @@ function renderLibraryProducts(){
   const size=resultPageSize();
   const pageCount=Math.max(1,Math.ceil(products.length/size));
   libraryPage=Math.min(Math.max(1,libraryPage),pageCount);
-  const mobile=window.innerWidth<=700;
+  const mobile=isCompactBrowse();
   const start=mobile?0:(libraryPage-1)*size;
   const end=mobile?libraryPage*size:start+size;
   const visible=products.slice(start,end);
@@ -1437,13 +1451,32 @@ async function refreshCatalog(selectUrl=""){
 }
 
 
+function syncStateControls(){
+  document.querySelectorAll("#stateFilters .state-chip").forEach(chip=>{
+    chip.classList.toggle("active",(chip.dataset.state||"visible")===libraryState);
+  });
+  const mobileWatch=$("#mobileWatchFilter");
+  if(mobileWatch){
+    const active=libraryState==="watch";
+    mobileWatch.classList.toggle("active",active);
+    mobileWatch.textContent=active?"♥":"♡";
+    mobileWatch.setAttribute("aria-pressed",active?"true":"false");
+  }
+}
+
+$("#mobileWatchFilter").addEventListener("click",()=>{
+  libraryState=libraryState==="watch"?"visible":"watch";
+  libraryPage=1;
+  syncStateControls();
+  renderLibraryProducts();
+});
+
 $("#stateFilters").addEventListener("click",e=>{
   const chip=e.target.closest(".state-chip");
   if(!chip)return;
   libraryState=chip.dataset.state||"visible";
   libraryPage=1;
-  document.querySelectorAll(".state-chip").forEach(x=>x.classList.remove("active"));
-  chip.classList.add("active");
+  syncStateControls();
   renderLibraryProducts();
 });
 
@@ -1541,6 +1574,8 @@ $("#productGrid").addEventListener("click",async e=>{
     return;
   }
 
+  if(isCompactBrowse())return;
+
   const button=e.target.closest(".grid-product-name");
   const card=e.target.closest(".grid-product");
   const url=(button&&button.dataset.url)||(card&&card.dataset.url)||"";
@@ -1549,17 +1584,18 @@ $("#productGrid").addEventListener("click",async e=>{
 
 $("#productGrid").addEventListener("keydown",e=>{
   if(e.key!=="Enter"&&e.key!==" ")return;
+  if(isCompactBrowse())return;
   const card=e.target.closest(".grid-product");
   if(!card)return;
   e.preventDefault();
-  openLibraryItem(card.dataset.url||"");
+  if(!isCompactBrowse())openLibraryItem(card.dataset.url||"");
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
   const detailButton=e.target.closest(".xls-open-detail");
   if(detailButton){
     e.stopPropagation();
-    openLibraryItem(detailButton.dataset.url||"");
+    if(!isCompactBrowse())openLibraryItem(detailButton.dataset.url||"");
     return;
   }
 
@@ -1766,7 +1802,7 @@ refreshCatalog();
 syncViewMode();
 
 window.addEventListener("resize",()=>{
-  const mobile=window.innerWidth<=700;
+  const mobile=isCompactBrowse();
   if(mobile===lastMobileLayout)return;
   lastMobileLayout=mobile;
   categoryPage=1;

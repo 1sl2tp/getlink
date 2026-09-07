@@ -14,7 +14,7 @@ jobs:
       - name: Test GETLINK sample
         env:
           API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
-          SAMPLE: "https://www.bachhoaxanh.com/dau-an/thung-6-can-dau-dau-nanh-nguyen-chat-simply-2-lit"
+          SAMPLE: "https://www.bachhoaxanh.com/dau-an/thung-12-chai-dau-thuc-vat-good-meall-1-lit"
         run: |
           set -euo pipefail
           echo "Health:"
@@ -45,7 +45,7 @@ jobs:
             STATUS="$(jq -r '.status // empty' /tmp/getlink-result.json)"
             echo "poll=$i status=$STATUS"
             if [ "$STATUS" = "complete" ]; then
-              jq '{status,registry_count,input_type:.payload.input_type,name:(.payload.product.name // .payload.category_name),price:(.payload.product.price.current // null),children:(.payload.products|length)}' /tmp/getlink-result.json
+              jq '{status,registry_count,input_type:.payload.input_type,name:(.payload.product.name // .payload.category_name),price:(.payload.product.price.current // null),children:(.payload.products|length),variants:(.payload.variants|length),variant_prices:[.payload.variants[].price.current]}' /tmp/getlink-result.json
               exit 0
             fi
             if [ "$STATUS" = "error" ]; then

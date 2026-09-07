@@ -58,3 +58,16 @@ jobs:
           echo "Timeout waiting for complete result"
           jq . /tmp/getlink-result.json || true
           exit 1
+
+      - name: Verify D1 24h cache
+        env:
+          API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+          SAMPLE: "https://www.bachhoaxanh.com/dau-an/thung-12-chai-dau-thuc-vat-good-meall-1-lit"
+        run: |
+          set -euo pipefail
+          echo "Cache hit:"
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$SAMPLE" '{url:$url}')"             > /tmp/getlink-cache.json
+          jq '{status,engine,cache_hit,cache_age_seconds,price:(.payload.product.price.current // null),variants:(.payload.variants|length)}' /tmp/getlink-cache.json
+          test "$(jq -r '.status' /tmp/getlink-cache.json)" = "complete"
+          test "$(jq -r '.engine' /tmp/getlink-cache.json)" = "d1-cache"
+          test "$(jq -r '.cache_hit' /tmp/getlink-cache.json)" = "true"

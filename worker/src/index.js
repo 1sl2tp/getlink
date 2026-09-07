@@ -84,8 +84,57 @@ function parseSize(text){
   return {value,unit};
 }
 
-function comparisonData({name,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
-  const quantity=Number(packCount)>0?Number(packCount):1;
+function normalizePackWord(value){
+  const raw=cleanText(value||"");
+  const key=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const map={
+    thung:"Thùng",loc:"Lốc",tui:"Túi",bich:"Bịch",chai:"Chai",
+    hop:"Hộp",goi:"Gói",can:"Can",combo:"Combo",bo:"Bộ",
+    lon:"Lon",hu:"Hũ",thanh:"Thanh",cay:"Cây",vien:"Viên",tuyp:"Tuýp"
+  };
+  return map[key]||raw;
+}
+
+function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
+  const text=cleanText([name,packagingText,featureText].filter(Boolean).join(" "));
+  const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  const kindMatch=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
+  let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
+
+  const countMatch=plain.match(/([0-9]+(?:[.,][0-9]+)?)\s*(hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can)\b/);
+  let quantity=Number(rawCount)>0?Number(rawCount):0;
+  let unit=cleanText(rawUnit||"");
+
+  if(countMatch){
+    const parsed=Number(String(countMatch[1]).replace(",","."));
+    if(parsed>0&&(quantity<=1||!unit||normalizePackWord(unit)===packKind)){
+      quantity=parsed;
+      unit=normalizePackWord(countMatch[2]);
+    }
+  }
+
+  if(!quantity)quantity=1;
+  if(!packKind){
+    packKind=normalizePackWord(rawUnit||unit||"")||"Đơn";
+  }
+  if(!unit){
+    const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Can","Thanh","Cây","Viên","Tuýp"]);
+    unit=singleKinds.has(packKind)?packKind:"đơn vị";
+  }
+
+  const size=parseSize([packagingText,name,featureText].filter(Boolean).join(" "));
+  return {
+    pack_kind:packKind,
+    pack_quantity:quantity,
+    pack_unit:normalizePackWord(unit)||"đơn vị",
+    size_value:size.value,
+    size_unit:size.unit
+  };
+}
+
+function comparisonData({name,packagingText,featureText,packCount,packUnit,current,sysPrice,discount,promoText}){
+  const pack=parsePackStructure(name,packagingText,featureText,packCount,packUnit);
+  const quantity=Math.max(1,Number(pack.pack_quantity)||1);
   const regular=Number(sysPrice)>0?Number(sysPrice):(Number(current)||null);
   const currentPrice=Number(current)||null;
   const promoActive=Boolean(
@@ -94,12 +143,8 @@ function comparisonData({name,featureText,packCount,packUnit,current,sysPrice,di
     cleanText(promoText)
   );
   const promo=promoActive?currentPrice:null;
-  const size=parseSize([name,featureText].filter(Boolean).join(" "));
   return {
-    pack_quantity:quantity,
-    pack_unit:cleanText(packUnit||""),
-    size_value:size.value,
-    size_unit:size.unit,
+    ...pack,
     regular_pack_price:regular,
     promo_pack_price:promo,
     regular_unit_price:regular?Math.round(regular/quantity):null,
@@ -121,7 +166,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<4)return null;
+    if(Number(payload&&payload.schema_version||0)<5)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -223,6 +268,7 @@ function apiProductToPayloadProduct(raw){
     packaging:{text:cleanText(raw.canonical||raw.unit||"")},
     comparison:comparisonData({
       name:cleanText(raw.fullName||raw.name||slugTitle(url)),
+      packagingText:cleanText(raw.canonical||raw.unit||""),
       featureText:"",
       packCount:raw.packageItemCount,
       packUnit:raw.packageItemUnit||raw.unit,
@@ -273,6 +319,7 @@ function apiBoxBuyToProduct(raw,data){
   const name=cleanText(raw.name||slugTitle(url));
   const comparison=comparisonData({
     name,
+    packagingText:packaging,
     featureText:data&&data.productBo&&data.productBo.featureSpecification||"",
     packCount:raw.packageItemCount,
     packUnit:raw.packageItemUnit,
@@ -327,7 +374,7 @@ function productDetailPayload(inputUrl,requestId,data){
 
   const exact=variants.find(v=>sameBhxUrl(v.url,canonical))||variants[0];
   return {
-    schema_version:4,
+    schema_version:5,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -356,7 +403,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:4,
+    schema_version:5,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -419,6 +466,35 @@ async function persistLinkAsset(env,url,image,updatedAt){
   `).bind(url,imageUrl,updatedAt||new Date().toISOString()).run();
 }
 
+async function persistLinkComparison(env,url,cmp,updatedAt){
+  if(!url||!cmp)return;
+  await env.DB.prepare(`
+    INSERT INTO link_comparison(
+      link_url,pack_kind,pack_quantity,pack_unit,size_value,size_unit,
+      regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price,
+      promotion_active,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(link_url) DO UPDATE SET
+      pack_kind=excluded.pack_kind,
+      pack_quantity=excluded.pack_quantity,
+      pack_unit=excluded.pack_unit,
+      size_value=excluded.size_value,
+      size_unit=excluded.size_unit,
+      regular_pack_price=excluded.regular_pack_price,
+      promo_pack_price=excluded.promo_pack_price,
+      regular_unit_price=excluded.regular_unit_price,
+      promo_unit_price=excluded.promo_unit_price,
+      promotion_active=excluded.promotion_active,
+      updated_at=excluded.updated_at
+  `).bind(
+    url,cmp.pack_kind||"",Number(cmp.pack_quantity)||1,cmp.pack_unit||"",
+    cmp.size_value??null,cmp.size_unit||"",
+    cmp.regular_pack_price??null,cmp.promo_pack_price??null,
+    cmp.regular_unit_price??null,cmp.promo_unit_price??null,
+    cmp.promotion_active?1:0,updatedAt||new Date().toISOString()
+  ).run();
+}
+
 async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   const url=canonicalBhx(p.url);
   const price=p.price||{};
@@ -456,6 +532,11 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   if(linkType==="product"&&p.image){
     await persistLinkAsset(
       env,url,p.image,p.last_checked_at||checked
+    );
+  }
+  if(linkType==="product"&&p.comparison){
+    await persistLinkComparison(
+      env,url,p.comparison,p.last_checked_at||checked
     );
   }
   return id;
@@ -659,6 +740,35 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
         `).bind(childUrl,String(p.image),p.last_checked_at||checked)
       );
     }
+
+    const cmp=p.comparison||{};
+    prepared.push(
+      env.DB.prepare(`
+        INSERT INTO link_comparison(
+          link_url,pack_kind,pack_quantity,pack_unit,size_value,size_unit,
+          regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price,
+          promotion_active,updated_at
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(link_url) DO UPDATE SET
+          pack_kind=excluded.pack_kind,
+          pack_quantity=excluded.pack_quantity,
+          pack_unit=excluded.pack_unit,
+          size_value=excluded.size_value,
+          size_unit=excluded.size_unit,
+          regular_pack_price=excluded.regular_pack_price,
+          promo_pack_price=excluded.promo_pack_price,
+          regular_unit_price=excluded.regular_unit_price,
+          promo_unit_price=excluded.promo_unit_price,
+          promotion_active=excluded.promotion_active,
+          updated_at=excluded.updated_at
+      `).bind(
+        childUrl,cmp.pack_kind||"",Number(cmp.pack_quantity)||1,cmp.pack_unit||"",
+        cmp.size_value??null,cmp.size_unit||"",
+        cmp.regular_pack_price??null,cmp.promo_pack_price??null,
+        cmp.regular_unit_price??null,cmp.promo_unit_price??null,
+        cmp.promotion_active?1:0,p.last_checked_at||checked
+      )
+    );
   }
 
   // Keep D1 batches deliberately small: category roots can contain hundreds of children.
@@ -1280,6 +1390,11 @@ async function handleLibrary(url,env,origin){
         COALESCE(pref.state,'normal') AS preference_state,
         COALESCE(pref.auto_refresh,0) AS auto_refresh,
         COALESCE(pref.refresh_hours,24) AS refresh_hours,
+        cmp.pack_kind,cmp.pack_quantity,cmp.pack_unit,
+        cmp.size_value,cmp.size_unit,
+        cmp.regular_pack_price,cmp.promo_pack_price,
+        cmp.regular_unit_price,cmp.promo_unit_price,
+        cmp.promotion_active,
         COALESCE(
           asset.image_url,
           (
@@ -1290,21 +1405,29 @@ async function handleLibrary(url,env,origin){
             LIMIT 1
           )
         ) AS image,
-        (
-          SELECT MIN(COALESCE(d.promo_unit_price,d.regular_unit_price))
-          FROM daily_variant_prices d
-          WHERE d.parent_url=l.canonical_url
+        COALESCE(
+          cmp.promo_unit_price,cmp.regular_unit_price,
+          (
+            SELECT MIN(COALESCE(d.promo_unit_price,d.regular_unit_price))
+            FROM daily_variant_prices d
+            WHERE d.parent_url=l.canonical_url
+          )
         ) AS unit_price,
-        (
-          SELECT MAX(d.promotion_active)
-          FROM daily_variant_prices d
-          WHERE d.parent_url=l.canonical_url
+        COALESCE(
+          cmp.promotion_active,
+          (
+            SELECT MAX(d.promotion_active)
+            FROM daily_variant_prices d
+            WHERE d.parent_url=l.canonical_url
+          )
         ) AS has_promo
       FROM links l
       LEFT JOIN link_preferences pref
         ON pref.link_url=l.canonical_url
       LEFT JOIN link_assets asset
         ON asset.link_url=l.canonical_url
+      LEFT JOIN link_comparison cmp
+        ON cmp.link_url=l.canonical_url
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
@@ -1462,7 +1585,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:4,
+        schema_version:5,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

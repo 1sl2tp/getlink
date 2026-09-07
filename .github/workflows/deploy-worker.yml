@@ -17,7 +17,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   deploy:
@@ -25,7 +24,6 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      GETLINK_GITHUB_TOKEN: ${{ github.token }}
       ALLOWED_ORIGINS: ${{ inputs.allowed_origins || 'https://get.taphoa.xyz,https://1sl2tp.github.io' }}
     steps:
       - uses: actions/checkout@v4
@@ -43,6 +41,19 @@ jobs:
 
       - name: Cài Wrangler
         run: npm install -g wrangler@latest
+
+      - name: Đảm bảo có workers.dev subdomain
+        run: |
+          set -euo pipefail
+          CURRENT="$(curl -sS             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"             "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"             | jq -r '.result.subdomain // empty')"
+          if [ -z "$CURRENT" ]; then
+            SUFFIX="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | cut -c1-8)"
+            SUBDOMAIN="taphoa-$SUFFIX"
+            echo "Tạo workers.dev account subdomain"
+            curl --fail --silent --show-error -X PUT               -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"               -H "Content-Type: application/json"               "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/subdomain"               --data "{"subdomain":"$SUBDOMAIN"}"               | jq -e '.success == true' >/dev/null
+          else
+            echo "workers.dev đã có sẵn"
+          fi
 
       - name: Tạo hoặc dùng D1 getlink-db
         id: d1
@@ -69,6 +80,9 @@ jobs:
           [vars]
           ALLOWED_ORIGINS = "$ALLOWED_ORIGINS"
 
+          [browser]
+          binding = "BROWSER"
+
           [[d1_databases]]
           binding = "DB"
           database_name = "getlink-db"
@@ -78,10 +92,9 @@ jobs:
       - name: Tạo bảng D1
         run: wrangler d1 execute getlink-db --remote --file worker/schema.sql --config worker/wrangler.toml
 
-      - name: Deploy Worker và secret GitHub
+      - name: Deploy Worker
         run: |
-          printf 'GITHUB_TOKEN=%s\n' "$GETLINK_GITHUB_TOKEN" > /tmp/getlink-worker-secrets.env
-          wrangler deploy --config worker/wrangler.toml --secrets-file /tmp/getlink-worker-secrets.env 2>&1 | tee /tmp/getlink-deploy.log
+          wrangler deploy --config worker/wrangler.toml 2>&1 | tee /tmp/getlink-deploy.log
           WORKER_URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/getlink-deploy.log | tail -1)"
           test -n "$WORKER_URL" || (echo "Không đọc được Worker URL" && exit 1)
           echo "WORKER_URL=$WORKER_URL" >> "$GITHUB_ENV"

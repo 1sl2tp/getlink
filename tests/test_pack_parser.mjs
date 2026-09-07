@@ -67,6 +67,45 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 {
+  const p = parsePackStructure(
+    "Bột ngọt hạt lớn Ajinomoto gói 454g",
+    "Lon 454g",
+    "",
+    1,
+    "Lon"
+  );
+  assert.equal(p.pack_kind,"Gói");
+  assert.equal(p.pack_quantity,1);
+  assert.equal(p.pack_unit,"Gói");
+}
+
+{
+  const p = parsePackStructure(
+    "Cà phê MÊ Trang Robusta 500g",
+    "Gói 500g",
+    "",
+    1,
+    "Lon"
+  );
+  assert.equal(p.pack_kind,"Gói");
+  assert.equal(p.pack_quantity,1);
+  assert.equal(p.pack_unit,"Gói");
+}
+
+{
+  const p = parsePackStructure(
+    "Thùng 24 lon cà phê sữa Highlands 235ml",
+    "Lon 235ml",
+    "",
+    1,
+    "Lon"
+  );
+  assert.equal(p.pack_kind,"Thùng");
+  assert.equal(p.pack_quantity,24);
+  assert.equal(p.pack_unit,"Lon");
+}
+
+{
   const p = parsePackStructure("Bia Budweiser lon 330ml","","",1,"");
   assert.equal(p.pack_kind,"Lon");
   assert.equal(p.pack_quantity,1);
@@ -177,7 +216,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,16);
+  assert.equal(payload.schema_version,17);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -364,7 +403,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,16);
+  assert.equal(payload.schema_version,17);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

@@ -101,10 +101,18 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const namePlain=plainOf(name);
   const packagingPlain=plainOf(packagingText);
   const featurePlain=plainOf(featureText);
+  const rawLower=value=>cleanText(value||"").toLowerCase();
+  const nameRaw=rawLower(name);
+  const packagingRaw=rawLower(packagingText);
+  const featureRaw=rawLower(featureText);
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can";
-  const unitRe=new RegExp("\\b("+unitPattern+")\\b");
+  // IMPORTANT: unit detection inside product names is accent-sensitive.
+  // Otherwise Vietnamese words such as "lớn" normalize to "lon" and are
+  // falsely classified as the unit Lon.
+  const rawUnitPattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
+  const rawUnitRe=new RegExp("\\b("+rawUnitPattern+")\\b","iu");
 
   // Priority contract:
   // 1) "Thùng ..." at the start of this link's own name/price label.
@@ -142,9 +150,9 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
 
-  const nameUnitMatch=namePlain.match(unitRe);
-  const packagingUnitMatch=packagingPlain.match(unitRe);
-  const featureUnitMatch=featurePlain.match(unitRe);
+  const nameUnitMatch=nameRaw.match(rawUnitRe);
+  const packagingUnitMatch=packagingRaw.match(rawUnitRe);
+  const featureUnitMatch=featureRaw.match(rawUnitRe);
 
   let quantity=0;
   let unit="";

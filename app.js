@@ -89,10 +89,10 @@ function normalizedBaseName(row){
   // packaging at the beginning and size/weight at the end.
   let value=source
     .replace(/^(thùng|lốc|cụm|combo|bộ)\s+/iu,"")
-    .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
-    .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/\s+\d+(?:[.,]\d+)?\s*(ml|lít|lit|l|kg|g)\s*$/iu,"")
-    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s*$/iu,"")
+    .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|thanh|cây|viên|tuýp|can)\s*$/iu,"")
     .replace(/\s+/g," ")
     .trim();
 
@@ -104,8 +104,8 @@ function packSortRank(kind){
   const ranks={
     "Thùng":1,"Lốc":2,"Cụm":3,"Combo":4,"Bộ":5,
     "Chai":6,"Lon":7,"Hộp":8,"Gói":9,"Bịch":10,
-    "Túi":11,"Can":12,"Hũ":13,"Thanh":14,"Cây":15,
-    "Viên":16,"Tuýp":17,"Đơn":90
+    "Túi":11,"Can":12,"Hũ":13,"Ly":14,"Tô":15,"Thanh":16,"Cây":17,
+    "Viên":18,"Tuýp":19,"Đơn":90
   };
   return ranks[kind]||50;
 }
@@ -475,7 +475,7 @@ function sheetNormalizeUnit(value){
   const key=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const map={
     hop:"Hộp",chai:"Chai",goi:"Gói",bich:"Bịch",tui:"Túi",
-    lon:"Lon",hu:"Hũ",ly:"Ly",can:"Can",thanh:"Thanh",cay:"Cây",
+    lon:"Lon",hu:"Hũ",ly:"Ly",to:"Tô",can:"Can",thanh:"Thanh",cay:"Cây",
     vien:"Viên",tuyp:"Tuýp",thung:"Thùng",loc:"Lốc",
     combo:"Combo",bo:"Bộ"
   };
@@ -492,8 +492,8 @@ function inferSheetPack(row){
   const source=[primary,packaging].filter(Boolean).join(" ");
   const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
-  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|can|thanh|cay|vien|tuyp";
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|can|thanh|cay|vien|tuyp";
 
   const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
   const body=explicitKind
@@ -603,7 +603,7 @@ function inferSheetPack(row){
 function rowCartonStructure(row){
   const name=searchKey(row.source_name||row.name||"");
   const packaging=searchKey(row.packaging||"");
-  const units="hop|chai|goi|bich|tui|lon|hu|ly|can|thanh|cay|vien|tuyp|loc";
+  const units="hop|chai|goi|bich|tui|lon|hu|ly|to|can|thanh|cay|vien|tuyp|loc";
 
   // A pure BHX carton must START with "Thùng".
   // Exception: if the product name itself is neutral (e.g. "24 lon",

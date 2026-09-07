@@ -341,65 +341,121 @@ function renderPayload(payload){
   return renderProduct(payload);
 }
 
+function sheetPriceKey(url){
+  return "getlink:sheet-price:"+canonical(url);
+}
+
+function readSheetPrice(url){
+  const direct=localStorage.getItem(sheetPriceKey(url));
+  if(direct!==null&&direct!=="")return Number(String(direct).replace(/\D/g,""))||0;
+  try{
+    const legacy=JSON.parse(localStorage.getItem("getlink:"+canonical(url))||"null");
+    return Number(String(legacy&&legacy.myPrice||"").replace(/\D/g,""))||0;
+  }catch{return 0}
+}
+
+function writeSheetPrice(url,value){
+  const n=Number(String(value||"").replace(/\D/g,""))||0;
+  if(n>0)localStorage.setItem(sheetPriceKey(url),String(n));
+  else localStorage.removeItem(sheetPriceKey(url));
+  return n;
+}
+
+function sheetDiffText(webUnit,mineUnit){
+  if(!webUnit||!mineUnit)return "—";
+  const d=Math.round(webUnit-mineUnit);
+  if(Math.abs(d)<1)return "Bằng";
+  return d>0
+    ?"BHX +"+money(d)
+    :"Mình +"+money(Math.abs(d));
+}
+
+function updateSheetRow(card,minePack){
+  if(!card)return;
+  const qty=Math.max(1,Number(card.dataset.packQty)||1);
+  const webUnit=Number(card.dataset.webUnit)||0;
+  const mineUnit=minePack>0?Math.round(minePack/qty):0;
+  const mineCell=card.querySelector(".sheet-mine-unit");
+  const diffCell=card.querySelector(".sheet-diff");
+  if(mineCell)mineCell.textContent=mineUnit?money(mineUnit):"—";
+  if(diffCell)diffCell.textContent=sheetDiffText(webUnit,mineUnit);
+}
+
 function productCard(row){
   const hasPromo=Boolean(
+    Number(row.promotion_active)||
     Number(row.has_promo)||
     Number(row.promotion_price)||
     String(row.promotion_text||"").trim()
   );
   const current=Number(row.current_price||0);
-  const promo=Number(row.promotion_price||0);
-  const regular=Number(row.original_price||current||0);
-  const sell=promo||current||regular;
-  const unit=Number(row.unit_price||0);
+  const regularPack=Number(
+    row.regular_pack_price||
+    row.original_price||
+    current||
+    0
+  );
+  const promoPack=Number(
+    row.promo_pack_price||
+    (hasPromo?row.promotion_price||current:0)||
+    0
+  );
+  const effectivePack=promoPack||current||regularPack;
+  const qty=Math.max(1,Number(row.pack_quantity)||1);
+  const unitName=String(row.pack_unit||"đơn vị").trim()||"đơn vị";
+  const webUnit=Number(
+    row.promo_unit_price||
+    row.regular_unit_price||
+    row.unit_price||
+    (effectivePack?Math.round(effectivePack/qty):0)
+  );
+  const packKind=String(row.pack_kind||"Đơn").trim()||"Đơn";
+  const size=row.size_value
+    ?String(row.size_value)+" "+String(row.size_unit||"")
+    :"—";
   const image=String(row.image||"");
-  const stamp=formatAge(row.last_checked_at||row.updated_at);
-  const pack=String(row.packaging||"").trim();
   const pref=String(row.preference_state||"normal");
-  const badge=hasPromo
-    ?'<span class="deal-badge">ƯU ĐÃI</span>'
-    :'<span class="normal-badge">THƯỜNG</span>';
+  const minePack=readSheetPrice(row.canonical_url);
+  const mineUnit=minePack?Math.round(minePack/qty):0;
   const thumb=image
     ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy">'
     :'<div class="thumb-fallback">GL</div>';
-  const stateBadge=pref==="watch"
-    ?'<span class="watch-badge">★ QUAN TÂM</span>'
-    :(pref==="hidden"?'<span class="hidden-badge">ẨN</span>':"");
 
   const watchTitle=pref==="watch"?"Bỏ quan tâm":"Đánh dấu quan tâm";
   const watchNext=pref==="watch"?"normal":"watch";
   const hideTitle=pref==="hidden"?"Hiện lại":"Ẩn khỏi thư viện";
   const hideNext=pref==="hidden"?"normal":"hidden";
 
-  return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<div class="product-card '+(pref==="hidden"?"is-hidden":"")+'" role="button" tabindex="0" '+
+    'data-url="'+escapeAttr(row.canonical_url)+'" data-pack-qty="'+qty+'" data-web-unit="'+webUnit+'">'+
     '<div class="product-main">'+
       '<div class="product-thumb">'+thumb+'</div>'+
-      '<div class="product-name-wrap">'+badge+stateBadge+
-        (row.brand_name||row.branch_name?'<span class="brand-inline">'+escapeHtml(row.brand_name||row.branch_name)+'</span>':'')+
-        '<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3></div>'+
-    '</div>'+
-    '<div class="product-cell product-pack-cell" data-label="Quy cách">'+
-      escapeHtml(pack||row.group_name||"—")+
-    '</div>'+
-    '<div class="product-cell product-regular" data-label="Giá thường">'+
-      '<strong>'+money(regular||sell)+'</strong>'+
-    '</div>'+
-    '<div class="product-cell product-promo" data-label="Ưu đãi">'+
-      (hasPromo
-        ?'<strong>'+money(sell)+'</strong>'+
-          (regular&&regular!==sell?'<small>giảm từ '+money(regular)+'</small>':'')
-        :'<span>—</span>')+
-    '</div>'+
-    '<div class="product-cell product-unit" data-label="Giá lẻ">'+
-      (unit?'<strong>'+money(unit)+'</strong><small>/ đơn vị</small>':'<span>—</span>')+
-    '</div>'+
-    '<div class="product-cell product-updated" data-label="Cập nhật">'+
-      '<span>'+escapeHtml(stamp||"—")+'</span>'+
-      '<div class="row-actions">'+
-        '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
-        '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
+      '<div class="product-name-wrap">'+
+        '<h3>'+escapeHtml(row.name||"Sản phẩm")+'</h3>'+
+        '<div class="row-actions">'+
+          '<button class="pref-action watch-action '+(pref==="watch"?"active":"")+'" data-state="'+watchNext+'" type="button" title="'+watchTitle+'">★</button>'+
+          '<button class="pref-action hide-action '+(pref==="hidden"?"active":"")+'" data-state="'+hideNext+'" type="button" title="'+hideTitle+'">'+(pref==="hidden"?"↩":"⌫")+'</button>'+
+        '</div>'+
       '</div>'+
     '</div>'+
+    '<div class="product-cell brand-cell">'+escapeHtml(row.brand_name||row.branch_name||"—")+'</div>'+
+    '<div class="product-cell qc-kind"><strong>'+escapeHtml(packKind)+'</strong></div>'+
+    '<div class="product-cell qc-count"><strong>'+qty+'</strong><small>'+escapeHtml(unitName)+'</small></div>'+
+    '<div class="product-cell size-cell"><strong>'+escapeHtml(size)+'</strong></div>'+
+    '<div class="product-cell bhx-pack"><strong>'+money(regularPack||effectivePack)+'</strong></div>'+
+    '<div class="product-cell product-promo">'+
+      (promoPack
+        ?'<strong>'+money(promoPack)+'</strong>'+
+          (regularPack&&regularPack!==promoPack?'<small>từ '+money(regularPack)+'</small>':'')
+        :'<span>—</span>')+
+    '</div>'+
+    '<div class="product-cell bhx-unit"><strong>'+money(webUnit)+'</strong><small>/ '+escapeHtml(unitName)+'</small></div>'+
+    '<div class="product-cell mine-pack-cell">'+
+      '<input class="sheet-my-price" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" '+
+        'value="'+(minePack||"")+'" placeholder="Nhập giá">'+
+    '</div>'+
+    '<div class="product-cell sheet-mine-unit">'+(mineUnit?money(mineUnit):"—")+'</div>'+
+    '<div class="product-cell sheet-diff">'+sheetDiffText(webUnit,mineUnit)+'</div>'+
   '</div>';
 }
 
@@ -625,6 +681,12 @@ $("#librarySearch").addEventListener("input",e=>{
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
+  const priceInput=e.target.closest(".sheet-my-price");
+  if(priceInput){
+    e.stopPropagation();
+    return;
+  }
+
   const action=e.target.closest(".pref-action");
   const card=e.target.closest(".product-card");
   if(!card)return;
@@ -647,8 +709,15 @@ $("#libraryProducts").addEventListener("click",async e=>{
   openLibraryItem(card.dataset.url||"");
 });
 
+$("#libraryProducts").addEventListener("input",e=>{
+  const input=e.target.closest(".sheet-my-price");
+  if(!input)return;
+  const minePack=writeSheetPrice(input.dataset.url||"",input.value);
+  updateSheetRow(input.closest(".product-card"),minePack);
+});
+
 $("#libraryProducts").addEventListener("keydown",e=>{
-  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")){
+  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-price")){
     const card=e.target.closest(".product-card");
     if(!card)return;
     e.preventDefault();

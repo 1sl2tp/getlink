@@ -135,7 +135,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,10);
+  assert.equal(payload.schema_version,11);
   assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,30);
   assert.equal(payload.product.comparison.pack_unit,"Gói");
@@ -190,6 +190,28 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
   assert.equal(c.promo_pack_price,99500);
   assert.equal(c.promo_unit_price,99500);
   assert.equal(c.promotion_text,"MUA 2 TÚI 199K");
+}
+
+{
+  const c = comparisonData({
+    name:"10 bịch sữa dinh dưỡng tiệt trùng Vinamilk Happy Star 220ml",
+    packagingText:"10 Bịch",
+    featureText:"",
+    packCount:10,
+    packUnit:"Bịch",
+    current:65000,
+    sysPrice:86000,
+    discount:24,
+    promoText:"COMBO 10 BỊCH GIÁ 65.000Đ"
+  });
+  assert.equal(c.regular_pack_price,65000);
+  assert.equal(c.regular_unit_price,6500);
+  assert.equal(c.original_pack_price,86000);
+  assert.equal(c.discount_active,true);
+  assert.equal(c.quantity_offer_active,false);
+  assert.equal(c.promotion_active,false);
+  assert.equal(c.promo_pack_price,null);
+  assert.equal(c.promotion_text,"");
 }
 
 {
@@ -279,7 +301,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,10);
+  assert.equal(payload.schema_version,11);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

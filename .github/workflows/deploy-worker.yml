@@ -26,10 +26,6 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GETLINK_GITHUB_TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
-      BHX_BEARER_TOKEN: ${{ secrets.BHX_BEARER_TOKEN }}
-      BHX_XAPIKEY: ${{ secrets.BHX_XAPIKEY }}
-      BHX_DEVICE_ID: ${{ secrets.BHX_DEVICE_ID }}
-      BHX_REVERSE_HOST: ${{ secrets.BHX_REVERSE_HOST }}
       ALLOWED_ORIGINS: ${{ inputs.allowed_origins || 'https://get.taphoa.xyz,https://1sl2tp.github.io' }}
     steps:
       - uses: actions/checkout@v4
@@ -100,10 +96,6 @@ jobs:
         run: |
           : > /tmp/getlink-worker-secrets.env
           [ -n "$GETLINK_GITHUB_TOKEN" ] && printf 'GITHUB_TOKEN=%s\n' "$GETLINK_GITHUB_TOKEN" >> /tmp/getlink-worker-secrets.env
-          [ -n "$BHX_BEARER_TOKEN" ] && printf 'BHX_BEARER_TOKEN=%s\n' "$BHX_BEARER_TOKEN" >> /tmp/getlink-worker-secrets.env
-          [ -n "$BHX_XAPIKEY" ] && printf 'BHX_XAPIKEY=%s\n' "$BHX_XAPIKEY" >> /tmp/getlink-worker-secrets.env
-          [ -n "$BHX_DEVICE_ID" ] && printf 'BHX_DEVICE_ID=%s\n' "$BHX_DEVICE_ID" >> /tmp/getlink-worker-secrets.env
-          [ -n "$BHX_REVERSE_HOST" ] && printf 'BHX_REVERSE_HOST=%s\n' "$BHX_REVERSE_HOST" >> /tmp/getlink-worker-secrets.env
 
           if [ -s /tmp/getlink-worker-secrets.env ]; then
             wrangler deploy --config worker/wrangler.toml --secrets-file /tmp/getlink-worker-secrets.env 2>&1 | tee /tmp/getlink-deploy.log

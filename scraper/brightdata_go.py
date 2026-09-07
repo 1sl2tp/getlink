@@ -187,7 +187,47 @@ async def select_go_hanam(page, target_url: str):
     await page.wait_for_timeout(1400)
 
     current = (await title_store(page)).upper()
-    if "GO! HÀ NAM" not in current and "GO! HA NAM" not in current:
+    diag = await page.evaluate(
+        """() => {
+          const pick = store => {
+            const out = {};
+            for (let i=0;i<store.length;i++) {
+              const k=store.key(i);
+              out[k]=store.getItem(k);
+            }
+            return out;
+          };
+          const body=(document.body&&document.body.innerText||"").slice(0,2500);
+          const candidates=[...document.querySelectorAll("button,a,[role='button'],li,span,div")]
+            .filter(el => /GO!\\s*(HÀ NAM|HA NAM|AN LẠC|AN LAC)/i.test(el.textContent||""))
+            .slice(0,30)
+            .map(el => ({
+              tag:el.tagName,
+              text:String(el.textContent||"").replace(/\\s+/g," ").trim().slice(0,180),
+              href:el.getAttribute("href")||"",
+              cls:String(el.className||"").slice(0,160),
+              data:{...el.dataset}
+            }));
+          return {
+            title:document.title,
+            url:location.href,
+            cookie:document.cookie,
+            local:pick(localStorage),
+            session:pick(sessionStorage),
+            body_head:body,
+            candidates
+          };
+        }"""
+    )
+    print(json.dumps({"go_store_diagnostics": diag}, ensure_ascii=False))
+
+    proof = json.dumps(diag, ensure_ascii=False).lower()
+    if (
+        "go! hà nam" not in proof
+        and "go! ha nam" not in proof
+        and "ha nam" not in proof
+        and '"47"' not in proof
+    ):
         raise RuntimeError("go_hanam_store_not_confirmed:" + current[:120])
 
 

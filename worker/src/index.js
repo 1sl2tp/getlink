@@ -638,7 +638,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<18)return null;
+    if(Number(payload&&payload.schema_version||0)<19)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -890,7 +890,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:18,
+    schema_version:19,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -919,7 +919,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:18,
+    schema_version:19,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -2200,6 +2200,13 @@ async function handleLibrary(url,env,origin){
         cmp.regular_pack_price,cmp.promo_pack_price,
         cmp.regular_unit_price,cmp.promo_unit_price,
         cmp.promotion_active,
+        h.label1 AS pack_label_1,
+        h.qty1 AS pack_qty_1,
+        h.label2 AS pack_label_2,
+        h.qty2 AS pack_qty_2,
+        h.label3 AS pack_label_3,
+        h.qty3 AS pack_qty_3,
+        h.evidence AS pack_evidence,
         asset.image_url AS image,
         COALESCE(cmp.promo_unit_price,cmp.regular_unit_price) AS unit_price,
         COALESCE(cmp.promotion_active,0) AS has_promo,
@@ -2216,6 +2223,8 @@ async function handleLibrary(url,env,origin){
         ON asset.link_url=l.canonical_url
       LEFT JOIN link_comparison cmp
         ON cmp.link_url=l.canonical_url
+      LEFT JOIN link_pack_hierarchy h
+        ON h.link_url=l.canonical_url
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
@@ -2243,8 +2252,24 @@ async function handleLibrary(url,env,origin){
 
     const result=await env.DB.prepare(sql).bind(...binds).all();
     let products=(result.results||[]).map(row=>{
+      const persistedHierarchy={
+        label1:row.pack_label_1||"",
+        qty1:Number(row.pack_qty_1)||0,
+        label2:row.pack_label_2||"",
+        qty2:Number(row.pack_qty_2)||0,
+        label3:row.pack_label_3||"",
+        qty3:Number(row.pack_qty_3)||0,
+        evidence:row.pack_evidence||""
+      };
+      const hierarchy=persistedHierarchy.label1
+        ?persistedHierarchy
+        :packHierarchyData(
+          row.name||"",row.canonical_url||"",row.packaging||"",
+          row.pack_quantity||1,row.pack_unit||""
+        );
       const fresh=comparisonData({
         name:row.name||"",
+        url:row.canonical_url||"",
         packagingText:row.packaging||"",
         featureText:"",
         packCount:row.pack_quantity||1,
@@ -2252,10 +2277,18 @@ async function handleLibrary(url,env,origin){
         current:row.current_price,
         sysPrice:row.original_price||row.current_price,
         discount:0,
-        promoText:row.promotion_text||""
+        promoText:row.promotion_text||"",
+        hierarchy
       });
       return {
         ...row,
+        pack_label_1:hierarchy.label1||"",
+        pack_qty_1:Number(hierarchy.qty1)||0,
+        pack_label_2:hierarchy.label2||"",
+        pack_qty_2:Number(hierarchy.qty2)||0,
+        pack_label_3:hierarchy.label3||"",
+        pack_qty_3:Number(hierarchy.qty3)||0,
+        pack_evidence:hierarchy.evidence||"",
         promo_pack_price:fresh.promo_pack_price,
         promo_unit_price:fresh.promo_unit_price,
         promotion_active:fresh.promotion_active?1:0,
@@ -2283,7 +2316,7 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=17){
+        if(Number(payload&&payload.schema_version||0)>=19){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -2312,17 +2345,40 @@ async function handleLibrary(url,env,origin){
         cmp.promo_pack_price AS cmp_promo_pack_price,
         cmp.regular_unit_price AS cmp_regular_unit_price,
         cmp.promo_unit_price AS cmp_promo_unit_price,
-        cmp.promotion_active AS cmp_promotion_active
+        cmp.promotion_active AS cmp_promotion_active,
+        h.label1 AS pack_label_1,
+        h.qty1 AS pack_qty_1,
+        h.label2 AS pack_label_2,
+        h.qty2 AS pack_qty_2,
+        h.label3 AS pack_label_3,
+        h.qty3 AS pack_qty_3,
+        h.evidence AS pack_evidence
       FROM links l
       LEFT JOIN link_assets a ON a.link_url=l.canonical_url
       LEFT JOIN link_comparison cmp ON cmp.link_url=l.canonical_url
+      LEFT JOIN link_pack_hierarchy h ON h.link_url=l.canonical_url
       WHERE l.canonical_url=?
       LIMIT 1
     `).bind(itemUrl).first();
     if(!row)return json({error:"not_found"},404,origin);
 
+    const mainHierarchy=(row.pack_label_1
+      ?{
+        label1:row.pack_label_1||"",
+        qty1:Number(row.pack_qty_1)||0,
+        label2:row.pack_label_2||"",
+        qty2:Number(row.pack_qty_2)||0,
+        label3:row.pack_label_3||"",
+        qty3:Number(row.pack_qty_3)||0,
+        evidence:row.pack_evidence||""
+      }
+      :packHierarchyData(
+        row.name||"",itemUrl,row.packaging||"",
+        row.cmp_pack_quantity||1,row.cmp_pack_unit||""
+      ));
     const mainComparison=comparisonData({
       name:row.name||"",
+      url:itemUrl,
       packagingText:row.packaging||"",
       featureText:"",
       packCount:row.cmp_pack_quantity||1,
@@ -2330,7 +2386,8 @@ async function handleLibrary(url,env,origin){
       current:row.current_price,
       sysPrice:row.original_price||row.current_price,
       discount:0,
-      promoText:row.promotion_text||""
+      promoText:row.promotion_text||"",
+      hierarchy:mainHierarchy
     });
 
     const main={
@@ -2339,6 +2396,7 @@ async function handleLibrary(url,env,origin){
       branch:row.branch_name||"",
       name:row.name||slugTitle(itemUrl),
       packaging:{text:row.packaging||""},
+      hierarchy:mainHierarchy,
       comparison:mainComparison,
       price:{current:row.current_price||null,original:row.original_price||null},
       promotion:{
@@ -2356,7 +2414,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:18,
+        schema_version:19,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

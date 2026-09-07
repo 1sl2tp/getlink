@@ -5,6 +5,9 @@ let wantedUrl="";
 let requestId="";
 let pollTimer=0;
 let pollUntil=0;
+let jobStartedAt=Number(localStorage.getItem("getlink:request-started-at")||0);
+let statusTimer=0;
+let lastPollAt=0;
 let activeComparison=null;
 let activeGroupUrl="";
 let activeBrand="";
@@ -133,6 +136,73 @@ function setStatus(text){
   $("#status").textContent=text;
 }
 
+function progressLabel(stage){
+  return ({
+    idle:"Sẵn sàng",
+    checking:"Kiểm tra D1",
+    queued:"Chờ runner",
+    runner:"Runner đã nhận",
+    brightdata:"Đang lấy BHX",
+    saving:"Đang lưu",
+    complete:"Hoàn tất",
+    error:"Có lỗi"
+  })[stage]||"Đang xử lý";
+}
+
+function formatElapsed(ms){
+  const sec=Math.max(0,Math.floor(ms/1000));
+  if(sec<60)return sec+" giây";
+  const min=Math.floor(sec/60);
+  return min+"p "+String(sec%60).padStart(2,"0")+"s";
+}
+
+function refreshProgressMeta(){
+  const el=$("#statusElapsed");
+  if(!el)return;
+  if(!jobStartedAt){
+    el.textContent="";
+    return;
+  }
+  const elapsed=formatElapsed(Date.now()-jobStartedAt);
+  const checked=lastPollAt
+    ?" · kiểm tra "+Math.max(0,Math.round((Date.now()-lastPollAt)/1000))+"s trước"
+    :"";
+  el.textContent=elapsed+checked;
+}
+
+function startStatusTimer(){
+  if(statusTimer)return;
+  refreshProgressMeta();
+  statusTimer=setInterval(refreshProgressMeta,1000);
+}
+
+function stopStatusTimer(){
+  if(statusTimer)clearInterval(statusTimer);
+  statusTimer=0;
+  refreshProgressMeta();
+}
+
+function setJobStage(stage,text){
+  const badge=$("#statusStage");
+  if(badge){
+    badge.dataset.stage=stage||"idle";
+    badge.textContent=progressLabel(stage||"idle");
+  }
+  if(text)setStatus(text);
+
+  const active=["checking","queued","runner","brightdata","saving"].includes(stage);
+  if(active){
+    if(!jobStartedAt){
+      jobStartedAt=Date.now();
+      localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
+    }
+    startStatusTimer();
+  }else if(stage==="complete"||stage==="error"){
+    stopStatusTimer();
+  }
+  refreshProgressMeta();
+}
+
 function setGetBusy(busy){
   $("#get").disabled=Boolean(busy);
   $("#get").textContent=busy?"Đang lấy...":"Lấy giá";
@@ -147,16 +217,21 @@ function stopPolling(){
   pollTimer=0;
 }
 
-function clearPending(){
+function clearPending(keepElapsed=true){
   requestId="";
   localStorage.removeItem("getlink:request-id");
+  if(!keepElapsed){
+    jobStartedAt=0;
+    localStorage.removeItem("getlink:request-started-at");
+    stopStatusTimer();
+  }
 }
 
 function failPending(message){
   stopPolling();
-  clearPending();
   setGetBusy(false);
-  setStatus(message);
+  setJobStage("error",message);
+  clearPending(true);
 }
 
 function unitLabel(cmp){
@@ -1252,10 +1327,19 @@ async function pollOnce(){
     }
 
     if(data.status!=="complete"){
+      lastPollAt=Date.now();
       if(data.status==="queued"){
-        setStatus("Bright Data đang mở link và chờ API Bách Hóa XANH...");
+        setJobStage("queued","Đã gửi yêu cầu · đang chờ GitHub runner nhận việc...");
+      }else if(data.status==="runner"){
+        setJobStage("runner","GitHub runner đã nhận việc · đang chuẩn bị môi trường...");
+      }else if(data.status==="brightdata"){
+        setJobStage("brightdata","Bright Data đang mở Bách Hóa XANH và bắt API...");
+      }else if(data.status==="saving"){
+        setJobStage("saving","Đã có response · đang chuẩn hóa và lưu vào D1...");
       }else if(data.status==="running"){
-        setStatus("Đang xử lý response API Bách Hóa XANH...");
+        setJobStage("brightdata","Đang xử lý response API Bách Hóa XANH...");
+      }else{
+        setJobStage("queued","Đang chờ tiến trình lấy giá...");
       }
       return false;
     }
@@ -1266,9 +1350,9 @@ async function pollOnce(){
       $("#registryCount").textContent="Kho link: "+data.registry_count;
     }
     const finishedUrl=data.payload&&data.payload.input_url||wantedUrl;
-    clearPending();
+    clearPending(true);
     setGetBusy(false);
-    setStatus(doneStatus());
+    setJobStage("complete",doneStatus());
     await refreshCatalog(finishedUrl);
     return true;
   }catch{
@@ -1293,17 +1377,20 @@ $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
   if(!/^https?:\/\/(www\.)?bachhoaxanh\.com\//i.test(url)){
-    setStatus("Link chưa đúng bachhoaxanh.com.");
+    setJobStage("error","Link chưa đúng bachhoaxanh.com.");
     return;
   }
   if(!API){
-    setStatus("GETLINK Worker chưa được triển khai.");
+    setJobStage("error","GETLINK Worker chưa được triển khai.");
     return;
   }
 
   wantedUrl=url;
   setGetBusy(true);
-  setStatus("Đang kiểm tra thư viện D1...");
+  jobStartedAt=Date.now();
+  lastPollAt=0;
+  localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
+  setJobStage("checking","Đang kiểm tra thư viện D1...");
 
   try{
     const r=await fetch(API+"/api/get-price",{
@@ -1325,9 +1412,10 @@ $("#get").addEventListener("click",async()=>{
       if(Number(data.registry_count)>0){
         $("#registryCount").textContent="Kho link: "+data.registry_count;
       }
-      clearPending();
+      clearPending(true);
       setGetBusy(false);
-      setStatus(
+      setJobStage(
+        "complete",
         data.cache_hit
           ?"Đã đọc ngay từ D1 vì link được lấy trong vòng 24 giờ."
           :doneStatus()
@@ -1337,11 +1425,11 @@ $("#get").addEventListener("click",async()=>{
     }
 
     localStorage.setItem("getlink:request-id",requestId);
-    setStatus("Chưa có dữ liệu mới trong 24 giờ. Bright Data đang cập nhật...");
+    setJobStage("queued","Chưa có dữ liệu mới · đã xếp hàng lấy giá mới...");
     startPolling();
   }catch(error){
     setGetBusy(false);
-    setStatus("Không lấy được giá: "+String(error&&error.message||error));
+    setJobStage("error","Không lấy được giá: "+String(error&&error.message||error));
   }
 });
 
@@ -1355,6 +1443,10 @@ refreshCatalog();
 if(requestId&&API){
   $("#importCard").hidden=false;
   setGetBusy(true);
-  setStatus("Đang tiếp tục yêu cầu cập nhật trước...");
+  if(!jobStartedAt){
+    jobStartedAt=Date.now();
+    localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
+  }
+  setJobStage("queued","Đang tiếp tục yêu cầu cập nhật trước...");
   startPolling();
 }

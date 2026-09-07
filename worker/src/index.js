@@ -2409,7 +2409,7 @@ async function persistGoResponse(env,job,requestId,raw){
         id,requestId,checked,current,original,null,promoText,
         JSON.stringify({
           source:"GO!",
-          store:"GO! Hà Nam",
+          store:"GO!",
           category:tax.group_name,
           taxonomy_evidence:tax.evidence,
           pack_evidence:hierarchy.evidence||""
@@ -2453,7 +2453,7 @@ async function persistGoResponse(env,job,requestId,raw){
 
     normalized.push({
       source:{key:"go",name:"GO!",host:"sieuthi-go.vn"},
-      store:{key:"go-ha-nam",name:"GO! Hà Nam"},
+      store:null,
       group:tax.group_name,
       branch:brand,
       name,
@@ -2500,7 +2500,7 @@ async function persistGoResponse(env,job,requestId,raw){
     input_type:"category",
     checked_at:checked,
     source:{key:"go",name:"GO!",host:"sieuthi-go.vn"},
-    store:{key:"go-ha-nam",name:"GO! Hà Nam"},
+    store:null,
     category_name:categoryName,
     products:normalized,
     variants:[],
@@ -2658,7 +2658,7 @@ async function handleCreate(request,env,origin){
       link_type:initialType,
       engine:sourceKey==="winmart"
         ?"brightdata-browser-winmart"
-        :(sourceKey==="go"?"brightdata-browser-go-hanam":"brightdata-browser-api")
+        :(sourceKey==="go"?"brightdata-browser-go":"brightdata-browser-api")
     },202,origin);
   }catch(error){
     const detail=String(error&&error.message||error).slice(0,1000);
@@ -2764,7 +2764,7 @@ async function handleComplete(request,env){
     return json({
       status:"complete",
       ...saved,
-      engine:raw.engine||"brightdata-browser-go-hanam",
+      engine:raw.engine||"brightdata-browser-go",
       country:raw.country||""
     },200,"");
   }
@@ -2859,7 +2859,7 @@ async function handleResult(url,env,origin){
         return json({
           status:"complete",
           ...saved,
-          engine:raw.engine||"brightdata-browser-go-hanam",
+          engine:raw.engine||"brightdata-browser-go",
           country:raw.country||""
         },200,origin);
       }

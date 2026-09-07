@@ -1006,6 +1006,7 @@ function renderLibraryProducts(){
 
   $("#productGrid").innerHTML=visible.map(gridProductCard).join("");
   $("#libraryProducts").innerHTML=visible.map(productCard).join("");
+  document.querySelectorAll("#libraryProducts .product-card").forEach(updateSheetRow);
   $("#libraryEmpty").hidden=products.length!==0;
 
   if(!products.length){
@@ -1020,7 +1021,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="8">Đang đọc thư viện D1...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="11">Đang đọc thư viện D1...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện D1...</div>';
   $("#libraryEmpty").hidden=true;
   try{
@@ -1270,7 +1271,7 @@ $("#libraryProducts").addEventListener("click",async e=>{
     return;
   }
 
-  const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-retail,.sheet-bargain");
+  const priceInput=e.target.closest(".sheet-my-carton,.sheet-my-middle,.sheet-my-retail,.sheet-bargain");
   if(priceInput){
     e.stopPropagation();
     return;
@@ -1300,18 +1301,19 @@ $("#libraryProducts").addEventListener("click",async e=>{
 
 $("#libraryProducts").addEventListener("input",e=>{
   const carton=e.target.closest(".sheet-my-carton");
+  const middle=e.target.closest(".sheet-my-middle");
   const retail=e.target.closest(".sheet-my-retail");
   const bargain=e.target.closest(".sheet-bargain");
-  const input=carton||retail||bargain;
+  const input=carton||middle||retail||bargain;
   if(!input)return;
 
-  const type=carton?"carton":(retail?"retail":"bargain");
+  const type=carton?"carton":(middle?"middle":(retail?"retail":"bargain"));
   writeOwnPrice(input.dataset.url||"",type,input.value);
   if(!bargain)updateSheetRow(input.closest(".product-card"));
 });
 
 $("#libraryProducts").addEventListener("keydown",e=>{
-  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-retail,.sheet-bargain")){
+  if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-middle,.sheet-my-retail,.sheet-bargain")){
     const card=e.target.closest(".product-card");
     if(!card)return;
     e.preventDefault();

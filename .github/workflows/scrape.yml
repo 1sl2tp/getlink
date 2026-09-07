@@ -4,8 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: "Dán link sản phẩm Bách Hóa XANH"
+        description: "Dán link Bách Hóa XANH (nhóm hoặc chi tiết)"
         required: true
+        type: string
+      request_id:
+        description: "Mã yêu cầu từ GETLINK Worker"
+        required: false
+        default: ""
         type: string
 
 permissions:
@@ -32,12 +37,14 @@ jobs:
       - name: Lấy giá
         env:
           INPUT_URL: ${{ inputs.url }}
-        run: python scraper/scraper.py --url "$INPUT_URL" --max-products 1
+          INPUT_REQUEST_ID: ${{ inputs.request_id }}
+        run: |
+          python scraper/scraper.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --max-products 20
       - name: Lưu kết quả về GitHub
         run: |
           git config user.name "getlink-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add data/products.json data/products.csv data/latest.json
+          git add data/products.json data/products.csv data/latest.json data/jobs
           if git diff --cached --quiet; then
             echo "Không có thay đổi"
             exit 0

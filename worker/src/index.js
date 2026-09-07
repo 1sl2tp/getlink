@@ -1290,15 +1290,22 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
 
     activeUrls.push(childUrl);
 
+    const hierarchy=packHierarchyData(
+      identity.name,childUrl,identity.packaging,
+      child.comparison&&child.comparison.pack_quantity,
+      child.comparison&&child.comparison.pack_unit
+    );
     const p={
       ...child,
       name:identity.name,
       packaging:{...(child.packaging||{}),text:identity.packaging},
+      hierarchy,
       group:child.group||categoryName||""
     };
     if(identity.authoritativeCarton){
       p.comparison=comparisonData({
         name:p.name,
+        url:childUrl,
         packagingText:p.packaging.text,
         featureText:"",
         packCount:p.comparison&&p.comparison.pack_quantity,
@@ -1306,7 +1313,8 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
         current:p.price&&p.price.current,
         sysPrice:p.price&&p.price.original,
         discount:0,
-        promoText:p.promotion&&p.promotion.text||""
+        promoText:p.promotion&&p.promotion.text||"",
+        hierarchy
       });
     }
     const price=p.price||{};
@@ -1382,6 +1390,31 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
         cmp.regular_pack_price??null,cmp.promo_pack_price??null,
         cmp.regular_unit_price??null,cmp.promo_unit_price??null,
         cmp.promotion_active?1:0,p.last_checked_at||checked
+      )
+    );
+
+    const h=p.hierarchy||{};
+    prepared.push(
+      env.DB.prepare(`
+        INSERT INTO link_pack_hierarchy(
+          link_url,label1,qty1,label2,qty2,label3,qty3,evidence,updated_at
+        ) VALUES(?,?,?,?,?,?,?,?,?)
+        ON CONFLICT(link_url) DO UPDATE SET
+          label1=excluded.label1,
+          qty1=excluded.qty1,
+          label2=excluded.label2,
+          qty2=excluded.qty2,
+          label3=excluded.label3,
+          qty3=excluded.qty3,
+          evidence=excluded.evidence,
+          updated_at=excluded.updated_at
+      `).bind(
+        childUrl,
+        h.label1||"",Number(h.qty1)||0,
+        h.label2||"",Number(h.qty2)||0,
+        h.label3||"",Number(h.qty3)||0,
+        h.evidence||"",
+        p.last_checked_at||checked
       )
     );
   }

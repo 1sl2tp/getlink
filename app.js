@@ -723,7 +723,13 @@ function rowUrlIsCarton(row){
     const path=new URL(String(row&&row.canonical_url||"")).pathname
       .replace(/\/+$/,"")
       .toLowerCase();
-    return /-thung$/.test(path);
+    const slug=path.split("/").filter(Boolean).pop()||"";
+
+    // BHX carton product URLs are commonly:
+    //   /ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml
+    // Older/imported URLs may also end with "-thung".
+    // Treat only the product slug boundary as authoritative.
+    return /^thung(?:-|$)/.test(slug)||/-thung$/.test(slug);
   }catch{
     return false;
   }

@@ -101,7 +101,9 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const kindMatch=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
   let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
 
-  const countMatch=plain.match(/([0-9]+(?:[.,][0-9]+)?)\s*(hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can)\b/);
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can";
+  const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
+  const singleUnitMatch=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
   let quantity=Number(rawCount)>0?Number(rawCount):0;
   let unit=cleanText(rawUnit||"");
 
@@ -113,14 +115,18 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     }
   }
 
+  if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnitMatch){
+    unit=normalizePackWord(singleUnitMatch[1]);
+  }
+
   if(!quantity)quantity=1;
   if(!packKind){
-    const normalizedUnit=normalizePackWord(rawUnit||unit||"");
+    const normalizedUnit=normalizePackWord(unit||rawUnit||"");
     packKind=quantity>1
       ?"Cụm"
       :(normalizedUnit&&normalizedUnit.toLowerCase()!=="đơn vị"
         ?normalizedUnit
-        :"Lẻ");
+        :"Đơn");
   }
   if(!unit){
     const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Can","Thanh","Cây","Viên","Tuýp"]);

@@ -261,17 +261,15 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     parsed.fragment,
                 ))
 
-                # Do the enlarged GetCate as a browser navigation, not through
-                # APIRequestContext. Bright Data can reset direct APIRequestContext
-                # sockets while the same URL succeeds normally in Chromium.
+                # Navigate the same Bright Data Chromium page directly to the
+                # enlarged API URL. This mirrors the successful manual test and
+                # avoids APIRequestContext/CDP secondary-page restrictions.
                 bulk_payload = None
                 bulk_status = 0
                 last_error = ""
-                for attempt in range(3):
-                    bulk_page = None
+                for attempt in range(2):
                     try:
-                        bulk_page = await page.context.new_page()
-                        bulk_response = await bulk_page.goto(
+                        bulk_response = await page.goto(
                             bulk_url,
                             wait_until="domcontentloaded",
                             timeout=60000,
@@ -283,12 +281,6 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         last_error = f"http_{bulk_status}"
                     except Exception as exc:
                         last_error = str(exc)[:300]
-                    finally:
-                        if bulk_page is not None:
-                            try:
-                                await bulk_page.close()
-                            except Exception:
-                                pass
                     await asyncio.sleep(0.6 * (attempt + 1))
 
                 if bulk_payload is None:
@@ -299,6 +291,17 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         "detail": last_error,
                         "url": bulk_url,
                     }, ensure_ascii=False))
+                    # Restore the category page so the old scroll/merge fallback
+                    # can still complete the job.
+                    try:
+                        await page.goto(
+                            target_url,
+                            wait_until="domcontentloaded",
+                            timeout=120000,
+                        )
+                        await page.wait_for_timeout(800)
+                    except Exception:
+                        pass
                     return None
 
                 if not (

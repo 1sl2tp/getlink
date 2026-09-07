@@ -83,7 +83,14 @@ jobs:
           test -n "$INPUT_REQUEST_ID"
           test -s "data/jobs/$INPUT_REQUEST_ID.json"
           test -n "$GETLINK_CALLBACK_TOKEN"
-          curl --fail --silent --show-error             --retry 5 --retry-delay 2 --retry-all-errors             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data-binary @"data/jobs/$INPUT_REQUEST_ID.json"             "$GETLINK_API_BASE/api/complete" | jq .
+
+          HTTP_CODE="$(curl --silent --show-error             --retry 5 --retry-delay 2 --retry-all-errors             -o /tmp/getlink-callback.json             -w '%{http_code}'             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data-binary @"data/jobs/$INPUT_REQUEST_ID.json"             "$GETLINK_API_BASE/api/complete")"
+
+          echo "Callback HTTP $HTTP_CODE"
+          cat /tmp/getlink-callback.json | jq . || cat /tmp/getlink-callback.json
+
+          test "$HTTP_CODE" -ge 200
+          test "$HTTP_CODE" -lt 300
 
       - name: Báo trạng thái
         if: steps.scrape.outputs.code != '0'

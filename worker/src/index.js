@@ -1633,6 +1633,33 @@ async function handleImageRefreshTargets(request,env){
     return json({error:"unauthorized"},401,"");
   }
 
+  const requestUrl=new URL(request.url);
+  const mode=String(requestUrl.searchParams.get("mode")||"all").toLowerCase();
+
+  if(mode==="missing"){
+    const missing=await env.DB.prepare(`
+      SELECT l.canonical_url AS url
+      FROM links l
+      LEFT JOIN link_assets a ON a.link_url=l.canonical_url
+      WHERE l.link_type='product'
+        AND COALESCE(l.last_status,'')<>'unlisted'
+        AND (a.image_url IS NULL OR TRIM(a.image_url)='')
+      ORDER BY l.canonical_url
+    `).all();
+
+    const targets=(missing.results||[])
+      .map(row=>String(row.url||"").trim())
+      .filter(Boolean)
+      .map(url=>({url,kind:"product"}));
+
+    return json({
+      ok:true,
+      mode:"missing",
+      target_count:targets.length,
+      targets
+    },200,"");
+  }
+
   const categories=await env.DB.prepare(`
     SELECT DISTINCT parent_url AS url
     FROM links
@@ -1669,6 +1696,7 @@ async function handleImageRefreshTargets(request,env){
 
   return json({
     ok:true,
+    mode:"all",
     target_count:targets.length,
     targets
   },200,"");

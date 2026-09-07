@@ -124,11 +124,13 @@ function packSortRank(kind){
 }
 
 function productSearchKey(row){
-  const pack=inferSheetPack(row);
   return searchKey([
     row.source_name,row.name,
     row.group_name,row.branch_name,row.brand_name,row.packaging,
-    pack.kind,pack.qty,pack.unit,pack.sizeValue,pack.sizeUnit,
+    row.pack_label_1,row.pack_qty_1,
+    row.pack_label_2,row.pack_qty_2,
+    row.pack_label_3,row.pack_qty_3,
+    row.size_value,row.size_unit,
     row.canonical_url
   ].filter(Boolean).join(" "));
 }

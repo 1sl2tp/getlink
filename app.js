@@ -907,8 +907,16 @@ function retailDisplayName(row,simple){
   return capitalizeDisplayName(cleaned||raw);
 }
 
+function packHierarchyText(qty,label){
+  const q=Number(qty)||0;
+  const unit=String(label||"").trim();
+  if(!unit)return "";
+  return (q>0?q+" ":"")+unit;
+}
+
 function productCard(row){
   const simple=simpleRowPrice(row);
+  const hierarchy=rowPackHierarchy(row);
   const displayName=retailDisplayName(row,simple);
   const pref=String(row.preference_state||"normal");
   const mineCarton=simple.hasCarton
@@ -928,14 +936,21 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(simple.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
-      '<td class="xls-qc xls-num-cell">'+
-        (simple.displayQty>0
-          ?'<span class="xls-qc-main">'+escapeHtml(simple.displayQty)+'</span>'
+      '<td class="xls-pack-level">'+
+        (hierarchy.label1
+          ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-unit">'+
-        (simple.displayUnit
-          ?escapeHtml(simple.displayUnit)
+      '<td class="xls-pack-level">'+
+        (hierarchy.label2
+          ?escapeHtml(packHierarchyText(hierarchy.qty2,hierarchy.label2))
+          :(!simple.hasCarton&&simple.displayUnit
+            ?escapeHtml(packHierarchyText(simple.displayQty,simple.displayUnit))
+            :'<span class="xls-empty">—</span>'))+
+      '</td>'+
+      '<td class="xls-pack-level">'+
+        (hierarchy.label3
+          ?escapeHtml(packHierarchyText(hierarchy.qty3,hierarchy.label3))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
       '<td class="xls-num">'+xlsWebPrice(simple.cartonPrice,simple.promoCartonPrice)+'</td>'+

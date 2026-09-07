@@ -1628,6 +1628,110 @@ async function handleRefreshDue(request,env){
   },200,"");
 }
 
+async function handleImageRefreshTargets(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  const categories=await env.DB.prepare(`
+    SELECT DISTINCT parent_url AS url
+    FROM links
+    WHERE link_type='product'
+      AND parent_url IS NOT NULL
+      AND TRIM(parent_url)<>''
+      AND COALESCE(last_status,'')<>'unlisted'
+    ORDER BY parent_url
+  `).all();
+
+  const standalone=await env.DB.prepare(`
+    SELECT canonical_url AS url
+    FROM links
+    WHERE link_type='product'
+      AND (parent_url IS NULL OR TRIM(parent_url)='')
+      AND COALESCE(last_status,'')<>'unlisted'
+    ORDER BY canonical_url
+  `).all();
+
+  const seen=new Set();
+  const targets=[];
+  for(const row of categories.results||[]){
+    const url=String(row.url||"").trim();
+    if(!url||seen.has(url))continue;
+    seen.add(url);
+    targets.push({url,kind:"category"});
+  }
+  for(const row of standalone.results||[]){
+    const url=String(row.url||"").trim();
+    if(!url||seen.has(url))continue;
+    seen.add(url);
+    targets.push({url,kind:"product"});
+  }
+
+  return json({
+    ok:true,
+    target_count:targets.length,
+    targets
+  },200,"");
+}
+
+async function handleImageRefresh(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  let raw;
+  try{raw=await request.json();}
+  catch{return json({error:"invalid_json"},400,"");}
+
+  if(!raw||raw.status==="error"){
+    return json({
+      error:"source_error",
+      detail:String(raw&&raw.detail||raw&&raw.error||"scrape_failed").slice(0,700)
+    },400,"");
+  }
+  if(!raw.bhx_response||!raw.bhx_response.data){
+    return json({error:"missing_bhx_response"},400,"");
+  }
+
+  const inputUrl=String(raw.input_url||"").trim();
+  if(!inputUrl)return json({error:"missing_input_url"},400,"");
+
+  const kind=raw.kind==="product"?"product":"category";
+  const refreshId="image-refresh-"+Date.now();
+  const normalized=kind==="product"
+    ?productDetailPayload(inputUrl,refreshId,raw.bhx_response.data)
+    :categoryPayload(inputUrl,refreshId,raw.bhx_response.data);
+
+  const items=kind==="product"
+    ?[normalized.product].filter(Boolean)
+    :(Array.isArray(normalized.products)?normalized.products:[]);
+
+  let updated=0;
+  let missing=0;
+  for(const item of items){
+    const url=String(item&&item.url||"").trim();
+    const image=String(item&&item.image||"").trim();
+    if(!url||!image){
+      missing+=1;
+      continue;
+    }
+    await persistLinkAsset(
+      env,canonicalBhx(url),image,
+      item.last_checked_at||normalized.checked_at||new Date().toISOString()
+    );
+    updated+=1;
+  }
+
+  return json({
+    ok:true,
+    input_url:inputUrl,
+    kind,
+    discovered:items.length,
+    updated,
+    missing
+  },200,"");
+}
+
 function isCategoryRootUrl(value){
   try{return pathParts(canonicalBhx(value)).length===1;}
   catch{return false;}
@@ -1954,6 +2058,12 @@ export default {
       }
       if(request.method==="POST"&&url.pathname==="/api/refresh-due"){
         return handleRefreshDue(request,env);
+      }
+      if(request.method==="GET"&&url.pathname==="/api/image-refresh-targets"){
+        return handleImageRefreshTargets(request,env);
+      }
+      if(request.method==="POST"&&url.pathname==="/api/image-refresh"){
+        return handleImageRefresh(request,env);
       }
       if(request.method==="GET"&&url.pathname==="/api/result"){
         return handleResult(url,env,origin||"*");

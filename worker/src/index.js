@@ -1795,8 +1795,13 @@ async function persistWinmartResponse(env,job,requestId,raw){
   const taxonomy=await loadBhxTaxonomyForWinmart(env);
   const products=Array.isArray(response.products)?response.products:[];
   const normalized=[];
+  const prepared=[];
   let mapped=0;
   let unmapped=0;
+
+  const linkSql=
+    "INSERT INTO links(id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,packaging,current_price,original_price,promotion_price,promotion_text,last_checked_at,last_status,last_request_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+    "ON CONFLICT(canonical_url) DO UPDATE SET source=excluded.source,link_type='product',parent_url=excluded.parent_url,group_name=COALESCE(NULLIF(excluded.group_name,''),links.group_name),branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),name=COALESCE(NULLIF(excluded.name,''),links.name),packaging=COALESCE(NULLIF(excluded.packaging,''),links.packaging),current_price=COALESCE(excluded.current_price,links.current_price),original_price=COALESCE(excluded.original_price,links.original_price),promotion_price=COALESCE(excluded.promotion_price,links.promotion_price),promotion_text=COALESCE(NULLIF(excluded.promotion_text,''),links.promotion_text),last_checked_at=excluded.last_checked_at,last_status='ok',last_request_id=excluded.last_request_id,updated_at=excluded.updated_at";
 
   for(const rawProduct of products){
     const name=cleanText(
@@ -1865,41 +1870,64 @@ async function persistWinmartResponse(env,job,requestId,raw){
     const brand=cleanText(rawProduct.brand||rawProduct.brand_name||"");
     const image=String(rawProduct.image||rawProduct.image_url||"").trim();
     const promoText=cleanText(rawProduct.promotion_text||"");
-    const id=await upsertLink(env,{
-      canonical_url:productUrl,
-      source:"WinMart",
-      link_type:"product",
-      parent_url:tax.parent_url,
-      group_name:tax.group_name,
-      branch_name:brand,
-      name,
-      packaging,
-      current_price:current,
-      original_price:original,
-      promotion_price:null,
-      promotion_text:promoText,
-      last_checked_at:checked,
-      last_status:"ok",
-      last_request_id:requestId
-    });
+    const id=await idForUrl(productUrl);
+    const now=new Date().toISOString();
 
-    await env.DB.prepare(
-      "INSERT OR IGNORE INTO price_snapshots(link_id,request_id,checked_at,current_price,original_price,promotion_price,promotion_text,result_json) VALUES(?,?,?,?,?,?,?,?)"
-    ).bind(
-      id,requestId,checked,current,original,null,promoText,
-      JSON.stringify({
-        source:"WinMart",
-        category:tax.group_name,
-        taxonomy_evidence:tax.evidence,
-        raw:rawProduct
-      })
-    ).run();
+    prepared.push(
+      env.DB.prepare(linkSql).bind(
+        id,productUrl,"WinMart","product",tax.parent_url,
+        tax.group_name,brand,name,packaging,
+        current,original,null,promoText,checked,"ok",requestId,now,now
+      )
+    );
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO price_snapshots(link_id,request_id,checked_at,current_price,original_price,promotion_price,promotion_text,result_json) VALUES(?,?,?,?,?,?,?,?)"
+      ).bind(
+        id,requestId,checked,current,original,null,promoText,
+        JSON.stringify({
+          source:"WinMart",
+          category:tax.group_name,
+          taxonomy_evidence:tax.evidence,
+          raw:rawProduct
+        })
+      )
+    );
 
     if(image){
-      await persistLinkAsset(env,productUrl,image,checked);
+      prepared.push(
+        env.DB.prepare(
+          "INSERT INTO link_assets(link_url,image_url,updated_at) VALUES(?,?,?) ON CONFLICT(link_url) DO UPDATE SET image_url=excluded.image_url,updated_at=excluded.updated_at"
+        ).bind(productUrl,image,checked)
+      );
     }
-    await persistLinkComparison(env,productUrl,comparison,checked);
-    await persistLinkHierarchy(env,productUrl,hierarchy,checked);
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT INTO link_comparison(link_url,pack_kind,pack_quantity,pack_unit,size_value,size_unit,regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price,promotion_active,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "+
+        "ON CONFLICT(link_url) DO UPDATE SET pack_kind=excluded.pack_kind,pack_quantity=excluded.pack_quantity,pack_unit=excluded.pack_unit,size_value=excluded.size_value,size_unit=excluded.size_unit,regular_pack_price=excluded.regular_pack_price,promo_pack_price=excluded.promo_pack_price,regular_unit_price=excluded.regular_unit_price,promo_unit_price=excluded.promo_unit_price,promotion_active=excluded.promotion_active,updated_at=excluded.updated_at"
+      ).bind(
+        productUrl,comparison.pack_kind||"",Number(comparison.pack_quantity)||1,
+        comparison.pack_unit||"",comparison.size_value??null,comparison.size_unit||"",
+        comparison.regular_pack_price??null,comparison.promo_pack_price??null,
+        comparison.regular_unit_price??null,comparison.promo_unit_price??null,
+        comparison.promotion_active?1:0,checked
+      )
+    );
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT INTO link_pack_hierarchy(link_url,label1,qty1,label2,qty2,label3,qty3,evidence,updated_at) VALUES(?,?,?,?,?,?,?,?,?) "+
+        "ON CONFLICT(link_url) DO UPDATE SET label1=excluded.label1,qty1=excluded.qty1,label2=excluded.label2,qty2=excluded.qty2,label3=excluded.label3,qty3=excluded.qty3,evidence=excluded.evidence,updated_at=excluded.updated_at"
+      ).bind(
+        productUrl,
+        hierarchy.label1||"",Number(hierarchy.qty1)||0,
+        hierarchy.label2||"",Number(hierarchy.qty2)||0,
+        hierarchy.label3||"",Number(hierarchy.qty3)||0,
+        hierarchy.evidence||"",checked
+      )
+    );
 
     normalized.push({
       source:{key:"winmart",name:"WinMart",host:"winmart.vn"},
@@ -1919,6 +1947,10 @@ async function persistWinmartResponse(env,job,requestId,raw){
       ),
       last_checked_at:checked
     });
+  }
+
+  for(let i=0;i<prepared.length;i+=60){
+    await env.DB.batch(prepared.slice(i,i+60));
   }
 
   const categoryName=cleanText(

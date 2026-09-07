@@ -20,44 +20,32 @@ assert.equal(money(0),"—");
 
 {
   const app=fs.readFileSync("app.js","utf8");
-  const searchMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
-  const urlMatch=app.match(/function rowUrlIsCarton\(row\)\{[\s\S]*?\n\}/);
-  const cartonMatch=app.match(/function rowCartonStartText\(row\)\{[\s\S]*?\n\}/);
-  assert.ok(searchMatch&&urlMatch&&cartonMatch,"carton safety helpers not found");
-  const rowCartonStartText=new Function(
-    searchMatch[0]+"\n"+urlMatch[0]+"\n"+cartonMatch[0]+"\nreturn rowCartonStartText;"
+  const hierarchyMatch=app.match(/function rowPackHierarchy\(row\)\{[\s\S]*?\n\}/);
+  const cartonMatch=app.match(/function rowIsCarton\(row\)\{[\s\S]*?\n\}/);
+  assert.ok(hierarchyMatch&&cartonMatch,"hierarchy carton helpers not found");
+  const api=new Function(
+    hierarchyMatch[0]+"\n"+cartonMatch[0]+
+    "\nreturn {rowPackHierarchy,rowIsCarton};"
   )();
-  assert.equal(
-    rowCartonStartText({name:"Thùng 24 lon cà phê sữa Highlands 235ml"}),
-    "thung 24 lon ca phe sua highlands 235ml"
-  );
-  assert.equal(
-    rowCartonStartText({
-      name:"Cà phê sữa Highlands 235ml",
-      source_name:"Thùng 24 lon cà phê sữa Highlands 235ml"
-    }),
-    "thung 24 lon ca phe sua highlands 235ml"
-  );
-  assert.equal(
-    rowCartonStartText({
-      name:"24 lon cà phê sữa Highlands 235ml",
-      canonical_url:"https://www.bachhoaxanh.com/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml"
-    }),
-    "thung"
-  );
-  assert.equal(
-    rowCartonStartText({
-      name:"6 lon cà phê sữa Highlands 235ml",
-      canonical_url:"https://www.bachhoaxanh.com/ca-phe-lon/6-lon-ca-phe-sua-highlands-235ml"
-    }),
-    ""
-  );
-  assert.equal(
-    rowCartonStartText({name:"6 lon cà phê sữa Highlands 235ml"}),
-    ""
-  );
-}
 
+  const highlands={
+    pack_label_1:"Thùng",
+    pack_qty_1:1,
+    pack_label_2:"Lon",
+    pack_qty_2:24,
+    pack_label_3:"",
+    pack_qty_3:0,
+    pack_evidence:"url"
+  };
+  assert.equal(api.rowIsCarton(highlands),true);
+  assert.deepEqual(api.rowPackHierarchy(highlands),{
+    label1:"Thùng",qty1:1,label2:"Lon",qty2:24,
+    label3:"",qty3:0,evidence:"url"
+  });
+  assert.equal(api.rowIsCarton({
+    name:"Thùng 24 lon cà phê sữa Highlands 235ml"
+  }),false);
+}
 
 {
   const app=fs.readFileSync("app.js","utf8");
@@ -132,16 +120,6 @@ assert.equal(money(0),"—");
       pack_unit:"Lon"
     }),
     {qty:1,unit:"Gói",kind:"Gói",sizeValue:500,sizeUnit:"g"}
-  );
-
-  assert.deepEqual(
-    inferSheetPack({
-      name:"Thùng 24 lon cà phê sữa Highlands 235ml",
-      packaging:"Lon 235ml",
-      pack_quantity:1,
-      pack_unit:"Lon"
-    }),
-    {qty:24,unit:"Lon",kind:"Thùng",sizeValue:235,sizeUnit:"ml"}
   );
 }
 

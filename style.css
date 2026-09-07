@@ -838,12 +838,13 @@ h1{margin:0;font-size:28px;line-height:1.1}
   text-transform:uppercase;
   white-space:nowrap;
 }
-.xls-price-table th:nth-child(1){width:40%}
-.xls-price-table th:nth-child(2){width:11%}
-.xls-price-table th:nth-child(3){width:11%}
-.xls-price-table th:nth-child(4){width:13%}
-.xls-price-table th:nth-child(5){width:13%}
+.xls-price-table th:nth-child(1){width:34%}
+.xls-price-table th:nth-child(2){width:10%}
+.xls-price-table th:nth-child(3){width:10%}
+.xls-price-table th:nth-child(4){width:10%}
+.xls-price-table th:nth-child(5){width:12%}
 .xls-price-table th:nth-child(6){width:12%}
+.xls-price-table th:nth-child(7){width:12%}
 
 .xls-price-table .product-card{
   display:table-row!important;
@@ -862,6 +863,30 @@ h1{margin:0;font-size:28px;line-height:1.1}
   white-space:nowrap;
   font-weight:650;
   color:#202124;
+}
+.xls-open-detail{
+  display:block;
+  width:100%;
+  padding:0;
+  border:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  font:inherit;
+  font-weight:650;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  cursor:pointer;
+}
+.xls-open-detail:hover{
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+.xls-qc{
+  white-space:nowrap;
+  color:#475467;
+  font-variant-numeric:tabular-nums;
 }
 .xls-num{
   white-space:nowrap;

@@ -1,6 +1,5 @@
 name: Smoke GO
-# inspect GO store state
-# retry with GO diagnostics
+# GO API-first pagination gate: Sữa Các Loại exposes 26 pages x 15
 
 on:
   push:
@@ -57,7 +56,7 @@ jobs:
                 sample:(.payload.products[0] // {})
               }' /tmp/go-result.json
               test "$(jq -r '.payload.source.name // empty' /tmp/go-result.json)" = "GO!"
-              test "$(jq '.payload.products|length' /tmp/go-result.json)" -ge 16
+              test "$(jq '.payload.products|length' /tmp/go-result.json)" -ge 376
               break
             fi
             if [ "$STATUS" = "error" ]; then
@@ -88,6 +87,6 @@ jobs:
           GO_COUNT="$(jq '[.products[]|select(.source=="GO!")]|length' /tmp/library.json)"
           GO_PACK="$(jq '[.products[]|select(.source=="GO!" and ((.pack_label_1 // "") != "" or (.pack_label_2 // "") != "" or (.pack_label_3 // "") != ""))]|length' /tmp/library.json)"
           GO_MAPPED="$(jq '[.products[]|select(.source=="GO!" and .parent_url!=null)]|length' /tmp/library.json)"
-          test "$GO_COUNT" -ge 16
+          test "$GO_COUNT" -ge 376
           test "$GO_PACK" -ge 1
           test "$GO_MAPPED" -ge 1

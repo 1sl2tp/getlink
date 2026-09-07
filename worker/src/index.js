@@ -174,9 +174,6 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
       quantity=cartons;
       unit="Thùng";
     }
-  }else if(rawUnitPlain==="thung"&&rawQty>0&&rawQty<=300){
-    quantity=rawQty;
-    unit="Thùng";
   }
 
   if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnitMatch){

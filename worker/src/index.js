@@ -98,19 +98,33 @@ function normalizePackWord(value){
 function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const text=cleanText([name,packagingText,featureText].filter(Boolean).join(" "));
   const plain=text.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-  const kindMatch=plain.match(/^(thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp)\b/);
+
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can";
+
+  const kindMatch=plain.match(new RegExp("^("+kindPattern+")\\b"));
   let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
 
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|thanh|cay|vien|tuyp|can";
-  const bonusMatch=plain.match(
-    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  // Only the beginning of the name may define pack quantity.
+  // This prevents product/model numbers such as 1664, 333, C2, 7Up...
+  // from ever becoming SL/QC.
+  const body=kindMatch
+    ?plain.slice(kindMatch[0].length).trimStart()
+    :plain;
+
+  const bonusMatch=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const bonusWithUnits=plain.match(
-    new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  const bonusWithUnits=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const countMatch=plain.match(new RegExp("([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b"));
-  const singleUnitMatch=plain.match(new RegExp("\\b("+unitPattern+")\\b"));
-  let quantity=Number(rawCount)>0?Number(rawCount):0;
+  const countMatch=body.match(
+    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
+  );
+  const singleUnitMatch=body.match(new RegExp("\\b("+unitPattern+")\\b"));
+
+  const rawQty=Number(rawCount);
+  let quantity=Number.isFinite(rawQty)&&rawQty>0&&rawQty<=300?rawQty:0;
   let unit=cleanText(rawUnit||"");
 
   if(bonusMatch){
@@ -131,7 +145,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     }
   }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
-    if(parsed>0&&parsed<=300&&(quantity<=1||!unit||normalizePackWord(unit)===packKind)){
+    if(parsed>0&&parsed<=300){
       quantity=parsed;
       unit=normalizePackWord(countMatch[2]);
     }
@@ -142,6 +156,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   }
 
   if(!quantity)quantity=1;
+
   if(!packKind){
     const normalizedUnit=normalizePackWord(unit||rawUnit||"");
     packKind=quantity>1
@@ -150,6 +165,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
         ?normalizedUnit
         :"Đơn");
   }
+
   if(!unit){
     const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Can","Thanh","Cây","Viên","Tuýp"]);
     unit=singleKinds.has(packKind)?packKind:"đơn vị";

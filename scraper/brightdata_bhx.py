@@ -233,11 +233,11 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     }, ensure_ascii=False))
                     return payload, response.url
 
-                # Keep a generous floor so small/medium categories are one-shot.
-                # If BHX ever caps pageSize, the old scroll merger below remains
-                # as a fallback.
-                requested_page_size = max(total, 500)
-                requested_page_size = min(requested_page_size, 2000)
+                # Request exactly the total BHX just reported. This is the same
+                # one-shot shape verified manually on /sua-tuoi (total=113).
+                # Cap only as a defensive guard; larger categories fall back to
+                # the existing scroll merger if BHX ever exceeds it.
+                requested_page_size = min(max(total, 1), 2000)
 
                 parsed = urlparse(response.url)
                 pairs = parse_qsl(parsed.query, keep_blank_values=True)
@@ -261,40 +261,43 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     parsed.fragment,
                 ))
 
-                try:
-                    raw_headers = await response.request.all_headers()
-                except Exception:
-                    raw_headers = {}
-                allowed = {
-                    "accept", "accept-language", "authorization",
-                    "origin", "referer", "user-agent"
-                }
-                headers = {
-                    key: value
-                    for key, value in (raw_headers or {}).items()
-                    if key.lower() in allowed or key.lower().startswith("x-")
-                }
+                # Do the enlarged GetCate as a browser navigation, not through
+                # APIRequestContext. Bright Data can reset direct APIRequestContext
+                # sockets while the same URL succeeds normally in Chromium.
+                bulk_payload = None
+                bulk_status = 0
+                last_error = ""
+                for attempt in range(3):
+                    bulk_page = None
+                    try:
+                        bulk_page = await page.context.new_page()
+                        bulk_response = await bulk_page.goto(
+                            bulk_url,
+                            wait_until="domcontentloaded",
+                            timeout=60000,
+                        )
+                        bulk_status = bulk_response.status if bulk_response else 0
+                        if bulk_response and bulk_response.ok:
+                            bulk_payload = await bulk_response.json()
+                            break
+                        last_error = f"http_{bulk_status}"
+                    except Exception as exc:
+                        last_error = str(exc)[:300]
+                    finally:
+                        if bulk_page is not None:
+                            try:
+                                await bulk_page.close()
+                            except Exception:
+                                pass
+                    await asyncio.sleep(0.6 * (attempt + 1))
 
-                try:
-                    bulk_response = await page.context.request.get(
-                        bulk_url,
-                        headers=headers,
-                        timeout=45000,
-                    )
-                    if not bulk_response.ok:
-                        print(json.dumps({
-                            "bhx_api_first": False,
-                            "reason": "bulk_http",
-                            "status": bulk_response.status,
-                            "url": bulk_url,
-                        }, ensure_ascii=False))
-                        return None
-                    bulk_payload = await bulk_response.json()
-                except Exception as exc:
+                if bulk_payload is None:
                     print(json.dumps({
                         "bhx_api_first": False,
-                        "reason": "bulk_exception",
-                        "detail": str(exc)[:300],
+                        "reason": "bulk_browser_navigation_failed",
+                        "status": bulk_status,
+                        "detail": last_error,
+                        "url": bulk_url,
                     }, ensure_ascii=False))
                     return None
 

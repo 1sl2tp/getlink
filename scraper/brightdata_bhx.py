@@ -261,24 +261,37 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     parsed.fragment,
                 ))
 
-                # Navigate the same Bright Data Chromium page directly to the
-                # enlarged API URL. This mirrors the successful manual test and
-                # avoids APIRequestContext/CDP secondary-page restrictions.
+                # Reuse the already-open BHX page and call GetCate with fetch().
+                # This keeps the exact browser session/cookies/headers that produced
+                # the original 10-item request, while only changing pageSize.
                 bulk_payload = None
                 bulk_status = 0
                 last_error = ""
-                for attempt in range(2):
+                for attempt in range(3):
                     try:
-                        bulk_response = await page.goto(
-                            bulk_url,
-                            wait_until="domcontentloaded",
-                            timeout=60000,
+                        result = await page.evaluate(
+                            """async ({url}) => {
+                              try {
+                                const res = await fetch(url, {
+                                  method: "GET",
+                                  credentials: "include",
+                                  headers: { "accept": "application/json, text/plain, */*" }
+                                });
+                                const text = await res.text();
+                                let body = null;
+                                try { body = JSON.parse(text); } catch {}
+                                return {ok:res.ok,status:res.status,body};
+                              } catch (e) {
+                                return {ok:false,status:0,error:String(e)};
+                              }
+                            }""",
+                            {"url": bulk_url},
                         )
-                        bulk_status = bulk_response.status if bulk_response else 0
-                        if bulk_response and bulk_response.ok:
-                            bulk_payload = await bulk_response.json()
+                        bulk_status = int((result or {}).get("status") or 0)
+                        if (result or {}).get("ok") and isinstance((result or {}).get("body"), dict):
+                            bulk_payload = result["body"]
                             break
-                        last_error = f"http_{bulk_status}"
+                        last_error = str((result or {}).get("error") or f"http_{bulk_status}")[:300]
                     except Exception as exc:
                         last_error = str(exc)[:300]
                     await asyncio.sleep(0.6 * (attempt + 1))
@@ -291,17 +304,6 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                         "detail": last_error,
                         "url": bulk_url,
                     }, ensure_ascii=False))
-                    # Restore the category page so the old scroll/merge fallback
-                    # can still complete the job.
-                    try:
-                        await page.goto(
-                            target_url,
-                            wait_until="domcontentloaded",
-                            timeout=120000,
-                        )
-                        await page.wait_for_timeout(800)
-                    except Exception:
-                        pass
                     return None
 
                 if not (

@@ -1,5 +1,5 @@
 name: Smoke WinMart
-# API pagination gate: Sữa đặc = 2 pages x 8 in captured WinMart response
+# API pagination + listing-card unit gate; no product-detail crawl
 # retry after reusable detail pool
 # retry after scraper compile fix
 # rerun after rendered Chọn loại + stale-row repair
@@ -70,18 +70,21 @@ jobs:
             winmart_count:([.products[]|select(.source=="WinMart")]|length),
             wm_image_count:([.products[]|select(.source=="WinMart" and (.image // "") != "")]|length),
             wm_brand_count:([.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length),
-            wm_detail_unit_count:([.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_detail_type" and (.pack_label_3 // "") != "")]|length),
+            wm_listing_unit_count:([.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_listing_card" and (.pack_label_3 // "") != "")]|length),
             mapped_groups:([.products[]|select(.source=="WinMart" and .parent_url!=null)|.group_name]|unique),
             simply_rbo:([.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0] // {}),
             ajinomoto_2kg:([.products[]|select(.source=="WinMart" and ((.name // "")|contains("Ajinomoto 2kg")))][0] // {})
           }' /tmp/library.json
 
           WM_COUNT="$(jq '[.products[]|select(.source=="WinMart")]|length' /tmp/library.json)"
-          WM_UNIT_COUNT="$(jq '[.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_detail_type" and (.pack_label_3 // "") != "")]|length' /tmp/library.json)"
+          WM_UNIT_COUNT="$(jq '[.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_listing_card" and (.pack_label_3 // "") != "")]|length' /tmp/library.json)"
           test "$WM_COUNT" -ge 1
           test "$(jq '[.products[]|select(.source=="WinMart" and (.image // "") != "")]|length' /tmp/library.json)" -ge 1
           test "$(jq '[.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length' /tmp/library.json)" -ge 1
-          test "$WM_UNIT_COUNT" -ge $(( WM_COUNT * 90 / 100 ))
+          # The selected Sữa đặc page has 8 visible cards per API page.
+          # Listing-card proof must exist, but missing unit metadata must not
+          # trigger hundreds of detail-page navigations.
+          test "$WM_UNIT_COUNT" -ge 8
 
           SIMPLY_UNIT="$(jq -r '[.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0].pack_label_3 // empty' /tmp/library.json)"
           SIMPLY_GROUP="$(jq -r '[.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0].group_name // empty' /tmp/library.json)"

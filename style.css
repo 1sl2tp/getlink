@@ -18,3 +18,9 @@ button:disabled{opacity:.55;cursor:wait}.status-row{display:flex;justify-content
 .child-row span{min-width:0;display:flex;flex-direction:column;gap:3px}
 .child-row small{font-size:12px;font-weight:500;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .child-row strong{white-space:nowrap}
+
+.mine-qty{display:flex;align-items:center;gap:6px;margin-top:7px;font-size:11px;color:var(--muted)}
+.mine-qty input{width:56px;padding:6px 7px;text-align:center}
+.unit-note{display:block;margin-top:6px;font-size:11px;color:#087a40;font-weight:650}
+.variant-price{display:flex!important;flex-direction:column;align-items:flex-end!important;gap:2px}
+.variant-price small{font-size:11px;color:var(--muted)}

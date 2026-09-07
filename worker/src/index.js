@@ -2066,6 +2066,70 @@ async function handleRefreshDue(request,env){
   },200,"");
 }
 
+async function handleCleanupIngestionRules(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+
+  const result=await env.DB.prepare(`
+    SELECT canonical_url,name,packaging,last_status
+    FROM links
+    WHERE link_type='product'
+      AND COALESCE(last_status,'')<>'unlisted'
+    ORDER BY updated_at DESC
+    LIMIT 5000
+  `).all();
+
+  const rejected=[];
+  const reasons={};
+  for(const row of result.results||[]){
+    const identity=getlinkProductIdentity(
+      row.name||"",
+      row.canonical_url||"",
+      row.packaging||""
+    );
+    if(identity.keep)continue;
+    rejected.push({
+      url:row.canonical_url,
+      name:row.name||"",
+      reason:identity.reason||"filtered"
+    });
+    reasons[identity.reason||"filtered"]=(reasons[identity.reason||"filtered"]||0)+1;
+  }
+
+  const now=new Date().toISOString();
+  for(let i=0;i<rejected.length;i+=40){
+    const chunk=rejected.slice(i,i+40);
+    const statements=[];
+    for(const item of chunk){
+      statements.push(
+        env.DB.prepare(
+          "UPDATE links SET last_status='unlisted',updated_at=? WHERE canonical_url=?"
+        ).bind(now,item.url)
+      );
+      statements.push(
+        env.DB.prepare(
+          "DELETE FROM link_comparison WHERE link_url=?"
+        ).bind(item.url)
+      );
+      statements.push(
+        env.DB.prepare(
+          "DELETE FROM link_pack_hierarchy WHERE link_url=?"
+        ).bind(item.url)
+      );
+    }
+    if(statements.length)await env.DB.batch(statements);
+  }
+
+  return json({
+    ok:true,
+    scanned:Number(result.results&&result.results.length||0),
+    unlisted:rejected.length,
+    reasons,
+    sample:rejected.slice(0,25)
+  },200,"");
+}
+
 async function handleImageRefreshTargets(request,env){
   if(!callbackAuthorized(request,env)){
     return json({error:"unauthorized"},401,"");
@@ -2571,6 +2635,9 @@ export default {
       }
       if(request.method==="POST"&&url.pathname==="/api/refresh-due"){
         return handleRefreshDue(request,env);
+      }
+      if(request.method==="POST"&&url.pathname==="/api/cleanup-ingestion-rules"){
+        return handleCleanupIngestionRules(request,env);
       }
       if(request.method==="GET"&&url.pathname==="/api/image-refresh-targets"){
         return handleImageRefreshTargets(request,env);

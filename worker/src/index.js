@@ -1027,6 +1027,152 @@ async function handleResult(url,env,origin){
 }
 
 
+
+async function getPreference(env,url){
+  const row=await env.DB.prepare(
+    "SELECT state,auto_refresh,refresh_hours,pinned,updated_at FROM link_preferences WHERE link_url=?"
+  ).bind(url).first();
+  return row||{
+    state:"normal",
+    auto_refresh:0,
+    refresh_hours:24,
+    pinned:0,
+    updated_at:""
+  };
+}
+
+async function setPreference(env,url,state,refreshHours){
+  const normalized=canonicalBhx(url);
+  const allowed=new Set(["normal","watch","hidden"]);
+  if(!allowed.has(state))throw new Error("invalid_preference_state");
+
+  const hours=state==="watch"
+    ?Math.min(168,Math.max(1,Number(refreshHours)||6))
+    :24;
+  const auto=state==="watch"?1:0;
+  const now=new Date().toISOString();
+
+  await env.DB.prepare(`
+    INSERT INTO link_preferences(
+      link_url,state,auto_refresh,refresh_hours,pinned,created_at,updated_at
+    ) VALUES(?,?,?,?,0,?,?)
+    ON CONFLICT(link_url) DO UPDATE SET
+      state=excluded.state,
+      auto_refresh=excluded.auto_refresh,
+      refresh_hours=excluded.refresh_hours,
+      updated_at=excluded.updated_at
+  `).bind(normalized,state,auto,hours,now,now).run();
+
+  return getPreference(env,normalized);
+}
+
+async function handlePreference(request,env,origin){
+  let body;
+  try{body=await request.json();}
+  catch{return json({error:"invalid_json"},400,origin);}
+
+  let url;
+  try{url=canonicalBhx(body.url);}
+  catch{return json({error:"invalid_bhx_url"},400,origin);}
+
+  const link=await env.DB.prepare(
+    "SELECT canonical_url FROM links WHERE canonical_url=? LIMIT 1"
+  ).bind(url).first();
+  if(!link)return json({error:"link_not_found"},404,origin);
+
+  const state=String(body.state||"normal");
+  const preference=await setPreference(
+    env,url,state,body.refresh_hours
+  );
+  return json({ok:true,url,preference},200,origin);
+}
+
+async function queueDueRefreshes(env,limit=10){
+  const max=Math.min(20,Math.max(1,Number(limit)||10));
+  const rows=await env.DB.prepare(`
+    SELECT
+      l.canonical_url,l.link_type,l.last_checked_at,
+      p.refresh_hours
+    FROM link_preferences p
+    JOIN links l ON l.canonical_url=p.link_url
+    WHERE p.state='watch'
+      AND p.auto_refresh=1
+      AND COALESCE(l.last_status,'')<>'unlisted'
+      AND (
+        l.last_checked_at IS NULL OR
+        datetime(l.last_checked_at) <= datetime(
+          'now','-' || CAST(p.refresh_hours AS TEXT) || ' hours'
+        )
+      )
+      AND NOT EXISTS(
+        SELECT 1 FROM jobs j
+        WHERE j.canonical_url=l.canonical_url
+          AND j.status IN ('queued','running')
+          AND datetime(j.updated_at) > datetime('now','-2 hours')
+      )
+    ORDER BY COALESCE(l.last_checked_at,'1970-01-01') ASC
+    LIMIT ?
+  `).bind(max).all();
+
+  const queued=[];
+  const errors=[];
+  for(const row of rows.results||[]){
+    const requestId=crypto.randomUUID().replace(/-/g,"");
+    const now=new Date().toISOString();
+    try{
+      await env.DB.prepare(`
+        INSERT INTO jobs(
+          request_id,input_url,canonical_url,link_type,status,created_at,updated_at
+        ) VALUES(?,?,?,?,?,?,?)
+      `).bind(
+        requestId,row.canonical_url,row.canonical_url,
+        row.link_type||heuristicType(row.canonical_url),
+        "queued",now,now
+      ).run();
+
+      const r=await dispatchGithub(
+        env,browserBhxUrl(row.canonical_url),requestId
+      );
+      if(!r.ok){
+        const detail=(await r.text()).slice(0,500);
+        throw new Error("github_dispatch_"+r.status+":"+detail);
+      }
+
+      await env.DB.prepare(
+        "UPDATE links SET last_status='queued',last_request_id=?,updated_at=? WHERE canonical_url=?"
+      ).bind(requestId,now,row.canonical_url).run();
+
+      queued.push({
+        url:row.canonical_url,
+        request_id:requestId,
+        refresh_hours:Number(row.refresh_hours)||6
+      });
+    }catch(error){
+      const detail=String(error&&error.message||error).slice(0,700);
+      await env.DB.prepare(
+        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+      ).bind(detail,new Date().toISOString(),requestId).run();
+      errors.push({url:row.canonical_url,error:detail});
+    }
+  }
+  return {queued,errors};
+}
+
+async function handleRefreshDue(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+  let body={};
+  try{body=await request.json();}catch{}
+  const result=await queueDueRefreshes(env,body.limit||10);
+  return json({
+    ok:true,
+    queued_count:result.queued.length,
+    error_count:result.errors.length,
+    ...result
+  },200,"");
+}
+
 function isCategoryRootUrl(value){
   try{return pathParts(canonicalBhx(value)).length===1;}
   catch{return false;}
@@ -1038,11 +1184,11 @@ async function handleLibrary(url,env,origin){
 
   if(view==="groups"){
     const categories=await env.DB.prepare(
-      "SELECT canonical_url,name,group_name,updated_at FROM links WHERE link_type='category' ORDER BY updated_at DESC LIMIT 300"
+      "SELECT l.canonical_url,l.name,l.group_name,l.updated_at,COALESCE(p.state,'normal') AS preference_state FROM links l LEFT JOIN link_preferences p ON p.link_url=l.canonical_url WHERE l.link_type='category' AND COALESCE(p.state,'normal')<>'hidden' ORDER BY l.updated_at DESC LIMIT 300"
     ).all();
 
     const productParents=await env.DB.prepare(
-      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(current_price,promotion_price) IS NOT NULL AND COALESCE(last_status,'')<>'unlisted' GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
+      "SELECT l.parent_url,MAX(l.group_name) AS group_name,COUNT(*) AS product_count,MAX(l.updated_at) AS updated_at FROM links l LEFT JOIN link_preferences p ON p.link_url=l.canonical_url WHERE l.link_type='product' AND l.parent_url IS NOT NULL AND TRIM(COALESCE(l.name,''))<>'' AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL AND COALESCE(l.last_status,'')<>'unlisted' AND COALESCE(p.state,'normal')<>'hidden' GROUP BY l.parent_url ORDER BY updated_at DESC LIMIT 500"
     ).all();
 
     const map=new Map();
@@ -1082,6 +1228,8 @@ async function handleLibrary(url,env,origin){
   if(view==="products"||view==="search"){
     let parent="";
     const q=cleanText(url.searchParams.get("q")||"");
+    const includeHidden=url.searchParams.get("include_hidden")==="1";
+    const stateFilter=String(url.searchParams.get("state")||"");
     if(view==="products"){
       try{parent=canonicalBhx(url.searchParams.get("parent")||"");}
       catch{return json({error:"invalid_parent"},400,origin);}
@@ -1092,6 +1240,9 @@ async function handleLibrary(url,env,origin){
         l.id,l.canonical_url,l.parent_url,l.group_name,l.branch_name,l.name,
         l.packaging,l.current_price,l.original_price,l.promotion_price,
         l.promotion_text,l.last_checked_at,l.last_status,l.updated_at,
+        COALESCE(pref.state,'normal') AS preference_state,
+        COALESCE(pref.auto_refresh,0) AS auto_refresh,
+        COALESCE(pref.refresh_hours,24) AS refresh_hours,
         (
           SELECT pv.image
           FROM product_variants pv
@@ -1110,12 +1261,21 @@ async function handleLibrary(url,env,origin){
           WHERE d.parent_url=l.canonical_url
         ) AS has_promo
       FROM links l
+      LEFT JOIN link_preferences pref
+        ON pref.link_url=l.canonical_url
       WHERE l.link_type='product'
         AND TRIM(COALESCE(l.name,''))<>''
         AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
         AND COALESCE(l.last_status,'')<>'unlisted'
     `;
     const binds=[];
+    if(!includeHidden){
+      sql+=" AND COALESCE(pref.state,'normal')<>'hidden'";
+    }
+    if(stateFilter==="watch"||stateFilter==="hidden"||stateFilter==="normal"){
+      sql+=" AND COALESCE(pref.state,'normal')=?";
+      binds.push(stateFilter);
+    }
     if(parent){
       sql+=" AND l.parent_url=?";
       binds.push(parent);
@@ -1146,11 +1306,13 @@ async function handleLibrary(url,env,origin){
     ).bind(itemUrl).first();
     if(cached&&cached.result_json){
       try{
+        const preference=await getPreference(env,itemUrl);
         return json({
           status:"complete",
           payload:JSON.parse(cached.result_json),
           source:"d1-library",
-          updated_at:cached.updated_at||""
+          updated_at:cached.updated_at||"",
+          preference
         },200,origin);
       }catch{}
     }
@@ -1252,9 +1414,11 @@ async function handleLibrary(url,env,origin){
       image:variantRows[0]&&variantRows[0].image||"",
       last_checked_at:row.last_checked_at||""
     };
+    const preference=await getPreference(env,itemUrl);
     return json({
       status:"complete",
       source:"d1-library",
+      preference,
       payload:{
         schema_version:4,
         request_id:row.last_request_id||"",
@@ -1341,6 +1505,12 @@ export default {
       }
       if(request.method==="POST"&&url.pathname==="/api/complete"){
         return handleComplete(request,env);
+      }
+      if(request.method==="POST"&&url.pathname==="/api/preference"){
+        return handlePreference(request,env,origin||"*");
+      }
+      if(request.method==="POST"&&url.pathname==="/api/refresh-due"){
+        return handleRefreshDue(request,env);
       }
       if(request.method==="GET"&&url.pathname==="/api/result"){
         return handleResult(url,env,origin||"*");

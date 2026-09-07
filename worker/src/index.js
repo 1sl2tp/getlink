@@ -115,7 +115,12 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
 
   if(!quantity)quantity=1;
   if(!packKind){
-    packKind=normalizePackWord(rawUnit||unit||"")||"Đơn";
+    const normalizedUnit=normalizePackWord(rawUnit||unit||"");
+    packKind=quantity>1
+      ?"Cụm"
+      :(normalizedUnit&&normalizedUnit.toLowerCase()!=="đơn vị"
+        ?normalizedUnit
+        :"Lẻ");
   }
   if(!unit){
     const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Can","Thanh","Cây","Viên","Tuýp"]);

@@ -2990,3 +2990,12 @@ h1{margin:0;font-size:28px;line-height:1.1}
     min-width:1180px!important;
   }
 }
+
+
+/* Source badges v2: BHX green, WinMart compact WM in red */
+.xls-source.source-bhx{
+  color:#087a40!important;
+}
+.xls-source.source-winmart{
+  color:#d92d20!important;
+}

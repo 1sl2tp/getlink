@@ -234,9 +234,6 @@ $("#get").addEventListener("click",async()=>{
 
 const saved=localStorage.getItem("getlink:last-url")||"";
 if(saved)$("#url").value=saved;
-requestId=localStorage.getItem("getlink:request-id")||"";
+requestId="";
+localStorage.removeItem("getlink:request-id");
 wantedUrl=saved;
-if(requestId&&API){
-  setStatus("Đang tiếp tục chờ kết quả lần trước...");
-  startPolling();
-}

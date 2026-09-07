@@ -159,7 +159,7 @@ function normalizePackWord(value){
   const key=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const map={
     thung:"Thùng",loc:"Lốc",tui:"Túi",bich:"Bịch",chai:"Chai",
-    hop:"Hộp",goi:"Gói",can:"Can",combo:"Combo",bo:"Bộ",
+    hop:"Hộp",goi:"Gói",can:"Can",combo:"Combo",bo:"Bộ",vi:"Vỉ",
     lon:"Lon",hu:"Hũ",ly:"Ly",to:"Tô",khoanh:"Khoanh",thanh:"Thanh",cay:"Cây",vien:"Viên",tuyp:"Tuýp"
   };
   return map[key]||raw;
@@ -259,7 +259,7 @@ function getlinkProductIdentity(name,url,packagingText){
 
 function rawPackUnit(value){
   const raw=cleanText(value||"").toLowerCase();
-  const pattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
+  const pattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|vỉ|khoanh|thanh|cây|viên|tuýp|can";
   const re=new RegExp(
     "(?:^|[^\\p{L}\\p{N}])("+pattern+")(?=$|[^\\p{L}\\p{N}])",
     "giu"
@@ -2151,6 +2151,48 @@ async function persistWinmartResponse(env,job,requestId,raw){
 }
 
 
+function goCleanProductName(value){
+  return cleanText(value||"")
+    .replace(/\s+tại\s+Siêu\s+thị\s+GO!.*$/iu,"")
+    .replace(/\s*-\s*[0-9]{4,}\s*$/u,"")
+    .trim();
+}
+
+function matchBhxTaxonomyForGo(product,taxonomy){
+  const name=goCleanProductName(product&&product.name||"");
+  const near=winmartNearBhxProduct(name,taxonomy);
+  if(near&&near.row&&near.row.parent_url){
+    return {
+      parent_url:near.row.parent_url,
+      group_name:cleanText(near.row.group_name||""),
+      evidence:near.evidence==="same_product"?"same_product":"near_product"
+    };
+  }
+
+  const nameKey=winmartTextKey(name);
+  let best=null;
+  for(const item of taxonomy.categoryRows||[]){
+    for(const key of item.keys||[]){
+      if(!key||key.length<4)continue;
+      const padded=" "+nameKey+" ";
+      const exactPhrase=padded.includes(" "+key+" ");
+      if(!exactPhrase)continue;
+      if(!best||key.length>best.key.length){
+        best={key,row:item.row};
+      }
+    }
+  }
+  if(best){
+    return {
+      parent_url:best.row.canonical_url,
+      group_name:cleanText(best.row.name||best.row.group_name||""),
+      evidence:"name_category"
+    };
+  }
+
+  return matchBhxTaxonomyForWinmart(product,taxonomy);
+}
+
 function goSlugText(url){
   try{
     const last=decodeURIComponent(
@@ -2179,7 +2221,7 @@ function goPackHierarchy(name,url){
   const namePlain=getlinkPlain(name||"");
   const slugPlain=getlinkPlain(goSlugText(url));
   const preferred=namePlain||slugPlain;
-  const units="loc|hop|chai|goi|bich|tui|lon|hu|ly|to|can|cay|vien|tuyp";
+  const units="loc|hop|chai|goi|bich|tui|lon|hu|ly|to|can|vi|cay|vien|tuyp";
   const unitLabel=value=>normalizePackWord(value||"");
   const validQty=value=>{
     const n=Number(String(value||"").replace(",","."));
@@ -2329,7 +2371,7 @@ async function persistGoResponse(env,job,requestId,raw){
     "ON CONFLICT(canonical_url) DO UPDATE SET source=excluded.source,link_type='product',parent_url=excluded.parent_url,group_name=excluded.group_name,branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),name=COALESCE(NULLIF(excluded.name,''),links.name),packaging=excluded.packaging,current_price=COALESCE(excluded.current_price,links.current_price),original_price=excluded.original_price,promotion_price=excluded.promotion_price,promotion_text=excluded.promotion_text,last_checked_at=excluded.last_checked_at,last_status='ok',last_request_id=excluded.last_request_id,updated_at=excluded.updated_at";
 
   for(const rawProduct of products){
-    const name=cleanText(
+    const name=goCleanProductName(
       rawProduct&&(
         rawProduct.name||
         rawProduct.product_name||
@@ -2380,7 +2422,7 @@ async function persistGoResponse(env,job,requestId,raw){
       hierarchy
     });
 
-    const tax=matchBhxTaxonomyForWinmart({
+    const tax=matchBhxTaxonomyForGo({
       ...rawProduct,
       name,
       category_name:rawProduct.category_name||response.category_name||""

@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 const source = fs.readFileSync("worker/src/index.js","utf8")
   .replace(/\bexport\s+default\b/,"const __worker_default =");
-const get = new Function(source + "\nreturn {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,apiProductToPayloadProduct};");
-const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,apiProductToPayloadProduct} = get();
+const get = new Function(source + "\nreturn {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,getlinkCartonEvidence,packHierarchyData,apiProductToPayloadProduct};");
+const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,getlinkCartonEvidence,packHierarchyData,apiProductToPayloadProduct} = get();
 
 {
   const p = parsePackStructure("6 lon bia Budweiser 330ml","","",1,"");
@@ -427,7 +427,7 @@ const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,ge
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,18);
+  assert.equal(payload.schema_version,19);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);
@@ -524,4 +524,91 @@ console.log("pack parser tests passed");
   assert.equal(payload.filter_summary.source_count,2);
   assert.equal(payload.filter_summary.kept_count,1);
   assert.equal(payload.filter_summary.filtered_count,1);
+}
+
+
+{
+  const h=packHierarchyData(
+    "24 lon cà phê sữa Highlands 235ml",
+    "https://bachhoaxanh.com/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml",
+    "Lon 235ml",
+    24,
+    "Lon"
+  );
+  assert.equal(h.label1,"Thùng");
+  assert.equal(h.qty1,1);
+  assert.equal(h.label2,"Lon");
+  assert.equal(h.qty2,24);
+  assert.equal(h.label3,"");
+  assert.equal(h.qty3,0);
+  assert.equal(h.evidence,"url");
+}
+
+{
+  const h=packHierarchyData(
+    "Thùng 12 lốc 4 hộp sữa demo 180ml",
+    "https://bachhoaxanh.com/sua/thung-12-loc-4-hop-sua-demo-180ml",
+    "Thùng 12 Lốc 4 Hộp",
+    12,
+    "Lốc"
+  );
+  assert.equal(h.label1,"Thùng");
+  assert.equal(h.label2,"Lốc");
+  assert.equal(h.qty2,12);
+  assert.equal(h.label3,"Hộp");
+  assert.equal(h.qty3,4);
+  assert.equal(h.evidence,"name");
+}
+
+{
+  const h=packHierarchyData(
+    "Thùng 24 + 4 lon Bia Budweiser 250ml",
+    "https://bachhoaxanh.com/bia/thung-24-4-lon-bia-budweiser-250ml",
+    "Thùng 24 + 4 Lon",
+    28,
+    "Lon"
+  );
+  assert.equal(h.label1,"Thùng");
+  assert.equal(h.label2,"Lon");
+  assert.equal(h.qty2,28);
+}
+
+{
+  const h=packHierarchyData(
+    "Bia Heineken Silver lon 330ml",
+    "https://bachhoaxanh.com/bia/bia-heineken-silver-lon-330ml",
+    "Lon",
+    1,
+    "Lon"
+  );
+  assert.equal(h.label1,"");
+  assert.equal(h.label2,"");
+  assert.equal(h.label3,"");
+}
+
+{
+  const h=packHierarchyData(
+    "6 lon bia Heineken Silver 330ml",
+    "https://bachhoaxanh.com/bia/thung-6-lon-bia-heineken-silver-330ml",
+    "Lon",
+    6,
+    "Lon"
+  );
+  const c=comparisonData({
+    name:"Thùng 6 lon bia Heineken Silver 330ml",
+    url:"https://bachhoaxanh.com/bia/thung-6-lon-bia-heineken-silver-330ml",
+    packagingText:"Thùng 6 Lon",
+    featureText:"",
+    packCount:6,
+    packUnit:"Lon",
+    current:126000,
+    sysPrice:126000,
+    discount:0,
+    promoText:"",
+    hierarchy:h
+  });
+  assert.equal(c.pack_kind,"Thùng");
+  assert.equal(c.pack_quantity,6);
+  assert.equal(c.pack_unit,"Lon");
+  assert.equal(c.regular_unit_price,21000);
 }

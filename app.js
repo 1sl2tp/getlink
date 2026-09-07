@@ -16,6 +16,13 @@ function money(v){
   return n>0?n.toLocaleString("vi-VN")+"₫":"—";
 }
 function setStatus(text){$("#status").textContent=text}
+function doneStatus(payload){
+  if(payload&&payload.data_mode==="snapshot"){
+    const d=String(payload.snapshot_date||"").split("-").reverse().join("/");
+    return "Đã hiển thị giá snapshot BHX"+(d?" ngày "+d:"")+". Live BHX đang chặn kết nối server.";
+  }
+  return "Đã lấy xong và lưu link vào kho.";
+}
 function stopPolling(){if(pollTimer)clearInterval(pollTimer);pollTimer=0}
 function clearPending(){
   requestId="";
@@ -136,7 +143,7 @@ async function pollOnce(){
     renderPayload(data.payload);
     if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
     clearPending();
-    setStatus("Đã lấy xong và lưu link vào kho.");
+    setStatus(doneStatus(data.payload));
     return true;
   }catch{return false}
 }
@@ -182,7 +189,7 @@ $("#get").addEventListener("click",async()=>{
       renderPayload(data.payload);
       if(Number(data.registry_count)>0)$("#registryCount").textContent="Kho link: "+data.registry_count;
       clearPending();
-      setStatus("Đã lấy xong và lưu link vào kho.");
+      setStatus(doneStatus(data.payload));
       return;
     }
 

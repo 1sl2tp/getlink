@@ -115,5 +115,7 @@ jobs:
 
       - name: Kiểm tra health
         run: |
-          sleep 2
-          curl --fail --silent "$WORKER_URL/health"
+          sleep 3
+          curl --fail --silent --show-error \
+            --retry 10 --retry-delay 3 --retry-all-errors \
+            "$WORKER_URL/health"

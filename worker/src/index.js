@@ -95,6 +95,80 @@ function normalizePackWord(value){
   return map[key]||raw;
 }
 
+function getlinkPlain(value){
+  return cleanText(value||"")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/đ/gi,"d")
+    .toLowerCase();
+}
+
+function getlinkUrlIsCarton(value){
+  try{
+    const parts=pathParts(canonicalBhx(value));
+    const slug=String(parts[parts.length-1]||"").toLowerCase();
+    return /^thung(?:-|$)/.test(slug)||/-thung$/.test(slug);
+  }catch{
+    return false;
+  }
+}
+
+function getlinkProductIdentity(name,url,packagingText){
+  const sourceName=cleanText(name||"");
+  const sourcePackaging=cleanText(packagingText||"");
+  const namePlain=getlinkPlain(sourceName);
+  const packagingPlain=getlinkPlain(sourcePackaging);
+
+  // FIRST CONDITION: carton evidence belongs to THIS exact product link.
+  // BHX can expose it in the title/price option, or in the dedicated
+  // product slug: .../thung-24-lon-ca-phe-sua-highlands-235ml.
+  const authoritativeCarton=
+    /^thung\b/.test(namePlain)||
+    /^thung\b/.test(packagingPlain)||
+    getlinkUrlIsCarton(url);
+
+  // Temporary audit exclusions are enforced BEFORE persistence.
+  if(/^combo\b/.test(namePlain)){
+    return {keep:false,reason:"combo",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
+  }
+  if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(namePlain)){
+    return {keep:false,reason:"multi_carton",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
+  }
+  if(/\bva\b/.test(namePlain)){
+    return {keep:false,reason:"contains_va",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
+  }
+  if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(namePlain)&&!authoritativeCarton){
+    return {keep:false,reason:"numeric_prefix",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
+  }
+
+  let normalizedName=sourceName;
+  let normalizedPackaging=sourcePackaging;
+
+  // If BHX category API shortens a true carton title to "24 lon ...",
+  // restore the explicit carton marker from this link's own URL.
+  if(authoritativeCarton&&/^[0-9]+(?:[.,][0-9]+)?\b/.test(namePlain)){
+    normalizedName=cleanText("Thùng "+sourceName);
+  }
+
+  // Feed the same carton evidence into the pack parser so D1 stores
+  // pack_kind=Thùng immediately at GETLINK time, not later in the UI.
+  if(authoritativeCarton&&!/^thung\b/.test(packagingPlain)){
+    const lead=namePlain.match(
+      /^([0-9]+(?:[.,][0-9]+)?)\s+(hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can)\b/
+    );
+    normalizedPackaging=lead
+      ?cleanText("Thùng "+lead[1]+" "+normalizePackWord(lead[2]))
+      :cleanText(["Thùng",sourcePackaging].filter(Boolean).join(" "));
+  }
+
+  return {
+    keep:true,
+    reason:"",
+    authoritativeCarton,
+    name:normalizedName,
+    packaging:normalizedPackaging
+  };
+}
+
 function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const plainOf=value=>cleanText(value||"")
     .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
@@ -527,9 +601,16 @@ function apiProductToPayloadProduct(raw){
   );
   const discount=Number(priceRow.discountPercent||0);
 
+  const identity=getlinkProductIdentity(
+    cleanText(raw.fullName||raw.name||slugTitle(url)),
+    url,
+    cleanText(raw.canonical||raw.unit||"")
+  );
+  if(!identity.keep)return null;
+
   const comparison=comparisonData({
-    name:cleanText(raw.fullName||raw.name||slugTitle(url)),
-    packagingText:cleanText(raw.canonical||raw.unit||""),
+    name:identity.name,
+    packagingText:identity.packaging,
     featureText:"",
     packCount:raw.packageItemCount,
     packUnit:raw.packageItemUnit||raw.unit,
@@ -543,8 +624,8 @@ function apiProductToPayloadProduct(raw){
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group,
     branch,
-    name:cleanText(raw.fullName||raw.name||slugTitle(url)),
-    packaging:{text:cleanText(raw.canonical||raw.unit||"")},
+    name:identity.name,
+    packaging:{text:identity.packaging},
     comparison,
     price:{current,original},
     promotion:{
@@ -597,10 +678,16 @@ function apiBoxBuyToProduct(raw,data){
   if(priceUnitKey==="thung"&&!/\bthung\b/.test(packagingKey)){
     packaging=cleanText([packaging,priceUnitText].filter(Boolean).join(" · "));
   }
-  const name=cleanText(raw.name||slugTitle(url));
+  const identity=getlinkProductIdentity(
+    cleanText(raw.name||slugTitle(url)),
+    url,
+    packaging
+  );
+  if(!identity.keep)return null;
+
   const comparison=comparisonData({
-    name,
-    packagingText:packaging,
+    name:identity.name,
+    packagingText:identity.packaging,
     featureText:data&&data.productBo&&data.productBo.featureSpecification||"",
     packCount:raw.packageItemCount,
     packUnit:raw.packageItemUnit,
@@ -614,8 +701,8 @@ function apiBoxBuyToProduct(raw,data){
     source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
     group:cleanText(data&&data.categoryName||""),
     branch:cleanText(data&&data.brandUrl||data&&data.categoryName||""),
-    name,
-    packaging:{text:packaging},
+    name:identity.name,
+    packaging:{text:identity.packaging},
     comparison,
     price:{current,original:null,sys_price:sysPrice},
     promotion:{
@@ -650,7 +737,7 @@ function productDetailPayload(inputUrl,requestId,data){
   const firstRaw=Array.isArray(data&&data.boxBuys)?data.boxBuys[0]:null;
   const first=apiBoxBuyToProduct(firstRaw,data);
 
-  if(!first)throw new Error("bhx_detail_empty");
+  if(!first)throw new Error("bhx_detail_filtered_or_empty");
 
   // A BHX detail URL owns exactly one authoritative price row:
   // boxBuys[0]. Other boxBuys are temporary choices shown beside it and
@@ -679,7 +766,7 @@ function categoryPayload(inputUrl,requestId,data){
   const canonical=canonicalBhx(inputUrl);
   const rawProducts=Array.isArray(data&&data.products)?data.products:[];
   const products=rawProducts.map(apiProductToPayloadProduct).filter(Boolean);
-  if(!products.length)throw new Error("bhx_category_empty");
+  if(!products.length)throw new Error("bhx_category_filtered_or_empty");
 
   const categoryName=cleanText(
     (rawProducts[0]&&rawProducts[0].category&&rawProducts[0].category.name)||
@@ -696,6 +783,11 @@ function categoryPayload(inputUrl,requestId,data){
     category_name:categoryName,
     product:null,
     products,
+    filter_summary:{
+      source_count:rawProducts.length,
+      kept_count:products.length,
+      filtered_count:Math.max(0,rawProducts.length-products.length)
+    },
     variants:[],
     discovered_links:products.map(p=>p.url)
   };
@@ -781,6 +873,39 @@ async function persistLinkComparison(env,url,cmp,updatedAt){
 
 async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   const url=canonicalBhx(p.url);
+
+  if(linkType==="product"){
+    const identity=getlinkProductIdentity(
+      p.name||"",
+      url,
+      p.packaging&&p.packaging.text||""
+    );
+    if(!identity.keep){
+      await env.DB.prepare(
+        "UPDATE links SET last_status='unlisted',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+      return null;
+    }
+    p={
+      ...p,
+      name:identity.name,
+      packaging:{...(p.packaging||{}),text:identity.packaging}
+    };
+    if(identity.authoritativeCarton){
+      p.comparison=comparisonData({
+        name:p.name,
+        packagingText:p.packaging.text,
+        featureText:"",
+        packCount:p.comparison&&p.comparison.pack_quantity,
+        packUnit:p.comparison&&p.comparison.pack_unit,
+        current:p.price&&p.price.current,
+        sysPrice:p.price&&p.price.original,
+        discount:0,
+        promoText:p.promotion&&p.promotion.text||""
+      });
+    }
+  }
+
   const price=p.price||{};
   const promo=p.promotion||{};
   const id=await upsertLink(env,{
@@ -972,12 +1097,35 @@ async function persistCategoryChildrenBatch(env,children,parentUrl,requestId,che
   for(const child of children||[]){
     let childUrl;
     try{childUrl=canonicalBhx(child.url);}catch{continue;}
+
+    const identity=getlinkProductIdentity(
+      child.name||"",
+      childUrl,
+      child.packaging&&child.packaging.text||""
+    );
+    if(!identity.keep)continue;
+
     activeUrls.push(childUrl);
 
     const p={
       ...child,
+      name:identity.name,
+      packaging:{...(child.packaging||{}),text:identity.packaging},
       group:child.group||categoryName||""
     };
+    if(identity.authoritativeCarton){
+      p.comparison=comparisonData({
+        name:p.name,
+        packagingText:p.packaging.text,
+        featureText:"",
+        packCount:p.comparison&&p.comparison.pack_quantity,
+        packUnit:p.comparison&&p.comparison.pack_unit,
+        current:p.price&&p.price.current,
+        sysPrice:p.price&&p.price.original,
+        discount:0,
+        promoText:p.promotion&&p.promotion.text||""
+      });
+    }
     const price=p.price||{};
     const promo=p.promotion||{};
     const id=await idForUrl(childUrl);

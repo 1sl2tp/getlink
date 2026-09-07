@@ -14,6 +14,7 @@ HOST = "bachhoaxanh.com"
 DATA_DIR = Path("data")
 PRODUCTS_JSON = DATA_DIR / "products.json"
 PRODUCTS_CSV = DATA_DIR / "products.csv"
+LATEST_JSON = DATA_DIR / "latest.json"
 BAD_PATH = ("tin-tuc", "blog", "khuyen-mai", "kinh-nghiem-hay")
 PROMO_WORDS = ("ưu đãi", "khuyến mãi", "giảm", "tặng", "mua ", "combo", "quà")
 UNIT_WORDS = "gói|chai|lon|hộp|túi|cái|viên|ly|hũ|thùng|lốc|khay"
@@ -483,6 +484,16 @@ def save_db(db):
         ),
     )
     PRODUCTS_JSON.write_text(json.dumps(db, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    latest = db["products"][-1] if db["products"] else None
+    LATEST_JSON.write_text(
+        json.dumps(
+            {"updated_at": db["updated_at"], "product": latest},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
 
     fields = [
         "source", "group", "branch", "name", "packaging",

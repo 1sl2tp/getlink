@@ -1708,14 +1708,21 @@ function winmartTextKey(value){
     .trim();
 }
 
+function winmartUnitEvidence(value){
+  const raw=String(value||"");
+  if(raw==="listing_card")return "winmart_listing_card";
+  if(raw==="detail_type")return "winmart_detail_type";
+  return "";
+}
+
 function winmartLeafUnit(product){
-  if(String(product&&product.unit_evidence||"")!=="detail_type"){
+  if(!winmartUnitEvidence(product&&product.unit_evidence)){
     return "";
   }
   const direct=normalizePackWord(product&&product.unit||"");
   const allowed=new Set([
     "Hộp","Chai","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô",
-    "Khoanh","Thanh","Cây","Viên","Tuýp","Can"
+    "Khoanh","Thanh","Cây","Viên","Tuýp","Can","Vỉ"
   ]);
   return allowed.has(direct)?direct:"";
 }
@@ -1981,9 +1988,7 @@ async function persistWinmartResponse(env,job,requestId,raw){
       label2:"",qty2:0,
       label3:unit,qty3:unit?1:0,
       evidence:unit
-        ?(String(rawProduct.unit_evidence||"")==="detail_type"
-          ?"winmart_detail_type"
-          :"winmart_leaf")
+        ?winmartUnitEvidence(rawProduct.unit_evidence)
         :"",
       locked:Boolean(unit)
     };
@@ -2571,7 +2576,6 @@ function winmartCacheIsComplete(payload){
   if(!products.length)return false;
 
   let realImages=0;
-  let provenUnits=0;
   for(const p of products){
     const image=String(p&&p.image||"").trim().toLowerCase();
     if(image&&
@@ -2581,22 +2585,12 @@ function winmartCacheIsComplete(payload){
        !image.includes("transparent")){
       realImages+=1;
     }
-    const h=p&&p.hierarchy||{};
-    if(
-      String(h.evidence||"")==="winmart_detail_type"&&
-      String(h.label3||"").trim()
-    ){
-      provenUnits+=1;
-    }
   }
 
-  // Images should normally cover the full list. Units must come from the
-  // detail "Chọn loại" proof; allowing a tiny miss avoids endless refetches
-  // when one product is temporarily unavailable.
-  return (
-    realImages>=Math.ceil(products.length*0.95)&&
-    provenUnits>=Math.ceil(products.length*0.95)
-  );
+  // WinMart bulk ingestion is complete when the category API returned products
+  // and normal image coverage is present. Listing-card unit is useful metadata,
+  // but a missing unit must never force a detail-page crawl or endless refetch.
+  return realImages>=Math.ceil(products.length*0.90);
 }
 
 async function handleCreate(request,env,origin){
@@ -3426,16 +3420,17 @@ async function handleLibrary(url,env,origin){
       let fresh;
 
       if(isWinmart){
-        // WinMart unit is valid only when the detail-page "Chọn loại"
-        // proof was persisted. Never infer CHAI/GÓI/etc from the title.
-        const proven=String(row.pack_evidence||"")==="winmart_detail_type";
+        // WinMart bulk unit comes from the visible category listing card.
+        // Keep legacy detail proof readable, but never infer from title/API uomName.
+        const proof=String(row.pack_evidence||"");
+        const proven=proof==="winmart_listing_card"||proof==="winmart_detail_type";
         hierarchy={
           keep:true,reason:"",
           label1:"",qty1:0,
           label2:"",qty2:0,
           label3:proven?cleanText(row.pack_label_3||""):"",
           qty3:proven?(Number(row.pack_qty_3)||1):0,
-          evidence:proven?"winmart_detail_type":"",
+          evidence:proven?proof:"",
           locked:proven
         };
         const size=parseSize(row.name||"");
@@ -3563,14 +3558,18 @@ async function handleLibrary(url,env,origin){
     if(!row)return json({error:"not_found"},404,origin);
 
     const rowIsWinmart=String(row.source||"").toLowerCase().includes("winmart");
-    const provenWinmartUnit=rowIsWinmart&&String(row.pack_evidence||"")==="winmart_detail_type";
+    const winmartProof=String(row.pack_evidence||"");
+    const provenWinmartUnit=rowIsWinmart&&(
+      winmartProof==="winmart_listing_card"||
+      winmartProof==="winmart_detail_type"
+    );
     const mainHierarchy=rowIsWinmart
       ?{
           keep:true,reason:"",
           label1:"",qty1:0,label2:"",qty2:0,
           label3:provenWinmartUnit?cleanText(row.pack_label_3||""):"",
           qty3:provenWinmartUnit?(Number(row.pack_qty_3)||1):0,
-          evidence:provenWinmartUnit?"winmart_detail_type":"",
+          evidence:provenWinmartUnit?winmartProof:"",
           locked:provenWinmartUnit
         }
       :packHierarchyData(

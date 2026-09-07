@@ -80,6 +80,11 @@ function setStatus(text){
   $("#status").textContent=text;
 }
 
+function setGetBusy(busy){
+  $("#get").disabled=Boolean(busy);
+  $("#get").textContent=busy?"Đang lấy...":"Lấy giá";
+}
+
 function doneStatus(){
   return "Đã lấy xong và lưu vào thư viện giá.";
 }
@@ -97,6 +102,7 @@ function clearPending(){
 function failPending(message){
   stopPolling();
   clearPending();
+  setGetBusy(false);
   setStatus(message);
 }
 
@@ -639,6 +645,7 @@ async function pollOnce(){
     }
     const finishedUrl=data.payload&&data.payload.input_url||wantedUrl;
     clearPending();
+    setGetBusy(false);
     setStatus(doneStatus());
     await refreshCatalog(finishedUrl);
     return true;
@@ -673,7 +680,7 @@ $("#get").addEventListener("click",async()=>{
   }
 
   wantedUrl=url;
-  $("#get").disabled=true;
+  setGetBusy(true);
   setStatus("Đang kiểm tra thư viện D1...");
 
   try{
@@ -697,6 +704,7 @@ $("#get").addEventListener("click",async()=>{
         $("#registryCount").textContent="Kho link: "+data.registry_count;
       }
       clearPending();
+      setGetBusy(false);
       setStatus(
         data.cache_hit
           ?"Đã đọc ngay từ D1 vì link được lấy trong vòng 24 giờ."
@@ -710,9 +718,8 @@ $("#get").addEventListener("click",async()=>{
     setStatus("Chưa có dữ liệu mới trong 24 giờ. Bright Data đang cập nhật...");
     startPolling();
   }catch(error){
+    setGetBusy(false);
     setStatus("Không lấy được giá: "+String(error&&error.message||error));
-  }finally{
-    $("#get").disabled=false;
   }
 });
 
@@ -725,6 +732,7 @@ refreshCatalog();
 
 if(requestId&&API){
   $("#importCard").hidden=false;
+  setGetBusy(true);
   setStatus("Đang tiếp tục yêu cầu cập nhật trước...");
   startPolling();
 }

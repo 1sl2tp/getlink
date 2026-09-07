@@ -149,8 +149,9 @@ function getlinkProductIdentity(name,url,packagingText){
   if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(namePlain)){
     return {keep:false,reason:"multi_carton",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
   }
-  if(/\bva\b/.test(namePlain)){
-    return {keep:false,reason:"contains_va",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
+  const mixedUnits="thung|loc|tui|bich|chai|hop|goi|can|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
+  if(new RegExp("\\bva\\s+[0-9]+(?:[.,][0-9]+)?\\s+("+mixedUnits+")\\b").test(namePlain)){
+    return {keep:false,reason:"mixed_bundle",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};
   }
   if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(namePlain)&&!authoritativeCarton){
     return {keep:false,reason:"numeric_prefix",authoritativeCarton:false,name:sourceName,packaging:sourcePackaging};

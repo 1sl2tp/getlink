@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 
 const source = fs.readFileSync("worker/src/index.js","utf8")
   .replace(/\bexport\s+default\b/,"const __worker_default =");
-const get = new Function(source + "\nreturn {parsePackStructure,comparisonData,productDetailPayload};");
-const {parsePackStructure,comparisonData,productDetailPayload} = get();
+const get = new Function(source + "\nreturn {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,apiProductToPayloadProduct};");
+const {parsePackStructure,comparisonData,productDetailPayload,categoryPayload,getlinkProductIdentity,apiProductToPayloadProduct} = get();
 
 {
   const p = parsePackStructure("6 lon bia Budweiser 330ml","","",1,"");
@@ -438,3 +438,91 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
 }
 
 console.log("pack parser tests passed");
+
+
+{
+  const identity = getlinkProductIdentity(
+    "24 lon cà phê sữa Highlands 235ml",
+    "https://www.bachhoaxanh.com/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml",
+    "Lon 235ml"
+  );
+  assert.equal(identity.keep,true);
+  assert.equal(identity.authoritativeCarton,true);
+  assert.equal(identity.name,"Thùng 24 lon cà phê sữa Highlands 235ml");
+  assert.match(identity.packaging,/^Thùng 24 Lon/);
+}
+
+{
+  const raw={
+    url:"/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml",
+    fullName:"24 lon cà phê sữa Highlands 235ml",
+    canonical:"Lon 235ml",
+    unit:"Lon",
+    packageItemCount:24,
+    packageItemUnit:"Lon",
+    avatar:"https://example.com/highlands.jpg",
+    brandName:"Highlands",
+    category:{name:"Cà phê lon"},
+    productPrices:[{price:332000,sysPrice:332000,discountPercent:0}]
+  };
+  const p=apiProductToPayloadProduct(raw);
+  assert.ok(p);
+  assert.equal(p.name,"Thùng 24 lon cà phê sữa Highlands 235ml");
+  assert.equal(p.comparison.pack_kind,"Thùng");
+  assert.equal(p.comparison.pack_quantity,24);
+  assert.equal(p.comparison.pack_unit,"Lon");
+  assert.equal(p.comparison.regular_unit_price,13833);
+}
+
+{
+  const blocked=[
+    ["2 túi nước giặt OMO 2.1kg","https://www.bachhoaxanh.com/nuoc-giat/2-tui-omo","Túi"],
+    ["Combo 6 lon bia Sài Gòn","https://www.bachhoaxanh.com/bia/combo-6-lon-bia","Lon"],
+    ["2 thùng nước ngọt Redbull","https://www.bachhoaxanh.com/nuoc-ngot/2-thung-redbull","Thùng"],
+    ["24 lon bia A và 24 lon bia B","https://www.bachhoaxanh.com/bia/thung-24-lon-a-va-b","Thùng 24 Lon"]
+  ];
+  for(const [name,url,packaging] of blocked){
+    const identity=getlinkProductIdentity(name,url,packaging);
+    assert.equal(identity.keep,false,name);
+  }
+}
+
+{
+  const payload=categoryPayload(
+    "https://www.bachhoaxanh.com/ca-phe-lon",
+    "test-ingestion-gate",
+    {
+      products:[
+        {
+          url:"/ca-phe-lon/thung-24-lon-ca-phe-sua-highlands-235ml",
+          fullName:"24 lon cà phê sữa Highlands 235ml",
+          canonical:"Lon 235ml",
+          unit:"Lon",
+          packageItemCount:24,
+          packageItemUnit:"Lon",
+          avatar:"https://example.com/highlands.jpg",
+          brandName:"Highlands",
+          category:{name:"Cà phê lon"},
+          productPrices:[{price:332000,sysPrice:332000}]
+        },
+        {
+          url:"/ca-phe-lon/2-lon-ca-phe-demo",
+          fullName:"2 lon cà phê demo 235ml",
+          canonical:"Lon 235ml",
+          unit:"Lon",
+          packageItemCount:2,
+          packageItemUnit:"Lon",
+          avatar:"https://example.com/demo.jpg",
+          brandName:"Demo",
+          category:{name:"Cà phê lon"},
+          productPrices:[{price:30000,sysPrice:30000}]
+        }
+      ]
+    }
+  );
+  assert.equal(payload.products.length,1);
+  assert.equal(payload.products[0].comparison.pack_kind,"Thùng");
+  assert.equal(payload.filter_summary.source_count,2);
+  assert.equal(payload.filter_summary.kept_count,1);
+  assert.equal(payload.filter_summary.filtered_count,1);
+}

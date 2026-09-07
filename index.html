@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260907-sheet19">
+  <link rel="stylesheet" href="style.css?v=20260907-workspace20">
 </head>
 <body>
 <main class="wrap">
@@ -15,56 +15,6 @@
       <p>Thư viện giá Bách Hóa XANH · Tra cứu và so sánh theo quy cách</p>
     </div>
   </header>
-
-  <section class="card catalog">
-    <div class="catalog-toolbar">
-      <div>
-        <h2>Bảng so sánh giá</h2>
-        <p>Mỗi dòng là một sản phẩm · Quy đổi giá BHX và giá của mình về cùng đơn vị lẻ.</p>
-      </div>
-      <button id="toggleImport" class="secondary" type="button">+ Thêm / cập nhật link</button>
-    </div>
-
-    <div class="catalog-search">
-      <input id="librarySearch" autocomplete="off" placeholder="Tìm tên sản phẩm, nhãn, quy cách...">
-    </div>
-
-    <div id="categoryTabs" class="category-tabs">
-      <button class="category-chip active" type="button">Đang tải thư viện...</button>
-    </div>
-
-    <div id="brandTabs" class="brand-tabs" hidden></div>
-    <div id="packTabs" class="pack-tabs" hidden></div>
-
-    <div id="stateFilters" class="state-filters" aria-label="Trạng thái thư viện">
-      <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
-      <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
-      <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
-    </div>
-
-    <div class="catalog-subhead">
-      <strong id="libraryTitle">Sản phẩm đã lưu</strong>
-      <span id="libraryCount"></span>
-    </div>
-
-    <div class="sheet-wrap">
-      <div class="price-table-head" aria-hidden="true">
-        <span>Sản phẩm</span>
-        <span>Hãng</span>
-        <span>Loại QC</span>
-        <span>SL/QC</span>
-        <span>KL/DT</span>
-        <span>BHX/QC</span>
-        <span>Ưu đãi</span>
-        <span>BHX/Lẻ</span>
-        <span>Giá mình/Thùng</span>
-        <span>Giá mình/Lẻ</span>
-        <span>Chênh</span>
-      </div>
-      <div id="libraryProducts" class="product-grid"></div>
-    </div>
-    <div id="libraryEmpty" class="library-empty" hidden>Chưa có sản phẩm trong nhóm này.</div>
-  </section>
 
   <section class="card import-card" id="importCard" hidden>
     <div class="import-head">
@@ -84,72 +34,139 @@
     </div>
   </section>
 
-  <section class="card result" id="result" hidden>
-    <div class="result-head">
-      <div>
-        <div class="result-kicker">
-          <span id="source">Bách Hóa XANH</span>
-          <span id="linkType" class="type-badge"></span>
+  <div class="workspace">
+    <aside class="card workspace-nav">
+      <div class="nav-head">
+        <strong>Danh mục</strong>
+        <button id="toggleImport" class="nav-add" type="button">+ Link</button>
+      </div>
+
+      <div id="categoryTabs" class="category-tabs nav-list">
+        <button class="category-chip active" type="button">Đang tải...</button>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-label">Hãng</span>
+        <div id="brandTabs" class="brand-tabs nav-list" hidden></div>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-label">Quy cách</span>
+        <div id="packTabs" class="pack-tabs nav-list" hidden></div>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-label">Trạng thái</span>
+        <div id="stateFilters" class="state-filters nav-list" aria-label="Trạng thái thư viện">
+          <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
+          <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
+          <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
         </div>
-        <h2 id="name"></h2>
       </div>
-      <a id="productLink" target="_blank" rel="noopener">Mở link gốc</a>
-    </div>
+    </aside>
 
-    <div class="meta-grid">
-      <div><small>Nhóm</small><strong id="group">—</strong></div>
-      <div><small>Nhánh</small><strong id="branch">—</strong></div>
-      <div><small>Quy cách</small><strong id="packaging">—</strong></div>
-    </div>
-
-    <div class="price-grid" id="priceGrid">
-      <div class="price">
-        <small>Giá thường BHX</small>
-        <strong id="webPrice">—</strong>
-      </div>
-      <div class="price promo">
-        <small>Ưu đãi BHX</small>
-        <strong id="promoPrice">—</strong>
-        <span id="promoText"></span>
-      </div>
-      <div class="price mine">
-        <small>Giá của mình</small>
-        <input id="myPrice" inputmode="numeric" placeholder="Nhập tổng giá">
-        <div class="mine-qty">
-          <span>Giá trên</span>
-          <input id="myPackQty" inputmode="decimal" value="1">
-          <span>quy cách</span>
+    <section class="card catalog workspace-list">
+      <div class="catalog-toolbar">
+        <div>
+          <h2 id="libraryTitle">Danh sách giá</h2>
+          <p>Trọng tâm: giá BHX · giá của mình · giá mặc cả.</p>
         </div>
-        <span id="myUnitPrice" class="unit-note"></span>
+        <span id="libraryCount"></span>
       </div>
-    </div>
 
-    <div id="productPersonal">
-      <label class="watch"><input id="watch" type="checkbox"> Theo dõi sản phẩm này</label>
-      <div id="compare" class="compare"></div>
-    </div>
-
-    <div id="productVariants" class="children" hidden>
-      <div class="children-title">
-        <strong>Quy cách / variant</strong>
-        <span id="variantCount"></span>
+      <div class="catalog-search">
+        <input id="librarySearch" autocomplete="off" placeholder="Tìm tên sản phẩm, hãng, quy cách...">
       </div>
-      <div id="variantList" class="child-list"></div>
-    </div>
 
-    <div id="categoryChildren" class="children" hidden>
-      <div class="children-title">
-        <strong>Link chi tiết đã phát hiện</strong>
-        <span id="childCount"></span>
+      <div class="compact-table-head" aria-hidden="true">
+        <span>Sản phẩm</span>
+        <span>BHX</span>
+        <span>Giá của mình</span>
+        <span>Giá mặc cả</span>
       </div>
-      <div id="childList" class="child-list"></div>
-    </div>
-  </section>
+      <div id="libraryProducts" class="product-grid compact-product-grid"></div>
+      <div id="libraryEmpty" class="library-empty" hidden>Chưa có sản phẩm trong nhóm này.</div>
+    </section>
+
+    <aside class="workspace-detail">
+      <section class="card detail-empty" id="detailEmpty">
+        <strong>Chi tiết sản phẩm</strong>
+        <p>Chọn một sản phẩm ở danh sách để xem ảnh, quy cách, ưu đãi và dữ liệu chi tiết.</p>
+      </section>
+
+      <section class="card result detail-panel" id="result" hidden>
+        <div class="detail-image-wrap">
+          <img id="detailImage" alt="" hidden>
+          <div id="detailImageFallback" class="detail-image-fallback">GL</div>
+        </div>
+
+        <div class="result-head">
+          <div>
+            <div class="result-kicker">
+              <span id="source">Bách Hóa XANH</span>
+              <span id="linkType" class="type-badge"></span>
+            </div>
+            <h2 id="name"></h2>
+          </div>
+          <a id="productLink" target="_blank" rel="noopener">Mở gốc</a>
+        </div>
+
+        <div class="meta-grid">
+          <div><small>Nhóm</small><strong id="group">—</strong></div>
+          <div><small>Hãng</small><strong id="branch">—</strong></div>
+          <div><small>Quy cách</small><strong id="packaging">—</strong></div>
+        </div>
+
+        <div class="price-grid" id="priceGrid">
+          <div class="price">
+            <small>Giá BHX</small>
+            <strong id="webPrice">—</strong>
+          </div>
+          <div class="price promo">
+            <small>Ưu đãi</small>
+            <strong id="promoPrice">—</strong>
+            <span id="promoText"></span>
+          </div>
+          <div class="price mine detail-legacy-price">
+            <small>Giá của mình</small>
+            <input id="myPrice" inputmode="numeric" placeholder="Nhập tổng giá">
+            <div class="mine-qty">
+              <span>Giá trên</span>
+              <input id="myPackQty" inputmode="decimal" value="1">
+              <span>quy cách</span>
+            </div>
+            <span id="myUnitPrice" class="unit-note"></span>
+          </div>
+        </div>
+
+        <div id="productPersonal">
+          <label class="watch"><input id="watch" type="checkbox"> Quan tâm</label>
+          <div id="compare" class="compare"></div>
+        </div>
+
+        <div id="productVariants" class="children" hidden>
+          <div class="children-title">
+            <strong>Quy cách / variant</strong>
+            <span id="variantCount"></span>
+          </div>
+          <div id="variantList" class="child-list"></div>
+        </div>
+
+        <div id="categoryChildren" class="children" hidden>
+          <div class="children-title">
+            <strong>Link chi tiết đã phát hiện</strong>
+            <span id="childCount"></span>
+          </div>
+          <div id="childList" class="child-list"></div>
+        </div>
+      </section>
+    </aside>
+  </div>
 </main>
 <script>
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
-<script src="config.js?v=20260907-sheet19"></script>
-<script src="app.js?v=20260907-sheet19"></script>
+<script src="config.js?v=20260907-workspace20"></script>
+<script src="app.js?v=20260907-workspace20"></script>
 </body>
 </html>

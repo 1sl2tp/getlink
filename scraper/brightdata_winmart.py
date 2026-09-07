@@ -6,7 +6,7 @@ import os
 import re
 import time
 from pathlib import Path
-from urllib.parse import parse_qs, quote, unquote, urljoin, urlparse, urlunparse
+from urllib.parse import parse_qs, quote, unquote, urlencode, urljoin, urlparse, urlunparse
 
 from playwright.async_api import async_playwright
 
@@ -248,6 +248,10 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     raw_url = first_value(obj, (
         "productUrl", "product_url", "seoUrl", "seo_url", "url", "href", "link", "slug", "path"
     ))
+    if not raw_url:
+        seo_name = clean_text(obj.get("seoName") or "")
+        if seo_name and re.search(r"--s\d+$", seo_name, re.I):
+            raw_url = "https://winmart.vn/products/" + seo_name
     url = normalize_product_url(str(raw_url or ""), base_url, store_code)
 
     current = None
@@ -280,6 +284,10 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
             original = parse_money(obj.get(key))
             if original:
                 break
+    if not original:
+        api_list_price = parse_money(obj.get("price"))
+        if api_list_price and current and api_list_price > current:
+            original = api_list_price
     if original and original <= current:
         original = None
 
@@ -316,6 +324,7 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     unit_evidence = ""
     packaging = ""
     image = image_url([
+        obj.get("mediaUrl"), obj.get("mediaItems"),
         obj.get("imageUrl"), obj.get("image_url"),
         obj.get("thumbnailUrl"), obj.get("thumbnail_url"),
         obj.get("thumbnail"), obj.get("image"),
@@ -341,6 +350,88 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
         "category_name": category,
         "promotion_text": promo,
     }
+
+
+def winmart_category_api_response(url: str, body) -> bool:
+    try:
+        u = urlparse(url)
+        if (u.hostname or "").lower() != "api-crownx.winmart.vn":
+            return False
+        if "/it/api/web/v3/item/category" not in (u.path or "").lower():
+            return False
+        data = body.get("data") if isinstance(body, dict) else None
+        paging = body.get("paging") if isinstance(body, dict) else None
+        return (
+            isinstance(data, dict)
+            and isinstance(data.get("items"), list)
+            and isinstance(paging, dict)
+        )
+    except Exception:
+        return False
+
+
+def winmart_api_page_url(raw: str, page_number: int) -> str:
+    u = urlparse(raw)
+    q = parse_qs(u.query, keep_blank_values=True)
+    q["pageNumber"] = [str(int(page_number))]
+    pairs = []
+    for key, values in q.items():
+        for value in values:
+            pairs.append((key, value))
+    return urlunparse((
+        u.scheme, u.netloc, u.path, u.params,
+        urlencode(pairs), u.fragment
+    ))
+
+
+def winmart_api_headers(headers: dict) -> dict:
+    allowed = {}
+    for key, value in (headers or {}).items():
+        low = str(key).lower()
+        text = str(value or "").strip()
+        if not text:
+            continue
+        if low == "authorization" and text.lower() == "bearer":
+            # WinMart currently sends an empty Bearer header for public catalog.
+            continue
+        if (
+            low in {
+                "accept", "accept-language", "authorization",
+                "origin", "referer", "user-agent"
+            }
+            or low.startswith("x-")
+        ):
+            allowed[key] = text
+    return allowed
+
+
+def add_winmart_category_payload(
+    collector,
+    payload: dict,
+    page_url: str,
+) -> tuple[int, dict]:
+    data = payload.get("data") if isinstance(payload, dict) else {}
+    paging = payload.get("paging") if isinstance(payload, dict) else {}
+    items = data.get("items") if isinstance(data, dict) else []
+    added = 0
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        # The API itself gives the concrete categoryName on each item.
+        # Prefer it over a broad parent page label such as "Gia vi".
+        product = candidate_from_dict(
+            item,
+            page_url,
+            collector.store_code,
+            "",
+        )
+        if product:
+            product["discovery_evidence"] = "winmart_category_api"
+            before = len(collector.products)
+            collector.add(product)
+            if len(collector.products) > before:
+                added += 1
+    return added, paging if isinstance(paging, dict) else {}
 
 
 class Collector:
@@ -383,8 +474,12 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
         browser = await pw.chromium.connect_over_cdp(ws_url, timeout=60000)
         try:
             page = await browser.new_page()
-            current_category = {"label": top_category_name(target_url)}
+            current_category = {
+                "label": top_category_name(target_url),
+                "url": target_url,
+            }
             response_tasks = set()
+            category_api_events = asyncio.Queue()
 
             async def route_handler(route):
                 if route.request.resource_type in BLOCK_TYPES:
@@ -401,7 +496,28 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     if response.request.resource_type not in {"xhr", "fetch"}:
                         return
                     body = await response.json()
-                    collector.walk_json(body, response.url, current_category["label"])
+                    if winmart_category_api_response(response.url, body):
+                        try:
+                            request_headers = await response.request.all_headers()
+                        except Exception:
+                            request_headers = {}
+                        await category_api_events.put({
+                            "url": response.url,
+                            "headers": request_headers,
+                            "body": body,
+                            "page_url": current_category.get("url") or page.url,
+                        })
+                        add_winmart_category_payload(
+                            collector,
+                            body,
+                            current_category.get("url") or page.url,
+                        )
+                        return
+                    collector.walk_json(
+                        body,
+                        response.url,
+                        current_category["label"],
+                    )
                 except Exception:
                     return
 
@@ -505,16 +621,169 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         "promotion_text": "",
                     })
 
+            async def wait_main_category_api(page_url: str):
+                deadline = time.monotonic() + 10
+                while time.monotonic() < deadline:
+                    try:
+                        event = await asyncio.wait_for(
+                            category_api_events.get(),
+                            timeout=min(1.5, max(0.1, deadline - time.monotonic())),
+                        )
+                    except asyncio.TimeoutError:
+                        continue
+                    body = event.get("body") or {}
+                    if winmart_category_api_response(
+                        event.get("url") or "",
+                        body,
+                    ):
+                        return event
+                return None
+
+            async def fetch_remaining_api_pages(event, page_url: str):
+                body = event.get("body") or {}
+                _, paging = add_winmart_category_payload(
+                    collector,
+                    body,
+                    page_url,
+                )
+                total_pages = int(paging.get("totalPages") or 1)
+                total_count = int(paging.get("totalCount") or 0)
+                first_page = int(paging.get("pageNumber") or 1)
+                headers = winmart_api_headers(event.get("headers") or {})
+
+                async def fetch_one(page_number: int):
+                    api_url = winmart_api_page_url(
+                        event.get("url") or "",
+                        page_number,
+                    )
+                    last_error = ""
+                    for attempt in range(2):
+                        try:
+                            response = await page.context.request.get(
+                                api_url,
+                                headers=headers,
+                                timeout=20000,
+                            )
+                            if response.ok:
+                                payload = await response.json()
+                                if winmart_category_api_response(api_url, payload):
+                                    return page_number, payload, ""
+                            last_error = "http_" + str(response.status)
+                        except Exception as exc:
+                            last_error = str(exc)[:300]
+                        await asyncio.sleep(0.35 * (attempt + 1))
+                    return page_number, None, last_error
+
+                remaining = [
+                    n for n in range(1, total_pages + 1)
+                    if n != first_page
+                ]
+                semaphore = asyncio.Semaphore(6)
+
+                async def limited(n):
+                    async with semaphore:
+                        return await fetch_one(n)
+
+                results = await asyncio.gather(
+                    *[limited(n) for n in remaining],
+                    return_exceptions=False,
+                )
+
+                failed = []
+                for page_number, payload, error in sorted(
+                    results,
+                    key=lambda x: x[0],
+                ):
+                    if payload is None:
+                        failed.append({
+                            "page": page_number,
+                            "error": error,
+                        })
+                        continue
+                    add_winmart_category_payload(
+                        collector,
+                        payload,
+                        page_url,
+                    )
+
+                print(json.dumps({
+                    "winmart_category_api": True,
+                    "category": clean_text(
+                        (body.get("data") or {}).get("name") or ""
+                    ),
+                    "page_url": page_url,
+                    "first_page": first_page,
+                    "total_pages": total_pages,
+                    "total_count": total_count,
+                    "products_collected": len(collector.products),
+                    "failed_pages": failed,
+                }, ensure_ascii=False))
+
+                if failed:
+                    raise RuntimeError(
+                        "winmart_category_api_pages_failed:"
+                        + json.dumps(failed, ensure_ascii=False)
+                    )
+
             async def scan_page(url: str, category_label: str, discover_subcats: bool):
                 current_category["label"] = category_label
+                current_category["url"] = url
+
+                while not category_api_events.empty():
+                    try:
+                        category_api_events.get_nowait()
+                    except asyncio.QueueEmpty:
+                        break
+
                 try:
-                    await page.goto(url, wait_until="domcontentloaded", timeout=120000)
+                    await page.goto(
+                        url,
+                        wait_until="domcontentloaded",
+                        timeout=120000,
+                    )
                 except Exception:
                     pass
-                await page.wait_for_timeout(1800)
-                if discover_subcats:
-                    await extract_subcategories()
+                await page.wait_for_timeout(1200)
 
+                # Root/category navigation is still useful for discovering cate2 links,
+                # but product coverage no longer depends on scrolling the DOM.
+                if discover_subcats:
+                    subcat_stable = 0
+                    previous_subcats = -1
+                    for _ in range(8):
+                        await extract_subcategories()
+                        count = len(collector.subcategories)
+                        if count == previous_subcats:
+                            subcat_stable += 1
+                        else:
+                            subcat_stable = 0
+                        previous_subcats = count
+                        if count > 0 and subcat_stable >= 2:
+                            break
+                        try:
+                            await page.evaluate(
+                                """() => window.scrollTo(
+                                  0,
+                                  Math.min(
+                                    Math.max(
+                                      document.body ? document.body.scrollHeight : 0,
+                                      document.documentElement ? document.documentElement.scrollHeight : 0
+                                    ),
+                                    window.scrollY + Math.max(window.innerHeight * 0.75, 600)
+                                  )
+                                )"""
+                            )
+                        except Exception:
+                            pass
+                        await page.wait_for_timeout(500)
+
+                api_event = await wait_main_category_api(url)
+                if api_event:
+                    await fetch_remaining_api_pages(api_event, url)
+                    return True
+
+                # Safety fallback only. If WinMart changes its API shape we still
+                # collect visible rows rather than silently returning nothing.
                 stable = 0
                 previous_count = len(collector.products)
                 previous_height = 0
@@ -531,7 +800,7 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         )
                     except Exception:
                         height = previous_height
-                    await page.wait_for_timeout(1100)
+                    await page.wait_for_timeout(900)
                     count = len(collector.products)
                     if count == previous_count and height == previous_height:
                         stable += 1
@@ -541,19 +810,35 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     previous_height = height
                     if stable >= 4:
                         break
+                print(json.dumps({
+                    "winmart_category_api": False,
+                    "page_url": url,
+                    "fallback_products": len(collector.products),
+                }, ensure_ascii=False))
+                return False
 
             root_label = top_category_name(target_url)
-            await scan_page(target_url, root_label, True)
+            root_api = await scan_page(target_url, root_label, True)
 
-            subcats = list(collector.subcategories.items())[:40]
-            for index, (url, label) in enumerate(subcats, 1):
-                print(json.dumps({
-                    "winmart_subcategory": index,
-                    "label": label,
-                    "url": url,
-                    "products_before": len(collector.products),
-                }, ensure_ascii=False))
-                await scan_page(url, label or root_label, False)
+            subcats = list(collector.subcategories.items())[:80]
+            print(json.dumps({
+                "winmart_root_api": bool(root_api),
+                "winmart_subcategories_found": len(subcats),
+                "winmart_products_after_root": len(collector.products),
+            }, ensure_ascii=False))
+
+            # If the root page did not expose the catalog API, retain the old
+            # cate2 fallback. When root API works, it already paginates the full
+            # top-category inventory and avoids duplicate subcategory scans.
+            if not root_api:
+                for index, (url, label) in enumerate(subcats, 1):
+                    print(json.dumps({
+                        "winmart_subcategory": index,
+                        "label": label,
+                        "url": url,
+                        "products_before": len(collector.products),
+                    }, ensure_ascii=False))
+                    await scan_page(url, label or root_label, False)
 
             if response_tasks:
                 await asyncio.gather(*list(response_tasks), return_exceptions=True)
@@ -656,7 +941,7 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     product["unit_evidence"] = "detail_type"
                     product["packaging"] = unit
 
-            detail_pages = [await prepare_detail_page() for _ in range(5)]
+            detail_pages = [await prepare_detail_page() for _ in range(8)]
             queue = asyncio.Queue()
             for product in products:
                 queue.put_nowait(product)

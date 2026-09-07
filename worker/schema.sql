@@ -114,3 +114,35 @@ CREATE TABLE IF NOT EXISTS variant_price_snapshots(
 
 CREATE INDEX IF NOT EXISTS idx_variant_snapshots_checked
 ON variant_price_snapshots(variant_id,checked_at DESC);
+
+
+CREATE TABLE IF NOT EXISTS daily_variant_prices(
+  id TEXT PRIMARY KEY,
+  variant_id TEXT NOT NULL,
+  parent_url TEXT NOT NULL,
+  snapshot_date TEXT NOT NULL,
+  product_name TEXT,
+  packaging TEXT,
+  pack_quantity REAL NOT NULL DEFAULT 1,
+  pack_unit TEXT,
+  size_value REAL,
+  size_unit TEXT,
+  regular_pack_price INTEGER,
+  promo_pack_price INTEGER,
+  regular_unit_price REAL,
+  promo_unit_price REAL,
+  promotion_active INTEGER NOT NULL DEFAULT 0,
+  promotion_text TEXT,
+  checked_at TEXT NOT NULL,
+  raw_json TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(variant_id,snapshot_date),
+  FOREIGN KEY(variant_id) REFERENCES product_variants(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_variant_date
+ON daily_variant_prices(snapshot_date DESC,variant_id);
+
+CREATE INDEX IF NOT EXISTS idx_daily_variant_parent
+ON daily_variant_prices(parent_url,snapshot_date DESC);

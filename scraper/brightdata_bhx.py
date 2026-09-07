@@ -98,6 +98,8 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
         try:
             page = await browser.new_page()
             queue: asyncio.Queue = asyncio.Queue()
+            internal_bulk_urls: set[str] = set()
+            api_first_attempted = False
 
             async def route_handler(route):
                 if route.request.resource_type in BLOCK_TYPES:
@@ -108,6 +110,8 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
             await page.route("**/*", route_handler)
 
             def on_response(response):
+                if response.url in internal_bulk_urls:
+                    return
                 url = response.url.lower()
                 should_queue = marker_matches(response.url, kind)
                 if kind == "category" and "api.bachhoaxanh.com/" in url and "/gw/" in url:
@@ -196,6 +200,7 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                 return None
 
             async def try_api_first_category(response, payload):
+                nonlocal api_first_attempted
                 """
                 BHX V2/GetCate accepts an arbitrary pageSize. The storefront asks
                 for 10 by default, but a larger pageSize returns the whole
@@ -205,6 +210,9 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                 low_url = str(response.url or "").lower()
                 if "/category/v2/getcate" not in low_url:
                     return None
+                if api_first_attempted:
+                    return None
+                api_first_attempted = True
 
                 data = payload.get("data") if isinstance(payload, dict) else None
                 if not isinstance(data, dict):
@@ -260,6 +268,7 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
                     urlencode(rebuilt),
                     parsed.fragment,
                 ))
+                internal_bulk_urls.add(bulk_url)
 
                 # Reuse the already-open BHX page and call GetCate with fetch().
                 # This keeps the exact browser session/cookies/headers that produced

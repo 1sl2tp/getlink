@@ -186,249 +186,234 @@ function getlinkProductIdentity(name,url,packagingText){
   };
 }
 
+function rawPackUnit(value){
+  const raw=cleanText(value||"").toLowerCase();
+  const pattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
+  const re=new RegExp(
+    "(?:^|[^\\p{L}\\p{N}])("+pattern+")(?=$|[^\\p{L}\\p{N}])",
+    "giu"
+  );
+  let match;
+  let last="";
+  while((match=re.exec(raw))){
+    last=match[1]||last;
+  }
+  return last?normalizePackWord(last):"";
+}
+
 function packHierarchyData(name,url,packagingText,rawCount,rawUnit){
   const identity=getlinkProductIdentity(name,url,packagingText);
   if(!identity.keep){
     return {
-      keep:false,
-      reason:identity.reason,
-      label1:"",
-      qty1:0,
-      label2:"",
-      qty2:0,
-      label3:"",
-      qty3:0,
-      evidence:""
-    };
-  }
-
-  // Phase 1: Nhãn 1 = Thùng only. Non-carton hierarchy is intentionally
-  // left empty until the Lẻ phase, so there is no second guessing here.
-  if(!identity.authoritativeCarton){
-    return {
-      keep:true,
-      reason:"",
-      label1:"",
-      qty1:0,
-      label2:"",
-      qty2:0,
-      label3:"",
-      qty3:0,
-      evidence:""
+      keep:false,reason:identity.reason,
+      label1:"",qty1:0,label2:"",qty2:0,label3:"",qty3:0,
+      evidence:"",locked:false
     };
   }
 
   const units="hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can";
   const namePlain=getlinkPlain(identity.name);
   const packagingPlain=getlinkPlain(identity.packaging);
-  const structural=/^thung\b/.test(namePlain)
-    ?namePlain.replace(/^thung\s*/,"")
-    :(/^thung\b/.test(packagingPlain)
-      ?packagingPlain.replace(/^thung\s*/,"")
-      :"");
 
-  let qty2=0;
-  let label2="";
-  let qty3=0;
-  let label3="";
-
-  const bonus=structural.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
-  );
-  const bonusUnits=structural.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
-  );
-  const chain=structural.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b(?:\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b)?")
-  );
-
-  if(bonus){
-    qty2=Number(String(bonus[1]).replace(",","."))+
-      Number(String(bonus[2]).replace(",","."));
-    label2=normalizePackWord(bonus[3]);
-  }else if(bonusUnits&&normalizePackWord(bonusUnits[2])===normalizePackWord(bonusUnits[4])){
-    qty2=Number(String(bonusUnits[1]).replace(",","."))+
-      Number(String(bonusUnits[3]).replace(",","."));
-    label2=normalizePackWord(bonusUnits[2]);
-  }else if(chain){
-    qty2=Number(String(chain[1]).replace(",","."));
-    label2=normalizePackWord(chain[2]);
-    if(chain[3]&&chain[4]){
-      qty3=Number(String(chain[3]).replace(",","."));
-      label3=normalizePackWord(chain[4]);
-    }
+  function validQty(value){
+    const n=Number(String(value||"").replace(",","."));
+    return Number.isFinite(n)&&n>0&&n<=300?n:0;
   }
 
-  // If the carton marker is authoritative but the text does not expose
-  // the inner QC, use BHX's own package count/unit as the last source.
-  if((!qty2||!label2)){
-    const fallbackQty=Number(rawCount);
+  function directChain(text){
+    const chain=String(text||"").match(
+      new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b(?:\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b)?")
+    );
+    if(!chain)return null;
+    return {
+      qtyA:validQty(chain[1]),
+      unitA:normalizePackWord(chain[2]),
+      qtyB:validQty(chain[3]),
+      unitB:chain[4]?normalizePackWord(chain[4]):""
+    };
+  }
+
+  function bonusChain(text){
+    const match=String(text||"").match(
+      new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
+    );
+    if(!match)return null;
+    const a=validQty(match[1]);
+    const b=validQty(match[2]);
+    return a&&b
+      ?{qty:a+b,unit:normalizePackWord(match[3])}
+      :null;
+  }
+
+  function middleChain(text){
+    const match=String(text||"").match(
+      new RegExp("^(loc|bich|tui|hop|goi|can|hu|ly|to)\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
+    );
+    if(!match)return null;
+    const qty=validQty(match[2]);
+    if(!qty)return null;
+    return {
+      outer:normalizePackWord(match[1]),
+      child:normalizePackWord(match[3]),
+      qty
+    };
+  }
+
+  if(identity.authoritativeCarton){
+    const structural=/^thung\b/.test(namePlain)
+      ?namePlain.replace(/^thung\s*/,"")
+      :(/^thung\b/.test(packagingPlain)
+        ?packagingPlain.replace(/^thung\s*/,"")
+        :"");
+
+    const bonus=bonusChain(structural);
+    if(bonus){
+      return {
+        keep:true,reason:"",
+        label1:"Thùng",qty1:1,
+        label2:"",qty2:0,
+        label3:bonus.unit,qty3:bonus.qty,
+        evidence:identity.cartonEvidence||"",
+        locked:true
+      };
+    }
+
+    const chain=directChain(structural);
+    if(chain&&chain.qtyA&&chain.unitA){
+      if(chain.qtyB&&chain.unitB){
+        return {
+          keep:true,reason:"",
+          label1:"Thùng",qty1:1,
+          label2:chain.unitA,qty2:chain.qtyA,
+          label3:chain.unitB,qty3:chain.qtyB,
+          evidence:identity.cartonEvidence||"",
+          locked:true
+        };
+      }
+
+      // A direct "Thùng 24 lon/hộp/gói..." has no middle pack.
+      // Lốc is kept as middle if BHX does not expose its inner unit yet.
+      if(chain.unitA==="Lốc"){
+        return {
+          keep:true,reason:"",
+          label1:"Thùng",qty1:1,
+          label2:"Lốc",qty2:chain.qtyA,
+          label3:"",qty3:0,
+          evidence:identity.cartonEvidence||"",
+          locked:true
+        };
+      }
+      return {
+        keep:true,reason:"",
+        label1:"Thùng",qty1:1,
+        label2:"",qty2:0,
+        label3:chain.unitA,qty3:chain.qtyA,
+        evidence:identity.cartonEvidence||"",
+        locked:true
+      };
+    }
+
+    const fallbackQty=validQty(rawCount);
     const fallbackUnit=normalizePackWord(rawUnit||"");
-    if(
-      Number.isFinite(fallbackQty)&&fallbackQty>0&&fallbackQty<=300&&
-      fallbackUnit&&fallbackUnit!=="Thùng"
-    ){
-      qty2=fallbackQty;
-      label2=fallbackUnit;
+    if(fallbackQty&&fallbackUnit&&fallbackUnit!=="Thùng"){
+      return {
+        keep:true,reason:"",
+        label1:"Thùng",qty1:1,
+        label2:fallbackUnit==="Lốc"?"Lốc":"",
+        qty2:fallbackUnit==="Lốc"?fallbackQty:0,
+        label3:fallbackUnit==="Lốc"?"":fallbackUnit,
+        qty3:fallbackUnit==="Lốc"?0:fallbackQty,
+        evidence:identity.cartonEvidence||"",
+        locked:true
+      };
+    }
+
+    return {
+      keep:true,reason:"",
+      label1:"Thùng",qty1:1,
+      label2:"",qty2:0,label3:"",qty3:0,
+      evidence:identity.cartonEvidence||"",
+      locked:false
+    };
+  }
+
+  // Non-carton: only a complete "bao ngoài + số lượng + đơn vị con"
+  // is allowed to become the middle level. Arbitrary numbers in the
+  // product/brand name never become QC.
+  const middleByName=middleChain(namePlain);
+  const middleByPackaging=middleByName?null:middleChain(packagingPlain);
+  const middle=middleByName||middleByPackaging;
+  if(middle){
+    return {
+      keep:true,reason:"",
+      label1:"",qty1:0,
+      label2:middle.outer,qty2:1,
+      label3:middle.child,qty3:middle.qty,
+      evidence:middleByName?"name_middle":"packaging_middle",
+      locked:true
+    };
+  }
+
+  // Default supermarket case: one final retail unit (leaf).
+  // Accent-sensitive detection protects words such as "lớn" from
+  // accidentally becoming the unit "Lon"; brand numbers are ignored.
+  let leaf=rawPackUnit(identity.name);
+  let evidence=leaf?"name_leaf":"";
+  if(!leaf){
+    leaf=rawPackUnit(identity.packaging);
+    if(leaf)evidence="packaging_leaf";
+  }
+  if(!leaf){
+    const fallback=normalizePackWord(rawUnit||"");
+    const leafKinds=new Set([
+      "Hộp","Chai","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô",
+      "Khoanh","Thanh","Cây","Viên","Tuýp","Can"
+    ]);
+    if(leafKinds.has(fallback)){
+      leaf=fallback;
+      evidence="api_leaf";
     }
   }
 
   return {
-    keep:true,
-    reason:"",
-    label1:"Thùng",
-    qty1:1,
-    label2,
-    qty2:qty2||0,
-    label3,
-    qty3:qty3||0,
-    evidence:identity.cartonEvidence||""
+    keep:true,reason:"",
+    label1:"",qty1:0,
+    label2:"",qty2:0,
+    label3:leaf,qty3:leaf?1:0,
+    evidence,
+    locked:Boolean(leaf)
   };
 }
 
-function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
-  const plainOf=value=>cleanText(value||"")
-    .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-  const namePlain=plainOf(name);
-  const packagingPlain=plainOf(packagingText);
-  const featurePlain=plainOf(featureText);
-  const rawLower=value=>cleanText(value||"").toLowerCase();
-  const nameRaw=rawLower(name);
-  const packagingRaw=rawLower(packagingText);
-  const featureRaw=rawLower(featureText);
+function hierarchyPackCompatibility(hierarchy){
+  const h=hierarchy||{};
+  if(h.label1==="Thùng"){
+    const directLabel=h.label2||h.label3||"đơn vị";
+    const directQty=Math.max(1,Number(h.label2?h.qty2:h.qty3)||1);
+    return {pack_kind:"Thùng",pack_quantity:directQty,pack_unit:directLabel};
+  }
+  if(h.label2){
+    return {
+      pack_kind:h.label2,
+      pack_quantity:Math.max(1,Number(h.qty3)||1),
+      pack_unit:h.label3||"đơn vị"
+    };
+  }
+  if(h.label3){
+    return {pack_kind:h.label3,pack_quantity:1,pack_unit:h.label3};
+  }
+  return {pack_kind:"Đơn",pack_quantity:1,pack_unit:"đơn vị"};
+}
 
-  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can";
-  // IMPORTANT: unit detection inside product names is accent-sensitive.
-  // Otherwise Vietnamese words such as "lớn" normalize to "lon" and are
-  // falsely classified as the unit Lon.
-  const rawUnitPattern="hộp|chai|gói|bịch|túi|lon|hũ|ly|tô|lốc|khoanh|thanh|cây|viên|tuýp|can";
-  const rawUnitRe=new RegExp(
-    "(?:^|[^\\p{L}\\p{N}])("+rawUnitPattern+")(?=$|[^\\p{L}\\p{N}])",
-    "iu"
+// Compatibility surface only. All recognition lives in packHierarchyData().
+function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit,url=""){
+  const hierarchy=packHierarchyData(
+    name,url||"",packagingText,rawCount,rawUnit
   );
-
-  // Priority contract:
-  // 1) "Thùng ..." at the start of this link's own name/price label.
-  // 2) Structural prefix in the product name: Combo 6 lon / 5 lốc / 12 gói...
-  // 3) Explicit retail unit written anywhere in the product name.
-  // 4) API packaging text.
-  // 5) Persisted rawUnit/rawCount only as a last fallback.
-  // This prevents stale persisted labels (e.g. Lon) from overriding
-  // a current name such as "... gói 454g".
-  const multiCartonMatch=
-    namePlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/)||
-    packagingPlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/);
-  const nameIsCombo=/^combo\b/.test(namePlain);
-  const pureByName=/^thung\b/.test(namePlain);
-  const pureByPrice=!pureByName&&!multiCartonMatch&&!nameIsCombo&&/^thung\b/.test(packagingPlain);
-  const explicitCarton=Boolean(pureByName||pureByPrice);
-
-  const structuralPlain=pureByName
-    ?namePlain
-    :(pureByPrice?packagingPlain:namePlain);
-
-  const kindMatch=structuralPlain.match(new RegExp("^("+kindPattern+")\\b"));
-  let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
-  const body=kindMatch
-    ?structuralPlain.slice(kindMatch[0].length).trimStart()
-    :structuralPlain;
-
-  const bonusMatch=body.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
-  );
-  const bonusWithUnits=body.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
-  );
-  const countMatch=body.match(
-    new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
-  );
-
-  const nameUnitMatch=nameRaw.match(rawUnitRe);
-  const packagingUnitMatch=packagingRaw.match(rawUnitRe);
-  const featureUnitMatch=featureRaw.match(rawUnitRe);
-
-  let quantity=0;
-  let unit="";
-  let structuralCount=false;
-
-  if(bonusMatch){
-    const base=Number(String(bonusMatch[1]).replace(",","."));
-    const bonus=Number(String(bonusMatch[2]).replace(",","."));
-    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300){
-      quantity=base+bonus;
-      unit=normalizePackWord(bonusMatch[3]);
-      structuralCount=true;
-    }
-  }else if(bonusWithUnits){
-    const base=Number(String(bonusWithUnits[1]).replace(",","."));
-    const bonus=Number(String(bonusWithUnits[3]).replace(",","."));
-    const unitA=normalizePackWord(bonusWithUnits[2]);
-    const unitB=normalizePackWord(bonusWithUnits[4]);
-    if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300&&unitA===unitB){
-      quantity=base+bonus;
-      unit=unitA;
-      structuralCount=true;
-    }
-  }else if(countMatch){
-    const parsed=Number(String(countMatch[1]).replace(",","."));
-    if(parsed>0&&parsed<=300){
-      quantity=parsed;
-      unit=normalizePackWord(countMatch[2]);
-      structuralCount=true;
-    }
-  }
-
-  if(multiCartonMatch){
-    const cartons=Number(String(multiCartonMatch[1]).replace(",","."));
-    if(cartons>0&&cartons<=300){
-      quantity=cartons;
-      unit="Thùng";
-      structuralCount=true;
-    }
-  }
-
-  // For a pure "Thùng xx đơn-vị", the structural parse above is final.
-  // For ordinary retail rows, the NAME unit overrides packaging/rawUnit.
-  if(!structuralCount){
-    if(nameUnitMatch){
-      unit=normalizePackWord(nameUnitMatch[1]);
-    }else if(packagingUnitMatch){
-      unit=normalizePackWord(packagingUnitMatch[1]);
-    }else if(featureUnitMatch){
-      unit=normalizePackWord(featureUnitMatch[1]);
-    }else{
-      unit=cleanText(rawUnit||"");
-    }
-
-    const rawQty=Number(rawCount);
-    const rawQtyValid=Number.isFinite(rawQty)&&rawQty>0&&rawQty<=300;
-    quantity=rawQtyValid?rawQty:1;
-  }
-
-  if(!quantity)quantity=1;
-
-  if(explicitCarton){
-    packKind="Thùng";
-  }else if(!packKind){
-    const normalizedUnit=normalizePackWord(unit||"");
-    packKind=quantity>1
-      ?"Cụm"
-      :(normalizedUnit&&normalizedUnit.toLowerCase()!=="đơn vị"
-        ?normalizedUnit
-        :"Đơn");
-  }
-
-  if(!unit){
-    const singleKinds=new Set(["Chai","Hộp","Gói","Bịch","Túi","Lon","Hũ","Ly","Tô","Khoanh","Can","Thanh","Cây","Viên","Tuýp"]);
-    unit=singleKinds.has(packKind)?packKind:"đơn vị";
-  }
-
+  const pack=hierarchyPackCompatibility(hierarchy);
   const size=parseSize([name,packagingText,featureText].filter(Boolean).join(" "));
   return {
-    pack_kind:packKind,
-    pack_quantity:quantity,
-    pack_unit:normalizePackWord(unit)||"đơn vị",
+    ...pack,
     size_value:size.value,
     size_unit:size.unit
   };

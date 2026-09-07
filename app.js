@@ -475,7 +475,7 @@ function sheetNormalizeUnit(value){
   const key=raw.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const map={
     hop:"Hộp",chai:"Chai",goi:"Gói",bich:"Bịch",tui:"Túi",
-    lon:"Lon",hu:"Hũ",can:"Can",thanh:"Thanh",cay:"Cây",
+    lon:"Lon",hu:"Hũ",ly:"Ly",can:"Can",thanh:"Thanh",cay:"Cây",
     vien:"Viên",tuyp:"Tuýp",thung:"Thùng",loc:"Lốc",
     combo:"Combo",bo:"Bộ"
   };
@@ -488,8 +488,8 @@ function inferSheetPack(row){
   const source=primary||packaging;
   const plain=source.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 
-  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|thanh|cay|vien|tuyp";
-  const unitPattern="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp";
+  const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|thanh|cay|vien|tuyp";
+  const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|can|thanh|cay|vien|tuyp";
 
   const explicitKind=plain.match(new RegExp("^("+kindPattern+")\\b"));
   const body=explicitKind
@@ -599,7 +599,7 @@ function inferSheetPack(row){
 function rowCartonStructure(row){
   const name=searchKey(row.source_name||row.name||"");
   const packaging=searchKey(row.packaging||"");
-  const units="hop|chai|goi|bich|tui|lon|hu|can|thanh|cay|vien|tuyp|loc";
+  const units="hop|chai|goi|bich|tui|lon|hu|ly|can|thanh|cay|vien|tuyp|loc";
 
   // A pure BHX carton must START with "Thùng".
   // Exception: if the product name itself is neutral (e.g. "24 lon",

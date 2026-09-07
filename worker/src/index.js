@@ -754,11 +754,86 @@ async function persistEntry(env,p,parentUrl,requestId,checked,linkType){
   }
 }
 
+
+async function persistVariant(env,p,parentUrl,requestId,checked){
+  const meta=p&&p.variant||{};
+  const variantUrl=canonicalBhx(p.url);
+  const key=parentUrl+"|"+variantUrl+"|"+String(meta.product_code||"")+"|"+String(meta.bhx_product_id||"");
+  const id=await idForUrl(key);
+  const now=new Date().toISOString();
+  const price=p.price||{};
+
+  await env.DB.prepare(`
+    INSERT INTO product_variants(
+      id,parent_url,variant_url,bhx_product_id,product_code,name,title,packaging,
+      package_item_count,package_item_unit,current_price,sys_price,discount_percent,
+      stock,is_can_buy,text_status,store_id,po_date,image,raw_json,
+      last_checked_at,created_at,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    ON CONFLICT(id) DO UPDATE SET
+      parent_url=excluded.parent_url,
+      variant_url=excluded.variant_url,
+      bhx_product_id=excluded.bhx_product_id,
+      product_code=excluded.product_code,
+      name=excluded.name,
+      title=excluded.title,
+      packaging=excluded.packaging,
+      package_item_count=excluded.package_item_count,
+      package_item_unit=excluded.package_item_unit,
+      current_price=excluded.current_price,
+      sys_price=excluded.sys_price,
+      discount_percent=excluded.discount_percent,
+      stock=excluded.stock,
+      is_can_buy=excluded.is_can_buy,
+      text_status=excluded.text_status,
+      store_id=excluded.store_id,
+      po_date=excluded.po_date,
+      image=excluded.image,
+      raw_json=excluded.raw_json,
+      last_checked_at=excluded.last_checked_at,
+      updated_at=excluded.updated_at
+  `).bind(
+    id,parentUrl,variantUrl,meta.bhx_product_id??null,String(meta.product_code||""),
+    p.name||"",meta.title||"",p.packaging&&p.packaging.text||"",
+    meta.package_item_count??null,meta.package_item_unit||"",
+    Number(price.current)||null,meta.sys_price??null,meta.discount_percent??0,
+    meta.stock??0,meta.is_can_buy?1:0,meta.text_status||"",
+    meta.store_id??null,meta.po_date||"",p.image||"",JSON.stringify(meta.raw||{}),
+    p.last_checked_at||checked,now,now
+  ).run();
+
+  await env.DB.prepare(`
+    INSERT OR IGNORE INTO variant_price_snapshots(
+      variant_id,request_id,checked_at,current_price,sys_price,discount_percent,
+      stock,is_can_buy,po_date,raw_json
+    ) VALUES(?,?,?,?,?,?,?,?,?,?)
+  `).bind(
+    id,requestId,p.last_checked_at||checked,Number(price.current)||null,
+    meta.sys_price??null,meta.discount_percent??0,meta.stock??0,
+    meta.is_can_buy?1:0,meta.po_date||"",JSON.stringify(meta.raw||{})
+  ).run();
+
+  return id;
+}
+
+
 async function persistPayload(env,payload){
   const checked=payload.checked_at||new Date().toISOString();
   const inputUrl=canonicalBhx(payload.input_url);
+
   if(payload.input_type==="product"&&payload.product){
-    await persistEntry(env,payload.product,null,payload.request_id,checked,"product");
+    const parts=pathParts(inputUrl);
+    const categoryParent=parts.length?"https://bachhoaxanh.com/"+parts[0]:null;
+    await persistEntry(env,{...payload.product,url:inputUrl},categoryParent,payload.request_id,checked,"product");
+
+    const variants=Array.isArray(payload.variants)?payload.variants:[];
+    for(const variant of variants){
+      await persistVariant(env,variant,inputUrl,payload.request_id,checked);
+      const variantUrl=canonicalBhx(variant.url);
+      if(variantUrl!==inputUrl){
+        await persistEntry(env,variant,inputUrl,payload.request_id,checked,"product");
+      }
+    }
   }else{
     await upsertLink(env,{
       canonical_url:inputUrl,
@@ -777,23 +852,26 @@ async function persistPayload(env,payload){
       await persistEntry(env,child,inputUrl,payload.request_id,checked,child.link_type==="category"?"category":"product");
     }
   }
+
   const resultJson=JSON.stringify(payload);
   await env.DB.prepare(
     "UPDATE jobs SET link_type=?,status='complete',result_json=?,error=NULL,updated_at=? WHERE request_id=?"
   ).bind(payload.input_type,resultJson,new Date().toISOString(),payload.request_id).run();
+
   const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
   return {payload,registry_count:Number(count&&count.n||0)};
 }
+
 
 async function handleCreate(request,env,origin){
   let body;
   try{body=await request.json();}catch{return json({error:"invalid_json"},400,origin);}
   let url;
   try{url=canonicalBhx(body.url);}catch{return json({error:"invalid_bhx_url"},400,origin);}
+
   const requestId=crypto.randomUUID().replace(/-/g,"");
   const now=new Date().toISOString();
   const initialType=heuristicType(url);
-  const diagnostics=[];
 
   await env.DB.prepare(`
     INSERT INTO jobs(request_id,input_url,canonical_url,link_type,status,created_at,updated_at)
@@ -804,149 +882,75 @@ async function handleCreate(request,env,origin){
     canonical_url:url,
     source:"Bách Hóa XANH",
     link_type:initialType,
-    parent_url:null,
+    parent_url:initialType==="product"?"https://bachhoaxanh.com/"+(pathParts(url)[0]||""):null,
     name:"",
     last_checked_at:now,
     last_status:"running",
     last_request_id:requestId
   });
 
-  try{
-    const apiPayload=await fetchBhxApiPayload(url,requestId);
-    const apiSaved=await persistPayload(env,apiPayload);
+  const hasCredentials=Boolean(env.BHX_BEARER_TOKEN&&env.BHX_XAPIKEY&&env.BHX_DEVICE_ID);
+  if(!hasCredentials){
+    const message="bhx_credentials_missing";
+    await env.DB.prepare(
+      "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+    ).bind(message,new Date().toISOString(),requestId).run();
+    await env.DB.prepare(
+      "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+    ).bind(new Date().toISOString(),url).run();
     return json({
+      error:message,
       request_id:requestId,
-      status:"complete",
-      input_url:url,
-      link_type:apiPayload.input_type,
-      registry_count:apiSaved.registry_count,
-      payload:apiPayload,
-      engine:"bhx-api"
-    },200,origin);
-  }catch(apiError){
-    diagnostics.push("bhx-api:"+String(apiError&&apiError.message||apiError).slice(0,220));
+      detail:"GETLINK cần BHX_BEARER_TOKEN, BHX_XAPIKEY và BHX_DEVICE_ID để gọi API BHX."
+    },428,origin);
   }
 
+  const diagnostics=[];
   try{
-    const supaPayload=await fetchSupabaseBhxPayload(url,requestId);
-    const supaSaved=await persistPayload(env,supaPayload);
-    return json({
-      request_id:requestId,
-      status:"complete",
-      input_url:url,
-      link_type:supaPayload.input_type,
-      registry_count:supaSaved.registry_count,
-      payload:supaPayload,
-      engine:"supabase-bhx-api"
-    },200,origin);
-  }catch(supabaseError){
-    diagnostics.push("supabase:"+String(supabaseError&&supabaseError.message||supabaseError).slice(0,220));
-  }
-
-  try{
-    const mirrorPayload=await fetchMirrorSnapshotPayload(url,requestId);
-    const mirrorSaved=await persistPayload(env,mirrorPayload);
-    return json({
-      request_id:requestId,
-      status:"complete",
-      input_url:url,
-      link_type:mirrorPayload.input_type,
-      registry_count:mirrorSaved.registry_count,
-      payload:mirrorPayload,
-      engine:"public-snapshot",
-      snapshot_date:mirrorPayload.snapshot_date
-    },200,origin);
-  }catch(mirrorError){
-    diagnostics.push("snapshot:"+String(mirrorError&&mirrorError.message||mirrorError).slice(0,220));
-  }
-
-  try{
-    const html=await renderBhxHtml(env,url);
-    const roots=jsonLdRoots(html);
-    const product=parseProduct(url,html,roots);
-    let payload;
-    if(product){
-      payload={
-        schema_version:2,
-        request_id:requestId,
-        input_url:url,
-        input_type:"product",
-        source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-        checked_at:new Date().toISOString(),
-        category_name:"",
-        product,
-        products:[product],
-        discovered_links:[]
-      };
-    }else{
-      const categoryName=firstH1(html)||metaContent(html,"og:title")||slugTitle(url);
-      const children=discoverChildren(url,html,categoryName);
-      payload={
-        schema_version:2,
-        request_id:requestId,
-        input_url:url,
-        input_type:"category",
-        source:{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
-        checked_at:new Date().toISOString(),
-        category_name:categoryName,
-        product:null,
-        products:children,
-        discovered_links:children.map(x=>x.url)
-      };
-    }
+    const payload=await fetchBhxApiPayload(url,requestId,env);
     const saved=await persistPayload(env,payload);
     return json({
       request_id:requestId,
       status:"complete",
       input_url:url,
       link_type:payload.input_type,
-      registry_count:saved.registry_count
+      registry_count:saved.registry_count,
+      payload,
+      engine:"bhx-api-direct"
     },200,origin);
   }catch(error){
-    const browserError=String(error&&error.message||error).slice(0,800);
-    if(!env.GITHUB_TOKEN){
-      const detail=browserError+"; github_fallback_not_configured";
-      await env.DB.prepare(
-        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
-      ).bind(detail,new Date().toISOString(),requestId).run();
-      await env.DB.prepare(
-        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
-      ).bind(new Date().toISOString(),url).run();
-      return json({error:"github_fallback_not_configured",detail:browserError,request_id:requestId},503,origin);
-    }
-
-    try{
-      const r=await dispatchGithub(env,browserBhxUrl(url),requestId);
-      if(!r.ok){
-        const detail=(await r.text()).slice(0,700);
-        throw new Error("github_dispatch_"+r.status+":"+detail);
-      }
-      await env.DB.prepare(
-        "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
-      ).bind(new Date().toISOString(),requestId).run();
-      await env.DB.prepare(
-        "UPDATE links SET last_status='queued',updated_at=? WHERE canonical_url=?"
-      ).bind(new Date().toISOString(),url).run();
-      return json({
-        request_id:requestId,
-        status:"queued",
-        input_url:url,
-        link_type:initialType,
-        engine:"github",
-        browser_error:browserError,
-        detail:diagnostics.concat(["browser:"+browserError]).join(" | ").slice(0,1200)
-      },202,origin);
-    }catch(dispatchError){
-      const detail=String(dispatchError&&dispatchError.message||dispatchError).slice(0,900);
-      await env.DB.prepare(
-        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
-      ).bind(detail,new Date().toISOString(),requestId).run();
-      await env.DB.prepare(
-        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
-      ).bind(new Date().toISOString(),url).run();
-      return json({error:"github_dispatch_failed",detail,request_id:requestId},502,origin);
-    }
+    diagnostics.push("direct:"+String(error&&error.message||error).slice(0,300));
   }
+
+  try{
+    const payload=await fetchSupabaseBhxPayload(url,requestId,env);
+    const saved=await persistPayload(env,payload);
+    return json({
+      request_id:requestId,
+      status:"complete",
+      input_url:url,
+      link_type:payload.input_type,
+      registry_count:saved.registry_count,
+      payload,
+      engine:"supabase-api-proxy"
+    },200,origin);
+  }catch(error){
+    diagnostics.push("proxy:"+String(error&&error.message||error).slice(0,300));
+  }
+
+  const detail=diagnostics.join(" | ").slice(0,1200);
+  await env.DB.prepare(
+    "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+  ).bind(detail,new Date().toISOString(),requestId).run();
+  await env.DB.prepare(
+    "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+  ).bind(new Date().toISOString(),url).run();
+
+  return json({
+    error:"bhx_api_failed",
+    request_id:requestId,
+    detail
+  },502,origin);
 }
 
 async function handleResult(url,env,origin){
@@ -1030,7 +1034,7 @@ export default {
       if(request.method==="GET"&&url.pathname==="/api/links")return handleLinks(url,env,origin||"*");
       if(request.method==="GET"&&url.pathname==="/health"){
         const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
-        return json({ok:true,browser:Boolean(env.BROWSER),github_fallback:Boolean(env.GITHUB_TOKEN),links:Number(count&&count.n||0)},200,origin||"*");
+        return json({ok:true,mode:"api-only",bhx_credentials:Boolean(env.BHX_BEARER_TOKEN&&env.BHX_XAPIKEY&&env.BHX_DEVICE_ID),proxy:"supabase",links:Number(count&&count.n||0)},200,origin||"*");
       }
       return json({error:"not_found"},404,origin||"*");
     }catch(error){

@@ -59,13 +59,20 @@ def rewrite_ws_country(ws_url: str, country: str) -> str:
 
 
 def base_ws_from_env() -> str:
-    direct = (os.environ.get("BRIGHTDATA_BROWSER_WS") or "").strip()
-    if direct:
-        return direct
+    for name in ("BRIGHTDATA_BROWSER_WS", "BRIGHTDATA_BROWSER_WSS", "SBR_WS_CDP", "SBR_CDP_URL"):
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            print(f"Using Bright Data endpoint from {name}")
+            return value
+
     username = (os.environ.get("BRIGHTDATA_BROWSER_USERNAME") or "").strip()
     password = (os.environ.get("BRIGHTDATA_BROWSER_PASSWORD") or "").strip()
     if not username or not password:
-        raise RuntimeError("brightdata_credentials_missing")
+        raise RuntimeError(
+            "brightdata_credentials_missing: set BRIGHTDATA_BROWSER_WS "
+            "or BRIGHTDATA_BROWSER_USERNAME/BRIGHTDATA_BROWSER_PASSWORD"
+        )
+    print("Using Bright Data endpoint from username/password")
     return (
         "wss://"
         + quote(username, safe="")

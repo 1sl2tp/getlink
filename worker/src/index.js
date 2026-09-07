@@ -876,7 +876,7 @@ async function handleLibrary(url,env,origin){
     ).all();
 
     const productParents=await env.DB.prepare(
-      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
+      "SELECT parent_url,MAX(group_name) AS group_name,COUNT(*) AS product_count,MAX(updated_at) AS updated_at FROM links WHERE link_type='product' AND parent_url IS NOT NULL AND TRIM(COALESCE(name,''))<>'' AND COALESCE(current_price,promotion_price) IS NOT NULL GROUP BY parent_url ORDER BY updated_at DESC LIMIT 500"
     ).all();
 
     const map=new Map();
@@ -895,8 +895,8 @@ async function handleLibrary(url,env,origin){
       map.set(row.parent_url,{
         url:row.parent_url,
         name:cleanText(
-          (previous&&previous.name)||
           row.group_name||
+          (previous&&previous.name)||
           slugTitle(row.parent_url)
         ),
         product_count:Number(row.product_count)||0,
@@ -908,6 +908,7 @@ async function handleLibrary(url,env,origin){
       });
     }
     const groups=Array.from(map.values())
+      .filter(x=>Number(x.product_count)>0)
       .sort((a,b)=>a.name.localeCompare(b.name,"vi"));
     return json({groups},200,origin);
   }
@@ -944,6 +945,8 @@ async function handleLibrary(url,env,origin){
         ) AS has_promo
       FROM links l
       WHERE l.link_type='product'
+        AND TRIM(COALESCE(l.name,''))<>''
+        AND COALESCE(l.current_price,l.promotion_price) IS NOT NULL
     `;
     const binds=[];
     if(parent){

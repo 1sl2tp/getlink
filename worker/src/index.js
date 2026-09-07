@@ -100,18 +100,20 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     .normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
   const namePlain=plainOf(name);
   const packagingPlain=plainOf(packagingText);
-  const rawUnitPlain=plainOf(rawUnit);
-  const text=cleanText([name,packagingText,featureText].filter(Boolean).join(" "));
-  const plain=plainOf(text);
+  const featurePlain=plainOf(featureText);
 
   const kindPattern="thung|loc|tui|bich|chai|hop|goi|can|combo|bo|lon|hu|ly|to|khoanh|thanh|cay|vien|tuyp";
   const unitPattern="hop|chai|goi|bich|tui|lon|hu|ly|to|loc|khoanh|thanh|cay|vien|tuyp|can";
+  const unitRe=new RegExp("\\b("+unitPattern+")\\b");
 
-  const kindMatch=plain.match(new RegExp("^("+kindPattern+")\\b"));
-  let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
-
-  // "Thùng" may be written in the product name OR in the first price
-  // option's own title/unit. Those are both authoritative for this link.
+  // Priority contract:
+  // 1) "Thùng ..." at the start of this link's own name/price label.
+  // 2) Structural prefix in the product name: Combo 6 lon / 5 lốc / 12 gói...
+  // 3) Explicit retail unit written anywhere in the product name.
+  // 4) API packaging text.
+  // 5) Persisted rawUnit/rawCount only as a last fallback.
+  // This prevents stale persisted labels (e.g. Lon) from overriding
+  // a current name such as "... gói 454g".
   const multiCartonMatch=
     namePlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/)||
     packagingPlain.match(/^(?:combo\s+)?([0-9]+(?:[.,][0-9]+)?)\s*thung\b/);
@@ -120,12 +122,15 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const pureByPrice=!pureByName&&!multiCartonMatch&&!nameIsCombo&&/^thung\b/.test(packagingPlain);
   const explicitCarton=Boolean(pureByName||pureByPrice);
 
-  // Only the beginning of the authoritative text may define pack quantity.
-  // This prevents product/model numbers such as 1664, 333, C2, 7Up...
-  // from ever becoming SL/QC.
+  const structuralPlain=pureByName
+    ?namePlain
+    :(pureByPrice?packagingPlain:namePlain);
+
+  const kindMatch=structuralPlain.match(new RegExp("^("+kindPattern+")\\b"));
+  let packKind=kindMatch?normalizePackWord(kindMatch[1]):"";
   const body=kindMatch
-    ?plain.slice(kindMatch[0].length).trimStart()
-    :plain;
+    ?structuralPlain.slice(kindMatch[0].length).trimStart()
+    :structuralPlain;
 
   const bonusMatch=body.match(
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*\\+\\s*([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
@@ -136,11 +141,14 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   const countMatch=body.match(
     new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+unitPattern+")\\b")
   );
-  const singleUnitMatch=body.match(new RegExp("\\b("+unitPattern+")\\b"));
 
-  const rawQty=Number(rawCount);
-  let quantity=Number.isFinite(rawQty)&&rawQty>0&&rawQty<=300?rawQty:0;
-  let unit=cleanText(rawUnit||"");
+  const nameUnitMatch=namePlain.match(unitRe);
+  const packagingUnitMatch=packagingPlain.match(unitRe);
+  const featureUnitMatch=featurePlain.match(unitRe);
+
+  let quantity=0;
+  let unit="";
+  let structuralCount=false;
 
   if(bonusMatch){
     const base=Number(String(bonusMatch[1]).replace(",","."));
@@ -148,6 +156,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300){
       quantity=base+bonus;
       unit=normalizePackWord(bonusMatch[3]);
+      structuralCount=true;
     }
   }else if(bonusWithUnits){
     const base=Number(String(bonusWithUnits[1]).replace(",","."));
@@ -157,27 +166,42 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     if(base>0&&bonus>0&&base<=200&&bonus<=200&&(base+bonus)<=300&&unitA===unitB){
       quantity=base+bonus;
       unit=unitA;
+      structuralCount=true;
     }
   }else if(countMatch){
     const parsed=Number(String(countMatch[1]).replace(",","."));
     if(parsed>0&&parsed<=300){
       quantity=parsed;
       unit=normalizePackWord(countMatch[2]);
+      structuralCount=true;
     }
   }
 
-  // "Combo 5 thùng..." or an API price unit "5 Thùng" means one link
-  // represents five cartons. Keep that 1:5 relationship explicitly.
   if(multiCartonMatch){
     const cartons=Number(String(multiCartonMatch[1]).replace(",","."));
     if(cartons>0&&cartons<=300){
       quantity=cartons;
       unit="Thùng";
+      structuralCount=true;
     }
   }
 
-  if((!unit||unit.toLowerCase()==="đơn vị")&&singleUnitMatch){
-    unit=normalizePackWord(singleUnitMatch[1]);
+  // For a pure "Thùng xx đơn-vị", the structural parse above is final.
+  // For ordinary retail rows, the NAME unit overrides packaging/rawUnit.
+  if(!structuralCount){
+    if(nameUnitMatch){
+      unit=normalizePackWord(nameUnitMatch[1]);
+    }else if(packagingUnitMatch){
+      unit=normalizePackWord(packagingUnitMatch[1]);
+    }else if(featureUnitMatch){
+      unit=normalizePackWord(featureUnitMatch[1]);
+    }else{
+      unit=cleanText(rawUnit||"");
+    }
+
+    const rawQty=Number(rawCount);
+    const rawQtyValid=Number.isFinite(rawQty)&&rawQty>0&&rawQty<=300;
+    quantity=rawQtyValid?rawQty:1;
   }
 
   if(!quantity)quantity=1;
@@ -185,7 +209,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
   if(explicitCarton){
     packKind="Thùng";
   }else if(!packKind){
-    const normalizedUnit=normalizePackWord(unit||rawUnit||"");
+    const normalizedUnit=normalizePackWord(unit||"");
     packKind=quantity>1
       ?"Cụm"
       :(normalizedUnit&&normalizedUnit.toLowerCase()!=="đơn vị"
@@ -198,7 +222,7 @@ function parsePackStructure(name,packagingText,featureText,rawCount,rawUnit){
     unit=singleKinds.has(packKind)?packKind:"đơn vị";
   }
 
-  const size=parseSize([packagingText,name,featureText].filter(Boolean).join(" "));
+  const size=parseSize([name,packagingText,featureText].filter(Boolean).join(" "));
   return {
     pack_kind:packKind,
     pack_quantity:quantity,
@@ -349,7 +373,7 @@ async function loadFreshCache(env,url,maxAgeMs=86400000){
   if(ageMs<0||ageMs>=maxAgeMs)return null;
   try{
     const payload=JSON.parse(row.result_json);
-    if(Number(payload&&payload.schema_version||0)<16)return null;
+    if(Number(payload&&payload.schema_version||0)<17)return null;
     return {
       payload,
       age_seconds:Math.max(0,Math.round(ageMs/1000))
@@ -574,7 +598,7 @@ function productDetailPayload(inputUrl,requestId,data){
   // prices for this URL.
   const product={...first,url:canonical};
   return {
-    schema_version:16,
+    schema_version:17,
     request_id:requestId,
     input_url:canonical,
     input_type:"product",
@@ -603,7 +627,7 @@ function categoryPayload(inputUrl,requestId,data){
   );
 
   return {
-    schema_version:16,
+    schema_version:17,
     request_id:requestId,
     input_url:canonical,
     input_type:"category",
@@ -1703,7 +1727,7 @@ async function handleLibrary(url,env,origin){
     if(cached&&cached.result_json){
       try{
         const payload=JSON.parse(cached.result_json);
-        if(Number(payload&&payload.schema_version||0)>=16){
+        if(Number(payload&&payload.schema_version||0)>=17){
           const preference=await getPreference(env,itemUrl);
           return json({
             status:"complete",
@@ -1776,7 +1800,7 @@ async function handleLibrary(url,env,origin){
       source:"d1-library",
       preference,
       payload:{
-        schema_version:16,
+        schema_version:17,
         request_id:row.last_request_id||"",
         input_url:itemUrl,
         input_type:"product",

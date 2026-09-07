@@ -808,6 +808,49 @@ async function ensureLibraryCache(force=false){
 }
 
 
+function retailIdentity(row){
+  const pack=inferSheetPack(row);
+  const base=searchKey(normalizedBaseName(row));
+  const unit=searchKey(pack.unit||"");
+  const size=pack.sizeValue
+    ?String(pack.sizeValue)+" "+String(pack.sizeUnit||"")
+    :"";
+  return [base,unit,size].join("|");
+}
+
+function suppressRedundantMultiPacks(products){
+  // Keep source rows in D1 for debugging, but do not show an intermediate
+  // multi-pack when the same exact product already has a real single-unit
+  // row. Example: "6 lon Bia Heineken Silver 330ml" is redundant when
+  // "Bia Heineken Silver lon 330ml" already exists.
+  const singleKeys=new Set();
+
+  for(const row of products){
+    const pack=inferSheetPack(row);
+    const simple=simpleRowPrice(row);
+    const unit=String(pack.unit||"").trim().toLowerCase();
+    const isRealSingle=
+      !simple.hasCarton&&
+      Number(pack.qty)===1&&
+      unit&&unit!=="đơn vị"&&
+      pack.kind!=="Combo"&&
+      pack.kind!=="Bộ"&&
+      pack.kind!=="Lốc";
+    if(isRealSingle)singleKeys.add(retailIdentity(row));
+  }
+
+  return products.filter(row=>{
+    const pack=inferSheetPack(row);
+    const simple=simpleRowPrice(row);
+    const isIntermediateMulti=
+      !simple.hasCarton&&
+      pack.kind==="Cụm"&&
+      Number(pack.qty)>1;
+    if(!isIntermediateMulti)return true;
+    return !singleKeys.has(retailIdentity(row));
+  });
+}
+
 function visibleRowsBeforePack(){
   let products=libraryCache.slice();
 
@@ -827,6 +870,11 @@ function visibleRowsBeforePack(){
       String(row.brand_name||row.branch_name||"")===activeBrand
     );
   }
+
+  // Suppress redundant 6-lon/10-bịch/... rows BEFORE text search so a
+  // search for "6 lon" cannot bring back a row we intentionally hide.
+  products=suppressRedundantMultiPacks(products);
+
   if(libraryQuery){
     products=products.filter(row=>matchesSearch(row,libraryQuery));
   }

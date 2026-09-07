@@ -583,61 +583,41 @@ function inferSheetPack(row){
 }
 
 function rowIsCarton(row){
-  // "Thùng" comes only from this API row's own name / packaging / parsed
-  // pack kind. QC quantity alone never turns a retail row into a carton.
-  const source=[
-    row.source_name,row.name,row.packaging,row.pack_kind
-  ].map(searchKey).filter(Boolean).join(" ");
-  return source.split(/\s+/).includes("thung");
+  // Only this link's visible/current API text may decide Thùng.
+  // Do not trust an old hidden pack_kind by itself.
+  const name=searchKey(row.source_name||row.name||"");
+  const packaging=searchKey(row.packaging||"");
+  const structural=value=>
+    /^thung\b/.test(value)||
+    /^(?:combo\s+)?[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(value);
+  return structural(name)||structural(packaging);
 }
 
 function simpleRowPrice(row){
   const rawName=String(row.source_name||row.name||"").trim();
   const inferred=inferSheetPack(row);
   const hasCarton=rowIsCarton(row);
+  const ownPrice=Number(
+    row.promotion_price||
+    row.current_price||
+    row.promo_pack_price||
+    row.regular_pack_price||
+    row.original_price||
+    0
+  );
 
-  const cartonPrice=hasCarton
-    ?Number(
-      row.carton_price||
-      row.promotion_price||
-      row.current_price||
-      row.promo_pack_price||
-      row.regular_pack_price||
-      row.original_price||
-      0
-    )
-    :0;
+  // One detail link owns one authoritative price only.
+  // Put that price in exactly one bucket; never derive the other bucket.
+  const cartonPrice=hasCarton?ownPrice:0;
+  const retailPrice=hasCarton?0:ownPrice;
+
   const cartonQty=hasCarton
-    ?(Number(row.carton_quantity)||Number(row.pack_quantity)||Number(inferred.qty)||1)
+    ?(Number(row.pack_quantity)||Number(inferred.qty)||1)
     :0;
   const cartonUnit=hasCarton
-    ?String(row.carton_unit||row.pack_unit||inferred.unit||"đơn vị").trim()
+    ?String(row.pack_unit||inferred.unit||"đơn vị").trim()
     :"";
-
-  let retailPrice=0;
-  let retailUnit=String(row.retail_unit||row.pack_unit||inferred.unit||"").trim();
-
-  if(hasCarton){
-    retailPrice=Number(
-      row.promo_unit_price||
-      row.regular_unit_price||
-      row.retail_price||
-      0
-    );
-    if(!retailPrice&&cartonPrice&&cartonQty>1){
-      retailPrice=Math.round(cartonPrice/cartonQty);
-    }
-  }else{
-    retailPrice=Number(
-      row.retail_price||
-      row.promotion_price||
-      row.current_price||
-      row.promo_pack_price||
-      row.regular_pack_price||
-      row.original_price||
-      0
-    );
-  }
+  const retailUnit=String(row.pack_unit||inferred.unit||"đơn vị").trim();
 
   return {
     rawName:rawName||"Sản phẩm",
@@ -646,7 +626,7 @@ function simpleRowPrice(row){
     cartonQty,
     cartonUnit:cartonUnit||"đơn vị",
     retailPrice,
-    retailUnit:retailUnit||cartonUnit||inferred.unit||"đơn vị"
+    retailUnit:retailUnit||"đơn vị"
   };
 }
 

@@ -1,9 +1,7 @@
 name: Smoke GETLINK
 
 on:
-  push:
-    paths:
-      - ".github/workflows/smoke-get.yml"
+  workflow_dispatch:
 
 jobs:
   smoke:

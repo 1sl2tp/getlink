@@ -17,4 +17,30 @@ assert.equal(money(1750),"2");
 assert.equal(money(99500),"99.5");
 assert.equal(money(0),"—");
 
+
+{
+  const app=fs.readFileSync("app.js","utf8");
+  const searchMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
+  const cartonMatch=app.match(/function rowCartonStartText\(row\)\{[\s\S]*?\n\}/);
+  assert.ok(searchMatch&&cartonMatch,"carton safety helpers not found");
+  const rowCartonStartText=new Function(
+    searchMatch[0]+"\n"+cartonMatch[0]+"\nreturn rowCartonStartText;"
+  )();
+  assert.equal(
+    rowCartonStartText({name:"Thùng 24 lon cà phê sữa Highlands 235ml"}),
+    "thung 24 lon ca phe sua highlands 235ml"
+  );
+  assert.equal(
+    rowCartonStartText({
+      name:"Cà phê sữa Highlands 235ml",
+      source_name:"Thùng 24 lon cà phê sữa Highlands 235ml"
+    }),
+    "thung 24 lon ca phe sua highlands 235ml"
+  );
+  assert.equal(
+    rowCartonStartText({name:"6 lon cà phê sữa Highlands 235ml"}),
+    ""
+  );
+}
+
 console.log("money display tests passed");

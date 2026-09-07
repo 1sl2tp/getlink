@@ -11,7 +11,7 @@ from urllib.parse import quote, unquote, urljoin, urlparse, urlunparse
 from playwright.async_api import async_playwright
 
 GO_HOSTS = {"sieuthi-go.vn", "www.sieuthi-go.vn"}
-GO_STORE_NAME = "GO! HÀ NAM"
+GO_STORE_NAME = "GO!"
 BLOCK_TYPES = {"media", "font"}
 
 
@@ -108,127 +108,14 @@ async def title_store(page) -> str:
     return clean_text(m.group(1)) if m else title
 
 
-async def select_go_hanam(page, target_url: str):
-    # First open the category and inspect the current store.
-    try:
-        await page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
-    except Exception:
-        pass
-    await page.wait_for_timeout(1200)
-
-    current = (await title_store(page)).upper()
-    if "GO! HÀ NAM" in current or "GO! HA NAM" in current:
-        return
-
-    # Strategy 1: a real <select> containing GO! HÀ NAM.
-    try:
-        selects = page.locator("select")
-        for i in range(await selects.count()):
-            select = selects.nth(i)
-            labels = await select.locator("option").all_text_contents()
-            chosen = next(
-                (clean_text(x) for x in labels if clean_text(x).upper() in {"GO! HÀ NAM", "GO! HA NAM"}),
-                "",
-            )
-            if chosen:
-                await select.select_option(label=chosen)
-                await page.wait_for_timeout(1200)
-                break
-    except Exception:
-        pass
-
-    # Strategy 2: click the current-store control, then choose GO! HÀ NAM.
-    current = (await title_store(page)).upper()
-    if "GO! HÀ NAM" not in current and "GO! HA NAM" not in current:
-        try:
-            current_label = clean_text(await title_store(page))
-            if current_label:
-                candidates = page.get_by_text(current_label, exact=True)
-                for i in range(await candidates.count()):
-                    el = candidates.nth(i)
-                    try:
-                        if not await el.is_visible():
-                            continue
-                        tag = (await el.evaluate("(e)=>e.tagName")).lower()
-                        href = clean_text(await el.get_attribute("href"))
-                        if tag == "a" and "/about-us/" in href:
-                            continue
-                        await el.click(timeout=3000)
-                        await page.wait_for_timeout(500)
-                        break
-                    except Exception:
-                        continue
-        except Exception:
-            pass
-
-        try:
-            targets = page.get_by_text(re.compile(r"^GO!\s*(HÀ NAM|HA NAM)$", re.I))
-            for i in range(await targets.count()):
-                el = targets.nth(i)
-                try:
-                    if not await el.is_visible():
-                        continue
-                    href = clean_text(await el.get_attribute("href"))
-                    if "/about-us/" in href:
-                        continue
-                    await el.click(timeout=4000)
-                    await page.wait_for_timeout(1500)
-                    break
-                except Exception:
-                    continue
-        except Exception:
-            pass
-
-    # Re-open the requested category so any selected-store cookie/state applies.
+async def prepare_go_page(page, target_url: str):
+    # GO! prices are treated as source-wide/default unless the site itself
+    # exposes a concrete store context. Do not block ingestion on store name.
     try:
         await page.goto(target_url, wait_until="domcontentloaded", timeout=90000)
     except Exception:
         pass
     await page.wait_for_timeout(1400)
-
-    current = (await title_store(page)).upper()
-    diag = await page.evaluate(
-        """() => {
-          const pick = store => {
-            const out = {};
-            for (let i=0;i<store.length;i++) {
-              const k=store.key(i);
-              out[k]=store.getItem(k);
-            }
-            return out;
-          };
-          const body=(document.body&&document.body.innerText||"").slice(0,2500);
-          const candidates=[...document.querySelectorAll("button,a,[role='button'],li,span,div")]
-            .filter(el => /GO!\\s*(HÀ NAM|HA NAM|AN LẠC|AN LAC)/i.test(el.textContent||""))
-            .slice(0,30)
-            .map(el => ({
-              tag:el.tagName,
-              text:String(el.textContent||"").replace(/\\s+/g," ").trim().slice(0,180),
-              href:el.getAttribute("href")||"",
-              cls:String(el.className||"").slice(0,160),
-              data:{...el.dataset}
-            }));
-          return {
-            title:document.title,
-            url:location.href,
-            cookie:document.cookie,
-            local:pick(localStorage),
-            session:pick(sessionStorage),
-            body_head:body,
-            candidates
-          };
-        }"""
-    )
-    print(json.dumps({"go_store_diagnostics": diag}, ensure_ascii=False))
-
-    proof = json.dumps(diag, ensure_ascii=False).lower()
-    if (
-        "go! hà nam" not in proof
-        and "go! ha nam" not in proof
-        and "ha nam" not in proof
-        and '"47"' not in proof
-    ):
-        raise RuntimeError("go_hanam_store_not_confirmed:" + current[:120])
 
 
 async def extract_products(page, category_label: str):
@@ -328,7 +215,7 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
         try:
             page = await browser.new_page()
             await page.route("**/*", route_handler)
-            await select_go_hanam(page, target_url)
+            await prepare_go_page(page, target_url)
 
             category_label = category_name_from_url(target_url)
             products = {}
@@ -366,7 +253,7 @@ async def capture_go(ws_url: str, target_url: str) -> dict:
 
             return {
                 "category_name": category_label,
-                "store_name": "GO! Hà Nam",
+                "store_name": "",
                 "products": list(products.values()),
                 "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             }
@@ -402,7 +289,7 @@ async def run(args) -> int:
             payload = await capture_go(ws, target_url)
             result = {
                 "status": "complete",
-                "engine": "brightdata-browser-go-hanam",
+                "engine": "brightdata-browser-go",
                 "request_id": request_id,
                 "input_url": target_url,
                 "kind": "category",
@@ -417,7 +304,7 @@ async def run(args) -> int:
             print(json.dumps({
                 "status": "complete",
                 "source": "GO!",
-                "store": "GO! Hà Nam",
+                "store": "GO!",
                 "products": len(payload.get("products") or []),
                 "country": label,
             }, ensure_ascii=False))

@@ -1144,24 +1144,21 @@ function retailIdentity(row){
 }
 
 function isTemporaryErrorFilteredRow(row){
-  // TEMPORARY CLEANUP GATE for auditing bad classification/data.
-  // Keep source rows in D1; only remove them from the browse UI.
+  // UI safety mirror of the GETLINK ingestion gate.
+  // D1 should already be clean after a fresh GETLINK, but old rows can
+  // remain until their category is refreshed.
   const name=searchKey(row.source_name||row.name||"");
   if(!name)return false;
 
-  // 1) Any title STARTING with a number is temporarily hidden.
-  //    Examples: "2 túi...", "5 lốc...", "12 chai...", "10 bịch...",
-  //    "24 lon...", "2 thùng...". This audit pass wants only canonical
-  //    rows whose product name does not begin with quantity.
-  if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(name))return true;
-
-  // 2) Combo... is not a canonical single product/carton row.
+  // Always reject explicit multi-product/multi-carton offers first.
   if(/^combo\b/.test(name))return true;
-
-  // 3) For this audit pass, remove every title containing the word "và".
-  //    This is deliberately broader than mixed-bundle detection so the
-  //    remaining set is easier to inspect for parser errors.
+  if(/^[0-9]+(?:[.,][0-9]+)?\s+thung\b/.test(name))return true;
   if(/\bva\b/.test(name))return true;
+
+  // A numeric title is normally hidden, EXCEPT when this exact row has
+  // authoritative carton evidence (name/packaging/URL = Thùng).
+  if(rowIsCarton(row))return false;
+  if(/^[0-9]+(?:[.,][0-9]+)?\b/.test(name))return true;
 
   return false;
 }

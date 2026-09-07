@@ -82,6 +82,7 @@ function normalizedBaseName(row){
 
   let value=source
     .replace(/^(thùng|lốc|cụm|combo|bộ)\s+/iu,"")
+    .replace(/^\d+(?:[.,]\d+)?\s*\+\s*\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/^\d+(?:[.,]\d+)?\s*(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s+/iu,"")
     .replace(/\s+\d+(?:[.,]\d+)?\s*(ml|lít|lit|l|kg|g)\s*$/iu,"")
     .replace(/\s+(hộp|chai|gói|bịch|túi|lon|hũ|thanh|cây|viên|tuýp|can)\s*$/iu,"");

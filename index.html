@@ -1,1 +1,88 @@
-<!doctype html><html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>BHX Product Getter</title><link rel="stylesheet" href="style.css"></head><body><main class="wrap"><header><div class="badge">BHX</div><div><h1>BHX Product Getter</h1><p>Lấy sản phẩm theo nhóm/danh mục Bách Hoá XANH</p></div></header><section class="card"><label for="url">URL danh mục BHX</label><div class="row"><input id="url" value="https://www.bachhoaxanh.com/nuoc-tuong" placeholder="https://www.bachhoaxanh.com/nuoc-tuong"><button id="openAction">Chạy scraper</button></div><p class="hint">GitHub Pages là giao diện; Python/Playwright chạy bằng GitHub Actions.</p><div id="status" class="status"></div></section><section class="card"><div class="toolbar"><strong>Kết quả gần nhất</strong><span id="count"></span><a class="download" href="data/products.csv" download>CSV</a></div><div class="tablewrap"><table><thead><tr><th>Ảnh</th><th>Sản phẩm</th><th>Giá</th><th>Quy cách</th><th>Link</th></tr></thead><tbody id="tbody"><tr><td colspan="5" class="empty">Chưa có dữ liệu.</td></tr></tbody></table></div></section><section class="card small"><strong>Cách chạy</strong><ol><li>Bấm <b>Chạy scraper</b>.</li><li>Trong GitHub Actions chọn <b>Run workflow</b>, nhập URL rồi chạy.</li><li>Workflow chạy Python + Playwright và cập nhật JSON/CSV.</li><li>Refresh trang sau khi Pages deploy.</li></ol></section></main><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GETLINK · Theo dõi giá</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="wrap">
+  <header class="page-head">
+    <div class="brand">GL</div>
+    <div>
+      <h1>GETLINK</h1>
+      <p>Theo dõi và so sánh giá từ link sản phẩm</p>
+    </div>
+  </header>
+
+  <section class="card add-card">
+    <div class="section-title">
+      <div>
+        <strong>Thêm / cập nhật sản phẩm</strong>
+        <p>Dán link Bách Hóa XANH. Scraper sẽ tự tách nguồn, nhóm, nhánh, tên, quy cách, giá và ưu đãi.</p>
+      </div>
+    </div>
+    <label for="url">Link sản phẩm hoặc danh mục</label>
+    <div class="run-row">
+      <input id="url" placeholder="https://www.bachhoaxanh.com/..." autocomplete="off">
+      <button id="openAction" type="button">Lấy giá</button>
+    </div>
+    <div id="status" class="status" aria-live="polite"></div>
+    <p class="hint">Hiện backend scrape chạy bằng GitHub Actions. Khi nền dữ liệu ổn định có thể nối form này trực tiếp vào API/Google Sheet.</p>
+  </section>
+
+  <section class="card">
+    <div class="toolbar">
+      <div>
+        <strong>Bảng theo dõi</strong>
+        <span id="count"></span>
+      </div>
+      <div class="toolbar-actions">
+        <label class="watch-filter"><input id="watchOnly" type="checkbox"> Chỉ đang theo dõi</label>
+        <input id="search" class="search" placeholder="Tìm tên / nhóm / nguồn">
+        <a class="download" href="data/products.csv" download>CSV</a>
+      </div>
+    </div>
+
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Theo dõi</th>
+            <th>Nguồn</th>
+            <th>Nhóm / nhánh</th>
+            <th>Sản phẩm</th>
+            <th>Quy cách</th>
+            <th>Giá nguồn</th>
+            <th>Ưu đãi</th>
+            <th>Giá của mình</th>
+            <th>So sánh</th>
+            <th>Cập nhật</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="10" class="empty">Chưa có dữ liệu.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card info-grid">
+    <div>
+      <strong>1 · Giá nguồn</strong>
+      <p>Giá đang bán trên website nguồn.</p>
+    </div>
+    <div>
+      <strong>2 · Ưu đãi</strong>
+      <p>Giá/điều kiện khuyến mãi nếu website có hiển thị.</p>
+    </div>
+    <div>
+      <strong>3 · Giá của mình</strong>
+      <p>Dữ liệu riêng để so sánh và trình bày cho khách; scraper không tự ghi đè.</p>
+    </div>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>

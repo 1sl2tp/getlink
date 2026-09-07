@@ -3,84 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>GETLINK · Theo dõi giá</title>
+  <title>GETLINK</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main class="wrap">
-  <header class="page-head">
-    <div class="brand">GL</div>
-    <div>
-      <h1>GETLINK</h1>
-      <p>Theo dõi và so sánh giá từ link sản phẩm</p>
-    </div>
+  <header>
+    <div class="logo">GL</div>
+    <div><h1>GETLINK</h1><p>Lấy giá Bách Hóa XANH từ link sản phẩm</p></div>
   </header>
 
-  <section class="card add-card">
-    <div class="section-title">
-      <div>
-        <strong>Thêm / cập nhật sản phẩm</strong>
-        <p>Dán link Bách Hóa XANH. Scraper sẽ tự tách nguồn, nhóm, nhánh, tên, quy cách, giá và ưu đãi.</p>
-      </div>
-    </div>
-    <label for="url">Link sản phẩm hoặc danh mục</label>
-    <div class="run-row">
-      <input id="url" placeholder="https://www.bachhoaxanh.com/..." autocomplete="off">
-      <button id="openAction" type="button">Lấy giá</button>
-    </div>
-    <div id="status" class="status" aria-live="polite"></div>
-    <p class="hint">Hiện backend scrape chạy bằng GitHub Actions. Khi nền dữ liệu ổn định có thể nối form này trực tiếp vào API/Google Sheet.</p>
-  </section>
-
   <section class="card">
-    <div class="toolbar">
-      <div>
-        <strong>Bảng theo dõi</strong>
-        <span id="count"></span>
-      </div>
-      <div class="toolbar-actions">
-        <label class="watch-filter"><input id="watchOnly" type="checkbox"> Chỉ đang theo dõi</label>
-        <input id="search" class="search" placeholder="Tìm tên / nhóm / nguồn">
-        <a class="download" href="data/products.csv" download>CSV</a>
-      </div>
+    <label for="url">Link sản phẩm</label>
+    <div class="input-row">
+      <input id="url" autocomplete="off" placeholder="https://www.bachhoaxanh.com/...">
+      <button id="get" type="button">Lấy giá</button>
     </div>
-
-    <div class="tablewrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Theo dõi</th>
-            <th>Nguồn</th>
-            <th>Nhóm / nhánh</th>
-            <th>Sản phẩm</th>
-            <th>Quy cách</th>
-            <th>Giá nguồn</th>
-            <th>Ưu đãi</th>
-            <th>Giá của mình</th>
-            <th>So sánh</th>
-            <th>Cập nhật</th>
-          </tr>
-        </thead>
-        <tbody id="tbody">
-          <tr><td colspan="10" class="empty">Chưa có dữ liệu.</td></tr>
-        </tbody>
-      </table>
+    <div id="status" class="status">Dán link sản phẩm rồi bấm Lấy giá.</div>
+    <div class="steps" id="steps" hidden>
+      <b>GitHub Actions đã mở.</b> Link đã được copy; dán vào ô URL → Run workflow. Khi quay lại đây, trang sẽ tự kiểm tra kết quả.
     </div>
   </section>
 
-  <section class="card info-grid">
-    <div>
-      <strong>1 · Giá nguồn</strong>
-      <p>Giá đang bán trên website nguồn.</p>
+  <section class="card result" id="result" hidden>
+    <div class="result-head">
+      <div>
+        <small id="source">Bách Hóa XANH</small>
+        <h2 id="name"></h2>
+      </div>
+      <a id="productLink" target="_blank" rel="noopener">Mở link</a>
     </div>
-    <div>
-      <strong>2 · Ưu đãi</strong>
-      <p>Giá/điều kiện khuyến mãi nếu website có hiển thị.</p>
+
+    <div class="meta-grid">
+      <div><small>Nhóm</small><strong id="group">—</strong></div>
+      <div><small>Nhánh</small><strong id="branch">—</strong></div>
+      <div><small>Quy cách</small><strong id="packaging">—</strong></div>
     </div>
-    <div>
-      <strong>3 · Giá của mình</strong>
-      <p>Dữ liệu riêng để so sánh và trình bày cho khách; scraper không tự ghi đè.</p>
+
+    <div class="price-grid">
+      <div class="price"><small>1 · Giá của họ</small><strong id="webPrice">—</strong></div>
+      <div class="price promo"><small>2 · Ưu đãi</small><strong id="promoPrice">—</strong><span id="promoText"></span></div>
+      <div class="price mine"><small>3 · Giá của mình</small><input id="myPrice" inputmode="numeric" placeholder="Nhập giá"></div>
     </div>
+
+    <label class="watch"><input id="watch" type="checkbox"> Theo dõi sản phẩm này</label>
+    <div id="compare" class="compare"></div>
   </section>
 </main>
 <script src="app.js"></script>

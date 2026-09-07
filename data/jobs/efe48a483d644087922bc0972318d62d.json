@@ -1,0 +1,6 @@
+{
+  "status": "error",
+  "error": "Không lấy được dữ liệu từ Bách Hóa XANH",
+  "detail": "BHX API exception= Error APIRequestContext.get: read ECONNRESET Call log:   - → GET https://api.bachhoaxanh.com/gw/Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&categoryUrl=dau-an&isMobile=true&isV2=true&pageSize=300     - user-agent: Mozil DEBUG unparsed title=  DEBUG unparsed url= https://www.bachhoaxanh.com/dau-an/thung-6-can-dau-dau-nanh-nguyen-chat-simply-2-lit DEBUG unparsed body=  Traceback (most recent call last):   File \"/home/runner/work/getlink/getlink/scraper/scraper.py\", line 805, in <module>     main()   File \"/home/runner/work/getlink/getlink/scraper/scraper.py\", line 801, in main     asyncio.run(main_async(args))   File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/asyncio/runners.py\", line 195, in run     return runner.run(main)            ^^^^^^^^^^^^^^^^   File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/asyncio/runners.py\", line 118, in run     return self._loop.run_until_complete(task)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   File \"/opt/hostedtoolcache/Python/3.12.14/x64/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete     return future.result()            ^^^^^^^^^^^^^^^   File \"/h",
+  "request_id": "efe48a483d644087922bc0972318d62d"
+}

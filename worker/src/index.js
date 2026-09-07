@@ -2,6 +2,7 @@ const OWNER="1sl2tp";
 const REPO="getlink";
 const WORKFLOW_BHX="scrape.yml";
 const WORKFLOW_WINMART="scrape-winmart.yml";
+const WORKFLOW_GO="scrape-go.yml";
 
 function json(data,status=200,origin=""){
   const headers={
@@ -53,27 +54,42 @@ function canonicalWinmart(raw){
   return out.toString().replace(/\?$/,"");
 }
 
+function canonicalGo(raw){
+  const u=new URL(String(raw||""));
+  const host=u.hostname.toLowerCase();
+  if(host!=="sieuthi-go.vn"&&host!=="www.sieuthi-go.vn"){
+    throw new Error("invalid_go_url");
+  }
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/+$/,"")||"/";
+  return "https://sieuthi-go.vn"+path;
+}
+
 function sourceKeyForUrl(raw){
   const host=new URL(String(raw||"")).hostname.toLowerCase();
   if(host==="bachhoaxanh.com"||host==="www.bachhoaxanh.com")return "bachhoaxanh";
   if(host==="winmart.vn"||host==="www.winmart.vn")return "winmart";
+  if(host==="sieuthi-go.vn"||host==="www.sieuthi-go.vn")return "go";
   throw new Error("unsupported_source_url");
 }
 
 function sourceNameForKey(key){
-  return key==="winmart"?"WinMart":"Bách Hóa XANH";
+  if(key==="winmart")return "WinMart";
+  if(key==="go")return "GO!";
+  return "Bách Hóa XANH";
 }
 
 function canonicalSource(raw){
-  return sourceKeyForUrl(raw)==="winmart"
-    ?canonicalWinmart(raw)
-    :canonicalBhx(raw);
+  const key=sourceKeyForUrl(raw);
+  if(key==="winmart")return canonicalWinmart(raw);
+  if(key==="go")return canonicalGo(raw);
+  return canonicalBhx(raw);
 }
 
 function browserSourceUrl(raw){
-  return sourceKeyForUrl(raw)==="winmart"
-    ?canonicalWinmart(raw)
-    :browserBhxUrl(raw);
+  const key=sourceKeyForUrl(raw);
+  if(key==="winmart")return canonicalWinmart(raw);
+  if(key==="go")return canonicalGo(raw);
+  return browserBhxUrl(raw);
 }
 
 function pathParts(url){
@@ -89,6 +105,12 @@ function heuristicType(url){
     return /--c\d+$/i.test(last)||u.searchParams.has("cate2")
       ?"category"
       :"product";
+  }
+  if(source==="go"){
+    const path=new URL(url).pathname.toLowerCase();
+    if(path.includes("/categories/"))return "category";
+    if(path.includes("/product/"))return "product";
+    return "category";
   }
   return pathParts(url).length<=1?"category":"product";
 }
@@ -750,7 +772,9 @@ async function idForUrl(value){
 
 async function dispatchGithub(env,url,requestId,sourceKey="bachhoaxanh"){
   if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
-  const workflow=sourceKey==="winmart"?WORKFLOW_WINMART:WORKFLOW_BHX;
+  const workflow=sourceKey==="winmart"
+    ?WORKFLOW_WINMART
+    :(sourceKey==="go"?WORKFLOW_GO:WORKFLOW_BHX);
   return fetch(
     "https://api.github.com/repos/"+OWNER+"/"+REPO+
     "/actions/workflows/"+workflow+"/dispatches",
@@ -2126,6 +2150,379 @@ async function persistWinmartResponse(env,job,requestId,raw){
   };
 }
 
+
+function goSlugText(url){
+  try{
+    const last=decodeURIComponent(
+      pathParts(canonicalGo(url)).slice(-1)[0]||""
+    );
+    return cleanText(
+      last
+        .replace(/-i\.\d+$/i,"")
+        .replace(/-\d+$/,"")
+        .replace(/-/g," ")
+    );
+  }catch{
+    return "";
+  }
+}
+
+function goProductClassUnit(text){
+  const key=getlinkPlain(text||"");
+  // Only infer when the product class itself is a strong packaging signal.
+  // Explicit CHAI/HỘP/LON/GÓI in name or URL always wins.
+  if(/\b(mi|pho|bun|hu tieu)\b/.test(key))return "Gói";
+  return "";
+}
+
+function goPackHierarchy(name,url){
+  const namePlain=getlinkPlain(name||"");
+  const slugPlain=getlinkPlain(goSlugText(url));
+  const preferred=namePlain||slugPlain;
+  const units="loc|hop|chai|goi|bich|tui|lon|hu|ly|to|can|cay|vien|tuyp";
+  const unitLabel=value=>normalizePackWord(value||"");
+  const validQty=value=>{
+    const n=Number(String(value||"").replace(",","."));
+    return Number.isFinite(n)&&n>0&&n<=500?n:0;
+  };
+  const explicitLeaf=()=>{
+    const fromName=rawPackUnit(name||"");
+    if(fromName&&fromName!=="Lốc")return {unit:fromName,evidence:"go_name"};
+    const fromSlug=rawPackUnit(goSlugText(url));
+    if(fromSlug&&fromSlug!=="Lốc")return {unit:fromSlug,evidence:"go_url"};
+    const inferred=goProductClassUnit([name,goSlugText(url)].join(" "));
+    return inferred?{unit:inferred,evidence:"go_product_class"}:{unit:"",evidence:""};
+  };
+
+  const cartonSource=/^thung\b/.test(namePlain)
+    ?namePlain
+    :(/^thung\b/.test(slugPlain)?slugPlain:"");
+  if(cartonSource){
+    const structural=cartonSource.replace(/^thung\s*/,"");
+    const direct=structural.match(
+      new RegExp("^([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b(?:\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b)?")
+    );
+    if(direct){
+      const qtyA=validQty(direct[1]);
+      const unitA=unitLabel(direct[2]);
+      const qtyB=validQty(direct[3]);
+      const unitB=direct[4]?unitLabel(direct[4]):"";
+      if(qtyA&&unitA==="Lốc"){
+        return {
+          keep:true,reason:"",
+          label1:"Thùng",qty1:1,
+          label2:"Lốc",qty2:qtyA,
+          label3:qtyB&&unitB?unitB:"",
+          qty3:qtyB&&unitB?qtyB:0,
+          evidence:/^thung\b/.test(namePlain)?"go_name":"go_url",
+          locked:Boolean(qtyB&&unitB)
+        };
+      }
+      if(qtyA&&unitA){
+        return {
+          keep:true,reason:"",
+          label1:"Thùng",qty1:1,
+          label2:"",qty2:0,
+          label3:unitA,qty3:qtyA,
+          evidence:/^thung\b/.test(namePlain)?"go_name":"go_url",
+          locked:true
+        };
+      }
+    }
+
+    const qtyMatch=structural.match(/^([0-9]+(?:[.,][0-9]+)?)\b/);
+    const qty=validQty(qtyMatch&&qtyMatch[1]);
+    const leaf=explicitLeaf();
+    if(qty&&leaf.unit){
+      return {
+        keep:true,reason:"",
+        label1:"Thùng",qty1:1,
+        label2:"",qty2:0,
+        label3:leaf.unit,qty3:qty,
+        evidence:leaf.evidence||"go_name",
+        locked:true
+      };
+    }
+    return {
+      keep:true,reason:"",
+      label1:"Thùng",qty1:1,
+      label2:"",qty2:0,label3:"",qty3:0,
+      evidence:/^thung\b/.test(namePlain)?"go_name":"go_url",
+      locked:false
+    };
+  }
+
+  const middleSource=/^loc\b/.test(namePlain)
+    ?namePlain
+    :(/^loc\b/.test(slugPlain)?slugPlain:"");
+  if(middleSource){
+    const match=middleSource.match(
+      new RegExp("^loc\\s+([0-9]+(?:[.,][0-9]+)?)\\s*("+units+")\\b")
+    );
+    if(match){
+      const qty=validQty(match[1]);
+      const child=unitLabel(match[2]);
+      if(qty&&child){
+        return {
+          keep:true,reason:"",
+          label1:"",qty1:0,
+          label2:"Lốc",qty2:1,
+          label3:child,qty3:qty,
+          evidence:/^loc\b/.test(namePlain)?"go_name":"go_url",
+          locked:true
+        };
+      }
+    }
+  }
+
+  const leaf=explicitLeaf();
+  return {
+    keep:true,reason:"",
+    label1:"",qty1:0,label2:"",qty2:0,
+    label3:leaf.unit,qty3:leaf.unit?1:0,
+    evidence:leaf.evidence,
+    locked:Boolean(leaf.unit)
+  };
+}
+
+function goPackagingText(hierarchy){
+  const h=hierarchy||{};
+  if(h.label1==="Thùng"){
+    if(h.label2){
+      return cleanText(
+        "Thùng "+(Number(h.qty2)||1)+" "+h.label2+
+        (h.label3?" "+(Number(h.qty3)||1)+" "+h.label3:"")
+      );
+    }
+    if(h.label3){
+      return cleanText("Thùng "+(Number(h.qty3)||1)+" "+h.label3);
+    }
+    return "Thùng";
+  }
+  if(h.label2){
+    return cleanText(h.label2+" "+(Number(h.qty3)||1)+" "+(h.label3||""));
+  }
+  return cleanText(h.label3||"");
+}
+
+async function persistGoResponse(env,job,requestId,raw){
+  const response=raw&&raw.go_response||{};
+  const inputUrl=canonicalGo(
+    raw&&raw.input_url||
+    job&&job.input_url||
+    job&&job.canonical_url
+  );
+  const checked=String(
+    raw&&raw.checked_at||
+    response.checked_at||
+    new Date().toISOString()
+  );
+  const taxonomy=await loadBhxTaxonomyForWinmart(env);
+  const products=Array.isArray(response.products)?response.products:[];
+  const normalized=[];
+  const prepared=[];
+  let mapped=0;
+  let unmapped=0;
+
+  const linkSql=
+    "INSERT INTO links(id,canonical_url,source,link_type,parent_url,group_name,branch_name,name,packaging,current_price,original_price,promotion_price,promotion_text,last_checked_at,last_status,last_request_id,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "+
+    "ON CONFLICT(canonical_url) DO UPDATE SET source=excluded.source,link_type='product',parent_url=excluded.parent_url,group_name=excluded.group_name,branch_name=COALESCE(NULLIF(excluded.branch_name,''),links.branch_name),name=COALESCE(NULLIF(excluded.name,''),links.name),packaging=excluded.packaging,current_price=COALESCE(excluded.current_price,links.current_price),original_price=excluded.original_price,promotion_price=excluded.promotion_price,promotion_text=excluded.promotion_text,last_checked_at=excluded.last_checked_at,last_status='ok',last_request_id=excluded.last_request_id,updated_at=excluded.updated_at";
+
+  for(const rawProduct of products){
+    const name=cleanText(
+      rawProduct&&(
+        rawProduct.name||
+        rawProduct.product_name||
+        rawProduct.title
+      )||""
+    );
+    const current=parseMoney(
+      rawProduct&&(
+        rawProduct.current_price||
+        rawProduct.sale_price||
+        rawProduct.price
+      )
+    );
+    if(!name||!current)continue;
+
+    let productUrl;
+    try{
+      productUrl=canonicalGo(
+        new URL(
+          String(rawProduct.url||rawProduct.link||""),
+          inputUrl
+        ).toString()
+      );
+    }catch{
+      continue;
+    }
+
+    const originalRaw=parseMoney(
+      rawProduct.original_price||
+      rawProduct.list_price||
+      rawProduct.base_price
+    );
+    const original=originalRaw&&originalRaw>current?originalRaw:null;
+    const hierarchy=goPackHierarchy(name,productUrl);
+    const packaging=goPackagingText(hierarchy);
+    const compatibility=hierarchyPackCompatibility(hierarchy);
+    const comparison=comparisonData({
+      name,
+      url:"",
+      packagingText:packaging,
+      featureText:cleanText(rawProduct.spec_text||""),
+      packCount:compatibility.pack_quantity||1,
+      packUnit:compatibility.pack_unit||"",
+      current,
+      sysPrice:original||current,
+      discount:0,
+      promoText:cleanText(rawProduct.promotion_text||""),
+      hierarchy
+    });
+
+    const tax=matchBhxTaxonomyForWinmart({
+      ...rawProduct,
+      name,
+      category_name:rawProduct.category_name||response.category_name||""
+    },taxonomy);
+    if(tax.parent_url)mapped+=1;
+    else unmapped+=1;
+
+    const brand=matchBhxBrandForWinmart(rawProduct,name,taxonomy);
+    const image=String(rawProduct.image||rawProduct.image_url||"").trim();
+    const promoText=cleanText(rawProduct.promotion_text||"");
+    const id=await idForUrl(productUrl);
+    const now=new Date().toISOString();
+
+    prepared.push(
+      env.DB.prepare(linkSql).bind(
+        id,productUrl,"GO!","product",tax.parent_url,
+        tax.group_name,brand,name,packaging,
+        current,original,null,promoText,checked,"ok",requestId,now,now
+      )
+    );
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT OR IGNORE INTO price_snapshots(link_id,request_id,checked_at,current_price,original_price,promotion_price,promotion_text,result_json) VALUES(?,?,?,?,?,?,?,?)"
+      ).bind(
+        id,requestId,checked,current,original,null,promoText,
+        JSON.stringify({
+          source:"GO!",
+          store:"GO! Hà Nam",
+          category:tax.group_name,
+          taxonomy_evidence:tax.evidence,
+          pack_evidence:hierarchy.evidence||""
+        })
+      )
+    );
+
+    if(image){
+      prepared.push(
+        env.DB.prepare(
+          "INSERT INTO link_assets(link_url,image_url,updated_at) VALUES(?,?,?) ON CONFLICT(link_url) DO UPDATE SET image_url=excluded.image_url,updated_at=excluded.updated_at"
+        ).bind(productUrl,image,checked)
+      );
+    }
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT INTO link_comparison(link_url,pack_kind,pack_quantity,pack_unit,size_value,size_unit,regular_pack_price,promo_pack_price,regular_unit_price,promo_unit_price,promotion_active,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) "+
+        "ON CONFLICT(link_url) DO UPDATE SET pack_kind=excluded.pack_kind,pack_quantity=excluded.pack_quantity,pack_unit=excluded.pack_unit,size_value=excluded.size_value,size_unit=excluded.size_unit,regular_pack_price=excluded.regular_pack_price,promo_pack_price=excluded.promo_pack_price,regular_unit_price=excluded.regular_unit_price,promo_unit_price=excluded.promo_unit_price,promotion_active=excluded.promotion_active,updated_at=excluded.updated_at"
+      ).bind(
+        productUrl,comparison.pack_kind||"",Number(comparison.pack_quantity)||1,
+        comparison.pack_unit||"",comparison.size_value??null,comparison.size_unit||"",
+        comparison.regular_pack_price??null,comparison.promo_pack_price??null,
+        comparison.regular_unit_price??null,comparison.promo_unit_price??null,
+        comparison.promotion_active?1:0,checked
+      )
+    );
+
+    prepared.push(
+      env.DB.prepare(
+        "INSERT INTO link_pack_hierarchy(link_url,label1,qty1,label2,qty2,label3,qty3,evidence,updated_at) VALUES(?,?,?,?,?,?,?,?,?) "+
+        "ON CONFLICT(link_url) DO UPDATE SET label1=excluded.label1,qty1=excluded.qty1,label2=excluded.label2,qty2=excluded.qty2,label3=excluded.label3,qty3=excluded.qty3,evidence=excluded.evidence,updated_at=excluded.updated_at"
+      ).bind(
+        productUrl,
+        hierarchy.label1||"",Number(hierarchy.qty1)||0,
+        hierarchy.label2||"",Number(hierarchy.qty2)||0,
+        hierarchy.label3||"",Number(hierarchy.qty3)||0,
+        hierarchy.evidence||"",checked
+      )
+    );
+
+    normalized.push({
+      source:{key:"go",name:"GO!",host:"sieuthi-go.vn"},
+      store:{key:"go-ha-nam",name:"GO! Hà Nam"},
+      group:tax.group_name,
+      branch:brand,
+      name,
+      packaging:{text:packaging},
+      hierarchy,
+      comparison,
+      price:{current,original},
+      promotion:{active:false,price:null,text:promoText},
+      url:productUrl,
+      image,
+      taxonomy_match:tax.evidence,
+      go_category:cleanText(rawProduct.category_name||response.category_name||""),
+      last_checked_at:checked
+    });
+  }
+
+  for(let i=0;i<prepared.length;i+=60){
+    await env.DB.batch(prepared.slice(i,i+60));
+  }
+
+  const categoryName=cleanText(
+    response.category_name||
+    slugTitle(inputUrl)||
+    "GO!"
+  );
+  await upsertLink(env,{
+    canonical_url:inputUrl,
+    source:"GO!",
+    link_type:"category",
+    parent_url:null,
+    group_name:categoryName,
+    branch_name:"",
+    name:categoryName,
+    packaging:"",
+    last_checked_at:checked,
+    last_status:"ok",
+    last_request_id:requestId
+  });
+
+  const payload={
+    schema_version:30,
+    request_id:requestId,
+    input_url:inputUrl,
+    input_type:"category",
+    checked_at:checked,
+    source:{key:"go",name:"GO!",host:"sieuthi-go.vn"},
+    store:{key:"go-ha-nam",name:"GO! Hà Nam"},
+    category_name:categoryName,
+    products:normalized,
+    variants:[],
+    discovered_links:normalized.map(x=>x.url),
+    child_count:normalized.length,
+    mapped_to_bhx:mapped,
+    unmapped_to_bhx:unmapped
+  };
+  const resultJson=JSON.stringify(payload);
+  await env.DB.prepare(
+    "UPDATE jobs SET link_type='category',status='complete',result_json=?,error=NULL,updated_at=? WHERE request_id=?"
+  ).bind(resultJson,new Date().toISOString(),requestId).run();
+
+  const count=await env.DB.prepare("SELECT COUNT(*) AS n FROM links").first();
+  return {
+    payload,
+    registry_count:Number(count&&count.n||0),
+    mapped_to_bhx:mapped,
+    unmapped_to_bhx:unmapped
+  };
+}
+
 function winmartCacheIsComplete(payload){
   if(Number(payload&&payload.schema_version||0)<21)return false;
   const products=Array.isArray(payload&&payload.products)?payload.products:[];
@@ -2261,7 +2658,7 @@ async function handleCreate(request,env,origin){
       link_type:initialType,
       engine:sourceKey==="winmart"
         ?"brightdata-browser-winmart"
-        :"brightdata-browser-api"
+        :(sourceKey==="go"?"brightdata-browser-go-hanam":"brightdata-browser-api")
     },202,origin);
   }catch(error){
     const detail=String(error&&error.message||error).slice(0,1000);
@@ -2362,6 +2759,16 @@ async function handleComplete(request,env){
     },200,"");
   }
 
+  if(raw.go_response){
+    const saved=await persistGoResponse(env,job,id,raw);
+    return json({
+      status:"complete",
+      ...saved,
+      engine:raw.engine||"brightdata-browser-go-hanam",
+      country:raw.country||""
+    },200,"");
+  }
+
   if(!raw.bhx_response||!raw.bhx_response.data){
     return json({error:"missing_source_response"},400,"");
   }
@@ -2443,6 +2850,16 @@ async function handleResult(url,env,origin){
           status:"complete",
           ...saved,
           engine:raw.engine||"brightdata-browser-winmart",
+          country:raw.country||""
+        },200,origin);
+      }
+
+      if(raw.go_response){
+        const saved=await persistGoResponse(env,job,id,raw);
+        return json({
+          status:"complete",
+          ...saved,
+          engine:raw.engine||"brightdata-browser-go-hanam",
           country:raw.country||""
         },200,origin);
       }
@@ -2593,8 +3010,9 @@ async function queueDueRefreshes(env,limit=10){
         "queued",now,now
       ).run();
 
+      const sourceKey=sourceKeyForUrl(row.canonical_url);
       const r=await dispatchGithub(
-        env,browserBhxUrl(row.canonical_url),requestId
+        env,browserSourceUrl(row.canonical_url),requestId,sourceKey
       );
       if(!r.ok){
         const detail=(await r.text()).slice(0,500);
@@ -2642,7 +3060,7 @@ async function handleCleanupIngestionRules(request,env){
   }
 
   const result=await env.DB.prepare(`
-    SELECT canonical_url,name,packaging,last_status
+    SELECT canonical_url,source,name,packaging,last_status
     FROM links
     WHERE link_type='product'
       AND COALESCE(last_status,'')<>'unlisted'
@@ -2653,6 +3071,7 @@ async function handleCleanupIngestionRules(request,env){
   const rejected=[];
   const reasons={};
   for(const row of result.results||[]){
+    if(String(row.source||"")!=="Bách Hóa XANH")continue;
     const identity=getlinkProductIdentity(
       row.name||"",
       row.canonical_url||"",
@@ -3149,7 +3568,9 @@ async function handleLibrary(url,env,origin){
     const main={
       source:String(row.source||"").toLowerCase().includes("winmart")
         ?{key:"winmart",name:"WinMart",host:"winmart.vn"}
-        :{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"},
+        :(String(row.source||"").toLowerCase().includes("go")
+          ?{key:"go",name:"GO!",host:"sieuthi-go.vn"}
+          :{key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"}),
       group:row.group_name||"",
       branch:row.branch_name||"",
       name:row.name||slugTitle(itemUrl),

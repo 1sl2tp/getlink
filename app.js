@@ -635,8 +635,15 @@ function sourceDisplayLabel(row){
   const raw=String(row&&row.source||"").trim();
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
-  if(key.includes("winmart"))return "WinMart";
+  if(key.includes("winmart"))return "WM";
   return raw;
+}
+
+function sourceDisplayClass(row){
+  const key=searchKey(String(row&&row.source||""));
+  if(key.includes("winmart"))return " source-winmart";
+  if(!key||key.includes("bach hoa xanh"))return " source-bhx";
+  return "";
 }
 
 function rowPrimaryQc(row){
@@ -692,7 +699,7 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(levels.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
-      '<td class="xls-source" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
+      '<td class="xls-source'+sourceDisplayClass(row)+'" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label1
           ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))

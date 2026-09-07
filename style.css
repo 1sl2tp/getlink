@@ -1635,3 +1635,103 @@ h1{margin:0;font-size:28px;line-height:1.1}
     display:none!important;
   }
 }
+
+
+/* Browse controls v3: keep view chooser clean, compact mobile navigation */
+.catalog-status-row{
+  justify-content:flex-start;
+  gap:6px;
+  padding:0 14px 8px;
+}
+.catalog-search-row{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.catalog-search-row .catalog-search{
+  min-width:0;
+  flex:1 1 auto;
+}
+.mobile-watch-filter{
+  display:none;
+  flex:0 0 auto;
+  width:40px;
+  height:40px;
+  margin:0 14px 12px 0;
+  border:1px solid #dfe4e8;
+  border-radius:11px;
+  background:#fff;
+  color:#7b8492;
+  font-size:22px;
+  line-height:1;
+  box-shadow:0 1px 4px #1018280a;
+}
+.mobile-watch-filter.active{
+  border-color:#e4a3a3;
+  background:#fff4f4;
+  color:#d52d2d;
+}
+
+@media(max-width:900px){
+  /* Categories are one continuous swipe rail: no numbered category pager. */
+  #categoryPager{
+    display:none!important;
+  }
+  .workspace-nav{
+    max-height:none;
+  }
+  .workspace-nav .category-tabs{
+    display:flex;
+    flex-direction:row;
+    gap:6px;
+    overflow-x:auto;
+    overflow-y:hidden;
+    padding:0;
+    border:0;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .workspace-nav .category-tabs::-webkit-scrollbar{display:none}
+  .workspace-nav .category-chip{
+    flex:0 0 auto;
+    width:auto;
+    min-height:34px;
+    padding:7px 10px;
+    border-radius:9px;
+  }
+
+  /* The empty HÃNG section must not consume mobile height. */
+  .brand-section[hidden]{
+    display:none!important;
+  }
+
+  /* On mobile, state management lives on card hearts.
+     Keep the view chooser strictly Ảnh / Bảng. */
+  .catalog-status-row{
+    display:none!important;
+  }
+  .catalog-controls{
+    grid-template-columns:minmax(0,1fr) auto!important;
+  }
+  .catalog-controls .view-switch{
+    grid-column:2;
+    grid-row:1;
+    align-self:center;
+  }
+
+  .catalog-search-row{
+    padding:0;
+  }
+  .catalog-search-row .catalog-search{
+    padding-right:0;
+  }
+  .mobile-watch-filter{
+    display:grid;
+    place-items:center;
+  }
+
+  /* No heavy product detail panel on mobile/narrow layouts. */
+  .workspace-detail{
+    display:none!important;
+  }
+}

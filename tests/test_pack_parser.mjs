@@ -90,7 +90,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
   const p = parsePackStructure(
     "Combo 5 thùng 30 gói mì 3 Miền tôm chua cay 65g","Thùng 30 gói","",1,"Gói"
   );
-  assert.equal(p.pack_kind,"Thùng");
+  assert.equal(p.pack_kind,"Combo");
   assert.equal(p.pack_quantity,5);
   assert.equal(p.pack_unit,"Thùng");
 }
@@ -100,6 +100,24 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     "4 túi nước xả vải Downy hương nắng mai 3 lít","4 Túi","",4,"Túi"
   );
   assert.notEqual(p.pack_kind,"Thùng");
+}
+
+{
+  const p = parsePackStructure(
+    "4 túi nước xả vải Downy hương nắng mai 3 lít","Thùng 4 Túi","",4,"Túi"
+  );
+  assert.equal(p.pack_kind,"Thùng");
+  assert.equal(p.pack_quantity,4);
+  assert.equal(p.pack_unit,"Túi");
+}
+
+{
+  const p = parsePackStructure(
+    "2 thùng nước tăng lực Redbull Thái kèm vitamin 250ml","Thùng 24 Lon","",2,"Thùng"
+  );
+  assert.notEqual(p.pack_kind,"Thùng");
+  assert.equal(p.pack_quantity,2);
+  assert.equal(p.pack_unit,"Thùng");
 }
 
 {
@@ -117,11 +135,10 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     }]
   };
   const payload=productDetailPayload(input,"test-price-unit",data);
-  assert.equal(payload.schema_version,8);
-  assert.equal(payload.product.comparison.pack_kind,"Thùng");
-  assert.equal(payload.product.comparison.pack_quantity,5);
-  assert.equal(payload.product.comparison.pack_unit,"Thùng");
-  assert.match(payload.product.packaging.text,/Thùng/i);
+  assert.equal(payload.schema_version,9);
+  assert.notEqual(payload.product.comparison.pack_kind,"Thùng");
+  assert.equal(payload.product.comparison.pack_quantity,30);
+  assert.equal(payload.product.comparison.pack_unit,"Gói");
 }
 
 {
@@ -191,7 +208,7 @@ const {parsePackStructure,comparisonData,productDetailPayload} = get();
     ]
   };
   const payload=productDetailPayload(input,"test",data);
-  assert.equal(payload.schema_version,8);
+  assert.equal(payload.schema_version,9);
   assert.equal(payload.product.price.current,469000);
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.pack_quantity,24);

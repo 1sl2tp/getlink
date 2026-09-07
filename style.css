@@ -2902,3 +2902,35 @@ h1{margin:0;font-size:28px;line-height:1.1}
     min-width:1120px!important;
   }
 }
+
+
+/* Sticky catalog controls v1: keep search/filter context while scrolling */
+@media(min-width:901px){
+  .workspace-list{
+    overflow:visible!important;
+  }
+  .catalog-sticky-head{
+    position:sticky;
+    top:0;
+    z-index:30;
+    background:#fff;
+    border-radius:16px 16px 0 0;
+    border-bottom:1px solid #e7eaee;
+    box-shadow:0 8px 18px rgba(16,24,40,.035);
+  }
+  .catalog-sticky-head .catalog-status-row{
+    padding-bottom:10px!important;
+  }
+  .xls-table-wrap{
+    scroll-margin-top:190px;
+  }
+}
+
+/* On mobile the header stays in normal document flow so it does not
+   consume most of the viewport above the two-column card grid. */
+@media(max-width:900px){
+  .catalog-sticky-head{
+    position:static!important;
+    background:#fff;
+  }
+}

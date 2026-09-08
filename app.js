@@ -1007,6 +1007,10 @@ function rowIsCarton(row){
   return rowPackHierarchy(row).label1==="Thùng";
 }
 
+function rowIsRetail(row){
+  return !rowIsCarton(row);
+}
+
 function rowPriceLevels(row){
   const h=rowPackHierarchy(row);
   const wm=isWinmartRow(row);
@@ -1400,44 +1404,45 @@ function visibleRowsBeforePack(){
   return products;
 }
 
+function categoryBaseRows(){
+  let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+  if(activeRootGroup)rows=rows.filter(row=>rowRootGroup(row)===activeRootGroup);
+  if(activeGroupUrl)rows=rows.filter(row=>rowChildGroup(row)===activeGroupUrl);
+  return rows;
+}
+
 function renderPackTabs(){
   const host=$("#packTabs");
   if(!host)return;
 
   const base=visibleRowsBeforePack();
   const cartonCount=base.filter(row=>rowIsCarton(row)).length;
-  const retailCount=base.filter(row=>rowPackHierarchy(row).label3).length;
-  const promoCount=base.filter(row=>rowPriceLevels(row).hasPromo).length;
+  const retailCount=base.filter(row=>rowIsRetail(row)).length;
+
+  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ"){
+    activePackKind="";
+    localStorage.removeItem("getlink:filter-pack");
+  }
 
   const selectedCount=activePackKind==="Thùng"
     ?cartonCount
-    :(activePackKind==="Lẻ"
-      ?retailCount
-      :(activePackKind==="Ưu đãi"?promoCount:base.length));
+    :(activePackKind==="Lẻ"?retailCount:base.length);
 
   if(activePackKind&&selectedCount===0){
     activePackKind="";
     localStorage.removeItem("getlink:filter-pack");
   }
 
+  host.hidden=!base.length;
   if(!base.length){
-    activePackKind="";
-    host.hidden=true;
     host.innerHTML="";
     return;
   }
 
-  if(activePackKind!=="Thùng"&&activePackKind!=="Lẻ"&&activePackKind!=="Ưu đãi"){
-    activePackKind="";
-    localStorage.removeItem("getlink:filter-pack");
-  }
-
-  host.hidden=false;
   host.innerHTML=
     '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
     '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button">Thùng <small>'+cartonCount+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Ưu đãi"?"active":"")+'" data-pack="Ưu đãi" type="button">Ưu đãi <small>'+promoCount+'</small></button>';
+    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
 }
 
 function filteredLibraryProducts(){
@@ -1446,9 +1451,7 @@ function filteredLibraryProducts(){
   if(activePackKind==="Thùng"){
     products=products.filter(row=>rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
-    products=products.filter(row=>Boolean(rowPackHierarchy(row).label3));
-  }else if(activePackKind==="Ưu đãi"){
-    products=products.filter(row=>rowPriceLevels(row).hasPromo);
+    products=products.filter(row=>rowIsRetail(row));
   }
 
   products.sort((a,b)=>{
@@ -1473,21 +1476,18 @@ function renderBrandTabs(){
     return;
   }
 
-  const base=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"&&
-    (!activeRootGroup||rowRootGroup(row)===activeRootGroup)&&
-    (!activeGroupUrl||rowChildGroup(row)===activeGroupUrl)
-  );
+  const base=categoryBaseRows();
   const counts=new Map();
   for(const row of base){
     const brand=String(row.brand_name||row.branch_name||"").trim();
     if(!brand)continue;
     counts.set(brand,(counts.get(brand)||0)+1);
   }
-  const brands=[...counts.entries()]
-    .sort((a,b)=>a[0].localeCompare(b[0],"vi"));
 
-  if(!brands.length){
+  const allBrands=[...counts.entries()]
+    .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"));
+
+  if(!allBrands.length){
     activeBrand="";
     host.hidden=true;
     host.innerHTML="";
@@ -1496,15 +1496,95 @@ function renderBrandTabs(){
   }
 
   if(activeBrand&&!counts.has(activeBrand))activeBrand="";
+  let brands=allBrands.slice(0,10);
+  if(activeBrand&&!brands.some(([name])=>name===activeBrand)){
+    brands=[...brands,[activeBrand,counts.get(activeBrand)||0]];
+  }
+
   if(section)section.hidden=false;
   host.hidden=false;
   host.innerHTML=
-    '<button class="brand-chip '+(!activeBrand?"active":"")+'" data-brand="" type="button">Tất cả hãng <small>'+base.length+'</small></button>'+
+    '<button class="brand-chip '+(!activeBrand?"active":"")+'" data-brand="" type="button">Tất cả <small>'+base.length+'</small></button>'+
     brands.map(([brand,count])=>
       '<button class="brand-chip '+(activeBrand===brand?"active":"")+'" data-brand="'+escapeAttr(brand)+'" type="button">'+
         escapeHtml(brand)+' <small>'+count+'</small>'+
       '</button>'
     ).join("");
+}
+
+function resetBrowseDetail(){
+  selectedLibraryUrl="";
+  document.querySelectorAll(".product-card.selected").forEach(x=>x.classList.remove("selected"));
+  const result=$("#result");
+  const detail=$("#detailEmpty");
+  if(result)result.hidden=true;
+  if(detail)detail.hidden=false;
+}
+
+function contextChildName(row){
+  const child=String(row&&row.source_category_name||"").trim();
+  const root=rowRootGroup(row);
+  return child&&child!==root?child:"";
+}
+
+function renderCategoryContext(visibleProducts){
+  if(selectedLibraryUrl)return;
+  const host=$("#detailEmpty");
+  if(!host)return;
+
+  host.hidden=false;
+  const result=$("#result");
+  if(result)result.hidden=true;
+
+  const base=categoryBaseRows();
+  const visible=Array.isArray(visibleProducts)?visibleProducts:filteredLibraryProducts();
+  const title=libraryQuery
+    ?'Tìm “'+libraryQuery+'”'
+    :(activeGroupUrl||activeRootGroup||"Toàn bộ thư viện");
+
+  const titleHost=$("#categoryDetailTitle");
+  const countHost=$("#categoryDetailCount");
+  const descHost=$("#categoryDetailDescription");
+  const statsHost=$("#categoryDetailStats");
+  if(titleHost)titleHost.textContent=title;
+  if(countHost)countHost.textContent=visible.length+" SP";
+  if(descHost){
+    descHost.textContent=libraryQuery
+      ?"Kết quả được lọc ngay trên dữ liệu đang có, không tải lại toàn bộ thư viện."
+      :(activeRootGroup
+        ?"Danh mục đang chọn. Hãng phổ biến và cấu trúc nhóm được đặt ở đây để phần giữa dành cho sản phẩm."
+        :"Chọn Thùng hoặc Lẻ, sau đó tìm kiếm. Chọn một sản phẩm để mở chi tiết.");
+  }
+
+  if(statsHost){
+    const carton=base.filter(row=>rowIsCarton(row)).length;
+    const retail=base.filter(row=>rowIsRetail(row)).length;
+    statsHost.innerHTML=
+      '<div><small>Tổng</small><strong>'+base.length+'</strong></div>'+
+      '<div><small>Thùng</small><strong>'+carton+'</strong></div>'+
+      '<div><small>Lẻ</small><strong>'+retail+'</strong></div>';
+  }
+
+  const childWrap=$("#categoryDetailChildrenWrap");
+  const childHost=$("#categoryDetailChildren");
+  const childCounts=new Map();
+  if(activeRootGroup&&!activeGroupUrl){
+    for(const row of base){
+      const child=contextChildName(row);
+      if(!child)continue;
+      childCounts.set(child,(childCounts.get(child)||0)+1);
+    }
+  }
+  const children=[...childCounts.entries()]
+    .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"))
+    .slice(0,8);
+
+  if(childWrap)childWrap.hidden=!children.length;
+  if(childHost){
+    childHost.innerHTML=children.map(([name,count])=>
+      '<div class="category-mini-row"><span>'+escapeHtml(name)+'</span><small>'+count+'</small></div>'
+    ).join("");
+  }
 }
 
 function renderResultPager(){
@@ -1533,15 +1613,22 @@ function renderLibraryProducts(){
   const products=filteredLibraryProducts();
 
   if(libraryQuery){
-    $("#libraryTitle").textContent='Kết quả cho “'+libraryQuery+'”';
+    $("#libraryTitle").textContent='Kết quả “'+libraryQuery+'”';
   }else if(activeGroupUrl){
     $("#libraryTitle").textContent=activeGroupUrl;
   }else if(activeRootGroup){
     $("#libraryTitle").textContent=activeRootGroup;
   }else{
-    $("#libraryTitle").textContent=libraryState==="watch"
-      ?"Sản phẩm quan tâm"
-      :(libraryState==="hidden"?"Sản phẩm đang ẩn":"Tất cả sản phẩm đang dùng");
+    $("#libraryTitle").textContent="Tất cả sản phẩm";
+  }
+
+  const hint=$("#catalogHint");
+  if(hint){
+    hint.textContent=libraryQuery
+      ?"Đang lọc theo thời gian thực trên dữ liệu đã tải."
+      :(activePackKind
+        ?"Chế độ "+activePackKind+" · tìm kiếm hoặc chọn sản phẩm."
+        :"Chọn cách mua trước, sau đó tìm sản phẩm theo thời gian thực.");
   }
 
   const visible=products;
@@ -1563,6 +1650,7 @@ function renderLibraryProducts(){
 
   renderResultPager();
   syncViewMode();
+  renderCategoryContext(products);
 }
 
 async function loadLibraryProducts(force=false){
@@ -1677,6 +1765,7 @@ $("#categoryTabs").addEventListener("click",e=>{
   libraryPage=1;
   libraryQuery="";
   $("#librarySearch").value="";
+  resetBrowseDetail();
   closeMobileCategoryNav();
   renderCategoryMenu();
   renderLibraryProducts();
@@ -1731,6 +1820,7 @@ $("#brandTabs").addEventListener("click",e=>{
   activePackKind="";
   localStorage.removeItem("getlink:filter-pack");
   libraryPage=1;
+  resetBrowseDetail();
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
@@ -1744,6 +1834,7 @@ $("#packTabs").addEventListener("click",e=>{
   libraryPage=1;
   if(activePackKind)localStorage.setItem("getlink:filter-pack",activePackKind);
   else localStorage.removeItem("getlink:filter-pack");
+  resetBrowseDetail();
   document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
   renderLibraryProducts();
@@ -1752,6 +1843,7 @@ $("#packTabs").addEventListener("click",e=>{
 $("#librarySearch").addEventListener("input",e=>{
   libraryQuery=String(e.target.value||"").trim();
   libraryPage=1;
+  resetBrowseDetail();
   renderLibraryProducts();
 });
 

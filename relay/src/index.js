@@ -352,6 +352,49 @@ async function handleCategory(request, env) {
   }
 }
 
+function stripHtml(text) {
+  return clean(String(text || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/gi, '"'));
+}
+
+async function inspectCategoryLinks(rawUrl) {
+  const { url } = canonicalCategoryUrl(rawUrl);
+  const r = await fetch(url, {
+    headers: {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "vi-VN,vi;q=0.9,en;q=0.7",
+      "user-agent": "Mozilla/5.0"
+    }
+  });
+  const html = await r.text();
+  const map = new Map();
+  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'?#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+    const href = clean(m[1]);
+    const label = stripHtml(m[2]);
+    let slug = "";
+    try {
+      const u = new URL(href, "https://www.bachhoaxanh.com/");
+      if (u.hostname.replace(/^www\./, "") !== "bachhoaxanh.com") continue;
+      const parts = u.pathname.split("/").filter(Boolean);
+      if (parts.length !== 1) continue;
+      slug = parts[0];
+    } catch { continue; }
+    const key = slug + "|" + label;
+    if (!map.has(key)) map.set(key, { slug, label });
+  }
+  return {
+    status: r.status,
+    length: html.length,
+    links: [...map.values()].slice(0, 500)
+  };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -363,6 +406,15 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/category") {
       return handleCategory(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/inspect-links") {
+      if (request.headers.get(RELAY_HEADER) !== RELAY_VALUE) return json({ error: "unauthorized" }, 401);
+      try {
+        const body = await request.json();
+        return json(await inspectCategoryLinks(body?.url));
+      } catch (error) {
+        return json({ error: "inspect_links_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
+      }
     }
     return json({ error: "not_found" }, 404);
   }

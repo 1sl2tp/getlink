@@ -392,21 +392,19 @@ async function handleCategory(request, env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+
     if (request.method === "GET" && url.pathname === "/health") {
       return json({ ok: true, mode: "bhx-transport-only", d1: false });
     }
+
     if (request.method === "POST" && url.pathname === "/bhx") {
       return handleBhx(request, env);
     }
+
     if (request.method === "POST" && url.pathname === "/category") {
       return handleCategory(request, env);
-    } catch (error) {
-        return json({ error: "inspect_links_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
-      }
-    } catch (error) {
-        return json({ error: "inspect_apis_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
-      }
     }
+
     return json({ error: "not_found" }, 404);
   }
 };

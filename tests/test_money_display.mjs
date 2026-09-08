@@ -385,7 +385,7 @@ assert.equal(money(0),"—");
 
 
 {
-  assert.match(html,/id="openSourceManager"/);
+  assert.equal(html.includes('id="openSourceManager"'),false);
   assert.match(html,/id="sourceManagerPanel"/);
   assert.match(html,/data-kind="brand"/);
   assert.match(html,/data-kind="group"/);

@@ -191,6 +191,10 @@ function escapeHtml(v){
 function escapeAttr(v){
   return escapeHtml(v).replace(/'/g,"&#39;");
 }
+function watchIconSvg(active){
+  return '<svg class="ui-icon ui-icon-heart" aria-hidden="true" viewBox="0 0 24 24" '+
+    'fill="'+(active?"currentColor":"none")+'"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+}
 
 function formatAge(iso){
   const t=Date.parse(iso||"");
@@ -1650,7 +1654,7 @@ function gridProductCard(row){
           'data-url="'+escapeAttr(row.canonical_url)+'" data-watch="'+(isWatch?"1":"0")+'" '+
           'aria-label="'+(isWatch?"Bỏ quan tâm":"Đánh dấu quan tâm")+'" '+
           'title="'+(isWatch?"Bỏ quan tâm":"Quan tâm")+'">'+
-          '<span aria-hidden="true">'+(isWatch?"♥":"♡")+'</span>'+
+          watchIconSvg(isWatch)+
         '</button>'+
         (image
           ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">'

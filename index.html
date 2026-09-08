@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-source-menu-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-visual-geometry-v1">
 </head>
 <body>
 <main class="wrap">
@@ -15,7 +15,7 @@
       <p>Thư viện giá BHX + WM + GO · Tra cứu và so sánh theo quy cách</p>
     </div>
     <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
-      <span aria-hidden="true">☰</span>
+      <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       <strong>Danh mục</strong>
       <span id="mobileCategoryCurrent">Tất cả</span>
     </button>
@@ -27,7 +27,7 @@
         <strong>Thêm / cập nhật link nguồn giá</strong>
         <small>Link gần đây được đọc lại từ Supabase; dữ liệu nguồn chỉ lấy mới khi cần.</small>
       </div>
-      <button id="closeImport" class="icon-button" type="button" aria-label="Đóng">×</button>
+      <button id="closeImport" class="icon-button" type="button" aria-label="Đóng"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
     <div class="input-row">
       <input id="url" autocomplete="off" placeholder="Dán link Bách Hóa XANH, WinMart hoặc GO!">
@@ -83,8 +83,8 @@
             <input id="librarySearch" autocomplete="off" placeholder="Tìm sản phẩm, hãng, quy cách...">
           </div>
           <div class="view-switch" aria-label="Kiểu hiển thị">
-            <button class="view-button active" data-view="grid" type="button" title="Xem ảnh"><span aria-hidden="true">▦</span><b>Ảnh</b></button>
-            <button class="view-button" data-view="table" type="button" title="Xem bảng"><span aria-hidden="true">☷</span><b>Bảng</b></button>
+            <button class="view-button active" data-view="grid" type="button" title="Xem ảnh"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><b>Ảnh</b></button>
+            <button class="view-button" data-view="table" type="button" title="Xem bảng"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><b>Bảng</b></button>
           </div>
         </div>
 
@@ -161,7 +161,7 @@
       <section class="card result detail-panel" id="result" hidden>
         <div class="detail-back-row">
           <button id="backToCategory" class="detail-back-button" type="button" aria-label="Quay lại danh mục">
-            <span aria-hidden="true">←</span>
+            <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
             <span>Danh mục</span>
           </button>
           <span id="detailCategoryLabel" class="detail-category-label"></span>
@@ -238,7 +238,7 @@
 </main>
 
 <div id="imageZoom" class="image-zoom" hidden aria-hidden="true">
-  <button id="closeImageZoom" class="image-zoom-close" type="button" aria-label="Đóng ảnh">×</button>
+  <button id="closeImageZoom" class="image-zoom-close" type="button" aria-label="Đóng ảnh"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <img id="imageZoomTarget" alt="">
 </div>
 
@@ -246,6 +246,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-source-menu-v1"></script>
+<script src="app.js?v=20260908-visual-geometry-v1"></script>
 </body>
 </html>

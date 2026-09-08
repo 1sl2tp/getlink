@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 const app=fs.readFileSync("app.js","utf8");
 const html=fs.readFileSync("index.html","utf8");
+const css=fs.readFileSync("style.css","utf8");
 
 const moneyMatch=app.match(/function money\(v\)\{[\s\S]*?\n\}/);
 assert.ok(moneyMatch,"money() not found");
@@ -298,6 +299,21 @@ assert.equal(money(0),"—");
   assert.match(html,/id="sourceTabs" class="source-tabs nav-source-tabs"/);
   assert.match(html,/Quy cách:<\/span>/);
   assert.equal(html.includes('filter-block-source'),false);
+}
+
+
+{
+  assert.equal(html.includes(">☰<"),false);
+  assert.equal(html.includes(">▦<"),false);
+  assert.equal(html.includes(">☷<"),false);
+  assert.equal(html.includes(">×<"),false);
+  assert.match(html,/class="ui-icon"/);
+  assert.match(app,/function watchIconSvg\(active\)/);
+  assert.match(css,/Visual geometry v1/);
+  assert.match(css,/aspect-ratio:4 \/ 3!important/);
+  assert.match(css,/\.workspace-nav \.category-tabs,[\s\S]*?flex:1 1 auto!important/);
+  assert.match(css,/\.grid-watch-button \.ui-icon\{[\s\S]*?width:15px!important/);
+  assert.match(css,/Price color is semantic, not source branding/);
 }
 
 console.log("money and hierarchy UI tests passed");

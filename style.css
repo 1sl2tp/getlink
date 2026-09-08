@@ -5795,3 +5795,266 @@ body.image-zoom-open{overflow:hidden!important}
     padding-right:5px!important;
   }
 }
+
+
+/* =========================================================
+   Visual geometry v1 — canonical rules for browse + detail
+   Parent geometry -> media -> icons -> typography/colors.
+   ========================================================= */
+:root{
+  --text-primary:#25303b;
+  --text-secondary:#58636f;
+  --text-muted:#7b8590;
+  --text-faint:#a1a8b1;
+}
+
+/* 1) Sidebar parent owns viewport; fixed blocks do not steal category scroll. */
+.workspace-nav{
+  display:flex!important;
+  flex-direction:column!important;
+  overflow:hidden!important;
+}
+.workspace-nav .nav-head,
+.workspace-nav .nav-source-block{
+  flex:0 0 auto!important;
+}
+.workspace-nav .category-tabs,
+.workspace-nav .nav-list{
+  flex:1 1 auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow-y:auto!important;
+  overflow-x:hidden!important;
+}
+@media(min-width:1101px){
+  .workspace-nav{
+    height:calc(100vh - 20px)!important;
+    max-height:calc(100vh - 20px)!important;
+  }
+}
+@media(max-width:1100px){
+  .workspace-nav{
+    height:auto!important;
+    max-height:none!important;
+  }
+}
+
+/* 2) Media geometry: consistent optical size, never crop source artwork. */
+.grid-product-image{
+  aspect-ratio:1 / 1!important;
+  height:auto!important;
+  min-height:0!important;
+  padding:4.5%!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:hidden!important;
+  background:#fff!important;
+}
+.grid-product-image img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  transform:none!important;
+}
+.detail-image-wrap{
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:4 / 3!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:4%!important;
+  margin:0 0 9px!important;
+  overflow:hidden!important;
+  border:1px solid #eef0f2!important;
+  border-radius:9px!important;
+  background:#fff!important;
+}
+.detail-image-wrap img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+}
+.detail-image-fallback{
+  width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  place-items:center!important;
+}
+@media(max-width:720px){
+  .grid-product-image{
+    aspect-ratio:4 / 3!important;
+    padding:4%!important;
+  }
+  .detail-image-wrap{
+    aspect-ratio:4 / 3!important;
+    padding:3.5%!important;
+  }
+}
+
+/* 3) One icon system: fixed viewport, fixed stroke, no font glyph geometry. */
+.ui-icon{
+  display:block;
+  flex:0 0 auto;
+  width:16px;
+  height:16px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  vector-effect:non-scaling-stroke;
+}
+.icon-button{
+  display:grid!important;
+  place-items:center!important;
+  padding:0!important;
+}
+.icon-button .ui-icon{width:16px;height:16px}
+.mobile-category-button .ui-icon{width:14px;height:14px}
+.view-button .ui-icon{width:14px;height:14px}
+.detail-back-button .ui-icon{width:14px;height:14px}
+.image-zoom-close{
+  display:grid!important;
+  place-items:center!important;
+  padding:0!important;
+}
+.image-zoom-close .ui-icon{width:18px;height:18px}
+.grid-watch-button{
+  width:28px!important;
+  height:28px!important;
+  top:7px!important;
+  right:7px!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:0!important;
+}
+.grid-watch-button .ui-icon{
+  width:15px!important;
+  height:15px!important;
+}
+.grid-watch-button.active .ui-icon-heart{
+  fill:currentColor!important;
+}
+.view-button{
+  min-width:54px!important;
+  gap:5px!important;
+}
+.view-button b{
+  display:inline!important;
+}
+
+/* 4) Typography hierarchy + restrained color system. */
+body{color:var(--text-primary)!important}
+.catalog-toolbar h2,
+.grid-product-name,
+.result h2,
+.detail-panel h2{
+  color:var(--text-primary)!important;
+}
+.workspace-nav .category-chip,
+.workspace-nav .nav-source-tabs .source-chip,
+.detail-back-button{
+  color:var(--text-secondary)!important;
+}
+.catalog-toolbar p,
+.filter-label,
+.workspace-nav .nav-section-label,
+.grid-qc,
+.detail-category-label,
+.meta-grid small,
+.price small{
+  color:var(--text-muted)!important;
+}
+.catalog-search-row .catalog-search input::placeholder{
+  color:var(--text-faint)!important;
+}
+
+/* Price color is semantic, not source branding. */
+.grid-product .grid-price,
+.grid-product.source-winmart .grid-price,
+.grid-product.source-go .grid-price,
+.grid-price.source-price-winmart,
+.grid-price.source-price-go{
+  color:var(--green-strong)!important;
+}
+#webPrice{color:var(--green-strong)!important}
+#promoPrice{color:var(--red)!important}
+
+/* Minimum readable type on real phones. */
+.grid-product-name{
+  height:29px!important;
+  min-height:29px!important;
+  max-height:29px!important;
+  font-size:10.8px!important;
+  line-height:14.5px!important;
+  font-weight:650!important;
+}
+.grid-qc{
+  font-size:9px!important;
+  line-height:1.15!important;
+}
+.grid-price{
+  font-size:13.5px!important;
+}
+.meta-grid small,
+.price small{font-size:9px!important}
+.meta-grid strong{font-size:10px!important}
+@media(max-width:720px){
+  .grid-product-name{
+    height:29px!important;
+    min-height:29px!important;
+    max-height:29px!important;
+    font-size:10.8px!important;
+    line-height:14.5px!important;
+  }
+  .grid-qc{font-size:9px!important}
+  .grid-price{font-size:12.8px!important}
+  .view-button{
+    min-width:46px!important;
+    padding:0 6px!important;
+  }
+}
+@media(max-width:390px){
+  .grid-product-name{
+    height:29px!important;
+    min-height:29px!important;
+    max-height:29px!important;
+    font-size:10.8px!important;
+    line-height:14.5px!important;
+  }
+  .grid-qc{font-size:9px!important}
+  .grid-price{font-size:12.5px!important}
+  .view-button{
+    min-width:44px!important;
+    padding:0 5px!important;
+  }
+}
+
+/* 5) Search + presentation controls remain one geometric row. */
+.catalog-search-row{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-areas:none!important;
+  align-items:center!important;
+  gap:6px!important;
+}
+.catalog-search-row .catalog-search{
+  min-width:0!important;
+  width:100%!important;
+  padding:0!important;
+}
+.catalog-search-row .view-switch{
+  width:auto!important;
+  justify-self:end!important;
+  white-space:nowrap!important;
+}

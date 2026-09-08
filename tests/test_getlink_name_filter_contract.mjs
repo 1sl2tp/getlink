@@ -10,9 +10,9 @@ assert.match(source, /filterGetlinkProducts\(raw\.items\.map\(\(x:any\)=>normali
 assert.match(source, /filterGetlinkProducts\(raw\.items\.map\(\(x:any\)=>normalizeBhx/);
 assert.match(source, /filterGetlinkProducts\(raw\.items\.map\(\(x:any\)=>normalizeGo/);
 
-// Lock the intended exception: numeric+text is only allowed when the same
-// numeric-leading prefix is the source brand, e.g. 3 Miền / 7 Up.
+// Numeric+text may survive only when its numeric-leading prefix is the
+// source brand (spacing/punctuation compacted), e.g. 3 Miền / 7 Up / 7UP.
 assert.match(source, /isNumericBrandException\(name,brand\)/);
-assert.match(source, /n===b\|\|n\.startsWith\(b\+" "\)/);
+assert.match(source, /nc\.startsWith\(bc\)/);
 
 console.log("GETLINK name filter contract: OK");

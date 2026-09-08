@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v8");
+      const req=tx.objectStore("cache").get("library-v9");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v8");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v9");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1205,7 +1205,7 @@ function compactCartonDisplayName(name,hierarchy){
   let text=String(name||"").trim();
   if(!text)return "Sản phẩm";
   if(String(hierarchy&&hierarchy.label1||"").trim()==="Thùng"){
-    const unit="(?:lốc|túi|hộp|chai|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
+    const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
     // Once source packaging already says Thùng, pack text belongs to QC, not the name.
     // Remove it whether it is at the start or in the middle.
     text=text

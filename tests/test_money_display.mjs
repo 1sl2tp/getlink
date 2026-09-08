@@ -442,8 +442,9 @@ assert.equal(money(0),"—");
   assert.match(app,/function rowManualGroupKey\(row\)/);
   assert.match(app,/function rowManualGroupName\(row\)/);
   assert.match(app,/function activeManualGroupName\(\)/);
-  assert.match(app,/rowManualGroupKey\(row\)===activeRootGroup/);
-  assert.match(app,/Primary catalog navigation is the user-owned manual grouping layer/);
+  assert.match(app,/rowBrowseGroupKey\(row\)===activeRootGroup/);
+  assert.match(app,/const UNCLASSIFIED_GROUP_KEY="__unclassified__"/);
+  assert.match(app,/function rowBrowseGroupKey\(row\)/);
   assert.match(app,/current\.textContent=activeManualGroupName\(\)\|\|"Tất cả"/);
 }
 

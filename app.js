@@ -230,7 +230,13 @@ function matchesSearchTokens(row,tokens){
 }
 
 function matchesSearch(row,query){
-  return matchesSearchTokens(row,searchTokens(query));
+  const tokens=searchKey(query).split(/\s+/).filter(Boolean);
+  if(!tokens.length)return true;
+  const words=productSearchKey(row).split(/\s+/).filter(Boolean);
+  return tokens.every(token=>{
+    if(token.length<=2)return words.includes(token);
+    return words.some(word=>word.startsWith(token));
+  });
 }
 
 function auditSourceKey(value){

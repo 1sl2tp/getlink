@@ -20,12 +20,14 @@ assert.equal(money(99500),"99.5");
 assert.equal(money(0),"—");
 
 {
+  const winmartMatch=app.match(/function winmartDisplayPack\(row\)\{[\s\S]*?\n\}/);
   const hierarchyMatch=app.match(/function rowPackHierarchy\(row\)\{[\s\S]*?\n\}/);
   const cartonMatch=app.match(/function rowIsCarton\(row\)\{[\s\S]*?\n\}/);
-  assert.ok(hierarchyMatch&&cartonMatch,"hierarchy helpers not found");
+  assert.ok(winmartMatch&&hierarchyMatch&&cartonMatch,"hierarchy helpers not found");
   const api=new Function(
-    hierarchyMatch[0]+"\n"+cartonMatch[0]+
-    "\nreturn {rowPackHierarchy,rowIsCarton};"
+    "function isWinmartRow(row){return String(row&&row.source||'').toLowerCase()==='winmart';}\n"+
+    winmartMatch[0]+"\n"+hierarchyMatch[0]+"\n"+cartonMatch[0]+
+    "\nreturn {winmartDisplayPack,rowPackHierarchy,rowIsCarton};"
   )();
 
   const row={
@@ -45,6 +47,23 @@ assert.equal(money(0),"—");
     label3:"Lon",qty3:24,
     evidence:"url",locked:true
   });
+
+  assert.deepEqual(
+    api.winmartDisplayPack({source:"WinMart",packaging:"THÙNG 24"}),
+    {kind:"carton",label:"THÙNG 24"}
+  );
+  assert.deepEqual(
+    api.winmartDisplayPack({source:"WinMart",packaging:"Gói 6"}),
+    {kind:"middle",label:"Gói 6"}
+  );
+  assert.deepEqual(
+    api.winmartDisplayPack({source:"WinMart",packaging:"Hộp"}),
+    {kind:"leaf",label:"Hộp"}
+  );
+  assert.deepEqual(
+    api.winmartDisplayPack({source:"WinMart",packaging:"Miếng"}),
+    {kind:"leaf",label:"Miếng"}
+  );
 }
 
 {

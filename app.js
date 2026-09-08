@@ -197,15 +197,27 @@ function searchKey(value){
 
 
 function productSearchKey(row){
-  return searchKey([
+  const raw=[
     row.source_name,row.name,
     row.group_name,row.branch_name,row.brand_name,row.packaging,
     row.pack_label_1,row.pack_qty_1,
     row.pack_label_2,row.pack_qty_2,
     row.pack_label_3,row.pack_qty_3,
-    row.size_value,row.size_unit,
-    row.canonical_url
-  ].filter(Boolean).join(" "));
+    row.size_value,row.size_unit
+  ].filter(Boolean);
+
+  // Do not let the same semantic value count twice (for example name + source_name)
+  // and do not index the URL, which repeats the product slug and created false hits
+  // such as "hao hao" matching a single "dầu hào".
+  const seen=new Set();
+  const fields=[];
+  for(const value of raw){
+    const key=searchKey(value);
+    if(!key||seen.has(key))continue;
+    seen.add(key);
+    fields.push(key);
+  }
+  return fields.join(" ");
 }
 
 function productSearchWords(row){
@@ -223,20 +235,36 @@ function searchTokens(query){
 function matchesSearchTokens(row,tokens){
   if(!tokens.length)return true;
   const words=productSearchWords(row);
-  return tokens.every(token=>{
-    if(token.length<=2)return words.includes(token);
-    return words.some(word=>word.startsWith(token));
-  });
+  const used=new Array(words.length).fill(false);
+  for(const token of tokens){
+    let found=-1;
+    for(let i=0;i<words.length;i++){
+      if(used[i])continue;
+      const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+      if(ok){found=i;break;}
+    }
+    if(found<0)return false;
+    used[found]=true;
+  }
+  return true;
 }
 
 function matchesSearch(row,query){
   const tokens=searchKey(query).split(/\s+/).filter(Boolean);
   if(!tokens.length)return true;
   const words=productSearchKey(row).split(/\s+/).filter(Boolean);
-  return tokens.every(token=>{
-    if(token.length<=2)return words.includes(token);
-    return words.some(word=>word.startsWith(token));
-  });
+  const used=new Array(words.length).fill(false);
+  for(const token of tokens){
+    let found=-1;
+    for(let i=0;i<words.length;i++){
+      if(used[i])continue;
+      const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+      if(ok){found=i;break;}
+    }
+    if(found<0)return false;
+    used[found]=true;
+  }
+  return true;
 }
 
 function auditSourceKey(value){
@@ -1698,10 +1726,12 @@ function renderCategoryContext(visibleProducts){
   }
 
   if(statsHost){
-    const carton=base.filter(row=>rowIsCarton(row)).length;
-    const retail=base.filter(row=>rowIsRetail(row)).length;
+    // When searching, stats must describe the search result set, not the whole library.
+    const statsBase=libraryQuery?visibleRowsBeforePack():base;
+    const carton=statsBase.filter(row=>rowIsCarton(row)).length;
+    const retail=statsBase.filter(row=>rowIsRetail(row)).length;
     statsHost.innerHTML=
-      '<div><small>Tổng</small><strong>'+base.length+'</strong></div>'+
+      '<div><small>Tổng</small><strong>'+statsBase.length+'</strong></div>'+
       '<div><small>Thùng</small><strong>'+carton+'</strong></div>'+
       '<div><small>Lẻ</small><strong>'+retail+'</strong></div>';
   }

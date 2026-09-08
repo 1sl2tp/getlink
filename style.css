@@ -8569,3 +8569,116 @@ body.source-manager-open{overflow:hidden!important}
     font-size:9.4px!important;
   }
 }
+
+
+/* Desktop transition hierarchy v9 */
+/*
+  Smooth the 1100 -> desktop transition by adding an intermediate hierarchy:
+  compact (<=1100) -> category + catalog (1101..1240) -> full 3-zone (>=1241).
+  Product detail is progressive disclosure in the bridge range instead of
+  permanently stealing 300px the moment the viewport crosses 1100px.
+*/
+@media(min-width:1101px) and (max-width:1240px){
+  .workspace{
+    position:relative!important;
+    display:grid!important;
+    grid-template-columns:clamp(158px,14.8vw,176px) minmax(0,1fr)!important;
+    gap:8px!important;
+    align-items:stretch!important;
+  }
+
+  .workspace > .workspace-nav{
+    grid-column:1!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  .workspace > .workspace-list{
+    grid-column:2!important;
+    grid-row:1!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+
+  /* Category context is already represented by the left navigation in this
+     bridge range, so do not reserve a permanent third column for it. */
+  .workspace > .workspace-detail:has(#detailEmpty:not([hidden])){
+    display:none!important;
+  }
+
+  /* A selected product opens detail as a contained right-side layer.
+     It does not resize the catalog, so clicking a product causes no layout jump. */
+  .workspace > .workspace-detail:has(#result:not([hidden])){
+    display:block!important;
+    position:absolute!important;
+    top:0!important;
+    right:0!important;
+    bottom:0!important;
+    left:auto!important;
+    z-index:34!important;
+    width:clamp(300px,31vw,356px)!important;
+    height:100%!important;
+    min-height:0!important;
+    max-height:100%!important;
+    margin:0!important;
+    padding:0!important;
+    overflow-y:auto!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    box-shadow:-10px 0 28px rgba(16,24,40,.10)!important;
+  }
+
+  .workspace > .workspace-detail:has(#result:not([hidden])) > .card{
+    min-height:100%!important;
+    margin:0!important;
+    border-radius:12px!important;
+  }
+
+  /* Keep the central catalog generous during the bridge range. */
+  .workspace-list{
+    --catalog-inline:clamp(10px,1vw,13px);
+  }
+
+  .workspace-list .purchase-mode-row{
+    grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr)!important;
+    gap:9px!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-block{
+    gap:6px!important;
+    padding-left:7px!important;
+    padding-right:7px!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    grid-template-columns:minmax(66px,1.2fr) repeat(3,minmax(44px,1fr))!important;
+    gap:4px!important;
+  }
+}
+
+/* Full desktop grows by proportion instead of snapping to 184 / 300 pixels. */
+@media(min-width:1241px){
+  .workspace{
+    grid-template-columns:
+      clamp(168px,13vw,184px)
+      minmax(0,1fr)
+      clamp(260px,21vw,300px)!important;
+    gap:clamp(8px,.7vw,10px)!important;
+  }
+
+  .workspace > .workspace-nav,
+  .workspace > .workspace-list,
+  .workspace > .workspace-detail{
+    min-width:0!important;
+  }
+}
+
+/* At roomy desktop widths the established proportions naturally reach their
+   previous stable 184 / 300 endpoints. */
+@media(min-width:1440px){
+  .workspace{
+    grid-template-columns:184px minmax(0,1fr) 300px!important;
+    gap:10px!important;
+  }
+}

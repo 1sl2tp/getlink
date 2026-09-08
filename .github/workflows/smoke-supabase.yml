@@ -1,0 +1,31 @@
+name: Smoke Supabase GETLINK
+
+on:
+  push:
+    paths:
+      - "config.js"
+      - ".github/workflows/smoke-supabase.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read-only Supabase smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
+          KEY="$(sed -n 's/^window.GETLINK_API_KEY="\([^"]*\)";/\1/p' config.js)"
+          test -n "$API"
+          test -n "$KEY"
+
+          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/health" > /tmp/health.json
+          jq . /tmp/health.json
+          test "$(jq -r '.ok' /tmp/health.json)" = "true"
+          test "$(jq -r '.mode' /tmp/health.json)" = "supabase-only"
+
+          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1"             > /tmp/library.json
+          jq '{products:(.products|length)}' /tmp/library.json
+          jq -e '.products | type=="array"' /tmp/library.json >/dev/null

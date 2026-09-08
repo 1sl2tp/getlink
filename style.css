@@ -7923,3 +7923,71 @@ body.source-manager-open{overflow:hidden!important}
 #result.source-go .variant-price strong{
   color:var(--price-go)!important;
 }
+
+
+/* Workspace foot visibility v5 */
+/*
+  The viewport is intentionally locked and the category/product areas own
+  their scroll. The shell itself must still fit INSIDE the remaining viewport.
+  Earlier geometry gave .workspace-nav a second viewport-sized height and the
+  base .card margin added extra height, which pushed the bottom edge offscreen.
+*/
+@media(min-width:1101px){
+  .workspace{
+    flex:1 1 auto!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:100%!important;
+    overflow:hidden!important;
+  }
+
+  .workspace > .workspace-nav,
+  .workspace > .workspace-list,
+  .workspace > .workspace-detail{
+    height:100%!important;
+    min-height:0!important;
+    max-height:100%!important;
+    margin-bottom:0!important;
+  }
+
+  /* Override the old calc(100vh - 20px): this child belongs to .workspace,
+     not directly to the viewport. */
+  .workspace > .workspace-nav{
+    height:100%!important;
+    max-height:100%!important;
+  }
+
+  .workspace-detail > .card{
+    margin-bottom:0!important;
+  }
+
+  /* Keep the bottom frame visually clear instead of letting content sit
+     directly on the rounded edge. */
+  #productGrid{
+    scroll-padding-bottom:14px!important;
+  }
+  #tableView{
+    scroll-padding-bottom:14px!important;
+  }
+}
+
+/* Compact/mobile uses the same rule: the shell foot stays visible while
+   only the data area scrolls. */
+@media(max-width:1100px){
+  .workspace{
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  .workspace > .workspace-list{
+    height:100%!important;
+    min-height:0!important;
+    margin-bottom:0!important;
+  }
+  .workspace-detail > .card{
+    margin-bottom:0!important;
+  }
+  #productGrid,
+  #tableView{
+    scroll-padding-bottom:max(12px,env(safe-area-inset-bottom))!important;
+  }
+}

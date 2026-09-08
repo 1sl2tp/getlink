@@ -4595,6 +4595,20 @@ body.image-zoom-open{overflow:hidden!important}
 }
 .source-chip.active small{color:#5d9f7b}
 
+/* Source identity colors: BHX = green, WinMart = red, GO = orange. */
+.source-chip[data-source="bhx"]{color:#087a40}
+.source-chip[data-source="bhx"] small{color:#5d9f7b}
+.source-chip[data-source="wm"]{color:#d92d20}
+.source-chip[data-source="wm"] small{color:#df6a61}
+.source-chip[data-source="go"]{color:#e85d04}
+.source-chip[data-source="go"] small{color:#ed8b51}
+.source-chip[data-source="bhx"].active{border-color:#a8d2bb;background:#eef8f2;color:#087a40}
+.source-chip[data-source="wm"].active{border-color:#efb7b2;background:#fff4f3;color:#d92d20}
+.source-chip[data-source="go"].active{border-color:#f2c8aa;background:#fff6ef;color:#e85d04}
+.source-chip[data-source="bhx"].active small{color:#5d9f7b}
+.source-chip[data-source="wm"].active small{color:#df6a61}
+.source-chip[data-source="go"].active small{color:#ed8b51}
+
 @media(max-width:720px){
   .catalog-search-row{
     display:grid!important;
@@ -6638,6 +6652,20 @@ body.source-manager-open{overflow:hidden!important}
 }
 .source-manager-segment button.active small{color:#d9f3e5}
 
+/* Keep source selector identity consistent with catalog/table colors. */
+#sourceManagerSources button[data-source="bhx"]{color:#087a40}
+#sourceManagerSources button[data-source="wm"]{color:#d92d20}
+#sourceManagerSources button[data-source="go"]{color:#e85d04}
+#sourceManagerSources button[data-source="bhx"] small{color:#5d9f7b}
+#sourceManagerSources button[data-source="wm"] small{color:#df6a61}
+#sourceManagerSources button[data-source="go"] small{color:#ed8b51}
+#sourceManagerSources button[data-source="bhx"].active{border-color:#a8d2bb;background:#eef8f2;color:#087a40}
+#sourceManagerSources button[data-source="wm"].active{border-color:#efb7b2;background:#fff4f3;color:#d92d20}
+#sourceManagerSources button[data-source="go"].active{border-color:#f2c8aa;background:#fff6ef;color:#e85d04}
+#sourceManagerSources button[data-source="bhx"].active small{color:#5d9f7b}
+#sourceManagerSources button[data-source="wm"].active small{color:#df6a61}
+#sourceManagerSources button[data-source="go"].active small{color:#ed8b51}
+
 .source-manager-search{
   flex:0 0 auto;
   display:grid;
@@ -6746,9 +6774,12 @@ body.source-manager-open{overflow:hidden!important}
   color:#929ca6;
   font-size:7.5px;
 }
-.source-manager-source-badge.bhx{border-color:#c9e4d4;color:#087944;background:#f4fbf7}
-.source-manager-source-badge.wm{border-color:#dce4ed;color:#476175;background:#f8fafc}
-.source-manager-source-badge.go{border-color:#f0dfc6;color:#a95b10;background:#fffaf4}
+.source-manager-source-badge.bhx{border-color:#c9e4d4;color:#087a40;background:#f4fbf7}
+.source-manager-source-badge.wm{border-color:#efc7c3;color:#d92d20;background:#fff7f6}
+.source-manager-source-badge.go{border-color:#f0d1ba;color:#e85d04;background:#fff8f2}
+.source-manager-source-badge.bhx small{color:#5d9f7b}
+.source-manager-source-badge.wm small{color:#df6a61}
+.source-manager-source-badge.go small{color:#ed8b51}
 .source-manager-total{
   justify-self:end;
   color:var(--green-strong);

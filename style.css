@@ -7501,3 +7501,121 @@ body.source-manager-open{overflow:hidden!important}
     min-height:64px!important;
   }
 }
+
+
+/* Mobile compact filters + standalone source logos v1 */
+/* Inline source filter: source brands are logo-only buttons; "Tất cả" keeps its label. */
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only{
+  width:58px!important;
+  min-width:58px!important;
+  padding:0 6px!important;
+  justify-content:center!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-mark{
+  margin:0!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-bhx{
+  width:64px!important;
+  min-width:64px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-wm{
+  width:66px!important;
+  min-width:66px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-go{
+  width:50px!important;
+  min-width:50px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.active{
+  box-shadow:inset 0 0 0 1px currentColor!important;
+}
+
+/* Mobile: remove duplicated catalog title, then split Quy cách and Nguồn into two clean rows. */
+@media(max-width:720px){
+  .workspace-list .catalog-toolbar{
+    display:none!important;
+  }
+  .workspace-list .catalog-sticky-head{
+    padding-top:6px!important;
+  }
+  .purchase-mode-row{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:7px!important;
+    padding:6px 9px 8px!important;
+    overflow:visible!important;
+  }
+  .purchase-mode-row .filter-block{
+    width:100%!important;
+    min-width:0!important;
+    display:grid!important;
+    grid-template-columns:58px minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:6px!important;
+  }
+  .purchase-mode-row .filter-label{
+    font-size:9px!important;
+    line-height:1.1!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs,
+  .purchase-mode-row .source-tabs-inline{
+    min-width:0!important;
+    width:100%!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:6px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs::-webkit-scrollbar,
+  .purchase-mode-row .source-tabs-inline::-webkit-scrollbar{
+    display:none!important;
+  }
+  .purchase-mode-row .pack-chip{
+    min-height:34px!important;
+    height:34px!important;
+    padding:0 10px!important;
+    border-radius:9px!important;
+    font-size:10px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-brand{
+    min-height:34px!important;
+    height:34px!important;
+    border-radius:9px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only{
+    flex:0 0 auto!important;
+    padding:0 5px!important;
+    justify-content:center!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-bhx{
+    width:58px!important;
+    min-width:58px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-wm{
+    width:60px!important;
+    min-width:60px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-go{
+    width:46px!important;
+    min-width:46px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-bhx{
+    width:46px!important;
+    height:20px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-wm{
+    width:48px!important;
+    height:19px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-go{
+    width:32px!important;
+    height:20px!important;
+  }
+  .catalog-search-row{
+    padding-top:0!important;
+  }
+}

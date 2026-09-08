@@ -7223,3 +7223,96 @@ body.source-manager-open{overflow:hidden!important}
 .source-logo-image:not([hidden]) + .source-logo-fallback{
   visibility:hidden!important;
 }
+
+
+/* Source filter consolidation v1
+   Left sidebar source block removed. Pack + source share one compact row. */
+.purchase-mode-row{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  flex-wrap:nowrap!important;
+  gap:14px!important;
+  min-width:0!important;
+  padding:4px 12px 8px!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  scrollbar-width:none!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+.purchase-mode-row::-webkit-scrollbar{display:none!important}
+.purchase-mode-row .filter-block{
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:7px!important;
+  flex:0 0 auto!important;
+  margin:0!important;
+}
+.purchase-mode-row .filter-block-source{
+  margin-left:0!important;
+}
+.purchase-mode-row .filter-label{
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+  padding:0!important;
+}
+.purchase-mode-row .catalog-pack-tabs,
+.purchase-mode-row .source-tabs-inline{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  flex-wrap:nowrap!important;
+  gap:6px!important;
+  overflow:visible!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-brand{
+  flex:0 0 auto!important;
+  min-height:36px!important;
+  height:36px!important;
+  padding:0 8px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-main{
+  gap:6px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-mark{
+  width:22px!important;
+  height:20px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-label{
+  font-size:9.8px!important;
+  line-height:1!important;
+}
+.purchase-mode-row .pack-chip{
+  flex:0 0 auto!important;
+}
+
+/* The old standalone source row no longer participates in layout. */
+.catalog-source-row{display:none!important}
+
+@media(max-width:720px){
+  .purchase-mode-row{
+    gap:10px!important;
+    padding:3px 9px 7px!important;
+  }
+  .purchase-mode-row .filter-block{
+    gap:5px!important;
+  }
+  .purchase-mode-row .filter-label{
+    font-size:8.8px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-brand{
+    min-height:32px!important;
+    height:32px!important;
+    padding:0 7px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-mark{
+    width:20px!important;
+    height:18px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-label{
+    font-size:9px!important;
+  }
+}

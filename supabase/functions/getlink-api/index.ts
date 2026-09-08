@@ -1121,7 +1121,11 @@ function goDetailValue(product:any, label:string){
 }
 function normalizeGo(item:any, rootName:string, checked:string): Product | null {
   const rawName=clean(item?.name||item?.meta?.title||""); if(!rawName)return null;
-  const name=rawName.replace(/\s*[-–|]\s*GO!.*$/i,"").trim();
+  const name=rawName
+    .replace(/\s+tại\s+Siêu\s+thị\s+GO!.*$/i,"")
+    .replace(/\s*[-–]\s*\d{4,}\s*$/,"")
+    .replace(/\s*[-–|]\s*GO!.*$/i,"")
+    .trim();
   const current=money(item?.price); if(!current)return null;
   const promo=money(item?.promotion_price), original=promo&&promo>current?promo:null;
   const alias=clean(item?.alias).replace(/^\/+|\/+$/g,"");

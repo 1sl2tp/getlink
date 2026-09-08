@@ -22,6 +22,51 @@ function apiFetch(path,options={}){
   return fetch(API+path,{...options,headers});
 }
 
+function openUiCacheDb(){
+  return new Promise((resolve,reject)=>{
+    if(!("indexedDB" in window)){resolve(null);return;}
+    const req=indexedDB.open("getlink-ui-cache",1);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains("cache"))db.createObjectStore("cache");
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function readUiLibraryCache(){
+  try{
+    const db=await openUiCacheDb();
+    if(!db)return null;
+    return await new Promise((resolve,reject)=>{
+      const tx=db.transaction("cache","readonly");
+      const req=tx.objectStore("cache").get("library-v1");
+      req.onsuccess=()=>resolve(req.result||null);
+      req.onerror=()=>reject(req.error);
+    });
+  }catch{return null;}
+}
+async function writeUiLibraryCache(rows){
+  try{
+    const db=await openUiCacheDb();
+    if(!db)return;
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction("cache","readwrite");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v1");
+      tx.oncomplete=()=>resolve();
+      tx.onerror=()=>reject(tx.error);
+    });
+  }catch{}
+}
+function persistUiLibraryCacheSoon(){
+  const snapshot=libraryCache;
+  if("requestIdleCallback" in window){
+    requestIdleCallback(()=>writeUiLibraryCache(snapshot),{timeout:1000});
+  }else{
+    setTimeout(()=>writeUiLibraryCache(snapshot),0);
+  }
+}
+
 let wantedUrl="";
 let requestId="";
 let pollTimer=0;
@@ -48,8 +93,26 @@ let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
 let libraryRenderVersion=0;
-let activeRenderToken=0;
-const viewRenderKeys={grid:"",table:""};
+let libraryByUrl=new Map();
+let searchFrame=0;
+let catalogObserver=null;
+const viewRenderState={
+  grid:{key:"",products:[],rendered:0},
+  table:{key:"",products:[],rendered:0}
+};
+const productSearchWordsCache=new WeakMap();
+const LOCAL_LIBRARY_CACHE_TTL=10*60*1000;
+
+function rebuildLibraryIndex(){
+  libraryByUrl=new Map();
+  for(const row of libraryCache){
+    const key=canonical(row&&row.canonical_url||"");
+    if(key)libraryByUrl.set(key,row);
+  }
+}
+function findLibraryRow(url){
+  return libraryByUrl.get(canonical(url||""))||null;
+}
 function isCompactBrowse(){
   return window.matchMedia("(max-width: 1100px)").matches;
 }
@@ -145,20 +208,29 @@ function productSearchKey(row){
   ].filter(Boolean).join(" "));
 }
 
-function matchesSearch(row,query){
-  const tokens=searchKey(query).split(/\s+/).filter(Boolean);
-  if(!tokens.length)return true;
-  const words=productSearchKey(row).split(/\s+/).filter(Boolean);
+function productSearchWords(row){
+  let words=productSearchWordsCache.get(row);
+  if(words)return words;
+  words=productSearchKey(row).split(/\s+/).filter(Boolean);
+  productSearchWordsCache.set(row,words);
+  return words;
+}
 
+function searchTokens(query){
+  return searchKey(query).split(/\s+/).filter(Boolean);
+}
+
+function matchesSearchTokens(row,tokens){
+  if(!tokens.length)return true;
+  const words=productSearchWords(row);
   return tokens.every(token=>{
-    // Short Vietnamese search tokens such as "ot" must be a real word.
-    // Otherwise "tuong ot" incorrectly matches "tuong ... Ottogi".
-    if(token.length<=2){
-      return words.includes(token);
-    }
-    // Longer tokens still support natural partial typing.
+    if(token.length<=2)return words.includes(token);
     return words.some(word=>word.startsWith(token));
   });
+}
+
+function matchesSearch(row,query){
+  return matchesSearchTokens(row,searchTokens(query));
 }
 
 function auditSourceKey(value){
@@ -509,7 +581,7 @@ $("#myPackQty").addEventListener("input",()=>{saveLocal();updateCompare()});
 
 function preferenceStateForUrl(url){
   const key=canonical(url);
-  const row=libraryCache.find(x=>canonical(x.canonical_url)===key);
+  const row=libraryByUrl.get(key);
   return row&&row.preference_state||"normal";
 }
 
@@ -532,7 +604,7 @@ async function updatePreference(url,state,refreshHours=6,rerender=true){
   if(!r.ok)throw new Error(data.error||"preference_error");
 
   const key=canonical(url);
-  const row=libraryCache.find(x=>canonical(x.canonical_url)===key);
+  const row=libraryByUrl.get(key);
   if(row){
     row.preference_state=data.preference&&data.preference.state||state;
     row.auto_refresh=Number(data.preference&&data.preference.auto_refresh||0);
@@ -541,6 +613,7 @@ async function updatePreference(url,state,refreshHours=6,rerender=true){
   if(canonical(wantedUrl)===key){
     syncWatchCheckbox(data.preference&&data.preference.state||state);
   }
+  persistUiLibraryCacheSoon();
   if(rerender)renderLibraryProducts();
   return data.preference;
 }
@@ -701,14 +774,14 @@ function renderCategory(payload){
 
 function detailSizeForUrl(url){
   const key=canonical(url||"");
-  const row=libraryCache.find(item=>canonical(item.canonical_url)===key);
+  const row=libraryByUrl.get(key);
   if(!row||!row.size_value)return "—";
   return String(row.size_value)+" "+String(row.size_unit||"").trim();
 }
 
 function detailGroupForUrl(url){
   const key=canonical(url||"");
-  const row=libraryCache.find(item=>canonical(item.canonical_url)===key);
+  const row=libraryByUrl.get(key);
   if(!row)return "";
   const root=rowRootGroup(row);
   const child=rowChildGroup(row);
@@ -719,7 +792,7 @@ function syncDetailCategoryLabel(url){
   const host=$("#detailCategoryLabel");
   if(!host)return;
   const key=canonical(url||"");
-  const row=libraryCache.find(item=>canonical(item.canonical_url)===key);
+  const row=libraryByUrl.get(key);
   const label=row
     ?(rowChildGroup(row)||rowRootGroup(row)||"")
     :(activeGroupUrl||activeRootGroup||"");
@@ -874,8 +947,13 @@ function mergePayloadIntoLibraryCache(payload){
   libraryCache=[...map.values()];
   libraryLoaded=true;
   libraryRenderVersion+=1;
-  viewRenderKeys.grid="";
-  viewRenderKeys.table="";
+  rebuildLibraryIndex();
+  for(const state of Object.values(viewRenderState)){
+    state.key="";
+    state.products=[];
+    state.rendered=0;
+  }
+  persistUiLibraryCacheSoon();
   const registry=$("#registryCount");
   if(registry)registry.textContent="Kho link: "+libraryCache.length;
   renderCategoryMenu();
@@ -1381,18 +1459,54 @@ async function loadLibraryGroups(){
   }
 }
 
-async function ensureLibraryCache(force=false){
-  if(libraryLoaded&&!force)return;
+async function fetchLibraryFromSupabase(){
   const r=await apiFetch("/api/library?view=search&limit=10000&include_hidden=1",{cache:"no-store"});
   const data=await r.json();
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];
   libraryLoaded=true;
   libraryRenderVersion+=1;
-  viewRenderKeys.grid="";
-  viewRenderKeys.table="";
+  rebuildLibraryIndex();
+  for(const state of Object.values(viewRenderState)){
+    state.key="";
+    state.products=[];
+    state.rendered=0;
+  }
   const registry=$("#registryCount");
   if(registry)registry.textContent="Kho link: "+libraryCache.length;
+  persistUiLibraryCacheSoon();
+}
+
+async function refreshLibraryInBackground(){
+  try{
+    await fetchLibraryFromSupabase();
+    renderCategoryMenu();
+    renderLibraryProducts();
+  }catch{}
+}
+
+async function ensureLibraryCache(force=false){
+  if(libraryLoaded&&!force)return;
+
+  if(!force){
+    const cached=await readUiLibraryCache();
+    if(cached&&Array.isArray(cached.rows)&&cached.rows.length){
+      libraryCache=cached.rows;
+      libraryLoaded=true;
+      libraryRenderVersion+=1;
+      rebuildLibraryIndex();
+      const registry=$("#registryCount");
+      if(registry)registry.textContent="Kho link: "+libraryCache.length;
+
+      const age=Date.now()-Number(cached.savedAt||0);
+      if(age>LOCAL_LIBRARY_CACHE_TTL){
+        setTimeout(refreshLibraryInBackground,0);
+      }
+      return;
+    }
+  }
+
+  await fetchLibraryFromSupabase();
 }
 
 
@@ -1419,7 +1533,8 @@ function visibleRowsBeforePack(){
     );
   }
   if(libraryQuery){
-    products=products.filter(row=>matchesSearch(row,libraryQuery));
+    const tokens=searchTokens(libraryQuery);
+    products=products.filter(row=>matchesSearchTokens(row,tokens));
   }
   return products;
 }
@@ -1621,87 +1736,90 @@ function productViewKey(products){
   ].join("|");
 }
 
-function scheduleUiChunk(fn){
-  if("requestIdleCallback" in window){
-    window.requestIdleCallback(fn,{timeout:80});
-  }else{
-    requestAnimationFrame(()=>fn({timeRemaining:()=>8,didTimeout:true}));
-  }
-}
-
 function hydrateTableRows(rows){
   for(const row of rows)updateSheetRow(row);
 }
 
-function renderGridProgressively(products,key){
-  const host=$("#productGrid");
-  if(!host)return;
-  if(viewRenderKeys.grid===key)return;
-
-  const token=++activeRenderToken;
-  const chunk=120;
-  const first=Math.min(chunk,products.length);
-  host.innerHTML=products.slice(0,first).map(gridProductCard).join("");
-  let index=first;
-  viewRenderKeys.grid=key;
-
-  const more=()=>{
-    if(token!==activeRenderToken||libraryView!=="grid"||viewRenderKeys.grid!==key){
-      if(viewRenderKeys.grid===key)viewRenderKeys.grid="";
-      return;
-    }
-    const end=Math.min(index+chunk,products.length);
-    if(end>index){
-      host.insertAdjacentHTML("beforeend",products.slice(index,end).map(gridProductCard).join(""));
-      index=end;
-    }
-    if(index<products.length)scheduleUiChunk(more);
-  };
-  if(index<products.length)scheduleUiChunk(more);
+function batchSizeForView(view){
+  return view==="table"?72:48;
 }
 
-function renderTableProgressively(products,key){
-  const body=$("#libraryProducts");
-  if(!body)return;
-  if(viewRenderKeys.table===key)return;
+function updateCatalogRenderMore(){
+  const host=$("#catalogRenderMore");
+  if(!host)return;
+  const state=viewRenderState[libraryView];
+  const total=state.products.length;
+  if(!total||state.rendered>=total){
+    host.hidden=true;
+    host.textContent="";
+    return;
+  }
+  host.hidden=false;
+  host.textContent="Đang hiển thị "+state.rendered+" / "+total+" · cuộn để xem thêm";
+}
 
-  const token=++activeRenderToken;
-  const chunk=100;
-  const append=(start,end,replace=false)=>{
-    const html=products.slice(start,end).map(productCard).join("");
-    const before=replace?0:body.children.length;
-    if(replace)body.innerHTML=html;
-    else body.insertAdjacentHTML("beforeend",html);
-    const children=body.children;
+function appendLocalViewBatch(view){
+  const state=viewRenderState[view];
+  if(!state||state.rendered>=state.products.length){
+    updateCatalogRenderMore();
+    return;
+  }
+
+  const size=batchSizeForView(view);
+  const start=state.rendered;
+  const end=Math.min(start+size,state.products.length);
+
+  if(view==="grid"){
+    const host=$("#productGrid");
+    if(!host)return;
+    host.insertAdjacentHTML("beforeend",state.products.slice(start,end).map(gridProductCard).join(""));
+  }else{
+    const body=$("#libraryProducts");
+    if(!body)return;
+    const before=body.children.length;
+    body.insertAdjacentHTML("beforeend",state.products.slice(start,end).map(productCard).join(""));
     const added=[];
-    for(let i=before;i<children.length;i++)added.push(children[i]);
+    for(let i=before;i<body.children.length;i++)added.push(body.children[i]);
     hydrateTableRows(added);
-  };
+  }
 
-  const first=Math.min(chunk,products.length);
-  append(0,first,true);
-  let index=first;
-  viewRenderKeys.table=key;
-
-  const more=()=>{
-    if(token!==activeRenderToken||libraryView!=="table"||viewRenderKeys.table!==key){
-      if(viewRenderKeys.table===key)viewRenderKeys.table="";
-      return;
-    }
-    const end=Math.min(index+chunk,products.length);
-    if(end>index){
-      append(index,end,false);
-      index=end;
-    }
-    if(index<products.length)scheduleUiChunk(more);
-  };
-  if(index<products.length)scheduleUiChunk(more);
+  state.rendered=end;
+  updateCatalogRenderMore();
 }
 
 function renderActiveProductView(products){
+  const view=libraryView;
   const key=productViewKey(products);
-  if(libraryView==="table")renderTableProgressively(products,key);
-  else renderGridProgressively(products,key);
+  const state=viewRenderState[view];
+  if(state.key!==key){
+    state.key=key;
+    state.products=products;
+    state.rendered=0;
+    if(view==="grid"){
+      const host=$("#productGrid");
+      if(host)host.innerHTML="";
+    }else{
+      const body=$("#libraryProducts");
+      if(body)body.innerHTML="";
+    }
+    appendLocalViewBatch(view);
+  }else if(state.rendered===0){
+    state.products=products;
+    appendLocalViewBatch(view);
+  }
+  updateCatalogRenderMore();
+}
+
+function initCatalogLocalObserver(){
+  const sentinel=$("#catalogRenderMore");
+  if(!sentinel||!("IntersectionObserver" in window))return;
+  if(catalogObserver)catalogObserver.disconnect();
+  catalogObserver=new IntersectionObserver(entries=>{
+    if(entries.some(entry=>entry.isIntersecting)){
+      appendLocalViewBatch(libraryView);
+    }
+  },{root:null,rootMargin:"700px 0px",threshold:0});
+  catalogObserver.observe(sentinel);
 }
 
 function renderResultPager(){
@@ -1796,7 +1914,7 @@ async function openLibraryItem(url){
 
   const key=canonical(url);
   syncDetailCategoryLabel(url);
-  const localRow=libraryCache.find(row=>canonical(row.canonical_url)===key);
+  const localRow=libraryByUrl.get(key);
   if(localRow){
     wantedUrl=url;
     $("#url").value=url;
@@ -1962,10 +2080,15 @@ $("#packTabs").addEventListener("click",e=>{
 });
 
 $("#librarySearch").addEventListener("input",e=>{
-  libraryQuery=String(e.target.value||"").trim();
-  libraryPage=1;
-  resetBrowseDetail();
-  renderLibraryProducts();
+  const next=String(e.target.value||"").trim();
+  if(searchFrame)cancelAnimationFrame(searchFrame);
+  searchFrame=requestAnimationFrame(()=>{
+    searchFrame=0;
+    libraryQuery=next;
+    libraryPage=1;
+    resetBrowseDetail();
+    renderLibraryProducts();
+  });
 });
 
 
@@ -2004,7 +2127,7 @@ $("#productGrid").addEventListener("click",async e=>{
 
     const url=watch.dataset.url||"";
     const key=canonical(url);
-    const row=libraryCache.find(x=>canonical(x.canonical_url)===key);
+    const row=libraryByUrl.get(key);
     const wasWatch=watch.dataset.watch==="1";
     const next=wasWatch?"normal":"watch";
 
@@ -2282,6 +2405,7 @@ wantedUrl=saved;
 refreshCatalog();
 
 syncViewMode();
+initCatalogLocalObserver();
 
 window.addEventListener("resize",()=>{
   const mobile=isCompactBrowse();

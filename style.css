@@ -564,6 +564,23 @@ h1{margin:0;font-size:28px;line-height:1.1}
 .workspace-nav .brand-chip small,
 .workspace-nav .pack-chip small{margin-left:auto}
 
+.workspace-nav .category-root{
+  font-weight:800;
+}
+.workspace-nav .category-child{
+  width:calc(100% - 10px);
+  margin-left:10px;
+  padding-left:9px;
+  background:#fafcfb;
+  font-weight:650;
+  color:#5f6877;
+}
+.workspace-nav .category-child.active{
+  background:#eef8f2;
+  border-color:#9fcdb4;
+  color:var(--green-strong);
+}
+
 .workspace-list{
   min-width:0;
   padding:0;

@@ -2,6 +2,14 @@ const BHX_HOST = "api.bachhoaxanh.com";
 const RELAY_HEADER = "x-getlink-relay";
 const RELAY_VALUE = "supabase-bhx-v1";
 
+function relaySecret(env) {
+  return clean(env.RELAY_SHARED_SECRET || RELAY_VALUE);
+}
+
+function relayAuthorized(request, env) {
+  return request.headers.get(RELAY_HEADER) === relaySecret(env);
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -86,7 +94,7 @@ function fixedContext() {
 }
 
 async function handleBhx(request, env) {
-  if (request.headers.get(RELAY_HEADER) !== RELAY_VALUE) {
+  if (!relayAuthorized(request, env)) {
     return json({ error: "unauthorized" }, 401);
   }
 
@@ -364,6 +372,10 @@ async function fetchWholeCategory(rawUrl, env) {
 }
 
 async function handleCategory(request, env) {
+  if (!relayAuthorized(request, env)) {
+    return json({ error: "unauthorized" }, 401);
+  }
+
   let raw;
   try { raw = await request.json(); }
   catch { return json({ error: "invalid_json" }, 400); }

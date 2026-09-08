@@ -4549,3 +4549,39 @@ body.image-zoom-open{overflow:hidden!important}
     font-size:8.3px!important;
   }
 }
+
+
+/* Product name v2: always two lines, slightly smaller for dense image cards */
+.grid-product-name{
+  display:-webkit-box!important;
+  -webkit-box-orient:vertical!important;
+  -webkit-line-clamp:2!important;
+  overflow:hidden!important;
+  width:100%!important;
+  height:28px!important;
+  min-height:28px!important;
+  max-height:28px!important;
+  font-size:10.8px!important;
+  line-height:14px!important;
+  font-weight:650!important;
+  word-break:normal!important;
+  overflow-wrap:break-word!important;
+}
+@media(max-width:720px){
+  .grid-product-name{
+    height:27px!important;
+    min-height:27px!important;
+    max-height:27px!important;
+    font-size:10.4px!important;
+    line-height:13.5px!important;
+  }
+}
+@media(max-width:390px){
+  .grid-product-name{
+    height:26px!important;
+    min-height:26px!important;
+    max-height:26px!important;
+    font-size:10px!important;
+    line-height:13px!important;
+  }
+}

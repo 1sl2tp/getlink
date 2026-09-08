@@ -30,26 +30,19 @@ jobs:
             n=$((n+1))
             echo "=== CANDIDATE $n: $q"
             code="$(curl -L -sS --connect-timeout 10 --max-time 20               -A "$UA" -H "Accept: application/json"               -H "Origin: $ORIGIN" -H "Referer: $REF"               -o "/tmp/wm-$n.json" -w '%{http_code}' "$BASE?$q" || true)"
-            echo "HTTP=$code bytes=$(wc -c < "/tmp/wm-$n.json" 2>/dev/null || echo 0)"
-            python - "$n" <<'PY'
-import json,sys,pathlib
-p=pathlib.Path('/tmp/wm-'+sys.argv[1]+'.json')
-if not p.exists():
-    print('NO_BODY'); raise SystemExit
-raw=p.read_text(errors='replace')
-try:
-    d=json.loads(raw)
-    data=d.get('data') if isinstance(d,dict) else None
-    paging=d.get('paging') if isinstance(d,dict) else None
-    items=(data or {}).get('items') if isinstance(data,dict) else None
-    print(json.dumps({
-      'keys': list(d.keys())[:20] if isinstance(d,dict) else [],
-      'data_keys': list(data.keys())[:20] if isinstance(data,dict) else [],
-      'items': len(items) if isinstance(items,list) else None,
-      'paging': paging,
-      'sample': items[0] if isinstance(items,list) and items else None
-    },ensure_ascii=False)[:4000])
-except Exception:
-    print(raw[:1200])
-PY
+            bytes="$(wc -c < "/tmp/wm-$n.json" 2>/dev/null || echo 0)"
+            echo "HTTP=$code bytes=$bytes"
+            if jq -e . "/tmp/wm-$n.json" >/dev/null 2>&1; then
+              jq -c '{
+                keys:(keys|.[0:20]),
+                data_keys:((.data // {})|keys|.[0:20]),
+                items:((.data.items // [])|length),
+                paging:(.paging // null),
+                sample:((.data.items // [])[0] // null)
+              }' "/tmp/wm-$n.json" | head -c 5000
+              echo
+            else
+              head -c 1200 "/tmp/wm-$n.json" || true
+              echo
+            fi
           done

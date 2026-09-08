@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v2");
+      const req=tx.objectStore("cache").get("library-v3");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v2");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v3");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1364,18 +1364,26 @@ function categoryPagerButtons(page,total){
 }
 
 function rowRootGroup(row){
-  // group_name is the canonical browsing group. For WinMart this may already
-  // be normalized to the matching BHX group; source_root_name remains audit-only.
+  // Browsing location follows BHX when a WinMart product has a confident BHX match.
+  // WinMart's original group remains stored separately for audit/source context.
+  if(isWinmartRow(row)){
+    return String(
+      row&&row.bhx_group_name||
+      row&&row.group_name||
+      row&&row.source_root_name||
+      ""
+    ).trim();
+  }
   return String(row&&row.group_name||"").trim();
 }
 
 function rowChildGroup(row){
   if(!isWinmartRow(row))return "";
+  // A matched WinMart product already sits in the exact BHX browsing group.
+  if(String(row&&row.bhx_group_name||"").trim())return "";
   const child=String(row&&row.source_category_name||"").trim();
   const root=rowRootGroup(row);
   if(!child)return "";
-  // Do not show a duplicate child when WinMart's original category only differs
-  // by case/accents from the canonical BHX group.
   return searchKey(child)===searchKey(root)?"":child;
 }
 

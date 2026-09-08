@@ -1506,16 +1506,7 @@ function manualGroupMatches(name:unknown,rule:any):boolean{
   }
   if(rule?.rule_type==="name_product_pack_phrase"){
     if(hay.startsWith(value))return true;
-    const escaped=value.replace(/[.*+?^$\{\}()|[\]\\]/g,"\\function manualGroupMatches(name:unknown,rule:any):boolean{
-  const value=clean(rule?.rule_value||"").normalize("NFC").toLocaleLowerCase("vi-VN");
-  if(!value)return false;
-  const hay=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
-  if(rule?.rule_type==="name_contains")return hay.includes(value);
-  if(rule?.rule_type==="name_product_phrase"){
-    return hay.startsWith(value)||(hay.startsWith("thùng ")&&hay.includes(value));
-  }
-  return false;
-}");
+    const escaped=value.replace(/[.*+?^$\{\}()|[\]\\]/g,"\\$&");
     const re=new RegExp(
       "^(lốc|lô|vỉ|vĩ|thùng|khay)\\s+\\d+\\s+"+
       "(?:(?:chai|hộp|hũ|túi|gói|lốc)\\s+)?"+

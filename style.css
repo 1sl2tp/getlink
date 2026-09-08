@@ -4386,3 +4386,44 @@ body.image-zoom-open{overflow:hidden!important}
   .grid-product-bottom{gap:5px!important}
   .grid-qc{font-size:8.3px!important}
 }
+
+
+/* Carton footer v2: compact for long scanning sessions */
+.grid-product-bottom{
+  align-items:center!important;
+  gap:6px!important;
+}
+.grid-qc-group{
+  flex:1 1 auto;
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  white-space:nowrap;
+}
+.grid-qc{
+  flex:0 0 auto!important;
+  width:auto!important;
+  max-width:none!important;
+  min-width:0!important;
+  padding:3px 7px!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:nowrap!important;
+}
+.grid-unit-price{
+  flex:0 1 auto;
+  min-width:0;
+  color:#8a939e;
+  font-size:9.5px;
+  line-height:1.1;
+  font-weight:600;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+@media(max-width:720px){
+  .grid-product-bottom{gap:4px!important}
+  .grid-qc-group{gap:4px}
+  .grid-qc{font-size:8.5px!important;padding:3px 6px!important}
+  .grid-unit-price{font-size:8.5px}
+}

@@ -388,10 +388,23 @@ async function inspectCategoryLinks(rawUrl) {
     const key = slug + "|" + label;
     if (!map.has(key)) map.set(key, { slug, label });
   }
+  const scripts = [...html.matchAll(/<script\\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
+    .map(m => {
+      try { return new URL(m[1], url).toString(); } catch { return ""; }
+    })
+    .filter(Boolean);
+  const lower = html.toLowerCase();
+  const snippets = [];
+  for (const needle of ["gia-vi", "tuong", "category", "getcate", "__next_data__"]) {
+    let at = lower.indexOf(needle);
+    if (at >= 0) snippets.push({ needle, text: html.slice(Math.max(0, at - 250), at + 750) });
+  }
   return {
     status: r.status,
     length: html.length,
-    links: [...map.values()].slice(0, 500)
+    links: [...map.values()].slice(0, 500),
+    scripts: scripts.slice(0, 80),
+    snippets
   };
 }
 

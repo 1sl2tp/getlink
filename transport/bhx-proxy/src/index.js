@@ -29,11 +29,7 @@ function headers(referer){
     "accept":"application/json, text/plain, */*",
     "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
     "origin":"https://www.bachhoaxanh.com",
-    "referer":referer,
-    "referer-url":referer,
-    "reversehost":"http://bhxapi.live",
-    "xapikey":"bhx-api-core-2022",
-    "platform":"webnew"
+    "referer":referer
   };
 }
 async function bhxJson(url,referer,body){

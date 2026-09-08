@@ -75,7 +75,7 @@ assert.match(rawMigration,/legacy:getlink_jobs\.result_json/i);
 assert.match(source,/function manualGroupMatches\(name:unknown,rule:any\):boolean/);
 assert.match(source,/function syncManualGroupsForProductRows\(rows:any\[\]\):Promise<void>/);
 assert.match(source,/await syncManualGroupsForProductRows\(rows\);/);
-assert.match(source,/fetchAll\("getlink_manual_groups"/);
+assert.match(source,/fetchAll\(\s*"getlink_manual_groups"/);
 assert.match(source,/manual_groups:\[\.\.\.manualMap\.values\(\)\]/);
 assert.match(manualGroupMigration,/create table if not exists public\.getlink_manual_groups/i);
 assert.match(manualGroupMigration,/create table if not exists public\.getlink_manual_group_members/i);

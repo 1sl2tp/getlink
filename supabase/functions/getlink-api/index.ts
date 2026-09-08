@@ -1045,9 +1045,14 @@ async function goCategory(url:string){
   const headers={
     "content-type":"application/json",
     "accept":"application/json, text/plain, */*",
+    "origin":"https://sieuthi-go.vn",
+    "referer":c,
+    "language":"vi",
+    "user-agent":"Mozilla/5.0",
     "apiclientid":cfg.apiclientid,
     "sign":cfg.sign,
-    "token":cfg.token
+    "token":cfg.token,
+    "storeid":String(store)
   };
   const base:any={
     page:1,

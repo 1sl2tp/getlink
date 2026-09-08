@@ -9,6 +9,7 @@ const manualGroupMigration = fs.readFileSync("supabase/migrations/20260908170000
 const manualRulesMigration = fs.readFileSync("supabase/migrations/20260908171000_manual_group_multi_rules.sql","utf8");
 const miChinhMigration = fs.readFileSync("supabase/migrations/20260908172000_manual_group_mi_chinh.sql","utf8");
 const exclusiveCoffeeMigration = fs.readFileSync("supabase/migrations/20260908173000_manual_group_exclusive_coffee.sql","utf8");
+const banhMigration = fs.readFileSync("supabase/migrations/20260908174000_manual_group_banh.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -123,5 +124,13 @@ assert.match(exclusiveCoffeeMigration,/'café'/i);
 assert.match(exclusiveCoffeeMigration,/'caffe'/i);
 assert.match(exclusiveCoffeeMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
 assert.match(exclusiveCoffeeMigration,/normalize\(lower\(l\.name\),NFC\)/i);
+
+
+// Broad Bánh group is created after earlier classifications and skips assigned products.
+assert.match(banhMigration,/'banh','Bánh'/);
+assert.match(banhMigration,/'name_product_phrase','bánh'/);
+assert.match(banhMigration,/normalize\(lower\(l\.name\),NFC\) like 'bánh%'/i);
+assert.match(banhMigration,/normalize\(lower\(l\.name\),NFC\) like 'thùng %'/i);
+assert.match(banhMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
 
 console.log("GETLINK name filter contract: OK");

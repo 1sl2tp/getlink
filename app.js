@@ -766,7 +766,7 @@ function winmartDisplayPack(row){
   // no digit   -> Lẻ
   // has digit  -> Giữa
   if(/^thung\b/.test(plain)){
-    return {kind:"carton",label:"Thùng"};
+    return {kind:"carton",label:raw};
   }
   if(/\d/.test(raw)){
     return {kind:"middle",label:raw};
@@ -801,6 +801,9 @@ function rowPackHierarchy(row){
 }
 
 function rowIsCarton(row){
+  if(isWinmartRow(row)){
+    return winmartDisplayPack(row).kind==="carton";
+  }
   return rowPackHierarchy(row).label1==="Thùng";
 }
 
@@ -825,7 +828,7 @@ function rowPriceLevels(row){
   return {
     rawName:String(row.source_name||row.name||"Sản phẩm").trim()||"Sản phẩm",
     hierarchy:h,
-    hasCarton:h.label1==="Thùng",
+    hasCarton:wm?Boolean(h.label1):h.label1==="Thùng",
     hasMiddle:Boolean(h.label2),
     hasLeaf:Boolean(h.label3),
     hasPromo,

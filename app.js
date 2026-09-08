@@ -2,6 +2,20 @@ const $=s=>document.querySelector(s);
 const API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
 const API_KEY=String(window.GETLINK_API_KEY||"");
 
+// One-time clean break from the legacy D1 browser state.
+// Keep only the user's grid/table view preference; all GETLINK data/state
+// starts fresh with the Supabase backend.
+const STORAGE_BACKEND_VERSION="supabase-v1";
+if(localStorage.getItem("getlink:backend-version")!==STORAGE_BACKEND_VERSION){
+  const keepView=localStorage.getItem("getlink:view-mode");
+  for(let i=localStorage.length-1;i>=0;i--){
+    const key=localStorage.key(i);
+    if(key&&key.startsWith("getlink:"))localStorage.removeItem(key);
+  }
+  if(keepView)localStorage.setItem("getlink:view-mode",keepView);
+  localStorage.setItem("getlink:backend-version",STORAGE_BACKEND_VERSION);
+}
+
 function apiFetch(path,options={}){
   const headers=new Headers(options.headers||{});
   if(API_KEY)headers.set("apikey",API_KEY);

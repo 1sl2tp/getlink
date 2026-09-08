@@ -440,7 +440,6 @@ async function loadBhxGroupRefs() {
   const comparisonByUrl=new Map(comps.map((x:any)=>[x.link_url,x]));
   const refs:BhxGroupRef[]=[];
   for(const l of links){
-    if(contains&&!plain(l.name).includes(plain(contains)))continue;
     const id=identityByUrl.get(l.canonical_url)||{};
     const h=hierarchyFromRaw(l.name,l.packaging||"");
     const storedCmp=comparisonByUrl.get(l.canonical_url)||{};
@@ -536,6 +535,7 @@ async function syncExistingWinmartEnrichment(apply:boolean,contains="") {
   let productMatched=0, groupMatched=0, cartons=0, cartonsWithInner=0, sizesFilled=0;
 
   for(const l of links){
+    if(contains&&!plain(l.name).includes(plain(contains)))continue;
     const id=identityByUrl.get(l.canonical_url)||{};
     const oldH=hierarchyByUrl.get(l.canonical_url)||{};
     const oldC=comparisonByUrl.get(l.canonical_url)||{};

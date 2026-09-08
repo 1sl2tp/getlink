@@ -8,7 +8,8 @@ const get=new Function(
   source+
   "\nreturn {"+
   "parsePackStructure,comparisonData,productDetailPayload,categoryPayload,"+
-  "getlinkProductIdentity,getlinkCartonEvidence,packHierarchyData,apiProductToPayloadProduct"+
+  "getlinkProductIdentity,getlinkCartonEvidence,packHierarchyData,apiProductToPayloadProduct,"+
+  "winmartSourceHierarchy,winmartComparisonFromHierarchy"+
   "};"
 );
 
@@ -19,7 +20,9 @@ const {
   categoryPayload,
   getlinkProductIdentity,
   packHierarchyData,
-  apiProductToPayloadProduct
+  apiProductToPayloadProduct,
+  winmartSourceHierarchy,
+  winmartComparisonFromHierarchy
 }=get();
 
 {
@@ -285,6 +288,70 @@ const {
   assert.equal(payload.product.comparison.pack_kind,"Thùng");
   assert.equal(payload.product.comparison.regular_carton_price,469000);
   assert.equal(payload.product.comparison.regular_leaf_price,19542);
+}
+
+{
+  const h=winmartSourceHierarchy({
+    unit:"THÙNG",
+    unit_evidence:"winmart_api_type"
+  });
+  assert.equal(h.label1,"Thùng");
+  assert.equal(h.qty1,1);
+  assert.equal(h.label2,"");
+  assert.equal(h.label3,"");
+  assert.equal(h.evidence,"winmart_api_type");
+
+  const c=winmartComparisonFromHierarchy(
+    "DUTCH LADY STT cao khỏe có đường 170ml",
+    370800,
+    h
+  );
+  assert.equal(c.regular_carton_price,370800);
+  assert.equal(c.regular_middle_price,null);
+  assert.equal(c.regular_leaf_price,null);
+  assert.equal(c.pack_kind,"Thùng");
+}
+
+{
+  const h=winmartSourceHierarchy({
+    unit:"GÓI 4",
+    unit_evidence:"winmart_api_type"
+  });
+  assert.equal(h.label1,"");
+  assert.equal(h.label2,"Gói");
+  assert.equal(h.qty2,4);
+  assert.equal(h.label3,"");
+
+  const c=winmartComparisonFromHierarchy(
+    "DUTCH LADY STT cao khỏe có đường 170ml",
+    31900,
+    h
+  );
+  assert.equal(c.regular_carton_price,null);
+  assert.equal(c.regular_middle_price,31900);
+  assert.equal(c.regular_leaf_price,null);
+  assert.equal(c.pack_kind,"Gói");
+  assert.equal(c.pack_quantity,4);
+}
+
+{
+  const h=winmartSourceHierarchy({
+    unit:"HỘP",
+    unit_evidence:"winmart_api_type"
+  });
+  assert.equal(h.label1,"");
+  assert.equal(h.label2,"");
+  assert.equal(h.label3,"Hộp");
+  assert.equal(h.qty3,1);
+
+  const c=winmartComparisonFromHierarchy(
+    "Bơ lạt Paysan Breton hộp 250g",
+    178000,
+    h
+  );
+  assert.equal(c.regular_carton_price,null);
+  assert.equal(c.regular_middle_price,null);
+  assert.equal(c.regular_leaf_price,178000);
 }
 
 console.log("pack hierarchy tests passed");

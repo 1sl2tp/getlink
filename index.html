@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-category-in-header-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-top-controls-v1">
 </head>
 <body>
 <main class="wrap">
@@ -61,11 +61,11 @@
     <section class="card catalog workspace-list">
       <div class="catalog-sticky-head">
         <div class="catalog-toolbar">
-          <div>
+          <div class="catalog-title-row">
             <h2 id="libraryTitle">Tất cả sản phẩm</h2>
-            <p id="catalogHint">Chọn cách mua trước, sau đó tìm sản phẩm theo thời gian thực.</p>
+            <span id="libraryCount"></span>
           </div>
-          <span id="libraryCount"></span>
+          <div id="sourceTabs" class="source-tabs source-tabs-top" aria-label="Lọc theo nguồn"></div>
         </div>
 
         <div class="catalog-controls purchase-mode-row">
@@ -77,7 +77,6 @@
           <div class="catalog-search">
             <input id="librarySearch" autocomplete="off" placeholder="Tìm sản phẩm, hãng, quy cách...">
           </div>
-          <div id="sourceTabs" class="source-tabs" aria-label="Lọc theo nguồn"></div>
           <div class="view-switch" aria-label="Kiểu hiển thị">
             <button class="view-button active" data-view="grid" type="button" title="Xem ảnh"><span aria-hidden="true">▦</span><b>Ảnh</b></button>
             <button class="view-button" data-view="table" type="button" title="Xem bảng"><span aria-hidden="true">☷</span><b>Bảng</b></button>

@@ -291,15 +291,18 @@ assert.equal(money(0),"—");
   const packRenderer=app.match(/function renderPackTabs\(\)\{[\s\S]*?\n\}/);
   const sourceRenderer=app.match(/function renderSourceTabs\(\)\{[\s\S]*?\n\}/);
   const packHandler=app.match(/\$\("#packTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
-  const sourceHandler=app.match(/\$\("#sourceTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
+  const sourceHandler=app.match(/function handleSourceChipClick\(e\)\{[\s\S]*?\n\}/);
   assert.ok(packRenderer&&sourceRenderer&&packHandler&&sourceHandler,"source-menu helpers not found");
   assert.equal(packRenderer[0].includes(">Cả hai <small>"),false);
-  assert.match(sourceRenderer[0],/>3 nguồn<\/span>/);
+  assert.match(sourceRenderer[0],/quickHost/);
   assert.match(sourceHandler[0],/setActiveSourceFilter\(chip\.dataset\.source\|\|""\)/);
-  assert.match(html,/nav-source-block/);
+  assert.match(app,/const sourceTabsSidebar=\$\("#sourceTabs"\)/);
+  assert.match(app,/const sourceTabsInline=\$\("#sourceTabsInline"\)/);
   assert.match(html,/id="sourceTabs" class="source-tabs nav-source-tabs"/);
+  assert.match(html,/id="sourceTabsInline" class="source-tabs source-tabs-inline"/);
+  assert.match(html,/id="quickSourceTabs"/);
   assert.match(html,/Quy cách:<\/span>/);
-  assert.equal(html.includes('filter-block-source'),false);
+  assert.equal(html.includes('filter-block-source'),true);
 }
 
 

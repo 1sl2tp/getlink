@@ -214,6 +214,32 @@ type Product = {
   source_identity:any; last_checked_at:string;
 };
 
+function getlinkNameKey(v: unknown) {
+  return plain(v).replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+}
+function isNumericBrandException(name: string, brand: string) {
+  const n=getlinkNameKey(name), b=getlinkNameKey(brand);
+  if(!/^\d+\s*[a-z]/.test(n))return false;
+  if(!b||!/^\d+\s*[a-z]/.test(b))return false;
+  return n===b||n.startsWith(b+" ");
+}
+function keepGetlinkProduct(p: Product) {
+  const name=clean(p?.name||"");
+  const brand=clean(p?.source_identity?.brand||p?.branch||"");
+  const comboHay=getlinkNameKey([
+    name,
+    p?.url||"",
+    p?.source_identity?.raw_name||""
+  ].join(" "));
+  if(/(^|\s)combo(\s|$)/.test(comboHay))return false;
+  const nameKey=getlinkNameKey(name);
+  if(/^\d+\s*[a-z]/.test(nameKey)&&!isNumericBrandException(name,brand))return false;
+  return true;
+}
+function filterGetlinkProducts(products: Product[]) {
+  return products.filter(keepGetlinkProduct);
+}
+
 const BHX_HTTP1_CLIENT = Deno.createHttpClient({
   http1: true,
   http2: false,
@@ -681,23 +707,24 @@ async function fetchSource(input:string, requestId:string){
   if(key==="winmart"){
     if(kind!=="category")throw new Error("winmart_category_link_required");
     const raw=await winmartCategory(url);
-    const products=raw.items.map((x:any)=>normalizeWinmart(x,raw.rootName,raw.store,checked)).filter(Boolean) as Product[];
+    const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeWinmart(x,raw.rootName,raw.store,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-winmart"};
   }
   if(key==="bachhoaxanh"){
     if(kind==="product"){
       const data=await bhxProductDetail(url), product=normalizeBhxDetail(data,url,checked);
+      if(!keepGetlinkProduct(product))throw new Error("product_blocked_by_name_rule");
       return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"product",source:sourceObject(key),checked_at:checked,category_name:product.group,product,products:[product],variants:[],discovered_links:[product.url]},engine:"supabase-edge-bhx"};
     }
     const raw=await bhxCategoryRaw(url);
     const root=clean(raw.rootName||raw.items[0]?.category?.name||slugTitle(url));
-    const products=raw.items.map((x:any)=>normalizeBhx(x,root,checked)).filter(Boolean) as Product[];
+    const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeBhx(x,root,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:root,category_id:raw.categoryId,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-bhx"};
   }
   if(key==="go"){
     if(kind!=="category")throw new Error("go_category_link_required");
     const raw=await goCategory(url);
-    const products=raw.items.map((x:any)=>normalizeGo(x,raw.rootName,checked)).filter(Boolean) as Product[];
+    const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeGo(x,raw.rootName,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-go"};
   }
   throw new Error("unsupported_source");

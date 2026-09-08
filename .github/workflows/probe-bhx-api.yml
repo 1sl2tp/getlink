@@ -8,50 +8,26 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    env:
+      API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
+      TOKEN: ${{ secrets.GETLINK_GITHUB_TOKEN }}
     steps:
-      - name: Test GETLINK BHX direct path
+      - name: Probe BHX direct Worker fetch without D1 writes
         shell: bash
         run: |
-          set -uo pipefail
-          API='https://getlink-api.taphoa-4ab8161d.workers.dev'
+          set -euo pipefail
 
           probe () {
             label="$1"
             url="$2"
             echo "=== $label ==="
             start="$(date +%s%3N)"
-            code="$(curl -sS --connect-timeout 20 --max-time 90               -D "/tmp/$label.headers"               -o "/tmp/$label.body" -w '%{http_code}'               -H 'Origin: https://get.taphoa.xyz'               -H 'Content-Type: application/json'               -X POST "$API/api/get-price"               --data "$(jq -nc --arg url "$url" '{url:$url,force:true}')" || true)"
+            code="$(curl -sS --connect-timeout 20 --max-time 60               -o "/tmp/$label.json" -w '%{http_code}'               -H "Authorization: Bearer $TOKEN"               -H 'Content-Type: application/json'               -X POST "$API/api/probe-bhx-direct"               --data "$(jq -nc --arg url "$url" '{url:$url}')")"
             end="$(date +%s%3N)"
             echo "HTTP=$code ms=$((end-start))"
-            echo "--- headers ---"
-            cat "/tmp/$label.headers" || true
-            echo "--- body ---"
-            if jq -e . "/tmp/$label.body" >/dev/null 2>&1; then
-              jq . "/tmp/$label.body"
-            else
-              head -c 4000 "/tmp/$label.body" || true
-              echo
-            fi
-
-            if [ "$code" = "202" ]; then
-              rid="$(jq -r '.request_id // empty' "/tmp/$label.body")"
-              if [ -n "$rid" ]; then
-                for i in $(seq 1 100); do
-                  sleep 1
-                  curl -sS                     -H 'Origin: https://get.taphoa.xyz'                     "$API/api/result?id=$rid" > "/tmp/$label-result.json"
-                  status="$(jq -r '.status // empty' "/tmp/$label-result.json")"
-                  if [ "$status" = "complete" ] || [ "$status" = "error" ]; then
-                    echo "--- final ---"
-                    jq '{status,engine,error,products:(.payload.products|length?)}' "/tmp/$label-result.json"
-                    break
-                  fi
-                done
-              fi
-            fi
+            cat "/tmp/$label.json" | jq .
           }
 
           probe product             'https://www.bachhoaxanh.com/hat-nem/bot-ngot-ajinomoto-1kg-cl'
 
           probe category             'https://www.bachhoaxanh.com/hat-nem'
-
-          exit 0

@@ -752,7 +752,42 @@ function updateSheetRow(card){
   }
 }
 
+function winmartDisplayPack(row){
+  const raw=String(row&&row.packaging||"").trim();
+  if(!raw)return {kind:"",label:""};
+
+  const plain=raw
+    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
+    .replace(/đ/gi,"d")
+    .toLowerCase();
+
+  // Display-only classification. Raw WinMart data in D1 stays untouched:
+  // THÙNG... -> Thùng
+  // no digit   -> Lẻ
+  // has digit  -> Giữa
+  if(/^thung\b/.test(plain)){
+    return {kind:"carton",label:"Thùng"};
+  }
+  if(/\d/.test(raw)){
+    return {kind:"middle",label:raw};
+  }
+  return {kind:"leaf",label:raw};
+}
+
 function rowPackHierarchy(row){
+  if(isWinmartRow(row)){
+    const wm=winmartDisplayPack(row);
+    return {
+      label1:wm.kind==="carton"?wm.label:"",
+      qty1:0,
+      label2:wm.kind==="middle"?wm.label:"",
+      qty2:0,
+      label3:wm.kind==="leaf"?wm.label:"",
+      qty3:0,
+      evidence:wm.kind?"winmart-display-only":"",
+      locked:false
+    };
+  }
   return {
     label1:String(row&&row.pack_label_1||"").trim(),
     qty1:Number(row&&row.pack_qty_1)||0,
@@ -771,12 +806,14 @@ function rowIsCarton(row){
 
 function rowPriceLevels(row){
   const h=rowPackHierarchy(row);
-  const carton=Number(row.web_carton_price||0);
-  const middle=Number(row.web_middle_price||0);
-  const leaf=Number(row.web_leaf_price||0);
-  const promoCarton=Number(row.promo_carton_price||0);
-  const promoMiddle=Number(row.promo_middle_price||0);
-  const promoLeaf=Number(row.promo_leaf_price||0);
+  const wm=isWinmartRow(row);
+  const wmPrice=Number(row.current_price||row.regular_pack_price||0);
+  const carton=wm&&h.label1?wmPrice:Number(row.web_carton_price||0);
+  const middle=wm&&h.label2?wmPrice:Number(row.web_middle_price||0);
+  const leaf=wm&&h.label3?wmPrice:Number(row.web_leaf_price||0);
+  const promoCarton=wm?0:Number(row.promo_carton_price||0);
+  const promoMiddle=wm?0:Number(row.promo_middle_price||0);
+  const promoLeaf=wm?0:Number(row.promo_leaf_price||0);
 
   const hasPromo=Boolean(
     (promoCarton>0&&carton>0&&promoCarton<carton)||
@@ -901,11 +938,6 @@ function productCard(row){
     ?readOwnPrice(row.canonical_url,"retail")
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
-  const rawSourceType=String(row.packaging||"").trim();
-  const rawSourcePrice=Number(
-    row.current_price||row.regular_pack_price||0
-  );
-  const rawOriginalPrice=Number(row.original_price||0);
 
   return '<tr class="product-card xls-row '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
@@ -917,9 +949,6 @@ function productCard(row){
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-source'+sourceDisplayClass(row)+'" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
-      '<td class="xls-pack-level">'+(rawSourceType?escapeHtml(rawSourceType):'<span class="xls-empty">—</span>')+'</td>'+
-      '<td class="xls-num">'+(rawSourcePrice?xlsWebPrice(rawSourcePrice,0):'<span class="xls-empty">—</span>')+'</td>'+
-      '<td class="xls-num">'+(rawOriginalPrice?xlsWebPrice(rawOriginalPrice,0):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label1
           ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
@@ -1120,8 +1149,8 @@ function renderPackTabs(){
   if(!host)return;
 
   const base=visibleRowsBeforePack();
-  const cartonCount=base.filter(row=>!isWinmartRow(row)&&rowIsCarton(row)).length;
-  const retailCount=base.filter(row=>!isWinmartRow(row)&&!rowIsCarton(row)).length;
+  const cartonCount=base.filter(row=>rowIsCarton(row)).length;
+  const retailCount=base.filter(row=>rowPackHierarchy(row).label3).length;
   const promoCount=base.filter(row=>rowPriceLevels(row).hasPromo).length;
 
   const selectedCount=activePackKind==="Thùng"
@@ -1159,9 +1188,9 @@ function filteredLibraryProducts(){
   let products=visibleRowsBeforePack();
 
   if(activePackKind==="Thùng"){
-    products=products.filter(row=>!isWinmartRow(row)&&rowIsCarton(row));
+    products=products.filter(row=>rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
-    products=products.filter(row=>!isWinmartRow(row)&&!rowIsCarton(row));
+    products=products.filter(row=>Boolean(rowPackHierarchy(row).label3));
   }else if(activePackKind==="Ưu đãi"){
     products=products.filter(row=>rowPriceLevels(row).hasPromo);
   }

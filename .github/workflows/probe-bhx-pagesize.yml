@@ -8,16 +8,21 @@ on:
 jobs:
   probe:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        size: [10,25,50,100,200,500]
     steps:
       - uses: actions/checkout@v4
       - name: Read-only BHX page-size probe
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
           KEY="$(sed -n 's/^window.GETLINK_API_KEY="\([^"]*\)";/\1/p' config.js)"
           START="$(date +%s%3N)"
-          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/debug-bhx-page-size?url=https%3A%2F%2Fwww.bachhoaxanh.com%2Fsua-tuoi"             > /tmp/result.json
+          code="$(curl --silent --show-error             -o /tmp/result.json -w '%{http_code}'             -H "apikey: $KEY"             "$API/api/debug-bhx-page-size?url=https%3A%2F%2Fwww.bachhoaxanh.com%2Fsua-tuoi&size=${{ matrix.size }}" || true)"
           END="$(date +%s%3N)"
-          echo "wall_ms=$((END-START))"
-          jq . /tmp/result.json
+          echo "size=${{ matrix.size }} http=$code wall_ms=$((END-START))"
+          cat /tmp/result.json | jq . || cat /tmp/result.json
+          exit 0

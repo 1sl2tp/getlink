@@ -712,6 +712,159 @@ function detailGroupForUrl(url){
   return [root,child].filter(Boolean).join(" › ");
 }
 
+function sourceObjectFromRow(row){
+  if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
+  if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
+  return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
+}
+
+function payloadFromLibraryRow(row){
+  if(!row)return null;
+  const h=rowPackHierarchy(row);
+  const cmp={
+    pack_kind:row.pack_kind||"",
+    pack_quantity:Number(row.pack_quantity)||1,
+    pack_unit:row.pack_unit||"",
+    size_value:row.size_value??null,
+    size_unit:row.size_unit||"",
+    regular_pack_price:row.regular_pack_price??row.current_price??null,
+    promo_pack_price:row.promo_pack_price??null,
+    regular_unit_price:row.regular_unit_price??null,
+    promo_unit_price:row.promo_unit_price??null,
+    promotion_active:Boolean(Number(row.promotion_active||row.has_promo||0))
+  };
+  const source=sourceObjectFromRow(row);
+  const product={
+    source,
+    group:rowRootGroup(row)||row.group_name||"",
+    branch:row.brand_name||row.branch_name||"",
+    name:row.source_name||row.name||"Sản phẩm",
+    packaging:{text:row.packaging||""},
+    hierarchy:h,
+    comparison:cmp,
+    price:{
+      current:Number(row.current_price||row.regular_pack_price||0)||null,
+      original:Number(row.original_price||0)||null
+    },
+    promotion:{
+      active:Boolean(Number(row.promotion_active||row.has_promo||0)),
+      price:Number(row.promotion_price||0)||null,
+      text:row.promotion_text||""
+    },
+    url:row.canonical_url||"",
+    image:row.image||"",
+    breadcrumbs:[rowRootGroup(row),rowChildGroup(row),row.brand_name||row.branch_name||""].filter(Boolean),
+    source_identity:{
+      source_product_id:row.source_product_id||"",
+      source_code:row.source_code||"",
+      barcode:row.barcode||"",
+      sku:row.sku||"",
+      brand:row.brand_name||row.branch_name||"",
+      category:row.source_category_name||row.group_name||"",
+      raw_name:row.source_raw_name||row.name||"",
+      raw_description:row.source_raw_description||""
+    },
+    last_checked_at:row.last_checked_at||row.updated_at||""
+  };
+  return {
+    schema_version:20,
+    request_id:row.last_request_id||"",
+    input_url:product.url,
+    input_type:"product",
+    source,
+    checked_at:product.last_checked_at,
+    category_name:product.group,
+    product,
+    products:[product],
+    variants:[],
+    discovered_links:[product.url]
+  };
+}
+
+function libraryRowFromProduct(p,previous=null){
+  if(!p||!p.url)return null;
+  const h=p.hierarchy||{};
+  const cmp=p.comparison||{};
+  const source=p.source&&p.source.name||previous&&previous.source||"Bách Hóa XANH";
+  const isWin=String(source).toLowerCase().includes("winmart");
+  const current=Number(p.price&&p.price.current||cmp.regular_pack_price||0)||null;
+  const isCarton=Boolean(h.label1);
+  const isMiddle=!isCarton&&Boolean(h.label2);
+  return {
+    ...(previous||{}),
+    canonical_url:p.url,
+    source,
+    source_name:p.name||"",
+    name:p.name||"",
+    group_name:p.group||"",
+    branch_name:p.branch||"",
+    brand_name:p.branch||"",
+    packaging:p.packaging&&p.packaging.text||"",
+    current_price:current,
+    original_price:Number(p.price&&p.price.original||0)||null,
+    promotion_price:Number(p.promotion&&p.promotion.price||0)||null,
+    promotion_text:p.promotion&&p.promotion.text||"",
+    last_checked_at:p.last_checked_at||"",
+    updated_at:p.last_checked_at||"",
+    preference_state:previous&&previous.preference_state||"normal",
+    auto_refresh:Number(previous&&previous.auto_refresh||0),
+    refresh_hours:Number(previous&&previous.refresh_hours||24),
+    image:p.image||"",
+    pack_kind:cmp.pack_kind||"",
+    pack_quantity:Number(cmp.pack_quantity)||1,
+    pack_unit:cmp.pack_unit||"",
+    size_value:cmp.size_value??null,
+    size_unit:cmp.size_unit||"",
+    regular_pack_price:cmp.regular_pack_price??current,
+    promo_pack_price:cmp.promo_pack_price??null,
+    regular_unit_price:cmp.regular_unit_price??null,
+    promo_unit_price:cmp.promo_unit_price??null,
+    promotion_active:cmp.promotion_active?1:0,
+    has_promo:cmp.promotion_active?1:0,
+    pack_label_1:h.label1||"",
+    pack_qty_1:Number(h.qty1)||0,
+    pack_label_2:h.label2||"",
+    pack_qty_2:Number(h.qty2)||0,
+    pack_label_3:h.label3||"",
+    pack_qty_3:Number(h.qty3)||0,
+    pack_evidence:h.evidence||"",
+    hierarchy_locked:h.locked?1:0,
+    source_product_id:p.source_identity&&p.source_identity.source_product_id||"",
+    source_code:p.source_identity&&p.source_identity.source_code||"",
+    barcode:p.source_identity&&p.source_identity.barcode||"",
+    sku:p.source_identity&&p.source_identity.sku||"",
+    source_raw_name:p.source_identity&&p.source_identity.raw_name||p.name||"",
+    source_raw_description:p.source_identity&&p.source_identity.raw_description||"",
+    source_category_name:p.source_identity&&p.source_identity.category||p.group||"",
+    source_root_name:isWin?(p.group||""):"",
+    web_carton_price:!isWin&&isCarton?current:null,
+    promo_carton_price:null,
+    web_middle_price:!isWin&&isMiddle?current:null,
+    promo_middle_price:null,
+    web_leaf_price:!isWin&&!isCarton&&!isMiddle?current:null,
+    promo_leaf_price:null,
+    unit_price:cmp.promo_unit_price||cmp.regular_unit_price||null
+  };
+}
+
+function mergePayloadIntoLibraryCache(payload){
+  const products=Array.isArray(payload&&payload.products)?payload.products:[];
+  if(!products.length)return;
+  const map=new Map(libraryCache.map(row=>[canonical(row.canonical_url),row]));
+  for(const p of products){
+    const key=canonical(p&&p.url||"");
+    if(!key)continue;
+    const row=libraryRowFromProduct(p,map.get(key)||null);
+    if(row)map.set(key,row);
+  }
+  libraryCache=[...map.values()];
+  libraryLoaded=true;
+  const registry=$("#registryCount");
+  if(registry)registry.textContent="Kho link: "+libraryCache.length;
+  renderCategoryMenu();
+  renderLibraryProducts();
+}
+
 function renderPayload(payload){
   if(!payload)return false;
   if(payload.input_type==="category"){
@@ -1434,32 +1587,37 @@ async function openLibraryItem(url){
   if(!API||!url)return;
   selectedLibraryUrl=url;
 
-  // Never leave the previous product image visible while the next detail
-  // request is still loading.
-  resetDetailImage();
-
   document.querySelectorAll(".product-card").forEach(x=>x.classList.remove("selected"));
   const card=document.querySelector('.product-card[data-url="'+CSS.escape(url)+'"]');
-  if(card){
-    card.classList.add("selected","loading");
+  if(card)card.classList.add("selected");
+
+  const key=canonical(url);
+  const localRow=libraryCache.find(row=>canonical(row.canonical_url)===key);
+  if(localRow){
+    wantedUrl=url;
+    $("#url").value=url;
+    $("#detailEmpty").hidden=true;
+    renderPayload(payloadFromLibraryRow(localRow));
+    const sizeHost=$("#productSize");
+    if(sizeHost)sizeHost.textContent=detailSizeForUrl(url);
+    const groupHost=$("#group");
+    const sourceGroup=detailGroupForUrl(url);
+    if(groupHost&&sourceGroup)groupHost.textContent=sourceGroup;
+    syncWatchCheckbox(preferenceStateForUrl(url));
+    return;
   }
 
+  // Fallback only for direct/deep links that are not already in the in-memory library.
+  if(card)card.classList.add("loading");
   try{
-    const r=await apiFetch(
-      "/api/library?view=item&url="+encodeURIComponent(url),
-      {cache:"no-store"}
-    );
+    const r=await apiFetch("/api/library?view=item&url="+encodeURIComponent(url));
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||"not_found");
     wantedUrl=url;
     $("#url").value=url;
     $("#detailEmpty").hidden=true;
     renderPayload(data.payload);
-    const sizeHost=$("#productSize");
-    if(sizeHost)sizeHost.textContent=detailSizeForUrl(url);
-    const groupHost=$("#group");
-    const sourceGroup=detailGroupForUrl(url);
-    if(groupHost&&sourceGroup)groupHost.textContent=sourceGroup;
+    if(data.payload)mergePayloadIntoLibraryCache(data.payload);
     syncWatchCheckbox(data.preference&&data.preference.state||preferenceStateForUrl(url));
   }catch{
     $("#importCard").hidden=false;
@@ -1478,11 +1636,12 @@ async function refreshCatalog(selectUrl=""){
     libraryQuery="";
     $("#librarySearch").value="";
   }
-  libraryLoaded=false;
-  await Promise.all([
-    loadLibraryGroups(),
-    loadLibraryProducts(true)
-  ]);
+  if(!libraryLoaded){
+    await loadLibraryProducts(false);
+  }else{
+    renderCategoryMenu();
+    renderLibraryProducts();
+  }
   if(matchAuditLoaded){
     matchAuditLoaded=false;
     if(matchAuditActive)await loadMatchAudit(true);
@@ -1797,6 +1956,7 @@ async function pollOnce(){
     clearPending(true);
     setGetBusy(false);
     setJobStage("complete",doneStatus());
+    mergePayloadIntoLibraryCache(data.payload);
     await refreshCatalog(finishedUrl);
     return true;
   }catch{
@@ -1884,6 +2044,7 @@ $("#get").addEventListener("click",async()=>{
           ?"Đã đọc ngay từ Supabase vì link được lấy trong vòng 24 giờ."
           :doneStatus()
       );
+      mergePayloadIntoLibraryCache(data.payload);
       await refreshCatalog(url);
       return;
     }

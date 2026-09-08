@@ -3534,6 +3534,64 @@ function callbackAuthorized(request,env){
 }
 
 
+async function handleBhxDirectProbe(request,env){
+  if(!callbackAuthorized(request,env)){
+    return json({error:"unauthorized"},401,"");
+  }
+  let raw;
+  try{raw=await request.json();}
+  catch{return json({error:"invalid_json"},400,"");}
+
+  let inputUrl;
+  try{
+    inputUrl=canonicalBhx(String(raw&&raw.url||""));
+  }catch{
+    return json({error:"invalid_bhx_url"},400,"");
+  }
+
+  try{
+    const kind=heuristicType(inputUrl);
+    if(kind==="product"){
+      const direct=await bhxDirectProductData(inputUrl);
+      return json({
+        ok:true,
+        kind:"product",
+        response_url:direct.response_url,
+        category_id:Number(direct.data&&direct.data.categoryId)||null,
+        category_name:cleanText(direct.data&&direct.data.categoryName||""),
+        box_buys:Array.isArray(direct.data&&direct.data.boxBuys)
+          ?direct.data.boxBuys.length:0,
+        sample_name:cleanText(
+          direct.data&&direct.data.boxBuys&&
+          direct.data.boxBuys[0]&&direct.data.boxBuys[0].name||""
+        )
+      },200,"");
+    }
+
+    const direct=await bhxDirectCategoryData(env,inputUrl);
+    return json({
+      ok:true,
+      kind:"category",
+      response_url:direct.response_url,
+      category_id:direct.category_id,
+      products:Array.isArray(direct.data&&direct.data.products)
+        ?direct.data.products.length:0,
+      existing_count:direct.existing_count,
+      sample:(direct.data&&direct.data.products||[])
+        .slice(0,5)
+        .map(item=>cleanText(item&&(
+          item.fullName||item.name
+        )||""))
+    },200,"");
+  }catch(error){
+    return json({
+      ok:false,
+      error:"bhx_direct_probe_failed",
+      detail:String(error&&error.message||error).slice(0,1200)
+    },502,"");
+  }
+}
+
 async function handleProgress(request,env){
   if(!callbackAuthorized(request,env)){
     return json({error:"unauthorized"},401,"");
@@ -4620,6 +4678,9 @@ export default {
     try{
       if(request.method==="POST"&&url.pathname==="/api/get-price"){
         return await handleCreate(request,env,origin||"*");
+      }
+      if(request.method==="POST"&&url.pathname==="/api/probe-bhx-direct"){
+        return await handleBhxDirectProbe(request,env);
       }
       if(request.method==="POST"&&url.pathname==="/api/progress"){
         return handleProgress(request,env);

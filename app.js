@@ -2289,9 +2289,18 @@ function nextTableSourceFilter(){
 }
 
 function sourceLogoMark(key){
-  if(key==="bhx")return '<span class="source-logo-mark source-logo-bhx" aria-hidden="true"><b>BHX</b></span>';
-  if(key==="wm")return '<span class="source-logo-mark source-logo-wm" aria-hidden="true"><b>W</b></span>';
-  if(key==="go")return '<span class="source-logo-mark source-logo-go" aria-hidden="true"><b>GO!</b></span>';
+  const logos={
+    bhx:"https://www.bachhoaxanh.com/favicon.ico",
+    wm:"https://www.winmart.vn/favicon.ico",
+    go:"https://sieuthi-go.vn/favicon.ico"
+  };
+  if(logos[key]){
+    const fallback=key==="bhx"?"BHX":(key==="wm"?"W":"GO!");
+    return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true">'+
+      '<img class="source-logo-image" src="'+logos[key]+'" alt="" loading="lazy" onerror="this.hidden=true">'+
+      '<b class="source-logo-fallback">'+fallback+'</b>'+
+    '</span>';
+  }
   return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>3</b></span>';
 }
 

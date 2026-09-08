@@ -3128,6 +3128,53 @@ async function handleCreate(request,env,origin){
     last_request_id:requestId
   });
 
+  // WinMart no longer needs GitHub Actions, Playwright or Bright Data.
+  // Its public category API already returns name + source type + price
+  // for the whole category, and supports pageSize=500.
+  if(sourceKey==="winmart"){
+    try{
+      await env.DB.prepare(
+        "UPDATE jobs SET status='running',updated_at=? WHERE request_id=?"
+      ).bind(new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='running',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+
+      const raw=await fetchWinmartDirect(url);
+      raw.request_id=requestId;
+      const saved=await persistWinmartResponse(
+        env,
+        {input_url:url,canonical_url:url},
+        requestId,
+        raw
+      );
+      return json({
+        request_id:requestId,
+        status:"complete",
+        input_url:url,
+        link_type:"category",
+        ...saved,
+        engine:"winmart-direct-worker",
+        cache_hit:false
+      },200,origin);
+    }catch(error){
+      const detail=String(
+        error&&error.message||error
+      ).slice(0,1200);
+      await env.DB.prepare(
+        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+      ).bind(detail,new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+      return json({
+        error:"winmart_direct_failed",
+        detail,
+        request_id:requestId
+      },502,origin);
+    }
+  }
+
   if(!env.GITHUB_TOKEN){
     const detail="GETLINK Worker chưa có GITHUB_TOKEN dispatcher.";
     await env.DB.prepare(
@@ -3154,9 +3201,7 @@ async function handleCreate(request,env,origin){
       status:"queued",
       input_url:url,
       link_type:initialType,
-      engine:sourceKey==="winmart"
-        ?"brightdata-browser-winmart"
-        :(sourceKey==="go"?"brightdata-browser-go":"brightdata-browser-api")
+      engine:sourceKey==="go"?"brightdata-browser-go":"brightdata-browser-api"
     },202,origin);
   }catch(error){
     const detail=String(error&&error.message||error).slice(0,1000);

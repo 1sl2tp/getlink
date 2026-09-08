@@ -68,10 +68,11 @@ assert.equal(money(0),"—");
 
 {
   const capMatch=app.match(/function capitalizeDisplayName\(value\)\{[\s\S]*?\n\}/);
+  const stripMatch=app.match(/function stripCartonPackPhrase\(value\)\{[\s\S]*?\n\}/);
   const compactMatch=app.match(/function compactCartonDisplayName\(name,hierarchy\)\{[\s\S]*?\n\}/);
-  assert.ok(capMatch&&compactMatch,"carton display helpers not found");
+  assert.ok(capMatch&&stripMatch&&compactMatch,"carton display helpers not found");
   const api=new Function(
-    capMatch[0]+"\n"+compactMatch[0]+"\nreturn {compactCartonDisplayName};"
+    capMatch[0]+"\n"+stripMatch[0]+"\n"+compactMatch[0]+"\nreturn {compactCartonDisplayName};"
   )();
   const h={label1:"Thùng"};
   assert.equal(
@@ -89,6 +90,14 @@ assert.equal(money(0),"—");
   assert.equal(
     api.compactCartonDisplayName("Thùng 24 chia nước ép cam Twister 455ml",h),
     "Nước ép cam Twister 455ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 24 + 4 lon Bia Budweiser 250ml",h),
+    "Bia Budweiser 250ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 24 bi\u0323ch sữa dinh dưỡng Dutch Lady 180ml",h),
+    "Sữa dinh dưỡng Dutch Lady 180ml"
   );
 }
 

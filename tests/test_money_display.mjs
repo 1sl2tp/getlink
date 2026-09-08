@@ -67,6 +67,32 @@ assert.equal(money(0),"—");
 }
 
 {
+  const capMatch=app.match(/function capitalizeDisplayName\(value\)\{[\s\S]*?\n\}/);
+  const compactMatch=app.match(/function compactCartonDisplayName\(name,hierarchy\)\{[\s\S]*?\n\}/);
+  assert.ok(capMatch&&compactMatch,"carton display helpers not found");
+  const api=new Function(
+    capMatch[0]+"\n"+compactMatch[0]+"\nreturn {compactCartonDisplayName};"
+  )();
+  const h={label1:"Thùng"};
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 24 gói mì Hảo Hảo 75g",h),
+    "Mì Hảo Hảo 75g"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Bia 333 Export thùng 24 lon x 330ml",h),
+    "Bia 333 Export 330ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Khay 24 lon Strongbow vị táo 320ml",h),
+    "Strongbow vị táo 320ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 24 chia nước ép cam Twister 455ml",h),
+    "Nước ép cam Twister 455ml"
+  );
+}
+
+{
   const searchKeyMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
   const productSearchKeyMatch=app.match(/function productSearchKey\(row\)\{[\s\S]*?\n\}/);
   const matchesSearchMatch=app.match(/function matchesSearch\(row,query\)\{[\s\S]*?\n\}/);

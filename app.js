@@ -665,6 +665,13 @@ function renderCategory(payload){
     :'<div class="child-empty">Chưa phát hiện link chi tiết.</div>';
 }
 
+function detailSizeForUrl(url){
+  const key=canonical(url||"");
+  const row=libraryCache.find(item=>canonical(item.canonical_url)===key);
+  if(!row||!row.size_value)return "—";
+  return String(row.size_value)+" "+String(row.size_unit||"").trim();
+}
+
 function renderPayload(payload){
   if(!payload)return false;
   if(payload.input_type==="category"){
@@ -1025,27 +1032,28 @@ function renderCategoryMenu(){
   const visibleLibrary=libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden"
   );
-  const groupCounts=new Map();
+  const counts=new Map();
   for(const row of visibleLibrary){
-    const key=String(row.parent_url||"");
-    if(!key)continue;
-    groupCounts.set(key,(groupCounts.get(key)||0)+1);
+    const name=String(row.group_name||"").trim();
+    if(!name)continue;
+    counts.set(name,(counts.get(name)||0)+1);
   }
+  const groups=[...counts.entries()]
+    .sort((a,b)=>a[0].localeCompare(b[0],"vi"));
 
   host.innerHTML=
     '<button class="category-chip '+(!activeGroupUrl?"active":"")+'" data-group="" type="button">'+
       '<span>Tất cả</span><small>'+visibleLibrary.length+'</small>'+
     '</button>'+
-    libraryGroups.map(g=>
-      '<button class="category-chip '+(activeGroupUrl===g.url?"active":"")+'" data-group="'+escapeAttr(g.url)+'" type="button">'+
-        '<span>'+escapeHtml(g.name)+'</span><small>'+Number(groupCounts.get(g.url)||0)+'</small>'+
+    groups.map(([name,count])=>
+      '<button class="category-chip '+(activeGroupUrl===name?"active":"")+'" data-group="'+escapeAttr(name)+'" type="button">'+
+        '<span>'+escapeHtml(name)+'</span><small>'+count+'</small>'+
       '</button>'
     ).join("");
 
   const current=$("#mobileCategoryCurrent");
   if(current){
-    const group=libraryGroups.find(g=>g.url===activeGroupUrl);
-    current.textContent=group?group.name:"Tất cả";
+    current.textContent=activeGroupUrl||"Tất cả";
   }
 }
 
@@ -1100,10 +1108,6 @@ async function loadLibraryGroups(){
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||"library_error");
     libraryGroups=Array.isArray(data.groups)?data.groups:[];
-
-    if(activeGroupUrl&&!libraryGroups.some(g=>g.url===activeGroupUrl)){
-      activeGroupUrl="";
-    }
     renderCategoryMenu();
   }catch{
     libraryGroups=[];
@@ -1134,7 +1138,9 @@ function visibleRowsBeforePack(){
   }
 
   if(activeGroupUrl){
-    products=products.filter(row=>row.parent_url===activeGroupUrl);
+    products=products.filter(row=>
+      String(row.group_name||"").trim()===activeGroupUrl
+    );
   }
   if(activeBrand){
     products=products.filter(row=>
@@ -1221,7 +1227,7 @@ function renderBrandTabs(){
   }
 
   const base=libraryCache.filter(row=>
-    row.parent_url===activeGroupUrl&&
+    String(row.group_name||"").trim()===activeGroupUrl&&
     String(row.preference_state||"normal")!=="hidden"
   );
   const counts=new Map();
@@ -1281,8 +1287,7 @@ function renderLibraryProducts(){
   if(libraryQuery){
     $("#libraryTitle").textContent='Kết quả cho “'+libraryQuery+'”';
   }else if(activeGroupUrl){
-    const group=libraryGroups.find(g=>g.url===activeGroupUrl);
-    $("#libraryTitle").textContent=group?group.name:"Sản phẩm";
+    $("#libraryTitle").textContent=activeGroupUrl;
   }else{
     $("#libraryTitle").textContent=libraryState==="watch"
       ?"Sản phẩm quan tâm"
@@ -1353,6 +1358,8 @@ async function openLibraryItem(url){
     $("#url").value=url;
     $("#detailEmpty").hidden=true;
     renderPayload(data.payload);
+    const sizeHost=$("#productSize");
+    if(sizeHost)sizeHost.textContent=detailSizeForUrl(url);
     syncWatchCheckbox(data.preference&&data.preference.state||preferenceStateForUrl(url));
   }catch{
     $("#importCard").hidden=false;
@@ -1365,7 +1372,7 @@ async function openLibraryItem(url){
 
 async function refreshCatalog(selectUrl=""){
   if(selectUrl){
-    activeGroupUrl=categoryRoot(selectUrl);
+    activeGroupUrl="";
     activeBrand="";
     libraryQuery="";
     $("#librarySearch").value="";

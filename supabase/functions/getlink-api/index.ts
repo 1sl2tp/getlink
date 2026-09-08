@@ -1588,8 +1588,8 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
         match_origin:"rule",
         matched_at:now
       });
-      assignedUrls.add(linkUrl);
       matched=true;
+      assignedUrls.add(linkUrl);
       break;
     }
     if(!matched){

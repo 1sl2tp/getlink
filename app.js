@@ -663,6 +663,29 @@ function resetDetailImage(){
   fallback.hidden=false;
 }
 
+function openImageZoom(src,alt=""){
+  const modal=$("#imageZoom");
+  const target=$("#imageZoomTarget");
+  if(!modal||!target||!src)return;
+  target.src=src;
+  target.alt=alt||"Ảnh sản phẩm";
+  modal.hidden=false;
+  modal.setAttribute("aria-hidden","false");
+  document.body.classList.add("image-zoom-open");
+}
+
+function closeImageZoom(){
+  const modal=$("#imageZoom");
+  const target=$("#imageZoomTarget");
+  if(!modal||!target)return;
+  modal.hidden=true;
+  modal.setAttribute("aria-hidden","true");
+  target.removeAttribute("src");
+  target.alt="";
+  document.body.classList.remove("image-zoom-open");
+}
+
+
 function renderProduct(payload){
   const p=payload&&payload.product?payload.product:payload;
   if(!p)return false;
@@ -2079,13 +2102,25 @@ $("#workspaceNav").addEventListener("touchend",e=>{
 },{passive:true});
 
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape")closeMobileCategoryNav();
+  if(e.key!=="Escape")return;
+  closeImageZoom();
+  closeMobileCategoryNav();
 });
 
 $("#backToCategory").addEventListener("click",()=>{
   resetBrowseDetail();
   renderCategoryContext(filteredLibraryProducts());
 });
+
+$("#detailImage").addEventListener("click",e=>{
+  const image=e.currentTarget;
+  if(image&&image.src)openImageZoom(image.currentSrc||image.src,image.alt||"Ảnh sản phẩm");
+});
+$("#closeImageZoom").addEventListener("click",closeImageZoom);
+$("#imageZoom").addEventListener("click",e=>{
+  if(e.target.id==="imageZoom")closeImageZoom();
+});
+
 
 $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
@@ -2160,6 +2195,14 @@ document.querySelector(".view-switch").addEventListener("click",e=>{
 });
 
 $("#productGrid").addEventListener("click",async e=>{
+  const zoomImage=e.target.closest(".grid-product-image img");
+  if(zoomImage&&isCompactBrowse()){
+    e.preventDefault();
+    e.stopPropagation();
+    openImageZoom(zoomImage.currentSrc||zoomImage.src,zoomImage.alt||"Ảnh sản phẩm");
+    return;
+  }
+
   const watch=e.target.closest(".grid-watch-button");
   if(watch){
     e.preventDefault();

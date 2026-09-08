@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v9");
+      const req=tx.objectStore("cache").get("library-v10");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v9");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v10");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -196,17 +196,35 @@ function searchKey(value){
 }
 
 
-function productSearchKey(row){
-  // Main search is product-name search only.
-  // Category, brand, packaging and URL must not add extra tokens because that
-  // creates false positives (for example "Vĩnh Hảo" or "Hoàn Hảo" for "hao hao").
-  return searchKey(
+function searchDisplayName(row){
+  let text=String(
     row&&(
       row.source_name||
       row.name||
       row.source_raw_name
     )||""
-  );
+  ).trim();
+
+  const isCarton=
+    String(row&&row.pack_label_1||"").trim().toLowerCase()==="thùng"||
+    String(row&&row.packaging||"").trim().toLowerCase()==="thùng"||
+    String(row&&row.pack_kind||"").trim().toLowerCase()==="carton";
+
+  if(isCarton&&text){
+    const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
+    text=text
+      .replace(new RegExp("(^|\\s)(?:thùng|khay|vỉ)\\s+\\d+\\s+"+unit+"(?:\\s*[x×]\\s*)?","giu")," ")
+      .replace(/\s{2,}/g," ")
+      .trim();
+  }
+  return text;
+}
+
+function productSearchKey(row){
+  // Search exactly the normalized visible product name.
+  // Pack words such as "Thùng 24 lon" belong to the Thùng/Lẻ filter + QC chip,
+  // so they must not make a text search for "thùng" match the product.
+  return searchKey(searchDisplayName(row));
 }
 
 function productSearchWords(row){

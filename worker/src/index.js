@@ -3925,6 +3925,16 @@ async function handleLibrary(url,env,origin){
       SELECT
         l.id,l.canonical_url,l.parent_url,l.source,l.group_name,l.branch_name,
         l.branch_name AS brand_name,l.name,
+        ident.category AS source_category_name,
+        (
+          SELECT c.name
+          FROM links c
+          WHERE c.source='WinMart'
+            AND c.link_type='category'
+            AND c.last_request_id=l.last_request_id
+          ORDER BY c.updated_at DESC
+          LIMIT 1
+        ) AS source_root_name,
         l.packaging,l.current_price,l.original_price,l.promotion_price,
         l.promotion_text,l.last_checked_at,l.last_status,l.updated_at,
         COALESCE(pref.state,'normal') AS preference_state,

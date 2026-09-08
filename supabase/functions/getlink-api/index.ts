@@ -1474,18 +1474,26 @@ async function loadManualGroupRules(force=false):Promise<any[]>{
     return manualGroupRuleCache;
   }
   const [groups,rules]=await Promise.all([
-    fetchAll("getlink_manual_groups","group_key,enabled,created_at",(q:any)=>q.eq("enabled",true)),
+    fetchAll(
+      "getlink_manual_groups",
+      "group_key,enabled,sort_order,is_fallback",
+      (q:any)=>q.eq("enabled",true)
+    ),
     fetchAll(
       "getlink_manual_group_rules",
       "group_key,rule_type,rule_value,rule_order,enabled",
       (q:any)=>q.eq("enabled",true).order("rule_order",{ascending:true})
     )
   ]);
-  const orderedGroups=[...groups].sort((a:any,b:any)=>
-    String(a.created_at||"").localeCompare(String(b.created_at||""))||
-    clean(a.group_key).localeCompare(clean(b.group_key))
+  const groupRank=new Map(
+    [...groups]
+      .filter((x:any)=>!x.is_fallback)
+      .sort((a:any,b:any)=>
+        Number(a.sort_order||999999)-Number(b.sort_order||999999)||
+        clean(a.group_key).localeCompare(clean(b.group_key))
+      )
+      .map((x:any,i:number)=>[clean(x.group_key),i])
   );
-  const groupRank=new Map(orderedGroups.map((x:any,i:number)=>[clean(x.group_key),i]));
   manualGroupRuleCache=rules
     .filter((x:any)=>groupRank.has(clean(x.group_key)))
     .sort((a:any,b:any)=>
@@ -1500,7 +1508,13 @@ function manualGroupMatches(name:unknown,rule:any):boolean{
   const value=clean(rule?.rule_value||"").normalize("NFC").toLocaleLowerCase("vi-VN");
   if(!value)return false;
   const hay=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
+
+  if(rule?.rule_type==="name_starts")return hay.startsWith(value);
   if(rule?.rule_type==="name_contains")return hay.includes(value);
+  if(rule?.rule_type==="name_contains_all"){
+    const parts=value.split("|").map((x:string)=>clean(x)).filter(Boolean);
+    return parts.length>0&&parts.every((x:string)=>hay.includes(x));
+  }
   if(rule?.rule_type==="name_product_phrase"){
     return hay.startsWith(value)||(hay.startsWith("thùng ")&&hay.includes(value));
   }
@@ -1524,7 +1538,7 @@ function manualGroupMatches(name:unknown,rule:any):boolean{
 async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
   const productRows=rows.filter((r:any)=>r?.link_type==="product"&&r?.canonical_url);
   if(!productRows.length)return;
-  const urls=[...new Set(productRows.map((r:any)=>r.canonical_url))];
+  const urls=[...new Set(productRows.map((r:any)=>clean(r.canonical_url)).filter(Boolean))];
   const [rules,existing]=await Promise.all([
     loadManualGroupRules(),
     fetchRowsByValues(
@@ -1537,12 +1551,35 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
 
   // Manual groups are exclusive and sticky:
   // once a product has been classified, later groups must skip it.
-  const assignedUrls=new Set(existing.map((x:any)=>clean(x.link_url)).filter(Boolean));
+  // "Chưa phân loại" is intentionally not sticky and is re-evaluated.
+  const fallbackKey="chua-phan-loai";
+  const assignedUrls=new Set(
+    existing
+      .filter((x:any)=>clean(x.group_key)!==fallbackKey)
+      .map((x:any)=>clean(x.link_url))
+      .filter(Boolean)
+  );
+  const fallbackUrls=existing
+    .filter((x:any)=>clean(x.group_key)===fallbackKey)
+    .map((x:any)=>clean(x.link_url))
+    .filter(Boolean);
+
+  if(fallbackUrls.length){
+    const {error}=await sb
+      .from("getlink_manual_group_members")
+      .delete()
+      .eq("group_key",fallbackKey)
+      .in("link_url",fallbackUrls);
+    if(error)throw error;
+  }
+
   const now=new Date().toISOString();
   const members:any[]=[];
   for(const row of productRows){
     const linkUrl=clean(row.canonical_url);
     if(!linkUrl||assignedUrls.has(linkUrl))continue;
+
+    let matched=false;
     for(const rule of rules){
       if(!manualGroupMatches(row.name,rule))continue;
       members.push({
@@ -1552,7 +1589,16 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
         matched_at:now
       });
       assignedUrls.add(linkUrl);
+      matched=true;
       break;
+    }
+    if(!matched){
+      members.push({
+        group_key:fallbackKey,
+        link_url:linkUrl,
+        match_origin:"fallback",
+        matched_at:now
+      });
     }
   }
   if(members.length){
@@ -1602,7 +1648,7 @@ async function sourceManagerManualGroupDetail(groupKey:string){
   const [{data:group,error:groupError},rules]=await Promise.all([
     sb
       .from("getlink_manual_groups")
-      .select("group_key,name,rule_type,rule_value,enabled")
+      .select("group_key,name,rule_type,rule_value,enabled,sort_order,is_fallback")
       .eq("group_key",groupKey)
       .eq("enabled",true)
       .maybeSingle(),
@@ -1669,7 +1715,9 @@ async function sourceManagerManualGroupDetail(groupKey:string){
         rule_type:clean(r.rule_type),
         rule_value:clean(r.rule_value)
       })),
-      rule_label:"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · ")
+      rule_label:group.is_fallback
+        ?"Chưa khớp nhóm cơ bản"
+        :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · ")
     },
     products:{...counts,all:counts.bhx+counts.wm+counts.go},
     items
@@ -1684,7 +1732,11 @@ async function sourceManagerSnapshot(force=false){
     fetchAll("getlink_source_product_identity","link_url,source_name,brand,raw_brand,category,raw_category,bhx_group_name"),
     fetchAll("getlink_links","canonical_url,last_status,source,name",(q:any)=>q.eq("link_type","product")),
     loadBrandAliases(),
-    fetchAll("getlink_manual_groups","group_key,name,rule_type,rule_value,enabled",(q:any)=>q.eq("enabled",true)),
+    fetchAll(
+      "getlink_manual_groups",
+      "group_key,name,rule_type,rule_value,enabled,sort_order,is_fallback",
+      (q:any)=>q.eq("enabled",true)
+    ),
     fetchAll("getlink_manual_group_members","group_key,link_url,match_origin,matched_at"),
     fetchAll(
       "getlink_manual_group_rules",
@@ -1756,7 +1808,11 @@ async function sourceManagerSnapshot(force=false){
         rule_type:clean(r.rule_type),
         rule_value:clean(r.rule_value)
       })),
-      rule_label:"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · "),
+      sort_order:Number(group.sort_order||999999),
+      is_fallback:Boolean(group.is_fallback),
+      rule_label:group.is_fallback
+        ?"Chưa khớp nhóm cơ bản"
+        :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · "),
       total:0,
       sources:sourceBucket(),
       variants:{bhx:[],wm:[],go:[]}
@@ -1790,7 +1846,10 @@ async function sourceManagerSnapshot(force=false){
     groups:finalize(groupMap),
     manual_groups:[...manualMap.values()]
       .filter((x:any)=>x.total>0)
-      .sort((a:any,b:any)=>(b.total-a.total)||a.name.localeCompare(b.name,"vi"))
+      .sort((a:any,b:any)=>
+        Number(a.sort_order||999999)-Number(b.sort_order||999999)||
+        a.name.localeCompare(b.name,"vi")
+      )
   };
   sourceManagerCacheAt=Date.now();
   return sourceManagerCache;

@@ -11,6 +11,7 @@ const miChinhMigration = fs.readFileSync("supabase/migrations/20260908172000_man
 const exclusiveCoffeeMigration = fs.readFileSync("supabase/migrations/20260908173000_manual_group_exclusive_coffee.sql","utf8");
 const banhMigration = fs.readFileSync("supabase/migrations/20260908174000_manual_group_banh.sql","utf8");
 const suaChuaMigration = fs.readFileSync("supabase/migrations/20260908175000_manual_group_sua_chua.sql","utf8");
+const basicGroupingMigration = fs.readFileSync("supabase/migrations/20260908180000_basic_manual_grouping.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -151,5 +152,22 @@ assert.match(suaChuaMigration,/not exists\s*\(\s*select 1\s*from public\.getlink
 // Manual-group detail chunks URL filters to avoid oversized PostgREST .in(...) requests.
 assert.match(source,/for\(let i=0;i<unique\.length;i\+=40\)/);
 assert.match(source,/unique\.slice\(i,i\+40\)/);
+
+
+// Basic first-pass grouping uses starts-with rules and a re-evaluable fallback pool.
+assert.match(source,/rule\?\.rule_type==="name_starts"/);
+assert.match(source,/rule\?\.rule_type==="name_contains_all"/);
+assert.match(source,/const fallbackKey="chua-phan-loai"/);
+assert.match(source,/Chưa phân loại" is intentionally not sticky and is re-evaluated/);
+assert.match(source,/match_origin:"fallback"/);
+assert.match(source,/sort_order,is_fallback/);
+assert.match(basicGroupingMigration,/add column if not exists sort_order/i);
+assert.match(basicGroupingMigration,/add column if not exists is_fallback/i);
+assert.match(basicGroupingMigration,/'chua-phan-loai','Chưa phân loại'/);
+assert.match(basicGroupingMigration,/'keo','Kẹo'/);
+assert.match(basicGroupingMigration,/'bot-giat','Bột giặt'/);
+assert.match(basicGroupingMigration,/'nuoc-tuong','Nước tương'/);
+assert.match(basicGroupingMigration,/'sua-chua','name_contains_all','sữa\|lên men'/);
+assert.match(basicGroupingMigration,/else 'chua-phan-loai'/i);
 
 console.log("GETLINK name filter contract: OK");

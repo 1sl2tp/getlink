@@ -364,4 +364,18 @@ assert.equal(money(0),"—");
   assert.match(css,/@container \(max-width:520px\)/);
 }
 
+
+{
+  const sourceSortHandler=app.match(/\$\("#tableSourceSort"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
+  assert.ok(sourceSortHandler,"table source sort handler not found");
+  assert.match(sourceSortHandler[0],/if\(activeSourceFilter\)/);
+  assert.match(sourceSortHandler[0],/activeSourceFilter=""/);
+  assert.match(sourceSortHandler[0],/tableSourceSort="asc"/);
+  assert.match(sourceSortHandler[0],/renderCategoryMenu\(\)/);
+  assert.match(css,/Table sticky header \+ actionable source sort v1/);
+  assert.match(css,/\.xls-price-table thead th,[\s\S]*?position:sticky!important/);
+  assert.match(css,/top:0!important/);
+  assert.match(css,/z-index:12!important/);
+}
+
 console.log("money and hierarchy UI tests passed");

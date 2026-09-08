@@ -1521,6 +1521,10 @@ function syncTableSourceSortHeader(){
   if(!head||!button)return;
   head.setAttribute("aria-sort",tableSourceSort==="asc"?"ascending":(tableSourceSort==="desc"?"descending":"none"));
   button.dataset.direction=tableSourceSort;
+  const activeName=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WM":(activeSourceFilter==="go"?"GO":""));
+  button.title=activeName
+    ?"Đang lọc "+activeName+" · bấm để xem 3 nguồn và sắp xếp"
+    :(tableSourceSort==="desc"?"Đang sắp GO → WM → BHX · bấm để đảo":"Sắp xếp BHX → WM → GO");
 }
 
 
@@ -2596,9 +2600,18 @@ $("#toggleMatchAudit").addEventListener("click",async()=>{
 });
 
 $("#tableSourceSort").addEventListener("click",()=>{
-  tableSourceSort=tableSourceSort==="asc"?"desc":"asc";
+  if(activeSourceFilter){
+    activeSourceFilter="";
+    localStorage.removeItem("getlink:filter-source");
+    tableSourceSort="asc";
+    renderCategoryMenu();
+  }else{
+    tableSourceSort=tableSourceSort==="asc"?"desc":"asc";
+  }
   viewRenderState.table.key="";
   viewRenderState.table.rendered=0;
+  const table=$("#tableView");
+  if(table)table.scrollTop=0;
   renderLibraryProducts();
 });
 

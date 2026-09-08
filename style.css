@@ -6482,3 +6482,38 @@ body{color:var(--text-primary)!important}
     font-size:9.7px!important;
   }
 }
+
+
+/* =========================================================
+   Table sticky header + actionable source sort v1
+   The table viewport owns vertical scroll, therefore THEAD sticks to it.
+   ========================================================= */
+.xls-table-wrap{
+  position:relative!important;
+  overscroll-behavior:contain!important;
+}
+.xls-price-table{
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+.xls-price-table thead th,
+.xls-price-table thead th:first-child{
+  position:sticky!important;
+  top:0!important;
+  z-index:12!important;
+  background:#f7f9fa!important;
+  box-shadow:0 1px 0 #dfe3e8!important;
+}
+.xls-price-table thead th:first-child{
+  left:auto!important;
+}
+#tableSourceHeader{
+  cursor:pointer!important;
+}
+#tableSourceHeader .xls-sort-button{
+  min-height:24px!important;
+}
+#tableSourceHeader[aria-sort="ascending"],
+#tableSourceHeader[aria-sort="descending"]{
+  color:var(--green-strong)!important;
+}

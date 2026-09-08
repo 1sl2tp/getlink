@@ -242,6 +242,17 @@ function filterGetlinkProducts(products: Product[]) {
   return products.filter(keepGetlinkProduct);
 }
 
+function sanitizeCatalogPayload(payload:any) {
+  if(!payload || typeof payload!=="object") return payload;
+  if(payload.input_type==="product" && payload.product && !keepGetlinkProduct(payload.product)) return null;
+  const out={...payload};
+  if(Array.isArray(payload.products)){
+    out.products=filterGetlinkProducts(payload.products);
+    out.discovered_links=out.products.map((p:Product)=>p.url);
+  }
+  return out;
+}
+
 const BHX_HTTP1_CLIENT = Deno.createHttpClient({
   http1: true,
   http2: false,
@@ -864,8 +875,11 @@ Deno.serve(async(req:Request)=>{
         const since=new Date(Date.now()-86400000).toISOString();
         const {data}=await sb.from("getlink_jobs").select("request_id,result_json,updated_at,link_type").eq("canonical_url",input).eq("status","complete").gte("updated_at",since).order("updated_at",{ascending:false}).limit(1).maybeSingle();
         if(data?.result_json){
-          const {count}=await sb.from("getlink_links").select("*",{count:"exact",head:true});
-          return response(req,{request_id:data.request_id,status:"complete",input_url:input,link_type:data.link_type,payload:data.result_json,registry_count:Number(count||0),engine:"supabase-cache",cache_hit:true});
+          const cached=sanitizeCatalogPayload(data.result_json);
+          if(cached){
+            const {count}=await sb.from("getlink_links").select("*",{count:"exact",head:true});
+            return response(req,{request_id:data.request_id,status:"complete",input_url:input,link_type:data.link_type,payload:cached,registry_count:Number(count||0),engine:"supabase-cache",cache_hit:true});
+          }
         }
       }
       const requestId=crypto.randomUUID().replace(/-/g,""), now=new Date().toISOString(), kind=heuristicType(input);
@@ -883,7 +897,11 @@ Deno.serve(async(req:Request)=>{
     if(req.method==="GET"&&route==="/api/result"){
       const id=clean(url.searchParams.get("id")); if(!id)return response(req,{error:"missing_id"},400);
       const {data,error}=await sb.from("getlink_jobs").select("*").eq("request_id",id).maybeSingle(); if(error)throw error;if(!data)return response(req,{error:"not_found"},404);
-      if(data.status==="complete")return response(req,{status:"complete",payload:data.result_json,request_id:id});
+      if(data.status==="complete"){
+        const payload=sanitizeCatalogPayload(data.result_json);
+        if(!payload)return response(req,{status:"error",error:"product_blocked_by_name_rule",request_id:id},410);
+        return response(req,{status:"complete",payload,request_id:id});
+      }
       if(data.status==="error")return response(req,{status:"error",error:data.error||"unknown",request_id:id});
       return response(req,{status:data.status||"running",request_id:id});
     }
@@ -905,7 +923,7 @@ Deno.serve(async(req:Request)=>{
       if(view==="item"){
         const raw=clean(url.searchParams.get("url")); if(!raw)return response(req,{error:"invalid_url"},400); const itemUrl=canonical(raw);
         const {data}=await sb.from("getlink_jobs").select("result_json,updated_at").eq("canonical_url",itemUrl).eq("status","complete").order("updated_at",{ascending:false}).limit(1).maybeSingle();
-        let payload=data?.result_json||null; if(!payload)payload=await reconstructItem(itemUrl); if(!payload)return response(req,{error:"not_found"},404);
+        let payload=sanitizeCatalogPayload(data?.result_json||null); if(!payload)payload=await reconstructItem(itemUrl); payload=sanitizeCatalogPayload(payload); if(!payload)return response(req,{error:"not_found"},404);
         const {data:pref}=await sb.from("getlink_link_preferences").select("*").eq("link_url",itemUrl).maybeSingle();
         return response(req,{status:"complete",payload,source:"supabase",updated_at:data?.updated_at||"",preference:pref||{state:"normal",auto_refresh:false,refresh_hours:24,pinned:false}});
       }

@@ -835,15 +835,30 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                     except asyncio.QueueEmpty:
                         break
 
+                # We only need the navigation to start so the WinMart catalog XHR
+                # can fire. Waiting for DOMContentLoaded through Bright Data can block
+                # for the full 120s even though the category API has already returned.
+                # Keep the browser navigation alive, but release the scraper as soon as
+                # the main document is committed.
+                nav_started = time.monotonic()
                 try:
                     await page.goto(
                         url,
-                        wait_until="domcontentloaded",
-                        timeout=120000,
+                        wait_until="commit",
+                        timeout=35000,
                     )
-                except Exception:
-                    pass
-                await page.wait_for_timeout(1200)
+                except Exception as exc:
+                    print(json.dumps({
+                        "winmart_navigation_warning": str(exc)[:300],
+                        "page_url": url,
+                    }, ensure_ascii=False))
+                print(json.dumps({
+                    "winmart_navigation_ms": round(
+                        (time.monotonic() - nav_started) * 1000
+                    ),
+                    "page_url": url,
+                }, ensure_ascii=False))
+                await page.wait_for_timeout(500)
 
                 # Root/category navigation is still useful for discovering cate2 links,
                 # but product coverage no longer depends on scrolling the DOM.

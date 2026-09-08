@@ -1881,6 +1881,11 @@ function renderSourceManager(){
 
   $("#sourceManagerBrandCount").textContent=String((sourceManagerCache.brands||[]).length);
   $("#sourceManagerGroupCount").textContent=String((sourceManagerCache.groups||[]).length);
+  const productCounts=sourceManagerCache.products||{};
+  $("#sourceManagerAllCount").textContent=String(Number(productCounts.all||0));
+  $("#sourceManagerWmCount").textContent=String(Number(productCounts.wm||0));
+  $("#sourceManagerBhxCount").textContent=String(Number(productCounts.bhx||0));
+  $("#sourceManagerGoCount").textContent=String(Number(productCounts.go||0));
 
   const items=sourceManagerActiveItems();
   const visible=items.slice(0,sourceManagerLimit);

@@ -32,3 +32,12 @@ jobs:
           curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1"             > /tmp/library.json
           jq '{products:(.products|length)}' /tmp/library.json
           jq -e '.products | type=="array"' /tmp/library.json >/dev/null
+
+          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=source-manager"             > /tmp/source-manager.json
+          jq '{brands:(.brands|length),groups:(.groups|length),products:.products}' /tmp/source-manager.json
+          jq -e '.brands | type=="array"' /tmp/source-manager.json >/dev/null
+          jq -e '.groups | type=="array"' /tmp/source-manager.json >/dev/null
+          jq -e '.products.all | type=="number"' /tmp/source-manager.json >/dev/null
+          jq -e '.products.wm | type=="number"' /tmp/source-manager.json >/dev/null
+          jq -e '.products.bhx | type=="number"' /tmp/source-manager.json >/dev/null
+          jq -e '.products.go | type=="number"' /tmp/source-manager.json >/dev/null

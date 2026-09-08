@@ -395,4 +395,13 @@ assert.equal(money(0),"—");
   assert.match(css,/Source manager v1/);
 }
 
+
+{
+  assert.match(html,/id="sourceManagerAllCount"/);
+  assert.match(html,/id="sourceManagerWmCount"/);
+  assert.match(html,/id="sourceManagerBhxCount"/);
+  assert.match(html,/id="sourceManagerGoCount"/);
+  assert.match(app,/sourceManagerCache\.products\|\|\{\}/);
+}
+
 console.log("money and hierarchy UI tests passed");

@@ -27,6 +27,7 @@ jobs:
           jq . /tmp/health.json
           test "$(jq -r '.ok' /tmp/health.json)" = "true"
           test "$(jq -r '.mode' /tmp/health.json)" = "supabase-only"
+          jq -e '.stale_jobs_cleaned | type=="number"' /tmp/health.json >/dev/null
 
           curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1"             > /tmp/library.json
           jq '{products:(.products|length)}' /tmp/library.json

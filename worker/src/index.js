@@ -1902,16 +1902,12 @@ function bhxDirectHeaders(referer){
 
 async function bhxDirectJson(apiUrl,referer){
   let lastError="";
-  for(let attempt=0;attempt<3;attempt++){
-    const controller=new AbortController();
-    const timer=setTimeout(()=>controller.abort(),8000);
+  for(let attempt=0;attempt<2;attempt++){
     try{
       const response=await fetch(apiUrl,{
         method:"GET",
-        headers:bhxDirectHeaders(referer),
-        signal:controller.signal
+        headers:bhxDirectHeaders(referer)
       });
-      clearTimeout(timer);
       if(!response.ok){
         lastError="http_"+response.status;
       }else{
@@ -1925,11 +1921,7 @@ async function bhxDirectJson(apiUrl,referer){
         lastError="invalid_payload_code_"+String(body&&body.code);
       }
     }catch(error){
-      clearTimeout(timer);
       lastError=String(error&&error.message||error).slice(0,300);
-    }
-    if(attempt<2){
-      await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
     }
   }
   throw new Error("bhx_direct_api_failed:"+lastError);

@@ -131,6 +131,10 @@ const viewRenderState={
 };
 const productSearchWordsCache=new WeakMap();
 const LOCAL_LIBRARY_CACHE_TTL=10*60*1000;
+const CLASSIFICATION_CHECK_MS=4000;
+let classificationVersion="";
+let classificationCheckTimer=0;
+let classificationRefreshBusy=false;
 
 function rebuildLibraryIndex(){
   libraryByUrl=new Map();
@@ -2091,6 +2095,41 @@ async function refreshLibraryInBackground(){
   }catch{}
 }
 
+async function checkClassificationVersion(force=false){
+  if(!API||classificationRefreshBusy)return;
+  if(document.visibilityState==="hidden"&&!force)return;
+  classificationRefreshBusy=true;
+  try{
+    const r=await apiFetch("/api/library?view=classification-version",{cache:"no-store"});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||"classification_version_error");
+    const next=String(data.version||"")+"|"+String(data.member_count||0);
+
+    if(!classificationVersion){
+      classificationVersion=next;
+      return;
+    }
+    if(next!==classificationVersion){
+      classificationVersion=next;
+      await fetchLibraryFromSupabase();
+      renderCategoryMenu();
+      renderLibraryProducts();
+    }
+  }catch{}finally{
+    classificationRefreshBusy=false;
+  }
+}
+
+function startClassificationAutoRefresh(){
+  if(classificationCheckTimer)return;
+  checkClassificationVersion(true);
+  classificationCheckTimer=setInterval(()=>checkClassificationVersion(false),CLASSIFICATION_CHECK_MS);
+  window.addEventListener("focus",()=>checkClassificationVersion(true));
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible")checkClassificationVersion(true);
+  });
+}
+
 async function ensureLibraryCache(force=false){
   if(libraryLoaded&&!force)return;
 
@@ -3472,6 +3511,7 @@ function startAutoUpdateChecks(){
 }
 
 startAutoUpdateChecks();
+startClassificationAutoRefresh();
 
 const saved=localStorage.getItem("getlink:last-url")||"";
 if(saved)$("#url").value=saved;

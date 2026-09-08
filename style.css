@@ -7316,3 +7316,157 @@ body.source-manager-open{overflow:hidden!important}
     font-size:9px!important;
   }
 }
+
+
+/* =========================================================
+   Source logo fidelity + pinned All + bottom breathing room v2
+   ========================================================= */
+
+/* "Tất cả" is a fixed sibling above the category scroll owner. */
+.workspace-nav .category-all-pinned{
+  flex:0 0 auto!important;
+  width:100%!important;
+  min-width:0!important;
+  min-height:34px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:7px!important;
+  margin:0 0 4px!important;
+  padding:7px 8px!important;
+  border:1px solid #e4e7eb!important;
+  border-radius:8px!important;
+  background:#fff!important;
+  color:#4f5965!important;
+  font-size:11px!important;
+  font-weight:700!important;
+  text-align:left!important;
+}
+.workspace-nav .category-all-pinned small{
+  margin-left:auto!important;
+  color:#9aa2ad!important;
+  font-size:9px!important;
+  font-weight:650!important;
+}
+.workspace-nav .category-all-pinned.active{
+  border-color:var(--green)!important;
+  background:var(--green)!important;
+  color:#fff!important;
+}
+.workspace-nav .category-all-pinned.active small{
+  color:#d8f1e3!important;
+}
+.workspace-nav .category-tabs{
+  padding-top:0!important;
+  padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+  scroll-padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+}
+
+/* Source chips: text first, real brand artwork on the RIGHT. */
+.source-chip-main{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:7px!important;
+}
+.source-chip-label{
+  order:1!important;
+  flex:0 0 auto!important;
+}
+.source-logo-mark{
+  order:2!important;
+  position:relative!important;
+  flex:0 0 auto!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:hidden!important;
+  background:#fff!important;
+}
+.source-logo-image{
+  position:static!important;
+  inset:auto!important;
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  object-fit:contain!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+.source-logo-fallback{display:none!important}
+
+.purchase-mode-row .source-tabs-inline .source-chip-brand{
+  min-height:36px!important;
+  height:36px!important;
+  padding:0 8px 0 10px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-main{
+  gap:7px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-all{
+  width:24px!important;
+  height:22px!important;
+  border:1px solid #dfe5e9!important;
+  border-radius:6px!important;
+  background:#f4f6f8!important;
+  color:#59636e!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-bhx{
+  width:54px!important;
+  height:24px!important;
+  border:0!important;
+  border-radius:4px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-wm{
+  width:55px!important;
+  height:23px!important;
+  border:0!important;
+  border-radius:0!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-go{
+  width:37px!important;
+  height:24px!important;
+  border:0!important;
+  border-radius:0!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-label{
+  font-size:9.8px!important;
+  font-weight:760!important;
+  white-space:nowrap!important;
+}
+
+/* A little air under the whole desktop app instead of touching the viewport edge. */
+@media(min-width:1101px){
+  .wrap{
+    padding-bottom:18px!important;
+  }
+}
+@media(max-width:1100px){
+  .wrap{
+    padding-bottom:max(10px,env(safe-area-inset-bottom))!important;
+  }
+  .workspace-nav .category-all-pinned{
+    min-height:38px!important;
+    padding:8px 9px!important;
+    margin-bottom:5px!important;
+  }
+}
+@media(max-width:720px){
+  .purchase-mode-row .source-tabs-inline .source-chip-brand{
+    min-height:32px!important;
+    height:32px!important;
+    padding-left:7px!important;
+    padding-right:6px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-bhx{
+    width:47px!important;
+    height:21px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-wm{
+    width:49px!important;
+    height:20px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-go{
+    width:34px!important;
+    height:21px!important;
+  }
+}

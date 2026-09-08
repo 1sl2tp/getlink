@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-matchaudit1">
+  <link rel="stylesheet" href="style.css?v=20260908-catalog-v2">
 </head>
 <body>
 <main class="wrap">
@@ -20,7 +20,7 @@
     <div class="import-head">
       <div>
         <strong>Thêm / cập nhật link nguồn giá</strong>
-        <small>Link đã lấy trong vòng 24 giờ sẽ đọc lại từ D1, không gọi Bright Data.</small>
+        <small>Link gần đây được đọc lại từ Supabase; dữ liệu nguồn chỉ lấy mới khi cần.</small>
       </div>
       <button id="closeImport" class="icon-button" type="button" aria-label="Đóng">×</button>
     </div>
@@ -60,41 +60,37 @@
 
     <section class="card catalog workspace-list">
       <div class="catalog-sticky-head">
-      <div class="brand-section main-brand-section" hidden>
-        <span class="nav-label">Hãng</span>
-        <div id="brandTabs" class="brand-tabs brand-filter-rail" hidden></div>
-      </div>
-
-      <div class="catalog-toolbar">
-        <div>
-          <h2 id="libraryTitle">Danh sách giá</h2>
-          <p>Trọng tâm: giá theo nguồn · giá của mình · giá mặc cả.</p>
+        <div class="catalog-toolbar">
+          <div>
+            <h2 id="libraryTitle">Tất cả sản phẩm</h2>
+            <p id="catalogHint">Chọn cách mua trước, sau đó tìm sản phẩm theo thời gian thực.</p>
+          </div>
+          <span id="libraryCount"></span>
         </div>
-        <span id="libraryCount"></span>
-      </div>
 
-      <div class="catalog-controls">
-        <div id="packTabs" class="pack-tabs catalog-pack-tabs"></div>
-        <div class="catalog-mode-actions">
-          <button id="toggleMatchAudit" class="audit-toggle" type="button" aria-pressed="false">Ghép thử Sữa</button>
+        <div class="catalog-controls purchase-mode-row">
+          <span class="control-label">Xem theo</span>
+          <div id="packTabs" class="pack-tabs catalog-pack-tabs"></div>
+        </div>
+
+        <div class="catalog-search-row">
+          <div class="catalog-search">
+            <input id="librarySearch" autocomplete="off" placeholder="Tìm sản phẩm, hãng, quy cách...">
+          </div>
           <div class="view-switch" aria-label="Kiểu hiển thị">
-            <button class="view-button active" data-view="grid" type="button" title="Xem ảnh">▦ <span>Ảnh</span></button>
-            <button class="view-button" data-view="table" type="button" title="Xem bảng">☷ <span>Bảng</span></button>
+            <button class="view-button active" data-view="grid" type="button" title="Xem ảnh"><span aria-hidden="true">▦</span><b>Ảnh</b></button>
+            <button class="view-button" data-view="table" type="button" title="Xem bảng"><span aria-hidden="true">☷</span><b>Bảng</b></button>
           </div>
         </div>
-      </div>
 
-      <div class="catalog-search-row">
-        <div class="catalog-search">
-          <input id="librarySearch" autocomplete="off" placeholder="Tìm tên sản phẩm, hãng, quy cách...">
+        <div class="legacy-catalog-actions" hidden>
+          <button id="toggleMatchAudit" class="audit-toggle" type="button" aria-pressed="false">Ghép thử Sữa</button>
+          <div id="stateFilters" class="state-filters catalog-status-row" aria-label="Trạng thái thư viện">
+            <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
+            <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
+            <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
+          </div>
         </div>
-      </div>
-
-      <div id="stateFilters" class="state-filters catalog-status-row" aria-label="Trạng thái thư viện">
-        <button class="state-chip active" data-state="visible" type="button">Đang dùng</button>
-        <button class="state-chip" data-state="watch" type="button">★ Quan tâm</button>
-        <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
-      </div>
       </div>
 
       <section id="matchAudit" class="match-audit" hidden aria-live="polite">
@@ -135,9 +131,25 @@
     </section>
 
     <aside class="workspace-detail">
-      <section class="card detail-empty" id="detailEmpty">
-        <strong>Chi tiết sản phẩm</strong>
-        <p>Chọn một sản phẩm ở danh sách để xem ảnh, quy cách, ưu đãi và dữ liệu chi tiết.</p>
+      <section class="card detail-empty category-context-card" id="detailEmpty">
+        <div class="category-context-kicker">Ngữ cảnh đang xem</div>
+        <div class="category-context-head">
+          <strong id="categoryDetailTitle">Toàn bộ thư viện</strong>
+          <span id="categoryDetailCount">—</span>
+        </div>
+        <p id="categoryDetailDescription">Chọn danh mục hoặc tìm kiếm để thu hẹp sản phẩm. Chọn một sản phẩm để xem chi tiết.</p>
+
+        <div id="categoryDetailStats" class="category-context-stats"></div>
+
+        <div id="categoryDetailChildrenWrap" class="category-context-section" hidden>
+          <div class="category-context-label">Nhóm trong danh mục</div>
+          <div id="categoryDetailChildren" class="category-mini-list"></div>
+        </div>
+
+        <div class="brand-section category-brand-section" hidden>
+          <div class="category-context-label">Hãng phổ biến</div>
+          <div id="brandTabs" class="brand-tabs brand-filter-rail" hidden></div>
+        </div>
       </section>
 
       <section class="card result detail-panel" id="result" hidden>
@@ -214,6 +226,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-supabase-clean1"></script>
+<script src="app.js?v=20260908-catalog-v2"></script>
 </body>
 </html>

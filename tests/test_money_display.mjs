@@ -173,6 +173,22 @@ assert.equal(money(0),"—");
     true
   );
   assert.equal(
+    api.matchesSearch({name:"Tương ớt Chinsu chai 250g"},"tuong o"),
+    true
+  );
+  assert.equal(
+    api.matchesSearch({name:"Sữa đậu nành Fami Canxi 200ml"},"fami c"),
+    true
+  );
+  assert.equal(
+    api.matchesSearch({name:"Mì Hảo Hảo tôm chua cay"},"hao h"),
+    true
+  );
+  assert.equal(
+    api.matchesSearch({name:"Sữa đậu nành Fami nguyên vị 200ml"},"fami c"),
+    false
+  );
+  assert.equal(
     api.matchesSearch({name:"Mì tương đen Bắc Kinh Ottogi gói 83g"},"tuong ot"),
     false
   );

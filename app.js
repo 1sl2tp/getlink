@@ -290,7 +290,7 @@ function matchesSearchTokens(row,tokens){
     let found=-1;
     for(let i=0;i<words.length;i++){
       if(used[i])continue;
-      const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+      const ok=words[i].startsWith(token);
       if(ok){found=i;break;}
     }
     if(found<0)return false;
@@ -308,7 +308,7 @@ function matchesSearch(row,query){
     let found=-1;
     for(let i=0;i<words.length;i++){
       if(used[i])continue;
-      const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+      const ok=words[i].startsWith(token);
       if(ok){found=i;break;}
     }
     if(found<0)return false;
@@ -2405,8 +2405,8 @@ $("#sourceTabs").addEventListener("click",e=>{
   renderLibraryProducts();
 });
 
-$("#librarySearch").addEventListener("input",e=>{
-  const next=String(e.target.value||"").trim();
+function queueLibrarySearch(value){
+  const next=String(value||"").trim();
   if(searchFrame)cancelAnimationFrame(searchFrame);
   searchFrame=requestAnimationFrame(()=>{
     searchFrame=0;
@@ -2417,6 +2417,15 @@ $("#librarySearch").addEventListener("input",e=>{
     if(activeScroller)activeScroller.scrollTop=0;
     renderLibraryProducts();
   });
+}
+
+$("#librarySearch").addEventListener("input",e=>{
+  if(e.isComposing)return;
+  queueLibrarySearch(e.target.value);
+});
+
+$("#librarySearch").addEventListener("compositionend",e=>{
+  queueLibrarySearch(e.target.value);
 });
 
 

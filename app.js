@@ -771,16 +771,9 @@ function rowIsCarton(row){
 
 function rowPriceLevels(row){
   const h=rowPackHierarchy(row);
-  const winmart=isWinmartRow(row);
   const carton=Number(row.web_carton_price||0);
   const middle=Number(row.web_middle_price||0);
-  const sourceLeaf=Number(
-    row.current_price||
-    row.regular_pack_price||
-    row.unit_price||
-    0
-  );
-  const leaf=Number(row.web_leaf_price||0)||(winmart?sourceLeaf:0);
+  const leaf=Number(row.web_leaf_price||0);
   const promoCarton=Number(row.promo_carton_price||0);
   const promoMiddle=Number(row.promo_middle_price||0);
   const promoLeaf=Number(row.promo_leaf_price||0);
@@ -797,7 +790,7 @@ function rowPriceLevels(row){
     hierarchy:h,
     hasCarton:h.label1==="Thùng",
     hasMiddle:Boolean(h.label2),
-    hasLeaf:Boolean(h.label3)||(winmart&&leaf>0),
+    hasLeaf:Boolean(h.label3),
     hasPromo,
     cartonPrice:carton,
     middlePrice:middle,
@@ -1020,13 +1013,18 @@ function gridProductCard(row){
   const levels=rowPriceLevels(row);
   const displayName=canonicalDisplayName(row);
   const hierarchy=levels.hierarchy;
-  const price=levels.hasCarton
-    ?(levels.promoCartonPrice||levels.cartonPrice)
-    :(levels.hasMiddle
-      ?(levels.promoMiddlePrice||levels.middlePrice)
-      :(levels.promoLeafPrice||levels.leafPrice));
+  const rawWinmart=isWinmartRow(row);
+  const price=rawWinmart
+    ?Number(row.current_price||row.regular_pack_price||0)
+    :(levels.hasCarton
+      ?(levels.promoCartonPrice||levels.cartonPrice)
+      :(levels.hasMiddle
+        ?(levels.promoMiddlePrice||levels.middlePrice)
+        :(levels.promoLeafPrice||levels.leafPrice)));
   const image=String(row.image||"").trim();
-  const qc=rowPrimaryQc(row);
+  const qc=rawWinmart
+    ?String(row.packaging||"").trim()
+    :rowPrimaryQc(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+
@@ -1114,8 +1112,8 @@ function renderPackTabs(){
   if(!host)return;
 
   const base=visibleRowsBeforePack();
-  const cartonCount=base.filter(row=>rowIsCarton(row)).length;
-  const retailCount=base.length-cartonCount;
+  const cartonCount=base.filter(row=>!isWinmartRow(row)&&rowIsCarton(row)).length;
+  const retailCount=base.filter(row=>!isWinmartRow(row)&&!rowIsCarton(row)).length;
   const promoCount=base.filter(row=>rowPriceLevels(row).hasPromo).length;
 
   const selectedCount=activePackKind==="Thùng"
@@ -1153,9 +1151,9 @@ function filteredLibraryProducts(){
   let products=visibleRowsBeforePack();
 
   if(activePackKind==="Thùng"){
-    products=products.filter(row=>rowIsCarton(row));
+    products=products.filter(row=>!isWinmartRow(row)&&rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
-    products=products.filter(row=>!rowIsCarton(row));
+    products=products.filter(row=>!isWinmartRow(row)&&!rowIsCarton(row));
   }else if(activePackKind==="Ưu đãi"){
     products=products.filter(row=>rowPriceLevels(row).hasPromo);
   }

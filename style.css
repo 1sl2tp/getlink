@@ -4249,3 +4249,121 @@ h1{
   display:flex!important;
   visibility:visible!important;
 }
+
+
+/* Image fidelity v1: preserve full artwork, maximize usable media area */
+.grid-product-image{
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  aspect-ratio:1 / 1!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:4px!important;
+  overflow:hidden!important;
+  background:#fff!important;
+}
+.grid-product-image img{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  transform:none!important;
+}
+.grid-product-fallback{
+  align-self:center!important;
+  justify-self:center!important;
+}
+
+/* Detail uses the image's own aspect ratio instead of a fixed 150px box. */
+.detail-image-wrap{
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:4px!important;
+  margin:0 0 8px!important;
+  overflow:hidden!important;
+  background:#fff!important;
+}
+.detail-image-wrap img{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  max-width:100%!important;
+  max-height:min(44vh,380px)!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  cursor:zoom-in;
+}
+.detail-image-fallback{
+  min-height:120px;
+  display:grid;
+  place-items:center;
+}
+
+/* Fullscreen zoom keeps original ratio and uses the whole viewport. */
+.image-zoom[hidden]{display:none!important}
+.image-zoom{
+  position:fixed;
+  inset:0;
+  z-index:120;
+  display:grid;
+  place-items:center;
+  padding:18px;
+  background:rgba(10,18,27,.88);
+  backdrop-filter:blur(3px);
+}
+.image-zoom img{
+  display:block;
+  width:auto;
+  height:auto;
+  max-width:min(96vw,1200px);
+  max-height:92vh;
+  object-fit:contain;
+}
+.image-zoom-close{
+  position:absolute;
+  top:max(12px,env(safe-area-inset-top));
+  right:max(12px,env(safe-area-inset-right));
+  width:36px;
+  height:36px;
+  border:0;
+  border-radius:999px;
+  background:rgba(255,255,255,.94);
+  color:#26313b;
+  font-size:24px;
+  line-height:1;
+  box-shadow:0 3px 16px rgba(0,0,0,.18);
+}
+body.image-zoom-open{overflow:hidden!important}
+
+@media(max-width:720px){
+  .workspace-list .product-grid{
+    align-items:start!important;
+  }
+  .grid-product-image{
+    aspect-ratio:1 / 1!important;
+    padding:3px!important;
+  }
+  .detail-image-wrap{
+    padding:2px!important;
+    margin-bottom:7px!important;
+  }
+  .detail-image-wrap img{
+    max-height:52vh!important;
+  }
+  .image-zoom{
+    padding:8px;
+  }
+  .image-zoom img{
+    max-width:98vw;
+    max-height:94vh;
+  }
+}

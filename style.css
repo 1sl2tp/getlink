@@ -4427,3 +4427,35 @@ body.image-zoom-open{overflow:hidden!important}
   .grid-qc{font-size:8.5px!important;padding:3px 6px!important}
   .grid-unit-price{font-size:8.5px}
 }
+
+
+/* Carton footer v3: pack chip left, small unit price beside total */
+.grid-product-bottom{
+  align-items:center!important;
+  justify-content:space-between!important;
+}
+.grid-qc{
+  flex:0 0 auto!important;
+  width:auto!important;
+  max-width:52%!important;
+}
+.grid-price-group{
+  margin-left:auto;
+  display:inline-flex;
+  align-items:baseline;
+  justify-content:flex-end;
+  gap:6px;
+  white-space:nowrap;
+}
+.grid-unit-price{
+  flex:0 0 auto;
+  color:#25303b!important;
+  font-size:10px!important;
+  line-height:1!important;
+  font-weight:650!important;
+  letter-spacing:0!important;
+}
+@media(max-width:720px){
+  .grid-price-group{gap:5px}
+  .grid-unit-price{font-size:9px!important}
+}

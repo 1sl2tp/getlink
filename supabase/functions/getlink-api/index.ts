@@ -328,6 +328,27 @@ async function bhxCategoryRaw(url:string) {
   for(const item of [...v2items,...vegItems,...ajaxItems]) map.set(String(item.url||item.id||item.productCode||item.productId),item);
   return {items:[...map.values()],categoryId};
 }
+async function bhxRegionProbe(url:string){
+  const c=canonicalBhx(url);
+  const slug=pathParts(c)[0]||"";
+  if(!slug)throw new Error("bhx_category_slug_missing");
+  const api=new URL("https://api.bachhoaxanh.com/gw/Category/V2/GetCate");
+  for(const [k,v] of Object.entries({
+    provinceId:"1027",wardId:"0",districtId:"0",storeId:"2546",
+    categoryUrl:slug,isMobile:"true",isV2:"true",pageSize:"500"
+  }))api.searchParams.set(k,v);
+  const t=Date.now();
+  const body=await bhxJson(api.toString(),c);
+  const items=collectBhx(body,c);
+  return {
+    ok:true,
+    region:Deno.env.get("SB_REGION")||"",
+    ms:Date.now()-t,
+    products:items.length,
+    category_id:bhxCategoryId(items)||null
+  };
+}
+
 function normalizeBhx(raw:any, rootGroup:string, checked:string): Product | null {
   if(!raw||typeof raw!=="object"||!raw.url)return null;
   let url=""; try{url=canonicalBhx(new URL(String(raw.url),"https://www.bachhoaxanh.com").toString());}catch{return null;}
@@ -642,6 +663,12 @@ Deno.serve(async(req:Request)=>{
   if(!authorized(req))return response(req,{error:"unauthorized"},401);
   const url=new URL(req.url), route=routePath(req);
   try{
+    if(req.method==="GET"&&route==="/api/debug-bhx-region"){
+      const raw=clean(url.searchParams.get("url"));
+      if(!raw)return response(req,{error:"missing_url"},400);
+      const data=await bhxRegionProbe(raw);
+      return response(req,data,200);
+    }
     if(req.method==="GET"&&route==="/health"){
       const {count,error}=await sb.from("getlink_links").select("*",{count:"exact",head:true}); if(error)throw error;
       return response(req,{ok:true,mode:"supabase-only",links:Number(count||0)});

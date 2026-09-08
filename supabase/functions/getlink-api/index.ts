@@ -225,6 +225,7 @@ const BHX_XAPIKEY = clean(Deno.env.get("BHX_XAPIKEY") || "bhx-api-core-2022");
 const BHX_BEARER_TOKEN = clean(Deno.env.get("BHX_BEARER_TOKEN") || "");
 const BHX_DEVICE_ID = clean(Deno.env.get("BHX_DEVICE_ID") || "");
 const BHX_PAGE_SIZE = 10;
+const BHX_TRANSPORT_URL = clean(Deno.env.get("BHX_TRANSPORT_URL") || "https://getlink-bhx-proxy.taphoa-4ab8161d.workers.dev");
 
 function bhxWebReferer(referer: string) {
   try {
@@ -348,67 +349,61 @@ function bhxPriorityProductIds(payload:any) {
 function bhxProductId(item:any) {
   return Number(item?.id||item?.productId||item?.productID||item?.ProductId||item?.ProductID||0)||0;
 }
+async function bhxTransportCategory(url:string) {
+  const c=canonicalBhx(url);
+  const slug=pathParts(c)[0]||"";
+  if(!slug)throw new Error("bhx_category_slug_missing");
+  const categoryUrl="https://www.bachhoaxanh.com/"+slug;
+  let last="";
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const r=await fetch(BHX_TRANSPORT_URL+"/category",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({url:categoryUrl})
+      });
+      if(!r.ok){last="http_"+r.status+":"+(await r.text()).slice(0,300);continue;}
+      const body=await r.json();
+      if(body&&Number(body.code)===0&&body.data!=null)return body;
+      last="code_"+String(body?.code);
+    }catch(e){
+      last=String(e&&e.message||e).slice(0,300);
+    }
+  }
+  throw new Error("bhx_transport_failed:"+last);
+}
 async function bhxProductDetail(url:string) {
-  const c=canonicalBhx(url); const parts=pathParts(c); if(parts.length<2)throw new Error("bhx_product_url_required");
-  const api=new URL("https://api.bachhoaxanh.com/gw/Product/GetProductDetail");
-  for (const [k,v] of Object.entries({provinceId:"1027",wardId:"0",districtId:"0",storeId:"2546",CategoryUrl:parts[0],ProductUrl:parts[1]})) api.searchParams.set(k,v);
-  const body=await bhxJson(api.toString(),c);
-  if(!Array.isArray(body.data?.boxBuys)||!body.data.boxBuys.length)throw new Error("bhx_product_empty");
-  return body.data;
+  const c=canonicalBhx(url);
+  const parts=pathParts(c);
+  if(parts.length<2)throw new Error("bhx_product_url_required");
+  const categoryUrl="https://bachhoaxanh.com/"+parts[0];
+  const body=await bhxTransportCategory(categoryUrl);
+  const items=bhxPayloadProducts(body,categoryUrl);
+  const match=items.find((item:any)=>{
+    try{
+      return canonicalBhx(new URL(String(item?.url||""),"https://www.bachhoaxanh.com").toString())===c;
+    }catch{return false;}
+  });
+  if(!match)throw new Error("bhx_product_not_found_in_category");
+  return {
+    boxBuys:[match],
+    categoryId:bhxCategoryId(items,body),
+    categoryName:clean(body?.data?.info?.name||match?.category?.name||parts[0]),
+    brandUrl:clean(match?.brandName||"")
+  };
 }
 async function bhxCategoryRaw(url:string) {
-  const c=canonicalBhx(url); const slug=pathParts(c)[0]||""; if(!slug)throw new Error("bhx_category_slug_missing");
-
-  // BHX renders the first batch with GetCate, then continues with AjaxProduct.
-  const v2=new URL("https://api.bachhoaxanh.com/gw/Category/V2/GetCate");
-  for(const [k,v] of Object.entries({
-    provinceId:"1027",wardId:"0",districtId:"0",storeId:"2546",
-    categoryUrl:slug,isMobile:"true",isV2:"true",pageSize:String(BHX_PAGE_SIZE)
-  }))v2.searchParams.set(k,v);
-
-  const v2body=await bhxJson(v2.toString(),c);
-  const first=bhxPayloadProducts(v2body,c);
-  const categoryId=bhxCategoryId(first,v2body);
+  const c=canonicalBhx(url);
+  const body=await bhxTransportCategory(c);
+  const items=bhxPayloadProducts(body,c);
+  const categoryId=bhxCategoryId(items,body);
   if(!categoryId)throw new Error("bhx_category_id_missing");
-
-  const total=bhxCategoryTotal(v2body);
-  const rootName=clean(v2body?.data?.info?.name||first[0]?.category?.name||slugTitle(c));
-  const priorityProductIds=bhxPriorityProductIds(v2body);
-  const map=new Map<string,any>();
-  for(const item of first)map.set(bhxProductKey(item),item);
-
-  const ajaxUrl="https://api.bachhoaxanh.com/gw/Category/AjaxProduct";
-  let lastShowProductId=bhxProductId(first[first.length-1]);
-  const expectedPages=total>0?Math.ceil(total/BHX_PAGE_SIZE):50;
-  const maxPage=Math.min(100,Math.max(3,expectedPages+2));
-
-  // GetCate is page 1. The site's continuation starts at PageIndex 2.
-  for(let page=2;page<=maxPage;page++){
-    if(total>0&&map.size>=total)break;
-    const body=await bhxJson(ajaxUrl,c,{
-      provinceId:1027,wardId:0,districtId:0,storeId:2546,
-      CategoryId:categoryId,
-      SelectedBrandId:"",
-      PropertyIdList:"",
-      PageIndex:page,
-      PageSize:BHX_PAGE_SIZE,
-      SortStr:"",
-      PriorityProductIds:priorityProductIds,
-      PropertySelected:[],
-      LastShowProductId:lastShowProductId
-    });
-    const batch=bhxPayloadProducts(body,c);
-    if(!batch.length)break;
-
-    const before=map.size;
-    for(const item of batch)map.set(bhxProductKey(item),item);
-
-    const nextLast=bhxProductId(batch[batch.length-1]);
-    if(nextLast>0)lastShowProductId=nextLast;
-    if(map.size===before)break;
+  const total=bhxCategoryTotal(body);
+  const rootName=clean(body?.data?.info?.name||items[0]?.category?.name||slugTitle(c));
+  if(total>0&&items.length<Math.min(total,10)){
+    throw new Error("bhx_transport_partial:"+items.length+"/"+total);
   }
-
-  return {items:[...map.values()],categoryId,rootName,total};
+  return {items,categoryId,rootName,total};
 }
 
 function normalizeBhx(raw:any, rootGroup:string, checked:string): Product | null {

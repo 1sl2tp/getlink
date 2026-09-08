@@ -10,6 +10,7 @@ const manualRulesMigration = fs.readFileSync("supabase/migrations/20260908171000
 const miChinhMigration = fs.readFileSync("supabase/migrations/20260908172000_manual_group_mi_chinh.sql","utf8");
 const exclusiveCoffeeMigration = fs.readFileSync("supabase/migrations/20260908173000_manual_group_exclusive_coffee.sql","utf8");
 const banhMigration = fs.readFileSync("supabase/migrations/20260908174000_manual_group_banh.sql","utf8");
+const suaChuaMigration = fs.readFileSync("supabase/migrations/20260908175000_manual_group_sua_chua.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -132,5 +133,18 @@ assert.match(banhMigration,/'name_product_phrase','bánh'/);
 assert.match(banhMigration,/normalize\(lower\(l\.name\),NFC\) like 'bánh%'/i);
 assert.match(banhMigration,/normalize\(lower\(l\.name\),NFC\) like 'thùng %'/i);
 assert.match(banhMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
+
+
+// Sữa chua uses structured product-name matching and still skips assigned products.
+assert.match(source,/name_product_pack_phrase/);
+assert.match(source,/name_pack_contains/);
+assert.match(source,/\\s\+\\d\+/);
+assert.match(suaChuaMigration,/'sua-chua','Sữa chua'/);
+assert.match(suaChuaMigration,/'sữa chua'/i);
+assert.match(suaChuaMigration,/'yogurt'/i);
+assert.match(suaChuaMigration,/'yoghurt'/i);
+assert.match(suaChuaMigration,/'yaourt'/i);
+assert.match(suaChuaMigration,/'th true yogurt'/i);
+assert.match(suaChuaMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
 
 console.log("GETLINK name filter contract: OK");

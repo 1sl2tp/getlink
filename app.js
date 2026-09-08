@@ -1,5 +1,12 @@
 const $=s=>document.querySelector(s);
 const API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
+const API_KEY=String(window.GETLINK_API_KEY||"");
+
+function apiFetch(path,options={}){
+  const headers=new Headers(options.headers||{});
+  if(API_KEY)headers.set("apikey",API_KEY);
+  return fetch(API+path,{...options,headers});
+}
 
 let wantedUrl="";
 let requestId="";
@@ -280,7 +287,7 @@ async function loadMatchAudit(force=false){
   $("#matchAuditSummary").textContent="";
   try{
     await ensureLibraryCache(false);
-    const r=await fetch(API+"/api/library?view=matches",{cache:"no-store"});
+    const r=await apiFetch("/api/library?view=matches",{cache:"no-store"});
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||"match_audit_error");
     matchAuditData=data;
@@ -318,7 +325,7 @@ function setStatus(text){
 function progressLabel(stage){
   return ({
     idle:"Sẵn sàng",
-    checking:"Kiểm tra D1",
+    checking:"Kiểm tra Supabase",
     queued:"Đang chờ xử lý",
     runner:"Đang khởi tạo",
     brightdata:"Đang lấy dữ liệu",
@@ -495,7 +502,7 @@ function syncWatchCheckbox(state){
 }
 
 async function updatePreference(url,state,refreshHours=6,rerender=true){
-  const r=await fetch(API+"/api/preference",{
+  const r=await apiFetch("/api/preference",{
     method:"POST",
     headers:{"content-type":"application/json"},
     body:JSON.stringify({
@@ -1174,7 +1181,7 @@ function gridProductCard(row){
 async function loadLibraryGroups(){
   if(!API)return;
   try{
-    const r=await fetch(API+"/api/library?view=groups",{cache:"no-store"});
+    const r=await apiFetch("/api/library?view=groups",{cache:"no-store"});
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||"library_error");
     libraryGroups=Array.isArray(data.groups)?data.groups:[];
@@ -1182,13 +1189,13 @@ async function loadLibraryGroups(){
   }catch{
     libraryGroups=[];
     $("#categoryTabs").innerHTML=
-      '<span class="library-error">Chưa đọc được nhóm từ D1.</span>';
+      '<span class="library-error">Chưa đọc được nhóm từ Supabase.</span>';
   }
 }
 
 async function ensureLibraryCache(force=false){
   if(libraryLoaded&&!force)return;
-  const r=await fetch(API+"/api/library?view=search&limit=10000&include_hidden=1",{cache:"no-store"});
+  const r=await apiFetch("/api/library?view=search&limit=10000&include_hidden=1",{cache:"no-store"});
   const data=await r.json();
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];
@@ -1422,8 +1429,8 @@ async function openLibraryItem(url){
   }
 
   try{
-    const r=await fetch(
-      API+"/api/library?view=item&url="+encodeURIComponent(url),
+    const r=await apiFetch(
+      "/api/library?view=item&url="+encodeURIComponent(url),
       {cache:"no-store"}
     );
     const data=await r.json();
@@ -1730,8 +1737,8 @@ $("#closeImport").addEventListener("click",()=>{
 async function pollOnce(){
   if(!API||!requestId)return false;
   try{
-    const r=await fetch(
-      API+"/api/result?id="+encodeURIComponent(requestId),
+    const r=await apiFetch(
+      "/api/result?id="+encodeURIComponent(requestId),
       {cache:"no-store"}
     );
     const data=await r.json();
@@ -1833,10 +1840,10 @@ $("#get").addEventListener("click",async()=>{
   jobStartedAt=Date.now();
   lastPollAt=0;
   localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
-  setJobStage("checking","Đang kiểm tra thư viện D1...");
+  setJobStage("checking","Đang kiểm tra thư viện Supabase...");
 
   try{
-    const r=await fetch(API+"/api/get-price",{
+    const r=await apiFetch("/api/get-price",{
       method:"POST",
       headers:{"content-type":"application/json"},
       body:JSON.stringify({url})
@@ -1860,7 +1867,7 @@ $("#get").addEventListener("click",async()=>{
       setJobStage(
         "complete",
         data.cache_hit
-          ?"Đã đọc ngay từ D1 vì link được lấy trong vòng 24 giờ."
+          ?"Đã đọc ngay từ Supabase vì link được lấy trong vòng 24 giờ."
           :doneStatus()
       );
       await refreshCatalog(url);

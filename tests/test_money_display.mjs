@@ -94,11 +94,12 @@ assert.equal(money(0),"—");
 
 {
   const searchKeyMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
+  const searchDisplayNameMatch=app.match(/function searchDisplayName\(row\)\{[\s\S]*?\n\}/);
   const productSearchKeyMatch=app.match(/function productSearchKey\(row\)\{[\s\S]*?\n\}/);
   const matchesSearchMatch=app.match(/function matchesSearch\(row,query\)\{[\s\S]*?\n\}/);
-  assert.ok(searchKeyMatch&&productSearchKeyMatch&&matchesSearchMatch,"search helpers not found");
+  assert.ok(searchKeyMatch&&searchDisplayNameMatch&&productSearchKeyMatch&&matchesSearchMatch,"search helpers not found");
   const api=new Function(
-    searchKeyMatch[0]+"\n"+productSearchKeyMatch[0]+"\n"+matchesSearchMatch[0]+
+    searchKeyMatch[0]+"\n"+searchDisplayNameMatch[0]+"\n"+productSearchKeyMatch[0]+"\n"+matchesSearchMatch[0]+
     "\nreturn {matchesSearch};"
   )();
 
@@ -133,6 +134,22 @@ assert.equal(money(0),"—");
   assert.equal(
     api.matchesSearch({name:"Nước khoáng Vĩnh Hảo 500ml",brand_name:"Hảo Hảo"},"hao hao"),
     false
+  );
+  assert.equal(
+    api.matchesSearch({
+      name:"Bia 333 Export thùng 24 lon x 330ml",
+      packaging:"Thùng",
+      pack_label_1:"Thùng"
+    },"thung"),
+    false
+  );
+  assert.equal(
+    api.matchesSearch({
+      name:"Bia 333 Export thùng 24 lon x 330ml",
+      packaging:"Thùng",
+      pack_label_1:"Thùng"
+    },"bia 333"),
+    true
   );
 }
 

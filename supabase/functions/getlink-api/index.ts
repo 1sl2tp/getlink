@@ -340,15 +340,34 @@ async function loadBhxGroupRefs() {
 async function mapIncomingWinmartGroups(products:Product[]) {
   if(!products.length)return;
   const refs=await loadBhxGroupRefs();
+
+  const brandCounts=new Map<string,Map<string,number>>();
+  for(const ref of refs){
+    const key=ref.brand_key;
+    if(!key)continue;
+    if(!brandCounts.has(key))brandCounts.set(key,new Map());
+    const variants=brandCounts.get(key)!;
+    variants.set(ref.brand,(variants.get(ref.brand)||0)+1);
+  }
+  const canonicalBrand=new Map<string,string>();
+  for(const [key,variants] of brandCounts){
+    const best=[...variants.entries()]
+      .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"))[0];
+    if(best)canonicalBrand.set(key,best[0]);
+  }
+
   for(const p of products){
     const si=p.source_identity||(p.source_identity={});
+    const rawBrand=clean(si.brand||p.branch);
+    const brandKey=groupBrandKey(rawBrand);
     const match=chooseBhxGroup({
       name:clean(si.raw_name||p.name),
-      brand:clean(si.brand||p.branch),
+      brand:rawBrand,
       barcode:clean(si.barcode||"")
     },refs);
-    // Keep WinMart root group untouched. BHX only supplies the normalized child.
+    // Keep WinMart source data untouched. BHX supplies browsing group/brand aliases only.
     si.bhx_group_name=match?match.group:"";
+    si.bhx_brand_name=canonicalBrand.get(brandKey)||"";
   }
 }
 async function syncExistingWinmartGroups(apply:boolean) {
@@ -954,7 +973,7 @@ async function persistPayload(payload:any, engine:string){
     if(p.image)assets.push({link_url:p.url,image_url:p.image,updated_at:now});
     comps.push({link_url:p.url,pack_kind:cmp.pack_kind||"",pack_quantity:Number(cmp.pack_quantity)||1,pack_unit:cmp.pack_unit||"",size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",regular_pack_price:cmp.regular_pack_price??p.price?.current??null,promo_pack_price:cmp.promo_pack_price??null,regular_unit_price:cmp.regular_unit_price??null,promo_unit_price:cmp.promo_unit_price??null,promotion_active:Boolean(cmp.promotion_active),updated_at:now});
     hier.push({link_url:p.url,label1:h.label1||"",qty1:Number(h.qty1)||0,label2:h.label2||"",qty2:Number(h.qty2)||0,label3:h.label3||"",qty3:Number(h.qty3)||0,evidence:h.evidence||"",updated_at:now});
-    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),category:clean(si.category||p.group),bhx_group_name:clean(si.bhx_group_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
+    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),category:clean(si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
     snaps.push({link_id:id,request_id:requestId,checked_at:p.last_checked_at||payload.checked_at,current_price:p.price?.current||null,original_price:p.price?.original||null,promotion_price:p.promotion?.price||null,promotion_text:p.promotion?.text||"",result_json:p});
   }
   await must(sb.from("getlink_links").upsert(rows,{onConflict:"canonical_url"}));
@@ -1009,7 +1028,7 @@ async function libraryRows(includeHidden=true){
       pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,pack_evidence:h.evidence||"",hierarchy_locked:0,
       source_product_id:id.source_product_id||"",source_code:id.source_code||"",barcode:id.barcode||"",sku:id.sku||"",
       source_raw_name:id.raw_name||l.name,source_raw_description:id.raw_description||"",match_key:id.match_key||"",match_basis:id.match_basis||"",
-      source_category_name:id.category||"",bhx_group_name:id.bhx_group_name||"",source_root_name:isW?(rootByReq.get(l.last_request_id)||l.group_name):"",
+      source_category_name:id.category||"",bhx_group_name:id.bhx_group_name||"",bhx_brand_name:id.bhx_brand_name||"",source_root_name:isW?(rootByReq.get(l.last_request_id)||l.group_name):"",
       web_carton_price:!isW&&isCarton?levelPrice:null,promo_carton_price:null,
       web_middle_price:!isW&&isMiddle?levelPrice:null,promo_middle_price:null,
       web_leaf_price:!isW&&!isCarton&&!isMiddle?levelPrice:null,promo_leaf_price:null,

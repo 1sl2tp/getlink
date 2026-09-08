@@ -1753,12 +1753,14 @@ function renderCategoryMenu(){
   }
   if(allPinnedCount)allPinnedCount.textContent=String(visibleLibrary.length);
 
-  host.innerHTML=groupRows.map(group=>
-    '<button class="category-chip category-root '+(activeRootGroup===group.key?"active":"")+'" '+
-      'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
-      '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
-    '</button>'
-  ).join("");
+  host.innerHTML=
+    groupRows.map(group=>
+      '<button class="category-chip category-root '+(activeRootGroup===group.key?"active":"")+'" '+
+        'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
+        '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
+      '</button>'
+    ).join("")+
+    '<div class="category-scroll-end-spacer" aria-hidden="true"></div>';
 
   const current=$("#mobileCategoryCurrent");
   if(current){

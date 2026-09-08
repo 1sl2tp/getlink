@@ -2362,7 +2362,17 @@ function sourceChipHtml(key,count,active,compact=false){
   }[key]||{full:key,short:key,title:key};
 
   const label=escapeHtml(compact?meta.short:meta.full);
-  return '<button class="source-chip source-chip-brand '+(active?"active ":"")+'source-'+(key||"all")+'" '+
+  const classes='source-chip source-chip-brand '+(active?"active ":"")+'source-'+(key||"all")+(compact&&key?" source-chip-logo-only":"");
+
+  if(compact&&key){
+    return '<button class="'+classes+'" '+
+      'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" '+
+      'title="'+escapeAttr(meta.title)+'" aria-label="'+escapeAttr(meta.title)+'">'+
+        sourceLogoMark(key)+
+      '</button>';
+  }
+
+  return '<button class="'+classes+'" '+
     'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" title="'+escapeAttr(meta.title)+'">'+
       '<span class="source-chip-main"><span class="source-chip-label">'+label+'</span>'+sourceLogoMark(key)+'</span>'+
       (compact?'':'<small class="source-chip-count">'+count+'</small>')+

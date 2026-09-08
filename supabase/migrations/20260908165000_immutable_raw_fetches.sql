@@ -71,7 +71,7 @@ select
   200,
   'application/json; legacy-processed',
   j.result_json::text,
-  encode(digest(convert_to(j.result_json::text,'UTF8'),'sha256'),'hex'),
+  encode(extensions.digest(convert_to(j.result_json::text,'UTF8'),'sha256'),'hex'),
   coalesce(j.updated_at,j.created_at,now())
 from public.getlink_jobs j
 where j.result_json is not null

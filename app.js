@@ -2903,7 +2903,8 @@ function handleSourceChipClick(e){
   if(!chip)return;
   setActiveSourceFilter(chip.dataset.source||"");
 }
-$("#sourceTabs").addEventListener("click",handleSourceChipClick);
+const sourceTabsSidebar=$("#sourceTabs");
+if(sourceTabsSidebar)sourceTabsSidebar.addEventListener("click",handleSourceChipClick);
 const sourceTabsInline=$("#sourceTabsInline");
 if(sourceTabsInline)sourceTabsInline.addEventListener("click",handleSourceChipClick);
 
@@ -3102,7 +3103,8 @@ $("#childList").addEventListener("click",e=>{
   openLibraryItem(row.dataset.url||"");
 });
 
-$("#openSourceManager").addEventListener("click",openSourceManager);
+const openSourceManagerButton=$("#openSourceManager");
+if(openSourceManagerButton)openSourceManagerButton.addEventListener("click",openSourceManager);
 $("#closeSourceManager").addEventListener("click",closeSourceManager);
 $("#sourceManagerPanel").addEventListener("click",e=>{
   if(e.target===$("#sourceManagerPanel"))closeSourceManager();

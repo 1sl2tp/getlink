@@ -483,45 +483,150 @@ async function mapIncomingWinmartGroups(products:Product[]) {
     if(productMatch)enrichWinmartProductFromBhx(p,productMatch);
   }
 }
-async function syncExistingWinmartGroups(apply:boolean) {
+async function syncExistingWinmartEnrichment(apply:boolean) {
   const refs=await loadBhxGroupRefs();
-  const [links,ids]=await Promise.all([
+  const [links,ids,hier,comps]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").eq("source","WinMart").neq("last_status","unlisted")),
-    fetchAll("getlink_source_product_identity","link_url,brand,barcode,raw_name,category,source_name",(q:any)=>q.eq("source_name","WinMart"))
+    fetchAll("getlink_source_product_identity","*",(q:any)=>q.eq("source_name","WinMart")),
+    fetchAll("getlink_link_pack_hierarchy"),
+    fetchAll("getlink_link_comparison")
   ]);
   const identityByUrl=new Map(ids.map((x:any)=>[x.link_url,x]));
-  const updates:any[]=[];
+  const hierarchyByUrl=new Map(hier.map((x:any)=>[x.link_url,x]));
+  const comparisonByUrl=new Map(comps.map((x:any)=>[x.link_url,x]));
+
+  const brandCounts=new Map<string,Map<string,number>>();
+  for(const ref of refs){
+    if(!brandCounts.has(ref.brand_key))brandCounts.set(ref.brand_key,new Map());
+    const m=brandCounts.get(ref.brand_key)!;
+    m.set(ref.brand,(m.get(ref.brand)||0)+1);
+  }
+  const canonicalBrand=new Map<string,string>();
+  for(const [key,variants] of brandCounts){
+    const best=[...variants.entries()].sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"))[0];
+    if(best)canonicalBrand.set(key,best[0]);
+  }
+
+  const hUpdates:any[]=[], cUpdates:any[]=[], iUpdates:any[]=[];
   const samples:any[]=[];
-  let matched=0,changed=0,unresolved=0;
+  let productMatched=0, groupMatched=0, cartons=0, cartonsWithInner=0, sizesFilled=0;
 
   for(const l of links){
     const id=identityByUrl.get(l.canonical_url)||{};
-    const match=chooseBhxGroup({
-      name:clean(id.raw_name||l.name),
-      brand:clean(id.brand||l.branch_name),
-      barcode:clean(id.barcode||"")
-    },refs);
-    if(!match){unresolved++;continue;}
-    matched++;
-    if(clean(l.group_name)===match.group)continue;
-    changed++;
-    updates.push({...l,group_name:match.group,updated_at:new Date().toISOString()});
-    if(samples.length<40)samples.push({
-      name:l.name,brand:id.brand||l.branch_name||"",
-      old_group:l.group_name,new_group:match.group,
-      bhx_name:match.ref.name,score:Number(match.score.toFixed(3)),
-      margin:Number(match.margin.toFixed(3)),basis:match.basis,
-      source_category:id.category||""
-    });
-  }
+    const oldH=hierarchyByUrl.get(l.canonical_url)||{};
+    const oldC=comparisonByUrl.get(l.canonical_url)||{};
+    const name=clean(id.raw_name||l.name);
+    const brand=clean(id.brand||l.branch_name);
+    const barcode=clean(id.barcode||"");
+    const ownH=hierarchyFromRaw(name,l.packaging||"");
+    const kind=hierarchyKind(ownH);
 
-  if(apply&&updates.length){
-    const chunk=400;
-    for(let i=0;i<updates.length;i+=chunk){
-      await must(sb.from("getlink_links").upsert(updates.slice(i,i+chunk),{onConflict:"canonical_url"}));
+    const groupMatch=chooseBhxGroup({name,brand,barcode},refs);
+    const productMatch=chooseBhxProduct({name,brand,barcode,pack_kind:kind},refs);
+    if(groupMatch)groupMatched++;
+    if(productMatch)productMatched++;
+
+    const mergedH=productMatch
+      ?mergedHierarchy(ownH,productMatch.ref.hierarchy,kind)
+      :ownH;
+    if(mergedH.label1==="Thùng"){
+      cartons++;
+      if(mergedH.label2||mergedH.label3)cartonsWithInner++;
+    }
+
+    const ownCmp=comparisonFrom(
+      money(l.current_price),
+      money(l.original_price),
+      mergedH,
+      l.packaging||"",
+      name
+    );
+    const donorCmp=productMatch?.ref?.comparison||{};
+    const cmp={
+      ...oldC,
+      link_url:l.canonical_url,
+      pack_kind:hierarchyKind(mergedH),
+      pack_quantity:mergedH.label1
+        ?Number(mergedH.qty3||mergedH.qty2||1)
+        :(mergedH.label2?Number(mergedH.qty3||mergedH.qty2||1):1),
+      pack_unit:mergedH.label1||mergedH.label2||mergedH.label3||ownCmp.pack_unit||"",
+      size_value:ownCmp.size_value??donorCmp.size_value??oldC.size_value??null,
+      size_unit:ownCmp.size_unit||donorCmp.size_unit||oldC.size_unit||"",
+      regular_pack_price:money(l.current_price),
+      promo_pack_price:oldC.promo_pack_price??null,
+      regular_unit_price:money(l.current_price)&&Number(mergedH.qty3||mergedH.qty2||1)>1
+        ?money(l.current_price)!/Number(mergedH.qty3||mergedH.qty2||1)
+        :money(l.current_price),
+      promo_unit_price:oldC.promo_unit_price??null,
+      promotion_active:Boolean(oldC.promotion_active),
+      updated_at:new Date().toISOString()
+    };
+    if(!oldC.size_value&&cmp.size_value)sizesFilled++;
+
+    const hRow={
+      ...oldH,
+      link_url:l.canonical_url,
+      label1:mergedH.label1||"",
+      qty1:Number(mergedH.qty1)||0,
+      label2:mergedH.label2||"",
+      qty2:Number(mergedH.qty2)||0,
+      label3:mergedH.label3||"",
+      qty3:Number(mergedH.qty3)||0,
+      evidence:mergedH.evidence||"",
+      updated_at:new Date().toISOString()
+    };
+
+    const idRow={
+      ...id,
+      link_url:l.canonical_url,
+      source_name:"WinMart",
+      bhx_group_name:groupMatch?.group||id.bhx_group_name||"",
+      bhx_brand_name:canonicalBrand.get(groupBrandKey(brand))||id.bhx_brand_name||"",
+      bhx_match_url:productMatch?.ref?.url||"",
+      bhx_match_name:productMatch?.ref?.name||"",
+      updated_at:new Date().toISOString()
+    };
+
+    hUpdates.push(hRow);
+    cUpdates.push(cmp);
+    iUpdates.push(idRow);
+
+    if(samples.length<50&&(mergedH.label1==="Thùng"||productMatch)){
+      samples.push({
+        name:l.name,
+        raw_pack:l.packaging||"",
+        normalized:[
+          mergedH.label1&&"Thùng",
+          mergedH.label2&&((mergedH.qty2||1)+" "+mergedH.label2),
+          mergedH.label3&&((mergedH.qty3||1)+" "+mergedH.label3)
+        ].filter(Boolean).join(" / "),
+        size:cmp.size_value?String(cmp.size_value)+cmp.size_unit:"",
+        bhx_match:productMatch?.ref?.name||"",
+        score:productMatch?Number(productMatch.score.toFixed(3)):0
+      });
     }
   }
-  return {apply,total_winmart:links.length,matched,changed,unresolved,samples};
+
+  if(apply){
+    const upsertChunks=async(table:string,rows:any[])=>{
+      for(let i=0;i<rows.length;i+=350){
+        await must(sb.from(table).upsert(rows.slice(i,i+350),{onConflict:"link_url"}));
+      }
+    };
+    await upsertChunks("getlink_link_pack_hierarchy",hUpdates);
+    await upsertChunks("getlink_link_comparison",cUpdates);
+    await upsertChunks("getlink_source_product_identity",iUpdates);
+  }
+
+  return {
+    apply,total_winmart:links.length,
+    group_matched:groupMatched,
+    product_matched:productMatched,
+    cartons,
+    cartons_with_inner_pack:cartonsWithInner,
+    sizes_filled:sizesFilled,
+    samples
+  };
 }
 
 function getlinkNameKey(v: unknown) {
@@ -1256,7 +1361,12 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
-    }    if(req.method==="POST"&&route==="/api/preference"){
+    }    if(req.method==="POST"&&route==="/api/admin/enrich-winmart"){
+      const body=await req.json();
+      if(clean(body?.confirm)!=="BHX_ENRICH_WM_V1")return response(req,{error:"confirmation_required"},400);
+      return response(req,await syncExistingWinmartEnrichment(Boolean(body?.apply)));
+    }
+    if(req.method==="POST"&&route==="/api/preference"){
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();
       const row={link_url:link,state,auto_refresh:state==="watch",refresh_hours:Math.max(1,Number(body?.refresh_hours)||24),pinned:false,updated_at:now};
       await must(sb.from("getlink_link_preferences").upsert(row,{onConflict:"link_url"}));

@@ -1556,7 +1556,7 @@ async function ensureLibraryCache(force=false){
 }
 
 
-function visibleRowsBeforePack(){
+function rowsBeforeSearch(){
   let products=libraryCache.slice();
 
   if(libraryState==="watch"){
@@ -1578,6 +1578,11 @@ function visibleRowsBeforePack(){
       String(row.brand_name||row.branch_name||"")===activeBrand
     );
   }
+  return products;
+}
+
+function visibleRowsBeforePack(){
+  let products=rowsBeforeSearch();
   if(libraryQuery){
     const tokens=searchTokens(libraryQuery);
     products=products.filter(row=>matchesSearchTokens(row,tokens));
@@ -1596,7 +1601,7 @@ function renderPackTabs(){
   const host=$("#packTabs");
   if(!host)return;
 
-  const base=visibleRowsBeforePack();
+  const base=rowsBeforeSearch();
   const cartonCount=base.filter(row=>rowIsCarton(row)).length;
   const retailCount=base.filter(row=>rowIsRetail(row)).length;
 
@@ -1641,6 +1646,16 @@ function filteredLibraryProducts(){
     return nameA.localeCompare(nameB,"vi");
   });
 
+  return products;
+}
+
+function headerLibraryProducts(){
+  let products=rowsBeforeSearch();
+  if(activePackKind==="Thùng"){
+    products=products.filter(row=>rowIsCarton(row));
+  }else if(activePackKind==="Lẻ"){
+    products=products.filter(row=>rowIsRetail(row));
+  }
   return products;
 }
 
@@ -1719,27 +1734,22 @@ function renderCategoryContext(visibleProducts){
 
   const base=categoryBaseRows();
   const visible=Array.isArray(visibleProducts)?visibleProducts:filteredLibraryProducts();
-  const title=libraryQuery
-    ?'Tìm “'+libraryQuery+'”'
-    :(activeGroupUrl||activeRootGroup||"Toàn bộ thư viện");
+  const title=activeGroupUrl||activeRootGroup||"Toàn bộ thư viện";
 
   const titleHost=$("#categoryDetailTitle");
   const countHost=$("#categoryDetailCount");
   const descHost=$("#categoryDetailDescription");
   const statsHost=$("#categoryDetailStats");
   if(titleHost)titleHost.textContent=title;
-  if(countHost)countHost.textContent=visible.length+" SP";
+  if(countHost)countHost.textContent=base.length+" SP";
   if(descHost){
-    descHost.textContent=libraryQuery
-      ?"Kết quả được lọc ngay trên dữ liệu đang có, không tải lại toàn bộ thư viện."
-      :(activeRootGroup
-        ?"Danh mục đang chọn. Hãng phổ biến và cấu trúc nhóm được đặt ở đây để phần giữa dành cho sản phẩm."
-        :"Chọn Thùng hoặc Lẻ, sau đó tìm kiếm. Chọn một sản phẩm để mở chi tiết.");
+    descHost.textContent=activeRootGroup
+      ?"Danh mục đang chọn. Hãng phổ biến và cấu trúc nhóm được đặt ở đây để phần giữa dành cho sản phẩm."
+      :"Chọn Thùng hoặc Lẻ, sau đó tìm kiếm. Chọn một sản phẩm để mở chi tiết.";
   }
 
   if(statsHost){
-    // When searching, stats must describe the search result set, not the whole library.
-    const statsBase=libraryQuery?visibleRowsBeforePack():base;
+    const statsBase=base;
     const carton=statsBase.filter(row=>rowIsCarton(row)).length;
     const retail=statsBase.filter(row=>rowIsRetail(row)).length;
     statsHost.innerHTML=
@@ -1905,9 +1915,7 @@ function renderLibraryProducts(){
   syncStateControls();
   const products=filteredLibraryProducts();
 
-  if(libraryQuery){
-    $("#libraryTitle").textContent='Kết quả “'+libraryQuery+'”';
-  }else if(activeGroupUrl){
+  if(activeGroupUrl){
     $("#libraryTitle").textContent=activeGroupUrl;
   }else if(activeRootGroup){
     $("#libraryTitle").textContent=activeRootGroup;
@@ -1917,17 +1925,16 @@ function renderLibraryProducts(){
 
   const hint=$("#catalogHint");
   if(hint){
-    hint.textContent=libraryQuery
-      ?"Đang lọc theo thời gian thực trên dữ liệu đã tải."
-      :(activePackKind
-        ?"Chế độ "+activePackKind+" · tìm kiếm hoặc chọn sản phẩm."
-        :"Chọn cách mua trước, sau đó tìm sản phẩm theo thời gian thực.");
+    hint.textContent=activePackKind
+      ?"Chế độ "+activePackKind+" · tìm kiếm hoặc chọn sản phẩm."
+      :"Chọn cách mua trước, sau đó tìm sản phẩm theo thời gian thực.";
   }
 
   const visible=products;
+  const headerProducts=headerLibraryProducts();
 
-  $("#libraryCount").textContent=products.length
-    ?products.length+" sản phẩm"
+  $("#libraryCount").textContent=headerProducts.length
+    ?headerProducts.length+" sản phẩm"
     :"";
 
   renderActiveProductView(visible);
@@ -2157,6 +2164,8 @@ $("#librarySearch").addEventListener("input",e=>{
     libraryQuery=next;
     libraryPage=1;
     resetBrowseDetail();
+    const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
+    if(activeScroller)activeScroller.scrollTop=0;
     renderLibraryProducts();
   });
 });

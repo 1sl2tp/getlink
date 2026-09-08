@@ -213,7 +213,8 @@ function searchKey(value){
 }
 
 
-function stripCartonPackPhrase(value,mode="carton"){
+function stripCartonPackPhrase(value){
+  const mode=arguments[1]||"carton";
   let text=String(value||"").normalize("NFC").trim();
   if(!text)return "";
   const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";

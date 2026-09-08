@@ -298,7 +298,7 @@ assert.equal(money(0),"—");
   assert.match(sourceHandler[0],/setActiveSourceFilter\(chip\.dataset\.source\|\|""\)/);
   assert.match(app,/const sourceTabsSidebar=\$\("#sourceTabs"\)/);
   assert.match(app,/const sourceTabsInline=\$\("#sourceTabsInline"\)/);
-  assert.match(html,/id="sourceTabs" class="source-tabs nav-source-tabs"/);
+  assert.equal(html.includes('id="sourceTabs" class="source-tabs nav-source-tabs"'),false);
   assert.match(html,/id="sourceTabsInline" class="source-tabs source-tabs-inline"/);
   assert.match(html,/id="quickSourceTabs"/);
   assert.match(html,/Quy cách:<\/span>/);

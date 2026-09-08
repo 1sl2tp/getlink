@@ -1847,15 +1847,25 @@ function renderActiveProductView(products){
 }
 
 function initCatalogLocalObserver(){
-  const sentinel=$("#catalogRenderMore");
-  if(!sentinel||!("IntersectionObserver" in window))return;
-  if(catalogObserver)catalogObserver.disconnect();
-  catalogObserver=new IntersectionObserver(entries=>{
-    if(entries.some(entry=>entry.isIntersecting)){
-      appendLocalViewBatch(libraryView);
-    }
-  },{root:null,rootMargin:"700px 0px",threshold:0});
-  catalogObserver.observe(sentinel);
+  const grid=$("#productGrid");
+  const table=$("#tableView");
+  const maybeAppend=(host,view)=>{
+    if(!host||libraryView!==view||host.hidden)return;
+    const remain=host.scrollHeight-host.scrollTop-host.clientHeight;
+    if(remain<900)appendLocalViewBatch(view);
+  };
+
+  if(grid){
+    grid.addEventListener("scroll",()=>maybeAppend(grid,"grid"),{passive:true});
+  }
+  if(table){
+    table.addEventListener("scroll",()=>maybeAppend(table,"table"),{passive:true});
+  }
+
+  requestAnimationFrame(()=>{
+    maybeAppend(grid,"grid");
+    maybeAppend(table,"table");
+  });
 }
 
 function renderResultPager(){
@@ -2152,6 +2162,12 @@ document.querySelector(".view-switch").addEventListener("click",e=>{
   localStorage.setItem("getlink:view-mode",libraryView);
   syncViewMode();
   renderActiveProductView(filteredLibraryProducts());
+  requestAnimationFrame(()=>{
+    const host=libraryView==="table"?$("#tableView"):$("#productGrid");
+    if(host&&host.scrollHeight-host.clientHeight<900){
+      appendLocalViewBatch(libraryView);
+    }
+  });
 });
 
 $("#productGrid").addEventListener("click",async e=>{

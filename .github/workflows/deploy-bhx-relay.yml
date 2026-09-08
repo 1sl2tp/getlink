@@ -1,0 +1,76 @@
+name: Deploy BHX Relay
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "relay/**"
+      - ".github/workflows/deploy-bhx-relay.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check Cloudflare credentials
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+
+      - name: Create relay config
+        run: |
+          cat > relay/wrangler.toml <<EOF
+          name = "getlink-bhx-relay"
+          main = "src/index.js"
+          compatibility_date = "2026-09-08"
+          workers_dev = true
+          account_id = "$CLOUDFLARE_ACCOUNT_ID"
+          EOF
+
+      - name: Deploy transport-only relay
+        run: |
+          set -euo pipefail
+          wrangler deploy --config relay/wrangler.toml 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
+          if [ -z "$URL" ]; then
+            URL="https://getlink-bhx-relay.taphoa-4ab8161d.workers.dev"
+          fi
+          echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
+          echo "relay=$URL"
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 8 --retry-delay 2 "$RELAY_URL/health" | tee /tmp/health.json
+          jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null
+
+      - name: Smoke BHX GetCate through Cloudflare
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error             -H 'x-getlink-relay: supabase-bhx-v1'             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}'             > /tmp/cate.json
+          jq '{code,total:.data.total,category_id:.data.info.id,products:(.data.products|length)}' /tmp/cate.json
+          jq -e '.code == 0 and (.data.total|tonumber) > 10 and (.data.products|length) > 0' /tmp/cate.json >/dev/null
+
+      - name: Smoke BHX AjaxProduct continuation
+        run: |
+          set -euo pipefail
+          CID="$(jq -r '.data.info.id' /tmp/cate.json)"
+          PRIORITY="$(jq -r '[.data.info.priorityProductIds[]?]|map(tostring)|join(",")' /tmp/cate.json)"
+          LAST="$(jq -r '.data.products[-1].id // 0' /tmp/cate.json)"
+          BODY="$(jq -nc             --argjson cid "$CID"             --arg priority "$PRIORITY"             --argjson last "$LAST"             '{op:"ajaxProduct",categoryUrl:"sua-tuoi",payload:{CategoryId:$cid,SelectedBrandId:"",PropertyIdList:"",PageIndex:2,PageSize:10,SortStr:"",PriorityProductIds:$priority,PropertySelected:[],LastShowProductId:$last}}')"
+          curl --fail --silent --show-error             -H 'x-getlink-relay: supabase-bhx-v1'             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data "$BODY"             > /tmp/ajax.json
+          jq '{code,products:(.data.products // .data | .. | arrays? | length) }' /tmp/ajax.json || true
+          jq -e '.code == 0 and .data != null' /tmp/ajax.json >/dev/null

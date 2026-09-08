@@ -277,12 +277,16 @@ async function fetchWholeCategory(rawUrl, env) {
   const map = new Map();
   for (const item of first) map.set(productKey(item), item);
 
-  let lastShowProductId = productId(first[first.length - 1]);
-  let pages = 1;
+  // BHX GetCate is the initial shelf, while AjaxProduct has its own
+  // continuation index. The browser can reach PageIndex 3 after two Ajax
+  // loads, so Ajax continuation starts at index 1, not 2.
+  let lastShowProductId = 0;
+  let pages = 0;
+  let stalePages = 0;
   const maxPage = Math.min(100, Math.max(3, total ? Math.ceil(total / pageSize) + 2 : 50));
   const ajaxUrl = "https://" + BHX_HOST + "/gw/Category/AjaxProduct";
 
-  for (let page = 2; page <= maxPage; page++) {
+  for (let page = 1; page <= maxPage; page++) {
     if (total > 0 && map.size >= total) break;
 
     const body = await bhxFetch(ajaxUrl, referer, env, {
@@ -307,7 +311,10 @@ async function fetchWholeCategory(rawUrl, env) {
 
     const next = productId(batch[batch.length - 1]);
     if (next > 0) lastShowProductId = next;
-    if (map.size === before) break;
+
+    if (map.size === before) stalePages += 1;
+    else stalePages = 0;
+    if (stalePages >= 2) break;
   }
 
   return {

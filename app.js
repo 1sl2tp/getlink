@@ -901,6 +901,11 @@ function productCard(row){
     ?readOwnPrice(row.canonical_url,"retail")
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
+  const rawSourceType=String(row.packaging||"").trim();
+  const rawSourcePrice=Number(
+    row.current_price||row.regular_pack_price||0
+  );
+  const rawOriginalPrice=Number(row.original_price||0);
 
   return '<tr class="product-card xls-row '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
@@ -912,6 +917,9 @@ function productCard(row){
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-source'+sourceDisplayClass(row)+'" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
+      '<td class="xls-pack-level">'+(rawSourceType?escapeHtml(rawSourceType):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num">'+(rawSourcePrice?xlsWebPrice(rawSourcePrice,0):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num">'+(rawOriginalPrice?xlsWebPrice(rawOriginalPrice,0):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label1
           ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))

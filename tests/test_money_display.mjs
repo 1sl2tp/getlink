@@ -325,9 +325,9 @@ assert.equal(money(0),"—");
   const categoryMatch=app.match(/function displayCategoryLabel\(value\)\{[\s\S]*?\n\}/);
   assert.ok(categoryMatch,"displayCategoryLabel() not found");
   const displayCategoryLabel=new Function(
-    "function searchKey(value){return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/đ/gi,'d').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}\\n"+
-    "const CATEGORY_DISPLAY_LABELS=new Map([['cham soc ca nhan','Chăm sóc cá nhân'],['banh keo cac loai','Bánh kẹo các loại'],['do uong cac loai','Đồ uống các loại'],['gao mi bun','Gạo, mì, bún'],['sua cac loai','Sữa các loại'],['nguyen lieu gia vi','Nguyên liệu, gia vị'],['cham soc nha cua','Chăm sóc nhà cửa'],['xuc xich do hop','Xúc xích, đồ hộp'],['khan giay ve sinh','Khăn giấy, vệ sinh']]);\\n"+
-    categoryMatch[0]+"\\nreturn displayCategoryLabel;"
+    "function searchKey(value){return String(value||'').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').replace(/đ/gi,'d').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}\n"+
+    "const CATEGORY_DISPLAY_LABELS=new Map([['cham soc ca nhan','Chăm sóc cá nhân'],['banh keo cac loai','Bánh kẹo các loại'],['do uong cac loai','Đồ uống các loại'],['gao mi bun','Gạo, mì, bún'],['sua cac loai','Sữa các loại'],['nguyen lieu gia vi','Nguyên liệu, gia vị'],['cham soc nha cua','Chăm sóc nhà cửa'],['xuc xich do hop','Xúc xích, đồ hộp'],['khan giay ve sinh','Khăn giấy, vệ sinh']]);\n"+
+    categoryMatch[0]+"\nreturn displayCategoryLabel;"
   )();
   assert.equal(displayCategoryLabel("Do Uong Cac Loai I.66"),"Đồ uống các loại");
   assert.equal(displayCategoryLabel("Cham Soc Ca Nhan I.68"),"Chăm sóc cá nhân");

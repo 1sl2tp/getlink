@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v15");
+      const req=tx.objectStore("cache").get("library-v16");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v15");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v16");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1571,9 +1571,9 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
-          '<span class="grid-price-group">'+
-            (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
+          '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+'">'+
             '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
+            (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
           '</span>'+
         '</div>'+
       '</div>'+

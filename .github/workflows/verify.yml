@@ -21,6 +21,7 @@ jobs:
       - run: node --check relay/src/index.js
       - run: node tests/test_money_display.mjs
       - run: node tests/test_bhx_edge_contract.mjs
+      - run: node tests/test_go_edge_contract.mjs
       - run: node tests/test_getlink_name_filter_contract.mjs
       - name: Supabase-only gate
         run: |

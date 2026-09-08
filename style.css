@@ -7009,3 +7009,199 @@ body.source-manager-open{overflow:hidden!important}
     scroll-padding-bottom:max(24px,env(safe-area-inset-bottom))!important;
   }
 }
+
+
+/* =========================================================
+   Branded source selector v1
+   Sidebar = full brand name; catalog = compact logo + name.
+   ========================================================= */
+.source-chip-brand{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:8px!important;
+}
+.source-chip-main{
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.source-chip-label{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.source-chip-count{
+  flex:0 0 auto!important;
+  margin-left:auto!important;
+}
+.source-logo-mark{
+  flex:0 0 auto!important;
+  width:26px!important;
+  height:22px!important;
+  display:grid!important;
+  place-items:center!important;
+  overflow:hidden!important;
+  border-radius:6px!important;
+  border:1px solid transparent!important;
+  background:#fff!important;
+  line-height:1!important;
+}
+.source-logo-mark b{
+  display:block!important;
+  font-size:8px!important;
+  font-weight:900!important;
+  letter-spacing:-.02em!important;
+  line-height:1!important;
+}
+.source-logo-all{
+  border-color:#dfe5e9!important;
+  background:#f4f6f8!important;
+  color:#59636e!important;
+}
+.source-logo-bhx{
+  border-color:#0b9855!important;
+  background:#0b9855!important;
+  color:#ffe600!important;
+}
+.source-logo-wm{
+  border-color:#d92d20!important;
+  background:#d92d20!important;
+  color:#fff!important;
+}
+.source-logo-wm b{
+  font-size:12px!important;
+  font-family:Arial,sans-serif!important;
+  font-style:italic!important;
+}
+.source-logo-go{
+  border-color:#f06a24!important;
+  background:#fff4ec!important;
+  color:#e85d04!important;
+}
+.source-logo-go b{font-size:8.5px!important}
+
+/* Sidebar: readable full names + counts. */
+.workspace-nav .nav-source-tabs .source-chip-brand{
+  height:38px!important;
+  min-height:38px!important;
+  padding:0 9px!important;
+  border:1px solid #e0e5e9!important;
+  border-radius:8px!important;
+  background:#fff!important;
+  color:#4f5965!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand .source-chip-label{
+  font-size:10px!important;
+  font-weight:760!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand .source-chip-count{
+  color:#9aa2ad!important;
+  font-size:8.5px!important;
+  font-weight:700!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand.source-all.active{
+  border-color:#0b9855!important;
+  background:#0b9855!important;
+  color:#fff!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand.source-all.active .source-chip-count{
+  color:#d9f4e5!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand.source-bhx.active{
+  border-color:#a8d2bb!important;
+  background:#eef8f2!important;
+  color:#087a40!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand.source-wm.active{
+  border-color:#efb7b2!important;
+  background:#fff4f3!important;
+  color:#d92d20!important;
+}
+.workspace-nav .nav-source-tabs .source-chip-brand.source-go.active{
+  border-color:#f2c8aa!important;
+  background:#fff6ef!important;
+  color:#e85d04!important;
+}
+
+/* Main catalog source line. */
+.catalog-source-row{
+  display:flex!important;
+  align-items:center!important;
+  gap:10px!important;
+  padding:0 12px 8px!important;
+  min-width:0!important;
+}
+.catalog-source-row>.filter-label{
+  flex:0 0 auto!important;
+}
+.source-tabs-inline{
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  flex-wrap:wrap!important;
+  gap:6px!important;
+}
+.source-tabs-inline .source-chip-brand{
+  min-height:38px!important;
+  padding:0 9px!important;
+  border:1px solid #e0e5e9!important;
+  border-radius:9px!important;
+  background:#fff!important;
+  color:#58636f!important;
+}
+.source-tabs-inline .source-chip-label{
+  font-size:10px!important;
+  font-weight:760!important;
+}
+.source-tabs-inline .source-logo-mark{
+  width:24px!important;
+  height:21px!important;
+}
+.source-tabs-inline .source-chip-brand.source-all.active{
+  border-color:#a8d2bb!important;
+  background:#eef8f2!important;
+  color:#087a40!important;
+}
+.source-tabs-inline .source-chip-brand.source-bhx.active{
+  border-color:#a8d2bb!important;
+  background:#eef8f2!important;
+  color:#087a40!important;
+}
+.source-tabs-inline .source-chip-brand.source-wm.active{
+  border-color:#efb7b2!important;
+  background:#fff4f3!important;
+  color:#d92d20!important;
+}
+.source-tabs-inline .source-chip-brand.source-go.active{
+  border-color:#f2c8aa!important;
+  background:#fff6ef!important;
+  color:#e85d04!important;
+}
+
+@media(max-width:720px){
+  .catalog-source-row{
+    gap:7px!important;
+    padding:0 9px 7px!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    scrollbar-width:none!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  .catalog-source-row::-webkit-scrollbar{display:none!important}
+  .source-tabs-inline{
+    flex-wrap:nowrap!important;
+    flex:0 0 auto!important;
+  }
+  .source-tabs-inline .source-chip-brand{
+    flex:0 0 auto!important;
+    min-height:34px!important;
+    padding:0 8px!important;
+  }
+  .source-tabs-inline .source-logo-mark{
+    width:22px!important;
+    height:20px!important;
+  }
+}

@@ -8214,3 +8214,243 @@ body.source-manager-open{overflow:hidden!important}
     overflow:hidden!important;
   }
 }
+
+
+/* Catalog hierarchy geometry v7 */
+/*
+  Geometry follows the real ownership chain:
+  workspace -> catalog -> sticky head -> title / filters / search -> data.
+  One horizontal gutter owns all child rows.  Filter zones share the row
+  instead of floating as two unrelated fixed-width islands.
+*/
+.workspace-list{
+  --catalog-inline:clamp(10px,1.15vw,14px);
+}
+
+.workspace-list .catalog-toolbar,
+.workspace-list .purchase-mode-row,
+.workspace-list .catalog-search-row{
+  box-sizing:border-box!important;
+  width:100%!important;
+  margin-left:0!important;
+  margin-right:0!important;
+  padding-left:var(--catalog-inline)!important;
+  padding-right:var(--catalog-inline)!important;
+}
+
+.workspace-list .catalog-toolbar{
+  padding-top:10px!important;
+  padding-bottom:7px!important;
+}
+
+.workspace-list .catalog-title-row{
+  width:100%!important;
+  min-width:0!important;
+  display:flex!important;
+  align-items:baseline!important;
+  gap:8px!important;
+}
+
+.workspace-list .catalog-title-row h2{
+  flex:0 1 auto!important;
+  min-width:0!important;
+}
+.workspace-list .catalog-title-row #libraryCount{
+  flex:0 0 auto!important;
+  margin:0!important;
+}
+
+/* The two secondary filter regions are siblings under ONE parent row. */
+@media(min-width:721px){
+  .workspace-list .purchase-mode-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+    align-items:stretch!important;
+    gap:12px!important;
+    padding-top:4px!important;
+    padding-bottom:8px!important;
+    overflow:visible!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-block{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:48px!important;
+    min-height:48px!important;
+    max-height:48px!important;
+    margin:0!important;
+    padding:6px 8px!important;
+    display:grid!important;
+    grid-template-columns:max-content minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:8px!important;
+    overflow:hidden!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-block-pack{
+    justify-self:stretch!important;
+  }
+  .workspace-list .purchase-mode-row .filter-block-source{
+    justify-self:stretch!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-label{
+    width:auto!important;
+    min-width:0!important;
+    height:34px!important;
+    margin:0!important;
+    padding:0!important;
+    display:flex!important;
+    align-items:center!important;
+    white-space:nowrap!important;
+  }
+
+  .workspace-list .purchase-mode-row .catalog-pack-tabs,
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:34px!important;
+    margin:0!important;
+    overflow:hidden!important;
+  }
+
+  .workspace-list .purchase-mode-row .catalog-pack-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:5px!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    display:grid!important;
+    grid-template-columns:minmax(70px,1.25fr) repeat(3,minmax(48px,1fr))!important;
+    gap:5px!important;
+  }
+
+  .workspace-list .purchase-mode-row .pack-chip,
+  .workspace-list .purchase-mode-row .source-chip,
+  .workspace-list .purchase-mode-row .source-chip-brand,
+  .workspace-list .purchase-mode-row .source-chip-logo-only{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+    margin:0!important;
+    padding-left:6px!important;
+    padding-right:6px!important;
+    box-sizing:border-box!important;
+    transform:none!important;
+  }
+
+  /* Cancel historical fixed logo-chip widths.  The parent grid owns width. */
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-bhx,
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-wm,
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-go,
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-all{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-logo-bhx{
+    width:min(44px,100%)!important;
+    max-width:100%!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-wm{
+    width:min(46px,100%)!important;
+    max-width:100%!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-go{
+    width:min(31px,100%)!important;
+    max-width:100%!important;
+  }
+}
+
+/* In the transition width, Source needs slightly more room than Pack.
+   This avoids clipping without creating a sudden breakpoint jump. */
+@media(min-width:721px) and (max-width:860px){
+  .workspace-list .purchase-mode-row{
+    grid-template-columns:minmax(0,.92fr) minmax(0,1.08fr)!important;
+    gap:8px!important;
+  }
+  .workspace-list .purchase-mode-row .filter-block{
+    gap:6px!important;
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  .workspace-list .purchase-mode-row .filter-label{
+    font-size:8.6px!important;
+  }
+  .workspace-list .purchase-mode-row .catalog-pack-tabs,
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    gap:4px!important;
+  }
+  .workspace-list .purchase-mode-row .pack-chip,
+  .workspace-list .purchase-mode-row .source-chip,
+  .workspace-list .purchase-mode-row .source-chip-brand,
+  .workspace-list .purchase-mode-row .source-chip-logo-only{
+    padding-left:4px!important;
+    padding-right:4px!important;
+  }
+}
+
+/* Mobile remains a parent row with two full-width children. */
+@media(max-width:720px){
+  .workspace-list{
+    --catalog-inline:clamp(7px,2.4vw,10px);
+  }
+
+  .workspace-list .purchase-mode-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:7px!important;
+    padding-top:7px!important;
+    padding-bottom:8px!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-block{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    margin:0!important;
+    padding:7px!important;
+  }
+}
+
+/* Data is the next child level: keep text on the same visual axis as the head. */
+.workspace-list .xls-price-table th:first-child,
+.workspace-list .xls-price-table td:first-child{
+  padding-left:var(--catalog-inline)!important;
+}
+.workspace-list .xls-price-table th:last-child,
+.workspace-list .xls-price-table td:last-child{
+  padding-right:var(--catalog-inline)!important;
+}
+
+@container (max-width:980px){
+  .workspace-list .xls-price-table th:nth-child(6),
+  .workspace-list .xls-price-table td:nth-child(6){
+    padding-right:var(--catalog-inline)!important;
+  }
+}
+
+/* Pressed/selected states are paint-only: zero geometry movement. */
+.workspace-list .purchase-mode-row button,
+.workspace-list .purchase-mode-row button:hover,
+.workspace-list .purchase-mode-row button:focus,
+.workspace-list .purchase-mode-row button:focus-visible,
+.workspace-list .purchase-mode-row button:active,
+.workspace-list .purchase-mode-row button.active,
+.workspace-list .purchase-mode-row button[aria-pressed="true"]{
+  transform:none!important;
+  translate:none!important;
+  scale:1!important;
+  box-sizing:border-box!important;
+}

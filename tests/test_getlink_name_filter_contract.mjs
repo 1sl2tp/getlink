@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const source = fs.readFileSync("supabase/functions/getlink-api/index.ts", "utf8");
 const brandMigration = fs.readFileSync("supabase/migrations/20260908163000_brand_canonical_registry.sql","utf8");
 const sourceManagerMigration = fs.readFileSync("supabase/migrations/20260908164000_source_manager_raw_fields.sql","utf8");
+const rawMigration = fs.readFileSync("supabase/migrations/20260908165000_immutable_raw_fetches.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -45,5 +46,21 @@ assert.match(source,/sourceManagerCache=null/);
 assert.match(sourceManagerMigration,/add column if not exists raw_brand text/i);
 assert.match(sourceManagerMigration,/add column if not exists raw_category text/i);
 assert.match(sourceManagerMigration,/getlink_price_snapshots/i);
+
+
+// RAW source capture is append-only and happens before any normalizer runs.
+assert.match(source,/type RawCaptureEntry=/);
+assert.match(source,/function readCapturedJson\(/);
+assert.match(source,/function persistRawCapture\(/);
+assert.match(source,/capture_stage:"source_original"/);
+assert.match(source,/await persistRawCapture\(requestId,url,"category",key,capture\);[\s\S]*?normalizeWinmart/);
+assert.match(source,/await persistRawCapture\(requestId,url,"product",key,capture\);[\s\S]*?normalizeBhxDetail/);
+assert.match(source,/await persistRawCapture\(requestId,url,"category",key,capture\);[\s\S]*?normalizeGo/);
+assert.match(rawMigration,/create table if not exists public\.getlink_raw_fetches/i);
+assert.match(rawMigration,/capture_stage in \('source_original','legacy_processed'\)/i);
+assert.match(rawMigration,/before update or delete on public\.getlink_raw_fetches/i);
+assert.match(rawMigration,/raise exception 'getlink_raw_fetches is append-only'/i);
+assert.match(rawMigration,/'legacy_processed'/i);
+assert.match(rawMigration,/legacy:getlink_jobs\.result_json/i);
 
 console.log("GETLINK name filter contract: OK");

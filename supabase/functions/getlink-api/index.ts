@@ -74,6 +74,81 @@ function sourceObject(key: string) {
 function sourceName(key: string) {
   return sourceObject(key).name;
 }
+type RawCaptureEntry={
+  seq:number;
+  endpoint:string;
+  method:string;
+  status:number;
+  content_type:string;
+  response_body:string;
+};
+type RawCapture={entries:RawCaptureEntry[]};
+
+function createRawCapture():RawCapture{
+  return {entries:[]};
+}
+
+async function readCapturedJson(
+  response:Response,
+  capture:RawCapture,
+  endpoint:string,
+  method:string
+):Promise<any>{
+  const responseBody=await response.text();
+  capture.entries.push({
+    seq:capture.entries.length+1,
+    endpoint,
+    method,
+    status:response.status,
+    content_type:clean(response.headers.get("content-type")||""),
+    response_body:responseBody
+  });
+  if(!responseBody)return null;
+  try{return JSON.parse(responseBody);}
+  catch{return null;}
+}
+
+async function sha256Text(value:string):Promise<string>{
+  const bytes=new TextEncoder().encode(value);
+  const hash=await crypto.subtle.digest("SHA-256",bytes);
+  return Array.from(new Uint8Array(hash))
+    .map(x=>x.toString(16).padStart(2,"0"))
+    .join("");
+}
+
+async function persistRawCapture(
+  requestId:string,
+  inputUrl:string,
+  inputType:string,
+  source:string,
+  capture:RawCapture
+):Promise<number>{
+  if(!capture.entries.length)throw new Error("raw_capture_empty");
+  const fetchedAt=new Date().toISOString();
+  const rows=await Promise.all(capture.entries.map(async entry=>({
+    request_id:requestId,
+    request_seq:entry.seq,
+    source_key:source,
+    input_url:inputUrl,
+    input_type:inputType,
+    capture_stage:"source_original",
+    fetched_at:fetchedAt,
+    endpoint:entry.endpoint,
+    http_method:entry.method,
+    http_status:entry.status,
+    content_type:entry.content_type,
+    response_body:entry.response_body,
+    body_sha256:await sha256Text(entry.response_body),
+    created_at:fetchedAt
+  })));
+  for(let i=0;i<rows.length;i+=25){
+    const batch=rows.slice(i,i+25);
+    const {error}=await sb.from("getlink_raw_fetches").insert(batch);
+    if(error)throw error;
+  }
+  return rows.length;
+}
+
 function canonicalBhx(raw: string) {
   const u = new URL(raw);
   const host = u.hostname.toLowerCase().replace(/^www\./, "");
@@ -744,7 +819,7 @@ function bhxPriorityProductIds(payload:any) {
 function bhxProductId(item:any) {
   return Number(item?.id||item?.productId||item?.productID||item?.ProductId||item?.ProductID||0)||0;
 }
-async function bhxTransportCategory(url:string) {
+async function bhxTransportCategory(url:string, capture:RawCapture) {
   const c=canonicalBhx(url);
   const slug=pathParts(c)[0]||"";
   if(!slug)throw new Error("bhx_category_slug_missing");
@@ -752,13 +827,14 @@ async function bhxTransportCategory(url:string) {
   let last="";
   for(let attempt=0;attempt<2;attempt++){
     try{
-      const r=await fetch(BHX_TRANSPORT_URL+"/category",{
+      const endpoint=BHX_TRANSPORT_URL+"/category";
+      const r=await fetch(endpoint,{
         method:"POST",
         headers:{"content-type":"application/json"},
         body:JSON.stringify({url:categoryUrl})
       });
-      if(!r.ok){last="http_"+r.status+":"+(await r.text()).slice(0,300);continue;}
-      const body=await r.json();
+      const body=await readCapturedJson(r,capture,endpoint,"POST");
+      if(!r.ok){last="http_"+r.status+":"+clean(JSON.stringify(body||"")).slice(0,300);continue;}
       if(body&&Number(body.code)===0&&body.data!=null)return body;
       last="code_"+String(body?.code);
     }catch(e){
@@ -768,11 +844,12 @@ async function bhxTransportCategory(url:string) {
   throw new Error("bhx_transport_failed:"+last);
 }
 
-async function bhxTransportMenu() {
+async function bhxTransportMenu(capture:RawCapture) {
   let last="";
   for(let attempt=0;attempt<2;attempt++){
     try{
-      const r=await fetch(BHX_TRANSPORT_URL+"/bhx",{
+      const endpoint=BHX_TRANSPORT_URL+"/bhx";
+      const r=await fetch(endpoint,{
         method:"POST",
         headers:{
           "content-type":"application/json",
@@ -780,8 +857,8 @@ async function bhxTransportMenu() {
         },
         body:JSON.stringify({op:"getMenuCategory"})
       });
-      if(!r.ok){last="http_"+r.status+":"+(await r.text()).slice(0,300);continue;}
-      const body=await r.json();
+      const body=await readCapturedJson(r,capture,endpoint,"POST");
+      if(!r.ok){last="http_"+r.status+":"+clean(JSON.stringify(body||"")).slice(0,300);continue;}
       if(body&&Number(body.code)===0&&body.data!=null)return body;
       last="code_"+String(body?.code);
     }catch(e){
@@ -829,9 +906,9 @@ function bhxLeafMenuNodes(node:any) {
   for(const child of kids)out.push(...bhxLeafMenuNodes(child));
   return out;
 }
-async function bhxParentCategoryRaw(c:string, directError:any) {
+async function bhxParentCategoryRaw(c:string, directError:any, capture:RawCapture) {
   const slug=pathParts(c)[0]||"";
-  const menu=await bhxTransportMenu();
+  const menu=await bhxTransportMenu(capture);
   const node=resolveBhxMenuNode(slug,menu);
   if(!node)throw directError;
 
@@ -845,7 +922,7 @@ async function bhxParentCategoryRaw(c:string, directError:any) {
   for(let start=0;start<leaves.length;start+=3){
     const batch=leaves.slice(start,start+3);
     const bodies=await Promise.all(batch.map((leaf:any)=>
-      bhxTransportCategory("https://www.bachhoaxanh.com/"+clean(leaf.url))
+      bhxTransportCategory("https://www.bachhoaxanh.com/"+clean(leaf.url),capture)
     ));
     for(let i=0;i<bodies.length;i++){
       const body=bodies[i];
@@ -864,12 +941,12 @@ async function bhxParentCategoryRaw(c:string, directError:any) {
   };
 }
 
-async function bhxProductDetail(url:string) {
+async function bhxProductDetail(url:string, capture:RawCapture) {
   const c=canonicalBhx(url);
   const parts=pathParts(c);
   if(parts.length<2)throw new Error("bhx_product_url_required");
   const categoryUrl="https://bachhoaxanh.com/"+parts[0];
-  const body=await bhxTransportCategory(categoryUrl);
+  const body=await bhxTransportCategory(categoryUrl,capture);
   const items=bhxPayloadProducts(body,categoryUrl);
   const match=items.find((item:any)=>{
     try{
@@ -884,10 +961,10 @@ async function bhxProductDetail(url:string) {
     brandUrl:clean(match?.brandName||"")
   };
 }
-async function bhxCategoryRaw(url:string) {
+async function bhxCategoryRaw(url:string, capture:RawCapture) {
   const c=canonicalBhx(url);
   try{
-    const body=await bhxTransportCategory(c);
+    const body=await bhxTransportCategory(c,capture);
     const items=bhxPayloadProducts(body,c);
     const categoryId=bhxCategoryId(items,body);
     if(!categoryId)throw new Error("bhx_category_id_missing");
@@ -898,7 +975,7 @@ async function bhxCategoryRaw(url:string) {
     }
     return {items,categoryId,rootName,total};
   }catch(e){
-    return await bhxParentCategoryRaw(c,e);
+    return await bhxParentCategoryRaw(c,e,capture);
   }
 }
 
@@ -949,14 +1026,15 @@ function winmartSlug(url:string){
 function winmartStore(url:string){
   const u=new URL(canonicalWinmart(url)); return clean(u.searchParams.get("storeCode")||"1535")||"1535";
 }
-async function winmartCategory(url:string){
+async function winmartCategory(url:string,capture:RawCapture){
   const c=canonicalWinmart(url), slug=winmartSlug(c), store=winmartStore(c); if(!slug)throw new Error("winmart_slug_missing");
   const fetchPage=async(page:number)=>{
     const api=new URL("https://api-crownx.winmart.vn/it/api/web/v3/item/category");
     for(const [k,v] of Object.entries({storeCode:store,slug,pageNumber:String(page),pageSize:"500",orderByDesc:"true",storeGroupCode:"1998"}))api.searchParams.set(k,v);
     const r=await fetch(api,{headers:{"accept":"application/json","x-api-merchant":"WCM","origin":"https://winmart.vn","referer":"https://winmart.vn/"}});
+    const body=await readCapturedJson(r,capture,api.toString(),"GET");
     if(!r.ok)throw new Error("winmart_http_"+r.status);
-    const body=await r.json(); const data=body?.data||{}, items=Array.isArray(data.items)?data.items:[];
+    const data=body?.data||{}, items=Array.isArray(data.items)?data.items:[];
     const paging=body?.paging||data?.paging||{};
     return {data,items,paging};
   };
@@ -1042,7 +1120,7 @@ async function goRuntimeConfig(){
   return out;
 }
 
-async function goCategory(url:string){
+async function goCategory(url:string,capture:RawCapture){
   const c=canonicalGo(url), category=goCategoryId(c);
   if(!category)throw new Error("go_category_id_missing");
 
@@ -1080,8 +1158,7 @@ async function goCategory(url:string){
       headers,
       body:JSON.stringify(payload)
     });
-    let b:any=null;
-    try{b=await r.json();}catch{}
+    const b=await readCapturedJson(r,capture,endpoint,"POST");
     if(!r.ok||b?.status!=="success"||!Array.isArray(b?.products)){
       const message=clean(b?.message||"");
       if(r.status===403&&/token|signature|client/i.test(message)){
@@ -1156,26 +1233,45 @@ function normalizeGo(item:any, rootName:string, checked:string): Product | null 
 
 async function fetchSource(input:string, requestId:string){
   const url=canonical(input), key=sourceKey(url), kind=heuristicType(url), checked=new Date().toISOString();
+  const capture=createRawCapture();
+
   if(key==="winmart"){
     if(kind!=="category")throw new Error("winmart_category_link_required");
-    const raw=await winmartCategory(url);
+    const raw=await winmartCategory(url,capture);
+
+    // HARD GATE: source response text is appended before normalization.
+    await persistRawCapture(requestId,url,"category",key,capture);
+
     const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeWinmart(x,raw.rootName,raw.store,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-winmart"};
   }
   if(key==="bachhoaxanh"){
     if(kind==="product"){
-      const data=await bhxProductDetail(url), product=normalizeBhxDetail(data,url,checked);
+      const data=await bhxProductDetail(url,capture);
+
+      // HARD GATE: source response text is appended before normalization.
+      await persistRawCapture(requestId,url,"product",key,capture);
+
+      const product=normalizeBhxDetail(data,url,checked);
       if(!keepGetlinkProduct(product))throw new Error("product_blocked_by_name_rule");
       return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"product",source:sourceObject(key),checked_at:checked,category_name:product.group,product,products:[product],variants:[],discovered_links:[product.url]},engine:"supabase-edge-bhx"};
     }
-    const raw=await bhxCategoryRaw(url);
+    const raw=await bhxCategoryRaw(url,capture);
+
+    // HARD GATE: source response text is appended before normalization.
+    await persistRawCapture(requestId,url,"category",key,capture);
+
     const root=clean(raw.rootName||raw.items[0]?.category?.name||slugTitle(url));
     const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeBhx(x,root,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:root,category_id:raw.categoryId,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-bhx"};
   }
   if(key==="go"){
     if(kind!=="category")throw new Error("go_category_link_required");
-    const raw=await goCategory(url);
+    const raw=await goCategory(url,capture);
+
+    // HARD GATE: source response text is appended before normalization.
+    await persistRawCapture(requestId,url,"category",key,capture);
+
     const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeGo(x,raw.rootName,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-go"};
   }

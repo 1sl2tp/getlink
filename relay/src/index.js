@@ -408,6 +408,56 @@ async function inspectCategoryLinks(rawUrl) {
   };
 }
 
+async function inspectApiStrings(rawUrl) {
+  const { url } = canonicalCategoryUrl(rawUrl);
+  const page = await fetch(url, {
+    headers: {
+      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language": "vi-VN,vi;q=0.9,en;q=0.7",
+      "user-agent": "Mozilla/5.0"
+    }
+  });
+  const html = await page.text();
+  const scripts = [...html.matchAll(/<script\\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
+    .map(m => {
+      try { return new URL(m[1], url).toString(); } catch { return ""; }
+    })
+    .filter(Boolean)
+    .slice(0, 48);
+
+  const matches = [];
+  for (let start = 0; start < scripts.length; start += 5) {
+    const batch = scripts.slice(start, start + 5);
+    const rows = await Promise.all(batch.map(async src => {
+      try {
+        const r = await fetch(src, { headers: { "accept": "*/*", "user-agent": "Mozilla/5.0" } });
+        const text = await r.text();
+        if (!/GetCate|GetFilters|GetHeadingPolicy|AjaxProduct|\/gw\/Category|categoryUrl|GetMenu/i.test(text)) return null;
+        const found = [];
+        for (const re of [
+          /[^"'\\s]{0,80}GetCate[^"'\\s]{0,160}/gi,
+          /[^"'\\s]{0,80}AjaxProduct[^"'\\s]{0,160}/gi,
+          /[^"'\\s]{0,80}GetFilters[^"'\\s]{0,160}/gi,
+          /[^"'\\s]{0,80}GetHeadingPolicy[^"'\\s]{0,160}/gi,
+          /\/gw\/Category\/[A-Za-z0-9_\/-]+/g,
+          /[A-Za-z0-9_\/-]{0,80}GetMenu[A-Za-z0-9_\/?=&.-]{0,120}/gi
+        ]) {
+          for (const m of text.matchAll(re)) {
+            found.push(m[0].slice(0, 300));
+            if (found.length >= 30) break;
+          }
+          if (found.length >= 30) break;
+        }
+        return found.length ? { src, length: text.length, found: [...new Set(found)] } : null;
+      } catch (error) {
+        return { src, error: String(error?.message || error).slice(0, 200) };
+      }
+    }));
+    for (const row of rows) if (row && (row.found?.length || row.error)) matches.push(row);
+  }
+  return { pageStatus: page.status, scriptCount: scripts.length, matches };
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -427,6 +477,15 @@ export default {
         return json(await inspectCategoryLinks(body?.url));
       } catch (error) {
         return json({ error: "inspect_links_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
+      }
+    }
+    if (request.method === "POST" && url.pathname === "/inspect-apis") {
+      if (request.headers.get(RELAY_HEADER) !== RELAY_VALUE) return json({ error: "unauthorized" }, 401);
+      try {
+        const body = await request.json();
+        return json(await inspectApiStrings(body?.url));
+      } catch (error) {
+        return json({ error: "inspect_apis_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
       }
     }
     return json({ error: "not_found" }, 404);

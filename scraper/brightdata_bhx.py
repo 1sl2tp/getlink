@@ -263,6 +263,15 @@ async def capture_bhx_json(ws_url: str, target_url: str, kind: str) -> tuple[dic
 
                         products = category_products_from_payload(payload)
                         if products:
+                            print(
+                                json.dumps(
+                                    {
+                                        "bhx_category_api_url": response.url,
+                                        "bhx_category_api_products": len(products),
+                                    },
+                                    ensure_ascii=False,
+                                )
+                            )
                             if first_product_payload is None:
                                 first_product_payload = payload
                                 first_product_response_url = response.url

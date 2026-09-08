@@ -14,6 +14,9 @@ assert.match(edge, /order2_listProduct\?platform=2&lang=vi/, "GO must use its na
 assert.match(edge, /"apiclientid":cfg\.apiclientid/, "GO must send API client id");
 assert.match(edge, /"sign":cfg\.sign/, "GO must send API sign");
 assert.match(edge, /"token":cfg\.token/, "GO must send API token");
+assert.match(edge, /"storeid":String\(store\)/, "GO must send selected store id header");
+assert.match(edge, /"origin":"https:\/\/sieuthi-go\.vn"/, "GO must send same-origin header");
+assert.match(edge, /"referer":c/, "GO must send category referer");
 assert.doesNotMatch(edge, /device_token|x-csrf-token|x-signature|_ga=/i, "browser cookies/session noise must not be committed");
 
 assert.match(edge, /start\+=10/, "GO pages should use bounded parallel batches");

@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v11");
+      const req=tx.objectStore("cache").get("library-v12");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v11");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v12");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1300,6 +1300,28 @@ function rowPrimaryQc(row){
   return "—";
 }
 
+function rowCartonCardQc(row,packPrice){
+  const h=rowPackHierarchy(row);
+  if(h.label1!=="Thùng")return rowPrimaryQc(row);
+
+  // Prefer the direct child of the carton. If that level is only 1,
+  // fall through to the real repeated leaf unit.
+  let qty=0,label="";
+  if(h.label2&&Number(h.qty2)>1){
+    qty=Number(h.qty2); label=String(h.label2);
+  }else if(h.label3&&Number(h.qty3)>1){
+    qty=Number(h.qty3); label=String(h.label3);
+  }
+
+  if(!qty||!label)return "Thùng";
+
+  const total=Number(packPrice||0);
+  const unitPrice=total>0?total/qty:0;
+  if(!unitPrice)return "Thùng · "+packHierarchyText(qty,label);
+
+  return qty+" × "+money(unitPrice)+" / 1 "+label.toLocaleLowerCase("vi-VN");
+}
+
 function productHierarchyText(p){
   const h=p&&p.hierarchy||{};
   if(String(h.label1||"").trim()==="Thùng"){
@@ -1521,7 +1543,7 @@ function gridProductCard(row){
         ?(levels.promoMiddlePrice||levels.middlePrice)
         :(levels.promoLeafPrice||levels.leafPrice)));
   const image=String(row.image||"").trim();
-  const qc=rowPrimaryQc(row);
+  const qc=rowIsCarton(row)?rowCartonCardQc(row,price):rowPrimaryQc(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+

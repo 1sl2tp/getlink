@@ -1,5 +1,12 @@
 name: Verify GETLINK
 
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-getlink-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   pull_request:
   push:

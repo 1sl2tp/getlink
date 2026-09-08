@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 72" role="img" aria-label="Bách Hóa Xanh">
+  <rect x="1" y="1" width="218" height="70" rx="6" fill="#008f45"/>
+  <g fill="#ffe500" text-anchor="middle" font-family="Arial,Helvetica,sans-serif">
+    <text x="110" y="29" font-size="22" font-weight="700">Bách hóa</text>
+    <text x="110" y="57" font-size="31" font-weight="900" letter-spacing="1">XANH</text>
+  </g>
+</svg>

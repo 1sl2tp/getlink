@@ -1881,6 +1881,283 @@ function winmartRawComparison(name,current){
   };
 }
 
+function winmartDirectSlug(inputUrl){
+  const u=new URL(canonicalWinmart(inputUrl));
+  return cleanText(
+    u.searchParams.get("cate2")||
+    pathParts(u.toString()).slice(-1)[0]||
+    ""
+  );
+}
+
+function winmartDirectStoreCode(inputUrl){
+  const u=new URL(canonicalWinmart(inputUrl));
+  return cleanText(u.searchParams.get("storeCode")||"1535")||"1535";
+}
+
+function winmartDirectApiUrl(inputUrl,pageNumber,pageSize=500){
+  const slug=winmartDirectSlug(inputUrl);
+  if(!slug)throw new Error("winmart_category_slug_missing");
+  const api=new URL(
+    "https://api-crownx.winmart.vn/it/api/web/v3/item/category"
+  );
+  api.searchParams.set("storeCode",winmartDirectStoreCode(inputUrl));
+  api.searchParams.set("slug",slug);
+  api.searchParams.set("pageNumber",String(Math.max(1,Number(pageNumber)||1)));
+  api.searchParams.set("pageSize",String(Math.max(1,Number(pageSize)||500)));
+  api.searchParams.set("orderByDesc","true");
+  api.searchParams.set("storeGroupCode","1998");
+  return api.toString();
+}
+
+async function winmartDirectFetchPage(inputUrl,pageNumber,pageSize=500){
+  const apiUrl=winmartDirectApiUrl(inputUrl,pageNumber,pageSize);
+  let lastError="";
+  for(let attempt=0;attempt<3;attempt++){
+    try{
+      const response=await fetch(apiUrl,{
+        method:"GET",
+        headers:{
+          "accept":"application/json",
+          "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
+          "x-api-merchant":"WCM",
+          "origin":"https://winmart.vn",
+          "referer":"https://winmart.vn/",
+          "user-agent":"Mozilla/5.0"
+        }
+      });
+      if(!response.ok){
+        lastError="http_"+response.status;
+      }else{
+        const body=await response.json();
+        const data=body&&typeof body.data==="object"&&body.data
+          ?body.data:{};
+        const items=Array.isArray(data.items)?data.items:[];
+        const paging=body&&typeof body.paging==="object"&&body.paging
+          ?body.paging
+          :(data&&typeof data.paging==="object"&&data.paging?data.paging:{});
+        return {data,items,paging,api_url:apiUrl};
+      }
+    }catch(error){
+      lastError=String(error&&error.message||error).slice(0,300);
+    }
+    if(attempt<2){
+      await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+    }
+  }
+  throw new Error("winmart_direct_api_failed:"+lastError);
+}
+
+function winmartDirectImageValue(value){
+  if(typeof value==="string"){
+    const text=value.trim();
+    if(text.startsWith("//"))return "https:"+text;
+    if(/^https?:\/\//i.test(text))return text;
+    return "";
+  }
+  if(Array.isArray(value)){
+    for(const child of value){
+      const found=winmartDirectImageValue(child);
+      if(found)return found;
+    }
+    return "";
+  }
+  if(value&&typeof value==="object"){
+    const preferred=[
+      "url","src","image","imageUrl","mediaUrl",
+      "thumbnail","thumbnailUrl","original"
+    ];
+    for(const key of preferred){
+      const found=winmartDirectImageValue(value[key]);
+      if(found)return found;
+    }
+    for(const child of Object.values(value)){
+      const found=winmartDirectImageValue(child);
+      if(found)return found;
+    }
+  }
+  return "";
+}
+
+function winmartDirectImage(item){
+  const keys=[
+    "mediaUrl","mediaItems","imageUrl","image_url",
+    "thumbnailUrl","thumbnail_url","thumbnail","image",
+    "images","imageUrls","image_urls","productImage",
+    "product_image","avatar","picture"
+  ];
+  for(const key of keys){
+    const found=winmartDirectImageValue(item&&item[key]);
+    if(found)return found;
+  }
+  return "";
+}
+
+function winmartDirectProductUrl(item,inputUrl){
+  const store=winmartDirectStoreCode(inputUrl);
+  const seo=cleanText(item&&(
+    item.seoName||item.seo_name
+  )||"");
+  if(seo){
+    const out=new URL(
+      "https://winmart.vn/products/"+seo.replace(/^\/+|\/+$/g,"")
+    );
+    out.searchParams.set("storeCode",store);
+    return out.toString();
+  }
+  const raw=cleanText(item&&(
+    item.productUrl||item.product_url||item.url||item.href
+  )||"");
+  if(!raw)return "";
+  try{
+    const out=new URL(raw,inputUrl);
+    if(
+      out.hostname.toLowerCase()!=="winmart.vn"&&
+      out.hostname.toLowerCase()!=="www.winmart.vn"
+    )return "";
+    out.protocol="https:";
+    out.hostname="winmart.vn";
+    out.search="";
+    out.searchParams.set("storeCode",store);
+    return out.toString();
+  }catch{
+    return "";
+  }
+}
+
+function winmartDirectRawProduct(item,inputUrl){
+  const regular=parseMoney(
+    item&&(
+      item.price||
+      item.listPrice||
+      item.originalPrice
+    )
+  );
+  const sale=parseMoney(
+    item&&(
+      item.salePrice||
+      item.sellingPrice||
+      item.finalPrice||
+      item.currentPrice
+    )
+  );
+  const current=sale||regular;
+  const original=regular&&current&&regular>current?regular:null;
+  const sourceType=cleanText(item&&(
+    item.uomName||
+    item.unitName||
+    item.unit||
+    item.packageUnit||
+    item.packingUnit||
+    item.measureUnit||
+    item.uom
+  )||"");
+  return {
+    url:winmartDirectProductUrl(item,inputUrl),
+    name:cleanText(item&&(
+      item.name||item.productName||item.product_name||item.title
+    )||""),
+    current_price:current,
+    original_price:original,
+    image:winmartDirectImage(item||{}),
+    brand:cleanText(item&&(
+      item.brandName||item.brand_name||item.brand
+    )||""),
+    unit:sourceType,
+    unit_evidence:sourceType?"winmart_api_type":"",
+    packaging:sourceType,
+    category_name:cleanText(item&&(
+      item.categoryName||item.category_name
+    )||""),
+    promotion_text:cleanText(item&&(
+      item.promotionText||item.promotion_text
+    )||""),
+    source_product_id:cleanText(item&&item.id||""),
+    source_item_no:cleanText(item&&(item.itemNo||item.item_no)||""),
+    source_sku:cleanText(item&&item.sku||""),
+    barcode:cleanText(item&&item.barcode||""),
+    source_seo_name:cleanText(item&&item.seoName||""),
+    source_description:cleanText(item&&item.description||""),
+    source_short_description:cleanText(item&&item.shortDescription||""),
+    source_uom:cleanText(item&&item.uom||""),
+    source_uom_name:cleanText(item&&item.uomName||""),
+    source_quantity_per_unit:item&&item.quantityPerUnit!==undefined
+      ?item.quantityPerUnit:null
+  };
+}
+
+async function fetchWinmartDirect(inputUrl){
+  const canonical=canonicalWinmart(inputUrl);
+  if(heuristicType(canonical)!=="category"){
+    throw new Error("winmart_category_link_required");
+  }
+  const started=Date.now();
+  const pageSize=500;
+  const first=await winmartDirectFetchPage(canonical,1,pageSize);
+  const totalPages=Math.max(
+    1,Number(first.paging&&first.paging.totalPages)||1
+  );
+  const totalCount=Math.max(
+    0,Number(first.paging&&first.paging.totalCount)||first.items.length
+  );
+  const pageResults=new Map([[1,first.items]]);
+  if(totalPages>1){
+    const pageNumbers=Array.from(
+      {length:totalPages-1},
+      (_,index)=>index+2
+    );
+    for(let start=0;start<pageNumbers.length;start+=8){
+      const part=pageNumbers.slice(start,start+8);
+      const results=await Promise.all(
+        part.map(pageNumber=>
+          winmartDirectFetchPage(canonical,pageNumber,pageSize)
+        )
+      );
+      results.forEach((result,index)=>{
+        pageResults.set(part[index],result.items);
+      });
+    }
+  }
+
+  const sourceItems=[];
+  for(let pageNumber=1;pageNumber<=totalPages;pageNumber++){
+    sourceItems.push(...(pageResults.get(pageNumber)||[]));
+  }
+
+  const products=sourceItems.map(
+    item=>winmartDirectRawProduct(item,canonical)
+  );
+  const checked=new Date().toISOString();
+  return {
+    status:"complete",
+    engine:"winmart-direct-worker",
+    input_url:canonical,
+    kind:"category",
+    checked_at:checked,
+    winmart_response:{
+      category_name:cleanText(
+        first.data&&first.data.name||winmartDirectSlug(canonical)
+      ),
+      store_code:winmartDirectStoreCode(canonical),
+      subcategories:[],
+      products,
+      checked_at:checked,
+      source_api:{
+        engine:"winmart-direct-worker",
+        slug:winmartDirectSlug(canonical),
+        page_size:pageSize,
+        total_pages:totalPages,
+        total_count:totalCount,
+        api_rows:sourceItems.length,
+        raw_types:products.filter(
+          product=>cleanText(product.unit||"")
+        ).length,
+        elapsed_ms:Date.now()-started
+      }
+    }
+  };
+}
+
 async function loadBhxTaxonomyForWinmart(env){
   const cats=await env.DB.prepare(
     "SELECT canonical_url,name,group_name FROM links WHERE source='Bách Hóa XANH' AND link_type='category' AND COALESCE(last_status,'')<>'unlisted'"

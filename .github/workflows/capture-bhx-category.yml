@@ -1,5 +1,5 @@
 name: Capture BHX category contract
-# endpoint trace refresh
+# endpoint trace refresh 2
 
 on:
   push:

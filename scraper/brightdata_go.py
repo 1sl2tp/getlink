@@ -132,8 +132,8 @@ async def prepare_go_page(page, target_url: str):
 
 async def extract_products(page, category_label: str):
     rows = await page.locator('a[href*="/product/"]').evaluate_all(
-        """(anchors, categoryLabel) => {
-          const clean=v=>String(v||"").replace(/\\s+/g," ").trim();
+        r"""(anchors, categoryLabel) => {
+          const clean=v=>String(v||"").replace(/\s+/g," ").trim();
           const money=v=>{
             const digits=String(v||"").replace(/[^0-9]/g,"");
             return digits?Number(digits):0;
@@ -250,8 +250,8 @@ async def click_load_more_products(page) -> bool:
     # Fallback for sites wrapping the label in nested spans.
     try:
         clicked = await page.evaluate(
-            """() => {
-              const clean=v=>String(v||"").replace(/\\s+/g," ").trim();
+            r"""() => {
+              const clean=v=>String(v||"").replace(/\s+/g," ").trim();
               const nodes=[...document.querySelectorAll("button,a,[role='button']")];
               const hit=nodes.find(el =>
                 /^Xem thêm sản phẩm$/i.test(clean(el.innerText||el.textContent)) &&
@@ -343,14 +343,14 @@ def go_api_product_row(product: dict, category_label: str, observed_urls: dict) 
 
 async def observed_go_product_urls(page) -> dict:
     rows = await page.locator('a[href*="/product/"]').evaluate_all(
-        """els => els.map(a => ({
+        r"""els => els.map(a => ({
           href: a.href || "",
           text: String(
             a.getAttribute("title") ||
             (a.querySelector("img") && a.querySelector("img").getAttribute("alt")) ||
             a.textContent ||
             ""
-          ).replace(/\\s+/g," ").trim()
+          ).replace(/\s+/g," ").trim()
         }))"""
     )
     out = {}

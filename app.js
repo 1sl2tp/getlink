@@ -123,8 +123,17 @@ function productSearchKey(row){
 function matchesSearch(row,query){
   const tokens=searchKey(query).split(/\s+/).filter(Boolean);
   if(!tokens.length)return true;
-  const hay=productSearchKey(row);
-  return tokens.every(token=>hay.includes(token));
+  const words=productSearchKey(row).split(/\s+/).filter(Boolean);
+
+  return tokens.every(token=>{
+    // Short Vietnamese search tokens such as "ot" must be a real word.
+    // Otherwise "tuong ot" incorrectly matches "tuong ... Ottogi".
+    if(token.length<=2){
+      return words.includes(token);
+    }
+    // Longer tokens still support natural partial typing.
+    return words.some(word=>word.startsWith(token));
+  });
 }
 
 function auditSourceKey(value){
@@ -1118,7 +1127,7 @@ async function loadLibraryGroups(){
 
 async function ensureLibraryCache(force=false){
   if(libraryLoaded&&!force)return;
-  const r=await fetch(API+"/api/library?view=search&limit=2000&include_hidden=1",{cache:"no-store"});
+  const r=await fetch(API+"/api/library?view=search&limit=10000&include_hidden=1",{cache:"no-store"});
   const data=await r.json();
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];

@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v12");
+      const req=tx.objectStore("cache").get("library-v13");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v12");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v13");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1705,15 +1705,8 @@ function renderPackTabs(){
     localStorage.removeItem("getlink:filter-pack");
   }
 
-  const selectedCount=activePackKind==="Thùng"
-    ?cartonCount
-    :(activePackKind==="Lẻ"?retailCount:base.length);
-
-  if(activePackKind&&selectedCount===0){
-    activePackKind="";
-    localStorage.removeItem("getlink:filter-pack");
-  }
-
+  // Thùng/Lẻ is the user's global shopping mode, above category/brand/search.
+  // Never clear it just because the current category has 0 matching products.
   host.hidden=!base.length;
   if(!base.length){
     host.innerHTML="";
@@ -2171,8 +2164,7 @@ $("#categoryTabs").addEventListener("click",e=>{
   activeRootGroup=chip.dataset.root||"";
   activeGroupUrl=chip.dataset.group||"";
   activeBrand="";
-  activePackKind="";
-  localStorage.removeItem("getlink:filter-pack");
+  // Keep activePackKind: shopping mode > category.
   libraryPage=1;
   libraryQuery="";
   $("#librarySearch").value="";
@@ -2245,8 +2237,7 @@ $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
   if(!chip)return;
   activeBrand=chip.dataset.brand||"";
-  activePackKind="";
-  localStorage.removeItem("getlink:filter-pack");
+  // Keep activePackKind: shopping mode > brand.
   libraryPage=1;
   resetBrowseDetail();
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));

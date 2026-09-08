@@ -214,6 +214,13 @@ type Product = {
   source_identity:any; last_checked_at:string;
 };
 
+const BHX_HTTP1_CLIENT = Deno.createHttpClient({
+  http1: true,
+  http2: false,
+  poolMaxIdlePerHost: 4,
+  poolIdleTimeout: 30
+});
+
 function bhxHeaders(referer: string) {
   return {
     "accept":"application/json, text/plain, */*",
@@ -227,11 +234,14 @@ async function bhxJson(url: string, referer: string, body?: unknown) {
   for (let i=0;i<2;i++) {
     try {
       const r = await fetch(url, body === undefined ? {
-        method:"GET", headers:bhxHeaders(referer)
+        method:"GET",
+        headers:bhxHeaders(referer),
+        client:BHX_HTTP1_CLIENT
       } : {
         method:"POST",
         headers:{...bhxHeaders(referer),"content-type":"application/json"},
-        body:JSON.stringify(body)
+        body:JSON.stringify(body),
+        client:BHX_HTTP1_CLIENT
       });
       if (!r.ok) { last="http_"+r.status; continue; }
       const data = await r.json();

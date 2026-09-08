@@ -4516,3 +4516,36 @@ body.image-zoom-open{overflow:hidden!important}
   .grid-price-group{row-gap:2px!important;min-width:38px}
   .grid-unit-price{font-size:8.5px!important}
 }
+
+
+/* Carton footer v5: one compact explanatory chip + total price */
+.grid-product-bottom{
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  min-height:24px!important;
+}
+.grid-qc{
+  justify-self:start!important;
+  max-width:100%!important;
+  padding:3px 7px!important;
+  color:#687381!important;
+  background:#f2f4f7!important;
+  font-size:9px!important;
+  font-weight:650!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+}
+.grid-price-group{
+  display:flex!important;
+  align-items:baseline!important;
+  min-width:0!important;
+}
+.grid-unit-price{
+  display:none!important;
+}
+@media(max-width:720px){
+  .grid-qc{
+    padding:3px 6px!important;
+    font-size:8.3px!important;
+  }
+}

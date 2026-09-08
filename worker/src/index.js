@@ -1,6 +1,5 @@
 const OWNER="1sl2tp";
 const REPO="getlink";
-const WORKFLOW_BHX="scrape.yml";
 const WORKFLOW_GO="scrape-go.yml";
 
 function json(data,status=200,origin=""){
@@ -863,12 +862,12 @@ async function idForUrl(value){
     .map(x=>x.toString(16).padStart(2,"0")).join("");
 }
 
-async function dispatchGithub(env,url,requestId,sourceKey="bachhoaxanh"){
+async function dispatchGithub(env,url,requestId,sourceKey="go"){
   if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
-  if(sourceKey==="winmart"){
-    throw new Error("winmart_github_dispatch_disabled");
+  if(sourceKey!=="go"){
+    throw new Error(sourceKey+"_github_dispatch_disabled");
   }
-  const workflow=sourceKey==="go"?WORKFLOW_GO:WORKFLOW_BHX;
+  const workflow=WORKFLOW_GO;
   return fetch(
     "https://api.github.com/repos/"+OWNER+"/"+REPO+
     "/actions/workflows/"+workflow+"/dispatches",
@@ -3576,9 +3575,8 @@ async function handleCreate(request,env,origin){
     last_request_id:requestId
   });
 
-  // BHX direct-first: use its JSON APIs from the Worker. If BHX blocks
-  // the Worker, a category has no D1 seed yet, or a category response is
-  // suspiciously partial, fall through to the existing Bright Data path.
+  // BHX uses its JSON APIs directly from the Worker.
+  // No GitHub Action, Playwright or Bright Data is used for price ingestion.
   if(sourceKey==="bachhoaxanh"){
     try{
       await env.DB.prepare(
@@ -3606,14 +3604,20 @@ async function handleCreate(request,env,origin){
         cache_hit:false
       },200,origin);
     }catch(error){
-      // Restore queued state before the legacy GitHub dispatcher runs.
-      // Do not expose a failed direct attempt as a user-facing error.
+      const detail=String(
+        error&&error.message||error
+      ).slice(0,1200);
       await env.DB.prepare(
-        "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
-      ).bind(new Date().toISOString(),requestId).run();
+        "UPDATE jobs SET status='error',error=?,updated_at=? WHERE request_id=?"
+      ).bind(detail,new Date().toISOString(),requestId).run();
       await env.DB.prepare(
-        "UPDATE links SET last_status='queued',updated_at=? WHERE canonical_url=?"
+        "UPDATE links SET last_status='error',updated_at=? WHERE canonical_url=?"
       ).bind(new Date().toISOString(),url).run();
+      return json({
+        error:"bhx_direct_failed",
+        detail,
+        request_id:requestId
+      },502,origin);
     }
   }
 
@@ -3717,67 +3721,6 @@ function callbackAuthorized(request,env){
   return got==="Bearer "+expected;
 }
 
-
-async function handleBhxDirectProbe(request,env){
-  if(!callbackAuthorized(request,env)){
-    return json({error:"unauthorized"},401,"");
-  }
-  let raw;
-  try{raw=await request.json();}
-  catch{return json({error:"invalid_json"},400,"");}
-
-  let inputUrl;
-  try{
-    inputUrl=canonicalBhx(String(raw&&raw.url||""));
-  }catch{
-    return json({error:"invalid_bhx_url"},400,"");
-  }
-
-  try{
-    const kind=heuristicType(inputUrl);
-    if(kind==="product"){
-      const direct=await bhxDirectProductData(inputUrl);
-      return json({
-        ok:true,
-        kind:"product",
-        response_url:direct.response_url,
-        category_id:Number(direct.data&&direct.data.categoryId)||null,
-        category_name:cleanText(direct.data&&direct.data.categoryName||""),
-        box_buys:Array.isArray(direct.data&&direct.data.boxBuys)
-          ?direct.data.boxBuys.length:0,
-        sample_name:cleanText(
-          direct.data&&direct.data.boxBuys&&
-          direct.data.boxBuys[0]&&direct.data.boxBuys[0].name||""
-        )
-      },200,"");
-    }
-
-    const direct=await bhxDirectCategoryData(env,inputUrl);
-    return json({
-      ok:true,
-      kind:"category",
-      response_url:direct.response_url,
-      category_id:direct.category_id,
-      products:(direct.data&&direct.data.products||[]).length,
-      existing_count:direct.existing_count,
-      v2_products:direct.v2_count,
-      vegetable_products:direct.vegetable_count,
-      ajax_products:direct.ajax_count,
-      ajax_pages:direct.ajax_pages,
-      sample:(direct.data&&direct.data.products||[])
-        .slice(0,5)
-        .map(item=>cleanText(item&&(
-          item.fullName||item.name
-        )||""))
-    },200,"");
-  }catch(error){
-    return json({
-      ok:false,
-      error:"bhx_direct_probe_failed",
-      detail:String(error&&error.message||error).slice(0,1200)
-    },502,"");
-  }
-}
 
 async function handleProgress(request,env){
   if(!callbackAuthorized(request,env)){
@@ -4866,9 +4809,6 @@ export default {
       if(request.method==="POST"&&url.pathname==="/api/get-price"){
         return await handleCreate(request,env,origin||"*");
       }
-      if(request.method==="POST"&&url.pathname==="/api/probe-bhx-direct"){
-        return await handleBhxDirectProbe(request,env);
-      }
       if(request.method==="POST"&&url.pathname==="/api/progress"){
         return handleProgress(request,env);
       }
@@ -4911,7 +4851,7 @@ export default {
         ).first();
         return json({
           ok:true,
-          mode:"brightdata-browser-api",
+          mode:"bhx-winmart-direct-go-browser",
           dispatcher:Boolean(env.GITHUB_TOKEN),
           links:Number(count&&count.n||0),
           source_identities:Number(identityCount&&identityCount.n||0)

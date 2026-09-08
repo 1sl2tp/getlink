@@ -9,40 +9,35 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe public WinMart category API
+      - name: Inspect WinMart page and API client
         shell: bash
         run: |
-          set -uo pipefail
-          BASE='https://api-crownx.winmart.vn/it/api/web/v3/item/category'
-          UA='Mozilla/5.0'
-          ORIGIN='https://winmart.vn'
-          REF='https://winmart.vn/sua-cac-loai--c08?storeCode=1535'
-          candidates=(
-            'categoryCode=c08&storeCode=1535&pageNumber=1&pageSize=8'
-            'categoryCode=08&storeCode=1535&pageNumber=1&pageSize=8'
-            'categoryCode=8&storeCode=1535&pageNumber=1&pageSize=8'
-            'cateCode=c08&storeCode=1535&pageNumber=1&pageSize=8'
-            'categoryId=c08&storeCode=1535&pageNumber=1&pageSize=8'
-            'categoryCode=c08&pageNumber=1&pageSize=8&storeCode=1535'
-          )
+          set -euo pipefail
+          PAGE='https://winmart.vn/sua-cac-loai--c08?storeCode=1535'
+          curl -L -sS --connect-timeout 10 --max-time 20             -A 'Mozilla/5.0' "$PAGE" -o /tmp/winmart.html
+          echo "HTML bytes=$(wc -c </tmp/winmart.html)"
+          echo "=== API/string hits in HTML ==="
+          grep -Eo 'https?://[^"''' ]+|/[^"''' ]*item/category[^"''' ]*|api-crownx[^"''' ]*' /tmp/winmart.html             | grep -E 'crownx|item/category' | head -50 || true
+
+          grep -Eo '<script[^>]+src="[^"]+"' /tmp/winmart.html             | sed -E 's/.*src="([^"]+)".*/\1/' > /tmp/scripts.txt || true
+          echo "scripts=$(wc -l </tmp/scripts.txt)"
           n=0
-          for q in "${candidates[@]}"; do
+          while IFS= read -r src; do
+            [ -n "$src" ] || continue
             n=$((n+1))
-            echo "=== CANDIDATE $n: $q"
-            code="$(curl -L -sS --connect-timeout 10 --max-time 20               -A "$UA" -H "Accept: application/json"               -H "Origin: $ORIGIN" -H "Referer: $REF"               -o "/tmp/wm-$n.json" -w '%{http_code}' "$BASE?$q" || true)"
-            bytes="$(wc -c < "/tmp/wm-$n.json" 2>/dev/null || echo 0)"
-            echo "HTTP=$code bytes=$bytes"
-            if jq -e . "/tmp/wm-$n.json" >/dev/null 2>&1; then
-              jq -c '{
-                keys:(keys|.[0:20]),
-                data_keys:((.data // {})|keys|.[0:20]),
-                items:((.data.items // [])|length),
-                paging:(.paging // null),
-                sample:((.data.items // [])[0] // null)
-              }' "/tmp/wm-$n.json" | head -c 5000
-              echo
-            else
-              head -c 1200 "/tmp/wm-$n.json" || true
-              echo
+            case "$src" in
+              http*) url="$src" ;;
+              //*) url="https:$src" ;;
+              /*) url="https://winmart.vn$src" ;;
+              *) url="https://winmart.vn/$src" ;;
+            esac
+            curl -L -sS --connect-timeout 8 --max-time 15 -A 'Mozilla/5.0' "$url" -o "/tmp/js-$n" || continue
+            if grep -qE 'item/category|api-crownx|pageNumber|storeCode' "/tmp/js-$n"; then
+              echo "=== SCRIPT $n $url ==="
+              grep -aoE '.{0,300}(item/category|api-crownx|pageNumber|storeCode).{0,500}' "/tmp/js-$n"                 | head -40 || true
             fi
-          done
+          done < /tmp/scripts.txt
+
+          echo "=== Guessed API response body ==="
+          curl -L -sS --connect-timeout 10 --max-time 20             -A 'Mozilla/5.0'             -H 'Accept: application/json'             -H 'Origin: https://winmart.vn'             -H 'Referer: https://winmart.vn/'             'https://api-crownx.winmart.vn/it/api/web/v3/item/category?categoryCode=c08&storeCode=1535&pageNumber=1&pageSize=8'             | head -c 1200
+          echo

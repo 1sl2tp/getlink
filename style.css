@@ -4967,3 +4967,86 @@ body.image-zoom-open{overflow:hidden!important}
     padding-right:7px!important;
   }
 }
+
+
+/* Responsive top geometry v2: shrink/grow smoothly without awkward gaps */
+.catalog-toolbar{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  align-items:center!important;
+  gap:8px!important;
+}
+.catalog-title-row{
+  min-width:0!important;
+  overflow:hidden;
+}
+.catalog-title-row h2{
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.source-tabs-top{
+  width:auto!important;
+  min-width:0!important;
+  display:grid!important;
+  grid-auto-flow:column;
+  grid-auto-columns:max-content;
+  gap:4px!important;
+}
+.source-tabs-top .source-chip{
+  min-width:0!important;
+  max-width:100%!important;
+}
+
+@media(max-width:720px){
+  .catalog-toolbar{
+    grid-template-columns:minmax(90px,1fr) clamp(158px,42vw,205px)!important;
+    gap:6px!important;
+  }
+  .source-tabs-top{
+    width:100%!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    grid-auto-flow:row!important;
+    gap:3px!important;
+  }
+  .source-tabs-top .source-chip{
+    width:100%!important;
+    padding:0 3px!important;
+    text-align:center!important;
+  }
+  .catalog-title-row h2{
+    font-size:clamp(12px,3.45vw,13.5px)!important;
+  }
+
+  .site-head{
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+  }
+  .site-brand-copy{
+    overflow:hidden!important;
+  }
+  .site-brand-copy h1,
+  .site-brand-copy p{
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+}
+@media(max-width:390px){
+  .catalog-toolbar{
+    grid-template-columns:minmax(72px,1fr) 154px!important;
+  }
+  .source-tabs-top{
+    gap:2px!important;
+  }
+  .source-tabs-top .source-chip{
+    height:25px!important;
+    padding:0 2px!important;
+    font-size:7.8px!important;
+  }
+  .site-brand-copy p{
+    display:none!important;
+  }
+}

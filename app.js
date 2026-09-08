@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v5");
+      const req=tx.objectStore("cache").get("library-v6");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v5");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v6");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -712,7 +712,7 @@ function renderProduct(payload){
   $("#categoryChildren").hidden=true;
   $("#linkType").textContent="So sánh giá";
   $("#source").textContent=(p.source&&p.source.name)||"Bách Hóa XANH";
-  $("#name").textContent=p.name||"Sản phẩm";
+  $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
   $("#group").textContent=p.group||"—";
   $("#branch").textContent=p.branch||"—";
   $("#packaging").textContent=productHierarchyText(p);
@@ -1201,9 +1201,22 @@ function capitalizeDisplayName(value){
   return text.charAt(0).toLocaleUpperCase("vi-VN")+text.slice(1);
 }
 
+function compactCartonDisplayName(name,hierarchy){
+  let text=String(name||"").trim();
+  if(!text)return "Sản phẩm";
+  if(String(hierarchy&&hierarchy.label1||"").trim()==="Thùng"){
+    text=text.replace(
+      /^thùng\s+\d+\s+(?:lốc|túi|hộp|chai|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp)\s+/iu,
+      ""
+    ).trim()||text;
+  }
+  return capitalizeDisplayName(text);
+}
+
 function canonicalDisplayName(row){
-  return capitalizeDisplayName(
-    String(row&&row.source_name||row&&row.name||"Sản phẩm")
+  return compactCartonDisplayName(
+    String(row&&row.source_name||row&&row.name||"Sản phẩm"),
+    rowPackHierarchy(row)
   );
 }
 

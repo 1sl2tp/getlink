@@ -7480,3 +7480,24 @@ body.source-manager-open{overflow:hidden!important}
 .workspace-nav .category-tabs .category-chip[data-root="__unclassified__"]{
   margin-bottom:4px!important;
 }
+
+
+/* Category end spacer v2
+   A real flex item extends scrollHeight; padding alone was not reliable in Safari/Chrome. */
+.workspace-nav .category-tabs{
+  padding-bottom:0!important;
+}
+.workspace-nav .category-scroll-end-spacer{
+  flex:0 0 54px!important;
+  width:100%!important;
+  height:54px!important;
+  min-height:54px!important;
+  pointer-events:none!important;
+}
+@media(max-width:1100px){
+  .workspace-nav .category-scroll-end-spacer{
+    flex-basis:64px!important;
+    height:64px!important;
+    min-height:64px!important;
+  }
+}

@@ -314,6 +314,10 @@ assert.equal(money(0),"—");
   assert.match(css,/\.workspace-nav \.category-tabs,[\s\S]*?flex:1 1 auto!important/);
   assert.match(css,/\.grid-watch-button \.ui-icon\{[\s\S]*?width:15px!important/);
   assert.match(css,/Price color is semantic, not source branding/);
+  assert.match(css,/max-width:88%!important/);
+  assert.match(css,/max-height:88%!important/);
+  assert.match(css,/max-width:86%!important/);
+  assert.match(css,/object-position:center center!important/);
 }
 
 console.log("money and hierarchy UI tests passed");

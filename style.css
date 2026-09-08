@@ -6977,3 +6977,35 @@ body.source-manager-open{overflow:hidden!important}
     -webkit-line-clamp:2;
   }
 }
+
+
+/* Category drawer scroll anchors v1
+   Keep "Tất cả" visible and always leave enough room to reveal the final row. */
+.workspace-nav .category-tabs{
+  box-sizing:border-box!important;
+  padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+  scroll-padding-top:42px!important;
+  scroll-padding-bottom:max(18px,env(safe-area-inset-bottom))!important;
+}
+.workspace-nav .category-tabs > .category-chip[data-root=""][data-group=""]{
+  position:sticky!important;
+  top:0!important;
+  z-index:8!important;
+  flex:0 0 auto!important;
+  background:#fff!important;
+  box-shadow:0 6px 8px rgba(16,24,40,.055)!important;
+}
+.workspace-nav .category-tabs > .category-chip[data-root=""][data-group=""].active{
+  background:var(--green)!important;
+  border-color:var(--green)!important;
+  color:#fff!important;
+}
+.workspace-nav .category-tabs > .category-chip[data-root=""][data-group=""].active small{
+  color:#d8f1e3!important;
+}
+@media(max-width:1100px){
+  .workspace-nav .category-tabs{
+    padding-bottom:max(24px,env(safe-area-inset-bottom))!important;
+    scroll-padding-bottom:max(24px,env(safe-area-inset-bottom))!important;
+  }
+}

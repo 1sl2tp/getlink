@@ -5050,3 +5050,128 @@ body.image-zoom-open{overflow:hidden!important}
     display:none!important;
   }
 }
+
+
+/* Catalog control hierarchy v3
+   1) purchase mode  2) search  3) source + presentation  4) results */
+.catalog-toolbar{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+.catalog-search-row{
+  display:block!important;
+  padding:0 12px 6px!important;
+}
+.catalog-search-row .catalog-search{
+  width:100%!important;
+}
+.catalog-secondary-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding:0 12px 9px;
+}
+.catalog-secondary-row .source-tabs{
+  flex:1 1 auto;
+  min-width:0;
+}
+.catalog-secondary-row .view-switch{
+  flex:0 0 auto;
+}
+
+/* Old source-at-title rules are superseded. */
+.source-tabs-top{
+  margin-left:0!important;
+  width:auto!important;
+}
+
+@media(max-width:720px){
+  /* On mobile the title/count is redundant: pack chips already communicate scope/count. */
+  .catalog-toolbar{
+    display:none!important;
+  }
+
+  .purchase-mode-row{
+    order:1;
+    padding:8px 9px 6px!important;
+  }
+
+  .catalog-search-row{
+    order:2;
+    padding:0 9px 6px!important;
+  }
+  .catalog-search-row .catalog-search input{
+    width:100%!important;
+    height:35px!important;
+  }
+
+  .catalog-secondary-row{
+    order:3;
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:center!important;
+    gap:6px!important;
+    padding:0 9px 8px!important;
+  }
+  .catalog-secondary-row .source-tabs{
+    width:100%!important;
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:4px!important;
+    overflow:visible!important;
+  }
+  .catalog-secondary-row .source-chip{
+    width:100%!important;
+    min-width:0!important;
+    height:29px!important;
+    padding:0 4px!important;
+    text-align:center!important;
+    font-size:8.8px!important;
+  }
+  .catalog-secondary-row .source-chip small{
+    display:none!important;
+  }
+
+  .catalog-secondary-row .view-switch{
+    height:35px!important;
+  }
+  .catalog-secondary-row .view-button{
+    min-width:45px!important;
+    height:29px!important;
+    padding:0 7px!important;
+  }
+  .catalog-secondary-row .view-button span[aria-hidden="true"]{
+    display:none!important;
+  }
+  .catalog-secondary-row .view-button b{
+    display:inline!important;
+    font-size:9.5px!important;
+  }
+}
+
+@media(max-width:390px){
+  .purchase-mode-row{
+    padding-left:7px!important;
+    padding-right:7px!important;
+  }
+  .catalog-search-row{
+    padding-left:7px!important;
+    padding-right:7px!important;
+  }
+  .catalog-secondary-row{
+    gap:5px!important;
+    padding-left:7px!important;
+    padding-right:7px!important;
+  }
+  .catalog-secondary-row .source-tabs{
+    gap:3px!important;
+  }
+  .catalog-secondary-row .source-chip{
+    padding:0 3px!important;
+    font-size:8.2px!important;
+  }
+  .catalog-secondary-row .view-button{
+    min-width:42px!important;
+    padding:0 6px!important;
+  }
+}

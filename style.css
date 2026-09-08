@@ -4233,3 +4233,19 @@ h1{
     scrollbar-width:thin;
   }
 }
+
+
+/* Safari grid paint fix: only ~48 cards are mounted, so do not hide card content. */
+.grid-product{
+  content-visibility:visible!important;
+  contain:none!important;
+}
+#productGrid{
+  grid-auto-rows:max-content!important;
+}
+.grid-product-body{
+  flex:0 0 auto!important;
+  min-height:76px!important;
+  display:flex!important;
+  visibility:visible!important;
+}

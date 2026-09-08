@@ -4092,3 +4092,10 @@ h1{
 @media(max-width:1100px){
   .detail-back-button{height:30px;font-size:10px}
 }
+
+
+/* View mode gate: Ảnh and Bảng are mutually exclusive */
+#productGrid[hidden],
+#tableView[hidden]{
+  display:none!important;
+}

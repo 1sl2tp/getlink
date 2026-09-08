@@ -3866,7 +3866,7 @@ function isCategoryRootUrl(value){
 
 async function handleLibrary(url,env,origin){
   const view=String(url.searchParams.get("view")||"groups");
-  const limit=Math.min(2000,Math.max(1,Number(url.searchParams.get("limit")||500)));
+  const limit=Math.min(10000,Math.max(1,Number(url.searchParams.get("limit")||500)));
 
   if(view==="groups"){
     const categories=await env.DB.prepare(

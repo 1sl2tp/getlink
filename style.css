@@ -4429,127 +4429,7 @@ body.image-zoom-open{overflow:hidden!important}
 }
 
 
-/* Carton footer v3: pack chip left, small unit price beside total */
-.grid-product-bottom{
-  align-items:center!important;
-  justify-content:space-between!important;
-}
-.grid-qc{
-  flex:0 0 auto!important;
-  width:auto!important;
-  max-width:52%!important;
-}
-.grid-price-group{
-  margin-left:auto;
-  display:inline-flex;
-  align-items:baseline;
-  justify-content:flex-end;
-  gap:6px;
-  white-space:nowrap;
-}
-.grid-unit-price{
-  flex:0 0 auto;
-  color:#25303b!important;
-  font-size:10px!important;
-  line-height:1!important;
-  font-weight:650!important;
-  letter-spacing:0!important;
-}
-@media(max-width:720px){
-  .grid-price-group{gap:5px}
-  .grid-unit-price{font-size:9px!important}
-}
-
-
-/* Carton footer v4: stable two-column geometry for long scanning */
-.grid-product-bottom{
-  display:grid!important;
-  grid-template-columns:minmax(0,1fr) auto!important;
-  align-items:end!important;
-  column-gap:8px!important;
-  min-height:30px!important;
-}
-.grid-qc{
-  justify-self:start!important;
-  align-self:end!important;
-  flex:none!important;
-  width:auto!important;
-  max-width:100%!important;
-  margin:0!important;
-}
-.grid-price-group{
-  justify-self:end!important;
-  align-self:end!important;
-  margin:0!important;
-  display:grid!important;
-  grid-template-rows:auto auto!important;
-  justify-items:end!important;
-  align-items:end!important;
-  row-gap:2px!important;
-  min-width:42px;
-  white-space:nowrap;
-}
-.grid-price-group:not(.has-unit){
-  grid-template-rows:auto!important;
-}
-.grid-price{
-  grid-row:1!important;
-  margin:0!important;
-  line-height:1!important;
-}
-.grid-unit-price{
-  grid-row:2!important;
-  margin:0!important;
-  color:#25303b!important;
-  font-size:9px!important;
-  line-height:1!important;
-  font-weight:600!important;
-  opacity:.82;
-  font-variant-numeric:tabular-nums;
-  white-space:nowrap;
-}
-@media(max-width:720px){
-  .grid-product-bottom{
-    column-gap:6px!important;
-    min-height:28px!important;
-  }
-  .grid-price-group{row-gap:2px!important;min-width:38px}
-  .grid-unit-price{font-size:8.5px!important}
-}
-
-
-/* Carton footer v5: one compact explanatory chip + total price */
-.grid-product-bottom{
-  grid-template-columns:minmax(0,1fr) auto!important;
-  align-items:center!important;
-  min-height:24px!important;
-}
-.grid-qc{
-  justify-self:start!important;
-  max-width:100%!important;
-  padding:3px 7px!important;
-  color:#687381!important;
-  background:#f2f4f7!important;
-  font-size:9px!important;
-  font-weight:650!important;
-  line-height:1.1!important;
-  white-space:nowrap!important;
-}
-.grid-price-group{
-  display:flex!important;
-  align-items:baseline!important;
-  min-width:0!important;
-}
-.grid-unit-price{
-  display:none!important;
-}
-@media(max-width:720px){
-  .grid-qc{
-    padding:3px 6px!important;
-    font-size:8.3px!important;
-  }
-}
-
+/* Carton footer geometry is owned by Catalog canonical owner v2 below. */
 
 /* Product name v2: always two lines, slightly smaller for dense image cards */
 .grid-product-name{
@@ -6069,4 +5949,178 @@ body{color:var(--text-primary)!important}
   width:auto!important;
   justify-self:end!important;
   white-space:nowrap!important;
+}
+
+
+/* =========================================================
+   Catalog canonical owner v2
+   Detail hierarchy + footer geometry + display typography.
+   ========================================================= */
+
+/* Product detail: fewer boxes, stronger information hierarchy. */
+.detail-back-row{
+  justify-content:flex-start!important;
+  margin-bottom:8px!important;
+}
+.detail-category-label{
+  display:none!important;
+}
+.detail-panel .result-head{
+  align-items:flex-start!important;
+  gap:10px!important;
+}
+.detail-panel .result-kicker{
+  display:flex!important;
+  align-items:center!important;
+  gap:6px!important;
+  margin-bottom:3px!important;
+}
+.detail-panel #source{
+  display:inline-flex!important;
+  align-items:center!important;
+  min-height:21px!important;
+  padding:0 7px!important;
+  border-radius:999px!important;
+  background:var(--green-soft)!important;
+  color:var(--green-strong)!important;
+  font-size:8.5px!important;
+  font-weight:760!important;
+}
+.detail-panel .type-badge{
+  padding:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--text-muted)!important;
+  font-size:8.5px!important;
+  font-weight:650!important;
+}
+.detail-panel .result-head a{
+  display:inline-flex!important;
+  align-items:center!important;
+  gap:4px!important;
+  flex:0 0 auto!important;
+  padding:4px 0!important;
+  color:var(--green-strong)!important;
+  font-size:9px!important;
+  font-weight:720!important;
+  text-decoration:none!important;
+  white-space:nowrap!important;
+}
+.detail-panel .result-head a .ui-icon{
+  width:12px!important;
+  height:12px!important;
+}
+.detail-panel .meta-grid{
+  grid-template-columns:1fr 1fr!important;
+  gap:0 12px!important;
+  margin-top:9px!important;
+  border-top:1px solid #edf0f2!important;
+  border-bottom:1px solid #edf0f2!important;
+}
+.detail-panel .meta-grid>div{
+  min-width:0!important;
+  padding:7px 1px!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+.detail-panel .meta-grid>div:nth-child(n+3){
+  border-top:1px solid #f0f2f4!important;
+}
+.detail-panel .meta-grid small{
+  margin:0 0 2px!important;
+  color:var(--text-muted)!important;
+  font-size:8.5px!important;
+}
+.detail-panel .meta-grid strong{
+  display:block!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  color:var(--text-primary)!important;
+  font-size:10px!important;
+  font-weight:680!important;
+  line-height:1.25!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.detail-panel .price-grid{
+  gap:6px!important;
+  margin-top:9px!important;
+}
+.detail-panel .price{
+  padding:9px!important;
+  border:1px solid #edf0f2!important;
+  border-radius:9px!important;
+  background:#fff!important;
+}
+.detail-panel .price.promo{
+  background:#fff9e8!important;
+  border-color:#f2e8be!important;
+}
+.detail-panel .price strong{
+  color:var(--green-strong)!important;
+  font-size:16px!important;
+  font-weight:800!important;
+  line-height:1.1!important;
+}
+.detail-panel .price.promo strong{
+  color:var(--red)!important;
+}
+.detail-panel .price-note{
+  display:block!important;
+  margin-top:4px!important;
+  color:var(--text-secondary)!important;
+  font-size:9.5px!important;
+  font-weight:620!important;
+  line-height:1.25!important;
+}
+
+/* Card footer: rule belongs here only; price never loses space to QC. */
+.grid-product-bottom{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) max-content!important;
+  align-items:center!important;
+  column-gap:7px!important;
+  min-width:0!important;
+  min-height:24px!important;
+}
+.grid-qc{
+  justify-self:start!important;
+  min-width:0!important;
+  max-width:64%!important;
+  padding:3px 7px!important;
+  overflow:hidden!important;
+  color:var(--text-muted)!important;
+  background:#f2f4f7!important;
+  font-size:9px!important;
+  font-weight:650!important;
+  line-height:1.1!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.grid-price-group{
+  justify-self:end!important;
+  min-width:max-content!important;
+  flex:0 0 auto!important;
+  display:flex!important;
+  align-items:baseline!important;
+  white-space:nowrap!important;
+}
+.grid-price{
+  flex:0 0 auto!important;
+  white-space:nowrap!important;
+}
+.grid-unit-price{
+  display:none!important;
+}
+@media(max-width:720px){
+  .grid-product-bottom{column-gap:5px!important}
+  .grid-qc{
+    max-width:62%!important;
+    padding:3px 6px!important;
+    font-size:9px!important;
+  }
+}
+@media(max-width:390px){
+  .grid-qc{max-width:60%!important}
 }

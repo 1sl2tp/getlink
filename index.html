@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-image-safe-area-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-detail-polish-v1">
 </head>
 <body>
 <main class="wrap">
@@ -180,7 +180,7 @@
             </div>
             <h2 id="name"></h2>
           </div>
-          <a id="productLink" target="_blank" rel="noopener">Mở gốc</a>
+          <a id="productLink" target="_blank" rel="noopener"><span>Mở gốc</span><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M18 13v5a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
         </div>
 
         <div class="meta-grid">
@@ -194,6 +194,7 @@
           <div class="price">
             <small>Giá nguồn</small>
             <strong id="webPrice">—</strong>
+            <span id="webPriceNote" class="price-note"></span>
           </div>
           <div class="price promo">
             <small>Ưu đãi</small>
@@ -246,6 +247,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-visual-geometry-v1"></script>
+<script src="app.js?v=20260908-detail-polish-v1"></script>
 </body>
 </html>

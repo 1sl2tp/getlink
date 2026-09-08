@@ -642,6 +642,29 @@ function unitLabel(cmp){
   const u=String(cmp&&cmp.pack_unit||"đơn vị").trim().toLowerCase();
   return u||"đơn vị";
 }
+function detailPriceContext(p,cmp,totalPrice,unitPrice){
+  const h=p&&p.hierarchy||{};
+  let qty=0,label="";
+  if(String(h.label1||"").trim()==="Thùng"){
+    if(h.label2&&Number(h.qty2)>1){
+      qty=Number(h.qty2); label=String(h.label2);
+    }else if(h.label3&&Number(h.qty3)>1){
+      qty=Number(h.qty3); label=String(h.label3);
+    }
+  }
+  if(!qty)qty=Math.max(1,Number(cmp&&cmp.pack_quantity)||1);
+  if(!label){
+    const fallback=String(cmp&&cmp.pack_unit||"").trim();
+    if(fallback&&!/^thùng$/i.test(fallback))label=fallback;
+  }
+  const unit=String(label||"đơn vị").trim().toLocaleLowerCase("vi-VN");
+  const each=Number(unitPrice||0)||(Number(totalPrice||0)>0&&qty>1?Number(totalPrice)/qty:0);
+  const parts=[];
+  if(each>0)parts.push(money(each)+" / "+unit);
+  if(qty>1)parts.push(qty+" "+unit+"/thùng");
+  return parts.join(" · ");
+}
+
 
 function saveLocal(){
   const key=canonical(wantedUrl||$("#url").value.trim());
@@ -819,7 +842,7 @@ function renderProduct(payload){
   $("#linkType").textContent="So sánh giá";
   $("#source").textContent=(p.source&&p.source.name)||"Bách Hóa XANH";
   $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
-  $("#group").textContent=p.group||"—";
+  $("#group").textContent=displayCategoryLabel(p.group)||"—";
   $("#branch").textContent=p.branch||"—";
   $("#packaging").textContent=productHierarchyText(p);
 
@@ -840,9 +863,7 @@ function renderProduct(payload){
   $("#webPrice").dataset.value=String(currentBhx||"");
   $("#webPrice").dataset.unitValue=String(currentUnit||0);
   $("#webPrice").textContent=money(currentBhx);
-  if(currentUnit){
-    $("#webPrice").textContent+=" · "+money(currentUnit)+"/"+unitLabel(cmp);
-  }
+  $("#webPriceNote").textContent=detailPriceContext(p,cmp,currentBhx,currentUnit);
 
   // "Ưu đãi" is only an extra quantity condition for this exact pack.
   // A normal BHX markdown (e.g. 86k -> 65k) stays in Giá BHX as 65k.
@@ -906,8 +927,8 @@ function renderCategory(payload){
   $("#categoryChildren").hidden=false;
   $("#linkType").textContent="Nhóm";
   $("#source").textContent=(payload.source&&payload.source.name)||"Bách Hóa XANH";
-  $("#name").textContent=payload.category_name||first.group||"Nhóm sản phẩm";
-  $("#group").textContent=first.group||"—";
+  $("#name").textContent=displayCategoryLabel(payload.category_name||first.group)||"Nhóm sản phẩm";
+  $("#group").textContent=displayCategoryLabel(first.group)||"—";
   $("#branch").textContent="—";
   $("#packaging").textContent=products.length+" link chi tiết";
   $("#productLink").href=payload.input_url||wantedUrl||"#";
@@ -951,7 +972,7 @@ function syncDetailCategoryLabel(url){
   const label=row
     ?(rowChildGroup(row)||rowRootGroup(row)||"")
     :(activeGroupUrl||activeRootGroup||"");
-  host.textContent=label;
+  host.textContent=displayCategoryLabel(label);
 }
 
 function sourceObjectFromRow(row){
@@ -1539,6 +1560,25 @@ function categoryPagerButtons(page,total){
     '<button type="button" data-page="'+Math.min(total,page+1)+'" '+(page>=total?'disabled':'')+' aria-label="Nhóm sau">›</button>';
 }
 
+const CATEGORY_DISPLAY_LABELS=new Map([
+  ["cham soc ca nhan","Chăm sóc cá nhân"],
+  ["banh keo cac loai","Bánh kẹo các loại"],
+  ["do uong cac loai","Đồ uống các loại"],
+  ["gao mi bun","Gạo, mì, bún"],
+  ["sua cac loai","Sữa các loại"],
+  ["nguyen lieu gia vi","Nguyên liệu, gia vị"],
+  ["cham soc nha cua","Chăm sóc nhà cửa"],
+  ["xuc xich do hop","Xúc xích, đồ hộp"],
+  ["khan giay ve sinh","Khăn giấy, vệ sinh"]
+]);
+
+function displayCategoryLabel(value){
+  const raw=String(value||"").normalize("NFC").trim();
+  if(!raw)return "";
+  const withoutSourceCode=raw.replace(/\s+[A-Z]\.\d+\s*$/iu,"").trim();
+  return CATEGORY_DISPLAY_LABELS.get(searchKey(withoutSourceCode))||withoutSourceCode;
+}
+
 function rowRootGroup(row){
   // Browsing location follows BHX when a WinMart product has a confident BHX match.
   // WinMart's original group remains stored separately for audit/source context.
@@ -1603,7 +1643,7 @@ function renderCategoryMenu(){
     const expanded=activeRootGroup===root;
     html.push(
       '<button class="category-chip category-root '+(rootActive?"active":"")+'" data-root="'+escapeAttr(root)+'" data-group="" type="button">'+
-        '<span>'+escapeHtml(root)+'</span><small>'+entry.count+'</small>'+
+        '<span>'+escapeHtml(displayCategoryLabel(root))+'</span><small>'+entry.count+'</small>'+
       '</button>'
     );
 
@@ -1613,7 +1653,7 @@ function renderCategoryMenu(){
       for(const [child,count] of children){
         html.push(
           '<button class="category-chip category-child '+(activeGroupUrl===child?"active":"")+'" data-root="'+escapeAttr(root)+'" data-group="'+escapeAttr(child)+'" type="button">'+
-            '<span>↳ '+escapeHtml(child)+'</span><small>'+count+'</small>'+
+            '<span>↳ '+escapeHtml(displayCategoryLabel(child))+'</span><small>'+count+'</small>'+
           '</button>'
         );
       }
@@ -1624,7 +1664,7 @@ function renderCategoryMenu(){
 
   const current=$("#mobileCategoryCurrent");
   if(current){
-    current.textContent=activeGroupUrl||activeRootGroup||"Tất cả";
+    current.textContent=displayCategoryLabel(activeGroupUrl||activeRootGroup)||"Tất cả";
   }
 }
 function gridProductCard(row){
@@ -2184,9 +2224,9 @@ function renderLibraryProducts(){
   const products=filteredLibraryProducts();
 
   if(activeGroupUrl){
-    $("#libraryTitle").textContent=activeGroupUrl;
+    $("#libraryTitle").textContent=displayCategoryLabel(activeGroupUrl);
   }else if(activeRootGroup){
-    $("#libraryTitle").textContent=activeRootGroup;
+    $("#libraryTitle").textContent=displayCategoryLabel(activeRootGroup);
   }else{
     $("#libraryTitle").textContent="Sản phẩm";
   }

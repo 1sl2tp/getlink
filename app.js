@@ -712,6 +712,17 @@ function detailGroupForUrl(url){
   return [root,child].filter(Boolean).join(" › ");
 }
 
+function syncDetailCategoryLabel(url){
+  const host=$("#detailCategoryLabel");
+  if(!host)return;
+  const key=canonical(url||"");
+  const row=libraryCache.find(item=>canonical(item.canonical_url)===key);
+  const label=row
+    ?(rowChildGroup(row)||rowRootGroup(row)||"")
+    :(activeGroupUrl||activeRootGroup||"");
+  host.textContent=label;
+}
+
 function sourceObjectFromRow(row){
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
@@ -1680,6 +1691,7 @@ async function openLibraryItem(url){
   if(card)card.classList.add("selected");
 
   const key=canonical(url);
+  syncDetailCategoryLabel(url);
   const localRow=libraryCache.find(row=>canonical(row.canonical_url)===key);
   if(localRow){
     wantedUrl=url;
@@ -1811,6 +1823,11 @@ $("#workspaceNav").addEventListener("touchend",e=>{
 
 document.addEventListener("keydown",e=>{
   if(e.key==="Escape")closeMobileCategoryNav();
+});
+
+$("#backToCategory").addEventListener("click",()=>{
+  resetBrowseDetail();
+  renderCategoryContext(filteredLibraryProducts());
 });
 
 $("#brandTabs").addEventListener("click",e=>{

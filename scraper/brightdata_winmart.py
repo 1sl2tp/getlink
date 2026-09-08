@@ -320,11 +320,16 @@ def candidate_from_dict(obj: dict, base_url: str, store_code: str, category_labe
     if isinstance(obj.get("brand"), dict):
         brand = clean_text(first_value(obj["brand"], ("name", "label")) or brand)
 
-    # WinMart's visible listing card is the authoritative retail-unit source
-    # for bulk ingestion. Do not use API uomName and do not infer from title.
-    unit = ""
-    unit_evidence = ""
-    packaging = ""
+    # WinMart total/category API already exposes the sale type for each row
+    # (for example THÙNG, GÓI 4, HỘP). Keep that source value intact and bind
+    # the price from the same API row. Never infer the sale type from the name
+    # and never wait for rendered listing/detail DOM to "prove" it.
+    unit = clean_text(first_value(obj, (
+        "uomName", "unitName", "unit", "packageUnit", "package_unit",
+        "packingUnit", "measureUnit", "uom"
+    )))
+    unit_evidence = "winmart_api_type" if unit else ""
+    packaging = unit
     image = image_url([
         obj.get("mediaUrl"), obj.get("mediaItems"),
         obj.get("imageUrl"), obj.get("image_url"),
@@ -790,41 +795,6 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         + json.dumps(failed, ensure_ascii=False)
                     )
 
-            async def enrich_listing_cards(category_label: str):
-                stable = 0
-                previous_units = -1
-                previous_height = -1
-                for _ in range(40):
-                    await extract_dom_products(category_label)
-                    unit_count = sum(
-                        1 for product in collector.products.values()
-                        if product.get("unit_evidence") == "listing_card"
-                        and normalize_unit(product.get("unit") or "")
-                    )
-                    try:
-                        height = await page.evaluate(
-                            "() => Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0)"
-                        )
-                        await page.evaluate(
-                            "() => window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
-                        )
-                    except Exception:
-                        height = previous_height
-                    await page.wait_for_timeout(550)
-                    if unit_count == previous_units and height == previous_height:
-                        stable += 1
-                    else:
-                        stable = 0
-                    previous_units = unit_count
-                    previous_height = height
-                    if stable >= 3:
-                        break
-                return sum(
-                    1 for product in collector.products.values()
-                    if product.get("unit_evidence") == "listing_card"
-                    and normalize_unit(product.get("unit") or "")
-                )
-
             async def scan_page(url: str, category_label: str, discover_subcats: bool):
                 current_category["label"] = category_label
                 current_category["url"] = url
@@ -893,49 +863,24 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
                         await page.wait_for_timeout(500)
 
                 api_event = await wait_main_category_api(url)
-                if api_event:
-                    await fetch_remaining_api_pages(api_event, url)
-                    listing_units = await enrich_listing_cards(category_label)
-                    print(json.dumps({
-                        "winmart_listing_units": listing_units,
-                        "page_url": url,
-                    }, ensure_ascii=False))
-                    return True
+                if not api_event:
+                    # Strict source mode: do not silently fall back to the old
+                    # rendered-card parser. If WinMart changes the category API,
+                    # fail visibly so we fix the source adapter instead of mixing
+                    # two different interpretations of name/type/price.
+                    raise RuntimeError("winmart_category_api_missing")
 
-                # Safety fallback only. If WinMart changes its API shape we still
-                # collect visible rows rather than silently returning nothing.
-                stable = 0
-                previous_count = len(collector.products)
-                previous_height = 0
-                for _ in range(28):
-                    await extract_dom_products(category_label)
-                    if discover_subcats:
-                        await extract_subcategories()
-                    try:
-                        height = await page.evaluate(
-                            "() => Math.max(document.body ? document.body.scrollHeight : 0, document.documentElement ? document.documentElement.scrollHeight : 0)"
-                        )
-                        await page.evaluate(
-                            "() => window.scrollTo(0, Math.max(document.body.scrollHeight, document.documentElement.scrollHeight))"
-                        )
-                    except Exception:
-                        height = previous_height
-                    await page.wait_for_timeout(900)
-                    count = len(collector.products)
-                    if count == previous_count and height == previous_height:
-                        stable += 1
-                    else:
-                        stable = 0
-                    previous_count = count
-                    previous_height = height
-                    if stable >= 4:
-                        break
+                await fetch_remaining_api_pages(api_event, url)
+                api_type_count = sum(
+                    1 for product in collector.products.values()
+                    if product.get("unit_evidence") == "winmart_api_type"
+                    and clean_text(product.get("unit") or "")
+                )
                 print(json.dumps({
-                    "winmart_category_api": False,
+                    "winmart_api_types": api_type_count,
                     "page_url": url,
-                    "fallback_products": len(collector.products),
                 }, ensure_ascii=False))
-                return False
+                return True
 
             root_label = top_category_name(target_url)
             input_has_cate2 = bool(
@@ -970,16 +915,17 @@ async def capture_winmart(ws_url: str, target_url: str) -> dict:
             if not products:
                 raise RuntimeError("winmart_no_products_captured")
 
-            listing_unit_count = sum(
+            api_type_count = sum(
                 1 for p in products
-                if p.get("unit_evidence") == "listing_card"
-                and normalize_unit(p.get("unit") or "")
+                if p.get("unit_evidence") == "winmart_api_type"
+                and clean_text(p.get("unit") or "")
             )
             print(json.dumps({
-                "winmart_listing_units": listing_unit_count,
+                "winmart_api_types": api_type_count,
                 "winmart_products": len(products),
-                "missing_listing_units": len(products) - listing_unit_count,
+                "missing_api_types": len(products) - api_type_count,
                 "detail_pages_opened": 0,
+                "listing_dom_type_reads": 0,
             }, ensure_ascii=False))
 
             return {

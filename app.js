@@ -1830,9 +1830,9 @@ function sourceManagerSourceLabel(key){
 
 function sourceManagerActiveItems(){
   if(!sourceManagerCache)return [];
-  const sourceItems=sourceManagerKind==="group"
-    ?sourceManagerCache.groups
-    :sourceManagerCache.brands;
+  const sourceItems=sourceManagerKind==="manual"
+    ?sourceManagerCache.manual_groups
+    :(sourceManagerKind==="group"?sourceManagerCache.groups:sourceManagerCache.brands);
   const q=searchKey(sourceManagerQuery);
   return (Array.isArray(sourceItems)?sourceItems:[]).filter(item=>{
     const sourceCount=sourceManagerSource==="all"
@@ -1842,6 +1842,7 @@ function sourceManagerActiveItems(){
     if(!q)return true;
     const hay=searchKey([
       item.name,
+      item.rule_label||"",
       ...(Object.values(item.variants||{}).flat())
     ].join(" "));
     return hay.includes(q);
@@ -1881,6 +1882,7 @@ function renderSourceManager(){
 
   $("#sourceManagerBrandCount").textContent=String((sourceManagerCache.brands||[]).length);
   $("#sourceManagerGroupCount").textContent=String((sourceManagerCache.groups||[]).length);
+  $("#sourceManagerManualCount").textContent=String((sourceManagerCache.manual_groups||[]).length);
   const productCounts=sourceManagerCache.products||{};
   $("#sourceManagerAllCount").textContent=String(Number(productCounts.all||0));
   $("#sourceManagerWmCount").textContent=String(Number(productCounts.wm||0));
@@ -1900,7 +1902,9 @@ function renderSourceManager(){
       const displayName=sourceManagerKind==="group"
         ?displayCategoryLabel(item.name)
         :String(item.name||"");
-      const variants=sourceManagerVariantLine(item);
+      const variants=sourceManagerKind==="manual"
+        ?String(item.rule_label||"")
+        :sourceManagerVariantLine(item);
       return '<article class="source-manager-row">'+
         '<div class="source-manager-name">'+
           '<strong>'+escapeHtml(displayName||"—")+'</strong>'+
@@ -1913,8 +1917,11 @@ function renderSourceManager(){
   }
 
   const sourceLabel=sourceManagerSource==="all"?"3 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  const kindLabel=sourceManagerKind==="brand"
+    ?"hãng"
+    :(sourceManagerKind==="manual"?"nhóm tự lập":"nhóm nguồn");
   $("#sourceManagerSummary").textContent=
-    items.length+" "+(sourceManagerKind==="brand"?"hãng":"nhóm")+" · "+sourceLabel;
+    items.length+" "+kindLabel+" · "+sourceLabel;
   const more=$("#sourceManagerMore");
   more.hidden=items.length<=sourceManagerLimit;
   if(!more.hidden)more.textContent="Xem thêm · "+sourceManagerLimit+" / "+items.length;
@@ -2970,7 +2977,9 @@ $("#sourceManagerPanel").addEventListener("click",e=>{
 $("#sourceManagerKinds").addEventListener("click",e=>{
   const btn=e.target.closest("button[data-kind]");
   if(!btn)return;
-  sourceManagerKind=btn.dataset.kind==="group"?"group":"brand";
+  sourceManagerKind=btn.dataset.kind==="manual"
+    ?"manual"
+    :(btn.dataset.kind==="group"?"group":"brand");
   sourceManagerLimit=200;
   renderSourceManager();
 });

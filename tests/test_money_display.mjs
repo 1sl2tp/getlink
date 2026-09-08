@@ -404,4 +404,13 @@ assert.equal(money(0),"—");
   assert.match(app,/sourceManagerCache\.products\|\|\{\}/);
 }
 
+
+{
+  assert.match(html,/data-kind="manual"/);
+  assert.match(html,/id="sourceManagerManualCount"/);
+  assert.match(app,/sourceManagerCache\.manual_groups/);
+  assert.match(app,/sourceManagerKind==="manual"/);
+  assert.match(css,/Manual groups inside Source Manager/);
+}
+
 console.log("money and hierarchy UI tests passed");

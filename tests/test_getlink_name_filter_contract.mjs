@@ -5,6 +5,7 @@ const source = fs.readFileSync("supabase/functions/getlink-api/index.ts", "utf8"
 const brandMigration = fs.readFileSync("supabase/migrations/20260908163000_brand_canonical_registry.sql","utf8");
 const sourceManagerMigration = fs.readFileSync("supabase/migrations/20260908164000_source_manager_raw_fields.sql","utf8");
 const rawMigration = fs.readFileSync("supabase/migrations/20260908165000_immutable_raw_fetches.sql","utf8");
+const manualGroupMigration = fs.readFileSync("supabase/migrations/20260908170000_manual_product_groups.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -62,5 +63,17 @@ assert.match(rawMigration,/before update or delete on public\.getlink_raw_fetche
 assert.match(rawMigration,/raise exception 'getlink_raw_fetches is append-only'/i);
 assert.match(rawMigration,/'legacy_processed'/i);
 assert.match(rawMigration,/legacy:getlink_jobs\.result_json/i);
+
+
+// User-owned manual groups are separate from source/raw groups and auto-refresh on persistence.
+assert.match(source,/function manualGroupMatches\(name:unknown,rule:any\):boolean/);
+assert.match(source,/function syncManualGroupsForProductRows\(rows:any\[\]\):Promise<void>/);
+assert.match(source,/await syncManualGroupsForProductRows\(rows\);/);
+assert.match(source,/fetchAll\("getlink_manual_groups"/);
+assert.match(source,/manual_groups:\[\.\.\.manualMap\.values\(\)\]/);
+assert.match(manualGroupMigration,/create table if not exists public\.getlink_manual_groups/i);
+assert.match(manualGroupMigration,/create table if not exists public\.getlink_manual_group_members/i);
+assert.match(manualGroupMigration,/'dau-an','Dầu ăn','name_contains','dầu ăn'/);
+assert.match(manualGroupMigration,/lower\(coalesce\(l\.name,''\)\) like '%dầu ăn%'/);
 
 console.log("GETLINK name filter contract: OK");

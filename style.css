@@ -6837,3 +6837,16 @@ body.source-manager-open{overflow:hidden!important}
     -webkit-line-clamp:2;
   }
 }
+
+
+/* Manual groups inside Source Manager */
+@media(min-width:721px){
+  .source-manager-kind-tabs{
+    flex-wrap:wrap;
+  }
+}
+@media(max-width:720px){
+  .source-manager-kind-tabs{
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+  }
+}

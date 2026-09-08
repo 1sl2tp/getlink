@@ -1435,6 +1435,7 @@ async function persistPayload(payload:any, engine:string){
     snaps.push({link_id:id,request_id:requestId,checked_at:p.last_checked_at||payload.checked_at,current_price:p.price?.current||null,original_price:p.price?.original||null,promotion_price:p.promotion?.price||null,promotion_text:p.promotion?.text||"",result_json:p});
   }
   await must(sb.from("getlink_links").upsert(rows,{onConflict:"canonical_url"}));
+  await syncManualGroupsForProductRows(rows);
   if(assets.length)await must(sb.from("getlink_link_assets").upsert(assets,{onConflict:"link_url"}));
   if(comps.length)await must(sb.from("getlink_link_comparison").upsert(comps,{onConflict:"link_url"}));
   if(hier.length)await must(sb.from("getlink_link_pack_hierarchy").upsert(hier,{onConflict:"link_url"}));
@@ -1464,6 +1465,65 @@ let sourceManagerCache:any=null;
 let sourceManagerCacheAt=0;
 const SOURCE_MANAGER_CACHE_MS=5*60*1000;
 
+let manualGroupRuleCache:any[]= [];
+let manualGroupRuleCacheAt=0;
+const MANUAL_GROUP_RULE_CACHE_MS=5*60*1000;
+
+async function loadManualGroupRules(force=false):Promise<any[]>{
+  if(!force&&manualGroupRuleCache.length&&Date.now()-manualGroupRuleCacheAt<MANUAL_GROUP_RULE_CACHE_MS){
+    return manualGroupRuleCache;
+  }
+  manualGroupRuleCache=await fetchAll(
+    "getlink_manual_groups",
+    "group_key,name,rule_type,rule_value,enabled",
+    (q:any)=>q.eq("enabled",true)
+  );
+  manualGroupRuleCacheAt=Date.now();
+  return manualGroupRuleCache;
+}
+function manualGroupMatches(name:unknown,rule:any):boolean{
+  const value=clean(rule?.rule_value||"").toLocaleLowerCase("vi-VN");
+  if(!value)return false;
+  const hay=clean(name).toLocaleLowerCase("vi-VN");
+  if(rule?.rule_type==="name_contains")return hay.includes(value);
+  return false;
+}
+async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
+  const productRows=rows.filter((r:any)=>r?.link_type==="product"&&r?.canonical_url);
+  if(!productRows.length)return;
+  const urls=[...new Set(productRows.map((r:any)=>r.canonical_url))];
+  const rules=await loadManualGroupRules();
+
+  const {error:deleteError}=await sb
+    .from("getlink_manual_group_members")
+    .delete()
+    .in("link_url",urls);
+  if(deleteError)throw deleteError;
+
+  const now=new Date().toISOString();
+  const members:any[]=[];
+  for(const row of productRows){
+    for(const rule of rules){
+      if(!manualGroupMatches(row.name,rule))continue;
+      members.push({
+        group_key:rule.group_key,
+        link_url:row.canonical_url,
+        match_origin:"rule",
+        matched_at:now
+      });
+    }
+  }
+  if(members.length){
+    const {error}=await sb
+      .from("getlink_manual_group_members")
+      .upsert(members,{onConflict:"group_key,link_url"});
+    if(error)throw error;
+  }
+  sourceManagerCache=null;
+  sourceManagerCacheAt=0;
+}
+
+
 function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|""{
   const s=plain(value);
   if(s.includes("bach hoa xanh"))return "bhx";
@@ -1488,14 +1548,16 @@ async function sourceManagerSnapshot(force=false){
   if(!force&&sourceManagerCache&&Date.now()-sourceManagerCacheAt<SOURCE_MANAGER_CACHE_MS){
     return sourceManagerCache;
   }
-  const [ids,links,aliases]=await Promise.all([
+  const [ids,links,aliases,manualGroups,manualMembers]=await Promise.all([
     fetchAll("getlink_source_product_identity","link_url,source_name,brand,raw_brand,category,raw_category,bhx_group_name"),
-    fetchAll("getlink_links","canonical_url,last_status",(q:any)=>q.eq("link_type","product")),
-    loadBrandAliases()
+    fetchAll("getlink_links","canonical_url,last_status,source,name",(q:any)=>q.eq("link_type","product")),
+    loadBrandAliases(),
+    fetchAll("getlink_manual_groups","group_key,name,rule_type,rule_value,enabled",(q:any)=>q.eq("enabled",true)),
+    fetchAll("getlink_manual_group_members","group_key,link_url,match_origin,matched_at")
   ]);
-  const activeLinks=new Set(
-    links.filter((x:any)=>x.last_status!=="unlisted").map((x:any)=>x.canonical_url)
-  );
+  const activeRows=links.filter((x:any)=>x.last_status!=="unlisted");
+  const activeLinks=new Set(activeRows.map((x:any)=>x.canonical_url));
+  const activeLinkByUrl=new Map(activeRows.map((x:any)=>[x.canonical_url,x]));
   const brandMap=new Map<string,any>();
   const groupMap=new Map<string,any>();
   const products=sourceBucket();
@@ -1537,6 +1599,32 @@ async function sourceManagerSnapshot(force=false){
     }
   }
 
+
+  const manualMap=new Map<string,any>();
+  for(const group of manualGroups){
+    manualMap.set(group.group_key,{
+      key:group.group_key,
+      name:clean(group.name),
+      rule_type:clean(group.rule_type),
+      rule_value:clean(group.rule_value),
+      rule_label:group.rule_type==="name_contains"
+        ?'Tên chứa “'+clean(group.rule_value)+'”'
+        :clean(group.rule_value),
+      total:0,
+      sources:sourceBucket(),
+      variants:{bhx:[],wm:[],go:[]}
+    });
+  }
+  for(const member of manualMembers){
+    const row=manualMap.get(member.group_key);
+    const link=activeLinkByUrl.get(member.link_url);
+    if(!row||!link)continue;
+    const source=managerSourceKey(link.source);
+    if(!source)continue;
+    row.total++;
+    row.sources[source]++;
+  }
+
   const finalize=(map:Map<string,any>)=>[...map.values()]
     .map(row=>({
       ...row,
@@ -1552,7 +1640,10 @@ async function sourceManagerSnapshot(force=false){
     generated_at:new Date().toISOString(),
     products:{...products,all:products.bhx+products.wm+products.go},
     brands:finalize(brandMap),
-    groups:finalize(groupMap)
+    groups:finalize(groupMap),
+    manual_groups:[...manualMap.values()]
+      .filter((x:any)=>x.total>0)
+      .sort((a:any,b:any)=>(b.total-a.total)||a.name.localeCompare(b.name,"vi"))
   };
   sourceManagerCacheAt=Date.now();
   return sourceManagerCache;

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-source-manager-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-manual-groups-v1">
 </head>
 <body>
 <main class="wrap">
@@ -260,9 +260,10 @@
     </header>
 
     <div class="source-manager-toolbar">
-      <div id="sourceManagerKinds" class="source-manager-segment" aria-label="Loại dữ liệu">
+      <div id="sourceManagerKinds" class="source-manager-segment source-manager-kind-tabs" aria-label="Loại dữ liệu">
         <button class="active" data-kind="brand" type="button">Hãng <small id="sourceManagerBrandCount">0</small></button>
-        <button data-kind="group" type="button">Nhóm <small id="sourceManagerGroupCount">0</small></button>
+        <button data-kind="group" type="button">Nhóm nguồn <small id="sourceManagerGroupCount">0</small></button>
+        <button data-kind="manual" type="button">Nhóm tự lập <small id="sourceManagerManualCount">0</small></button>
       </div>
       <div id="sourceManagerSources" class="source-manager-segment source-manager-source-tabs" aria-label="Nguồn">
         <button class="active" data-source="all" type="button">Tất cả <small id="sourceManagerAllCount">0</small></button>
@@ -296,6 +297,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-source-manager-v1"></script>
+<script src="app.js?v=20260908-manual-groups-v1"></script>
 </body>
 </html>

@@ -1646,7 +1646,10 @@ function renderGridProgressively(products,key){
   viewRenderKeys.grid=key;
 
   const more=()=>{
-    if(token!==activeRenderToken||libraryView!=="grid"||viewRenderKeys.grid!==key)return;
+    if(token!==activeRenderToken||libraryView!=="grid"||viewRenderKeys.grid!==key){
+      if(viewRenderKeys.grid===key)viewRenderKeys.grid="";
+      return;
+    }
     const end=Math.min(index+chunk,products.length);
     if(end>index){
       host.insertAdjacentHTML("beforeend",products.slice(index,end).map(gridProductCard).join(""));
@@ -1681,7 +1684,10 @@ function renderTableProgressively(products,key){
   viewRenderKeys.table=key;
 
   const more=()=>{
-    if(token!==activeRenderToken||libraryView!=="table"||viewRenderKeys.table!==key)return;
+    if(token!==activeRenderToken||libraryView!=="table"||viewRenderKeys.table!==key){
+      if(viewRenderKeys.table===key)viewRenderKeys.table="";
+      return;
+    }
     const end=Math.min(index+chunk,products.length);
     if(end>index){
       append(index,end,false);

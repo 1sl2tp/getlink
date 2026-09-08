@@ -242,13 +242,13 @@ function stripCartonPackPhrase(value){
   const cartonRe=new RegExp(
     "(^|\\s)(?:thùng|khay|vỉ)\\s+"+qty+
     "(?:\\s+"+unit+"(?:\\s+"+qty+"(?:\\s+"+unit+")?)?)?"+
-    "(?:\\s*[x×]\\s*)?",
+    "(?:\\s*[x×](?=\\s*\\d)\\s*)?",
     "giu"
   );
   const middleRe=new RegExp(
     "(^|\\s)"+unit+"\\s+"+qty+
     "(?:\\s+"+unit+")?"+
-    "(?:\\s*[x×]\\s*)?",
+    "(?:\\s*[x×](?=\\s*\\d)\\s*)?",
     "giu"
   );
   const re=mode==="middle"?middleRe:cartonRe;

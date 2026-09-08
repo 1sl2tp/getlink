@@ -40,10 +40,8 @@ jobs:
       - name: Deploy
         run: |
           set -euo pipefail
-          wrangler deploy --config transport/bhx-proxy/wrangler.toml 2>&1 | tee /tmp/deploy.log
-          URL="$(grep -Eo 'https://[^ ]+\\.workers\\.dev' /tmp/deploy.log | tail -1)"
-          test -n "$URL"
-          echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
+          wrangler deploy --config transport/bhx-proxy/wrangler.toml
+          echo "WORKER_URL=https://getlink-bhx-proxy.taphoa-4ab8161d.workers.dev" >> "$GITHUB_ENV"
       - name: Smoke
         run: |
           curl --fail --silent --show-error --retry 8 --retry-delay 2 "$WORKER_URL/health" | jq -e '.ok == true'

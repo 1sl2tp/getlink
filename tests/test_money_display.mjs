@@ -114,7 +114,7 @@ assert.equal(money(0),"—");
   )();
   assert.deepEqual(
     api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"Hộp",qty3:24}},240000),
-    {pack:"24 hộp",unitPrice:"10"}
+    {pack:"24 hộp × 10",unitPrice:""}
   );
   assert.deepEqual(
     api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"",qty3:0}},240000),

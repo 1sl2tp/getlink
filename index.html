@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-desktop-transition-v9">
+  <link rel="stylesheet" href="style.css?v=20260909-floating-browse-menu-v10">
 </head>
 <body>
 <main class="wrap">
@@ -46,6 +46,36 @@
   </section>
 
   <div id="mobileNavScrim" class="mobile-nav-scrim" hidden></div>
+
+  <div id="quickBrowseDock" class="quick-browse-dock">
+    <div id="quickBrowseMenu" class="quick-browse-menu" hidden>
+      <div class="quick-browse-head">
+        <div>
+          <strong>Chọn nhanh</strong>
+          <small id="quickBrowseCurrent">Tất cả · Tất cả nguồn</small>
+        </div>
+        <button id="quickBrowseClose" class="quick-browse-close" type="button" aria-label="Đóng menu chọn nhanh">
+          <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+      <div class="quick-browse-section">
+        <span class="quick-browse-label">Nguồn</span>
+        <div id="quickSourceTabs" class="quick-source-tabs" aria-label="Chọn nhanh nguồn hàng"></div>
+      </div>
+      <div class="quick-browse-section quick-browse-category-section">
+        <span class="quick-browse-label">Danh mục</span>
+        <div id="quickCategoryList" class="quick-category-list"></div>
+      </div>
+    </div>
+    <button id="quickBrowseButton" class="quick-browse-button" type="button"
+      aria-expanded="false" aria-controls="quickBrowseMenu" title="Chọn nguồn và danh mục">
+      <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24">
+        <path d="M4 7h16M4 12h10M4 17h16"/>
+        <path d="M18 10v4M16 12h4"/>
+      </svg>
+      <span>Chọn nhanh</span>
+    </button>
+  </div>
 
   <div class="workspace">
     <aside id="workspaceNav" class="card workspace-nav">
@@ -296,6 +326,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-pack-x-word-fix-v7"></script>
+<script src="app.js?v=20260909-floating-browse-menu-v10"></script>
 </body>
 </html>

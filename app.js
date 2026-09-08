@@ -1200,6 +1200,8 @@ async function ensureLibraryCache(force=false){
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];
   libraryLoaded=true;
+  const registry=$("#registryCount");
+  if(registry)registry.textContent="Kho link: "+libraryCache.length;
 }
 
 
@@ -1398,8 +1400,8 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="12">Đang đọc thư viện D1...</td></tr>';
-  $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện D1...</div>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="12">Đang đọc thư viện Supabase...</td></tr>';
+  $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{
     await ensureLibraryCache(force);
@@ -1765,7 +1767,7 @@ async function pollOnce(){
       }else if(data.status==="brightdata"){
         setJobStage("brightdata","Đang truy xuất dữ liệu từ "+(inputSourceName(wantedUrl)||"nguồn")+"...");
       }else if(data.status==="saving"){
-        setJobStage("saving","Đã có response · đang chuẩn hóa và lưu vào D1...");
+        setJobStage("saving","Đã có response · đang chuẩn hóa và lưu vào Supabase...");
       }else if(data.status==="running"){
         setJobStage("brightdata","Đang xử lý response từ "+(inputSourceName(wantedUrl)||"nguồn")+"...");
       }else{
@@ -1776,9 +1778,7 @@ async function pollOnce(){
 
     stopPolling();
     renderPayload(data.payload);
-    if(Number(data.registry_count)>0){
-      $("#registryCount").textContent="Kho link: "+data.registry_count;
-    }
+    $("#registryCount").textContent="Kho link: "+Number(data.registry_count||0);
     const finishedUrl=data.payload&&data.payload.input_url||wantedUrl;
     clearPending(true);
     setGetBusy(false);
@@ -1831,7 +1831,7 @@ $("#get").addEventListener("click",async()=>{
     return;
   }
   if(!API){
-    setJobStage("error","GETLINK Worker chưa được triển khai.");
+    setJobStage("error","GETLINK Supabase chưa được triển khai.");
     return;
   }
 

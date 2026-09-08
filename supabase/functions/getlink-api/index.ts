@@ -214,6 +214,183 @@ type Product = {
   source_identity:any; last_checked_at:string;
 };
 
+type BhxGroupRef = {
+  url:string;
+  group:string;
+  name:string;
+  brand:string;
+  brand_key:string;
+  barcode:string;
+  tokens:Set<string>;
+  sizes:Set<string>;
+};
+
+const GROUP_MATCH_NOISE = new Set([
+  "thung","loc","combo","goi","chai","hop","tui","bich","ly","lon","hu","khay",
+  "cai","cay","bo","doi","vi","huong","quy","cach","size","san","pham","cao","cap",
+  "chinh","hang","acecook","vina"
+]);
+
+function groupBrandKey(v:unknown) {
+  return plain(v).replace(/[^a-z0-9]/g,"");
+}
+function groupSizeSignatures(v:unknown) {
+  const out=new Set<string>();
+  const text=plain(v).replace(/,/g,".");
+  const re=/(\d+(?:\.\d+)?)\s*(kg|g|ml|lit|l)\b/g;
+  for(const m of text.matchAll(re)){
+    let value=Number(m[1]), unit=m[2];
+    if(!Number.isFinite(value)||value<=0)continue;
+    if(unit==="kg"){value*=1000;unit="g";}
+    if(unit==="l"||unit==="lit"){value*=1000;unit="ml";}
+    out.add(String(Math.round(value*100)/100)+unit);
+  }
+  return out;
+}
+function groupNameTokens(name:unknown,brand:unknown) {
+  const brandTokens=new Set(plain(brand).replace(/[^a-z0-9]+/g," ").split(/\s+/).filter(Boolean));
+  const out=new Set<string>();
+  const words=plain(name).replace(/[^a-z0-9]+/g," ").split(/\s+/).filter(Boolean);
+  for(const word of words){
+    if(/^\d+(?:\.\d+)?(?:kg|g|ml|l|lit)?$/.test(word))continue;
+    if(word.length<2||GROUP_MATCH_NOISE.has(word)||brandTokens.has(word))continue;
+    out.add(word);
+  }
+  return out;
+}
+function setIntersectionSize(a:Set<string>,b:Set<string>) {
+  let n=0;
+  for(const x of a)if(b.has(x))n++;
+  return n;
+}
+function groupMatchScore(input:any,ref:BhxGroupRef) {
+  const barcode=clean(input?.barcode||"");
+  if(barcode&&ref.barcode&&barcode===ref.barcode)return 1.5;
+  const brandKey=groupBrandKey(input?.brand||"");
+  if(!brandKey||brandKey!==ref.brand_key)return 0;
+
+  const a=groupNameTokens(input?.name||"",input?.brand||"");
+  const b=ref.tokens;
+  if(!a.size||!b.size)return 0;
+  const common=setIntersectionSize(a,b);
+  if(!common)return 0;
+
+  const minSize=Math.min(a.size,b.size);
+  const containment=common/minSize;
+  const dice=(2*common)/(a.size+b.size);
+  const aSizes=groupSizeSignatures(input?.name||"");
+  const bSizes=ref.sizes;
+  const bothSized=aSizes.size>0&&bSizes.size>0;
+  const sizeMatch=bothSized&&setIntersectionSize(aSizes,bSizes)>0;
+
+  let score=containment*0.66+dice*0.24+(sizeMatch?0.10:0);
+  if(bothSized&&!sizeMatch)score-=0.05;
+  if(common<2&&minSize>=2)score-=0.20;
+  return Math.max(0,Math.min(1.5,score));
+}
+function chooseBhxGroup(input:any,refs:BhxGroupRef[]) {
+  const brandKey=groupBrandKey(input?.brand||"");
+  const barcode=clean(input?.barcode||"");
+  if(!brandKey&&!barcode)return null;
+
+  const byGroup=new Map<string,{score:number,ref:BhxGroupRef}>();
+  for(const ref of refs){
+    if(barcode&&ref.barcode&&barcode===ref.barcode){
+      return {group:ref.group,score:1.5,margin:1.5,ref,basis:"barcode"};
+    }
+    if(!brandKey||ref.brand_key!==brandKey)continue;
+    const score=groupMatchScore(input,ref);
+    if(score<=0)continue;
+    const prev=byGroup.get(ref.group);
+    if(!prev||score>prev.score)byGroup.set(ref.group,{score,ref});
+  }
+
+  const ranked=[...byGroup.entries()]
+    .map(([group,x])=>({group,score:x.score,ref:x.ref}))
+    .sort((a,b)=>b.score-a.score);
+  const best=ranked[0], second=ranked[1];
+  if(!best||best.score<0.72)return null;
+  const margin=best.score-(second?.score||0);
+  if(second&&margin<0.08)return null;
+  return {group:best.group,score:best.score,margin,ref:best.ref,basis:"brand_name_size"};
+}
+async function loadBhxGroupRefs() {
+  const [links,ids]=await Promise.all([
+    fetchAll("getlink_links","canonical_url,group_name,name,branch_name,last_status",(q:any)=>q.eq("link_type","product").eq("source","Bách Hóa XANH").neq("last_status","unlisted")),
+    fetchAll("getlink_source_product_identity","link_url,brand,barcode,raw_name,source_name",(q:any)=>q.eq("source_name","Bách Hóa XANH"))
+  ]);
+  const identityByUrl=new Map(ids.map((x:any)=>[x.link_url,x]));
+  const refs:BhxGroupRef[]=[];
+  for(const l of links){
+    const id=identityByUrl.get(l.canonical_url)||{};
+    const group=clean(l.group_name);
+    const brand=clean(id.brand||l.branch_name);
+    const name=clean(id.raw_name||l.name);
+    const brandKey=groupBrandKey(brand);
+    if(!group||!brandKey||!name)continue;
+    refs.push({
+      url:l.canonical_url,group,name,brand,brand_key:brandKey,
+      barcode:clean(id.barcode||""),
+      tokens:groupNameTokens(name,brand),
+      sizes:groupSizeSignatures(name)
+    });
+  }
+  return refs;
+}
+async function mapIncomingWinmartGroups(products:Product[]) {
+  if(!products.length)return;
+  const refs=await loadBhxGroupRefs();
+  for(const p of products){
+    const si=p.source_identity||{};
+    const match=chooseBhxGroup({
+      name:clean(si.raw_name||p.name),
+      brand:clean(si.brand||p.branch),
+      barcode:clean(si.barcode||"")
+    },refs);
+    if(match)p.group=match.group;
+  }
+}
+async function syncExistingWinmartGroups(apply:boolean) {
+  const refs=await loadBhxGroupRefs();
+  const [links,ids]=await Promise.all([
+    fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").eq("source","WinMart").neq("last_status","unlisted")),
+    fetchAll("getlink_source_product_identity","link_url,brand,barcode,raw_name,category,source_name",(q:any)=>q.eq("source_name","WinMart"))
+  ]);
+  const identityByUrl=new Map(ids.map((x:any)=>[x.link_url,x]));
+  const updates:any[]=[];
+  const samples:any[]=[];
+  let matched=0,changed=0,unresolved=0;
+
+  for(const l of links){
+    const id=identityByUrl.get(l.canonical_url)||{};
+    const match=chooseBhxGroup({
+      name:clean(id.raw_name||l.name),
+      brand:clean(id.brand||l.branch_name),
+      barcode:clean(id.barcode||"")
+    },refs);
+    if(!match){unresolved++;continue;}
+    matched++;
+    if(clean(l.group_name)===match.group)continue;
+    changed++;
+    updates.push({...l,group_name:match.group,updated_at:new Date().toISOString()});
+    if(samples.length<40)samples.push({
+      name:l.name,brand:id.brand||l.branch_name||"",
+      old_group:l.group_name,new_group:match.group,
+      bhx_name:match.ref.name,score:Number(match.score.toFixed(3)),
+      margin:Number(match.margin.toFixed(3)),basis:match.basis,
+      source_category:id.category||""
+    });
+  }
+
+  if(apply&&updates.length){
+    const chunk=400;
+    for(let i=0;i<updates.length;i+=chunk){
+      await must(sb.from("getlink_links").upsert(updates.slice(i,i+chunk),{onConflict:"canonical_url"}));
+    }
+  }
+  return {apply,total_winmart:links.length,matched,changed,unresolved,samples};
+}
+
 function getlinkNameKey(v: unknown) {
   return plain(v).replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 }
@@ -749,6 +926,7 @@ async function must<T>(promise: PromiseLike<{data:T,error:any}>) {
 async function persistPayload(payload:any, engine:string){
   const now=new Date().toISOString(), requestId=payload.request_id, input=payload.input_url, key=payload.source.key;
   const products:Product[]=filterGetlinkProducts(Array.isArray(payload.products)?payload.products:[]);
+  if(key==="winmart"&&products.length)await mapIncomingWinmartGroups(products);
   payload.products=products;
   payload.discovered_links=products.map((p:Product)=>p.url);
   if(payload.input_type==="product"&&payload.product&&!keepGetlinkProduct(payload.product))throw new Error("product_blocked_by_name_rule");
@@ -935,6 +1113,11 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
+    }
+    if(req.method==="POST"&&route==="/api/admin/group-sync"){
+      const body=await req.json();
+      if(clean(body?.confirm)!=="BHX_GROUP_SYNC_V1")return response(req,{error:"confirmation_required"},400);
+      return response(req,await syncExistingWinmartGroups(Boolean(body?.apply)));
     }
     if(req.method==="POST"&&route==="/api/preference"){
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();

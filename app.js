@@ -34,25 +34,41 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
+const UI_LIBRARY_CACHE_KEY="library-data-v1";
+const UI_LIBRARY_CACHE_FALLBACK_KEYS=["library-v20","library-v19","library-v18"];
+
 async function readUiLibraryCache(){
   try{
     const db=await openUiCacheDb();
     if(!db)return null;
-    return await new Promise((resolve,reject)=>{
-      const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v20");
-      req.onsuccess=()=>resolve(req.result||null);
-      req.onerror=()=>reject(req.error);
-    });
+    const keys=[UI_LIBRARY_CACHE_KEY,...UI_LIBRARY_CACHE_FALLBACK_KEYS];
+    for(const key of keys){
+      const cached=await new Promise((resolve,reject)=>{
+        const tx=db.transaction("cache","readonly");
+        const req=tx.objectStore("cache").get(key);
+        req.onsuccess=()=>resolve(req.result||null);
+        req.onerror=()=>reject(req.error);
+      });
+      if(cached&&Array.isArray(cached.rows)&&cached.rows.length){
+        if(key!==UI_LIBRARY_CACHE_KEY){
+          // UI releases must not invalidate thousands of already-loaded rows.
+          // Migrate the last compatible cache once and preserve its age so
+          // stale-while-revalidate still behaves correctly.
+          setTimeout(()=>writeUiLibraryCache(cached.rows,Number(cached.savedAt)||Date.now()),0);
+        }
+        return cached;
+      }
+    }
+    return null;
   }catch{return null;}
 }
-async function writeUiLibraryCache(rows){
+async function writeUiLibraryCache(rows,savedAt=Date.now()){
   try{
     const db=await openUiCacheDb();
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v20");
+      tx.objectStore("cache").put({savedAt,rows},UI_LIBRARY_CACHE_KEY);
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });

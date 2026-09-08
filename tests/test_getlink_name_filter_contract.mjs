@@ -6,6 +6,7 @@ const brandMigration = fs.readFileSync("supabase/migrations/20260908163000_brand
 const sourceManagerMigration = fs.readFileSync("supabase/migrations/20260908164000_source_manager_raw_fields.sql","utf8");
 const rawMigration = fs.readFileSync("supabase/migrations/20260908165000_immutable_raw_fetches.sql","utf8");
 const manualGroupMigration = fs.readFileSync("supabase/migrations/20260908170000_manual_product_groups.sql","utf8");
+const manualRulesMigration = fs.readFileSync("supabase/migrations/20260908171000_manual_group_multi_rules.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -83,5 +84,19 @@ assert.match(source,/function fetchRowsByValues\(/);
 assert.match(source,/view==="manual-group"/);
 assert.match(source,/raw_group:clean\(id\.raw_category\|\|id\.category\)/);
 assert.match(source,/brand:clean\(id\.brand\|\|link\.branch_name\)/);
+
+
+// Manual groups support multiple OR conditions without touching source/raw fields.
+assert.match(source,/getlink_manual_group_rules/);
+assert.match(source,/name_product_phrase/);
+assert.match(source,/hay\.startsWith\(value\)\|\|\(hay\.startsWith\("thùng "\)&&hay\.includes\(value\)\)/);
+assert.match(source,/const members=new Map<string,any>\(\)/);
+assert.match(source,/\.eq\("match_origin","rule"\)/);
+assert.match(manualRulesMigration,/create table if not exists public\.getlink_manual_group_rules/i);
+assert.match(manualRulesMigration,/'dầu cooking'/i);
+assert.match(manualRulesMigration,/'dầu đậu nành'/i);
+assert.match(manualRulesMigration,/'dầu hướng dương'/i);
+assert.match(manualRulesMigration,/'dầu thực vật'/i);
+assert.match(manualRulesMigration,/with rules as/i);
 
 console.log("GETLINK name filter contract: OK");

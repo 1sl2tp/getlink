@@ -423,4 +423,10 @@ assert.equal(money(0),"—");
   assert.match(css,/\.source-manager-product-row/);
 }
 
+
+{
+  assert.match(app,/ruleLabel=String\(detail\.group&&detail\.group\.rule_label\|\|""\)/);
+  assert.match(app,/item\.rule_label\|\|""/);
+}
+
 console.log("money and hierarchy UI tests passed");

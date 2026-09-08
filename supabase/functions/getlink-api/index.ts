@@ -1473,11 +1473,16 @@ async function loadManualGroupRules(force=false):Promise<any[]>{
   if(!force&&manualGroupRuleCache.length&&Date.now()-manualGroupRuleCacheAt<MANUAL_GROUP_RULE_CACHE_MS){
     return manualGroupRuleCache;
   }
-  manualGroupRuleCache=await fetchAll(
-    "getlink_manual_groups",
-    "group_key,name,rule_type,rule_value,enabled",
-    (q:any)=>q.eq("enabled",true)
-  );
+  const [groups,rules]=await Promise.all([
+    fetchAll("getlink_manual_groups","group_key,enabled",(q:any)=>q.eq("enabled",true)),
+    fetchAll(
+      "getlink_manual_group_rules",
+      "group_key,rule_type,rule_value,rule_order,enabled",
+      (q:any)=>q.eq("enabled",true).order("rule_order",{ascending:true})
+    )
+  ]);
+  const enabledGroups=new Set(groups.map((x:any)=>clean(x.group_key)));
+  manualGroupRuleCache=rules.filter((x:any)=>enabledGroups.has(clean(x.group_key)));
   manualGroupRuleCacheAt=Date.now();
   return manualGroupRuleCache;
 }
@@ -1486,6 +1491,9 @@ function manualGroupMatches(name:unknown,rule:any):boolean{
   if(!value)return false;
   const hay=clean(name).toLocaleLowerCase("vi-VN");
   if(rule?.rule_type==="name_contains")return hay.includes(value);
+  if(rule?.rule_type==="name_product_phrase"){
+    return hay.startsWith(value)||(hay.startsWith("thùng ")&&hay.includes(value));
+  }
   return false;
 }
 async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
@@ -1497,15 +1505,17 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
   const {error:deleteError}=await sb
     .from("getlink_manual_group_members")
     .delete()
+    .eq("match_origin","rule")
     .in("link_url",urls);
   if(deleteError)throw deleteError;
 
   const now=new Date().toISOString();
-  const members:any[]=[];
+  const members=new Map<string,any>();
   for(const row of productRows){
     for(const rule of rules){
       if(!manualGroupMatches(row.name,rule))continue;
-      members.push({
+      const key=clean(rule.group_key)+"|"+row.canonical_url;
+      members.set(key,{
         group_key:rule.group_key,
         link_url:row.canonical_url,
         match_origin:"rule",
@@ -1513,10 +1523,10 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
       });
     }
   }
-  if(members.length){
+  if(members.size){
     const {error}=await sb
       .from("getlink_manual_group_members")
-      .upsert(members,{onConflict:"group_key,link_url"});
+      .upsert([...members.values()],{onConflict:"group_key,link_url"});
     if(error)throw error;
   }
   sourceManagerCache=null;
@@ -1557,12 +1567,19 @@ async function fetchRowsByValues(table:string,select:string,column:string,values
 }
 
 async function sourceManagerManualGroupDetail(groupKey:string){
-  const {data:group,error:groupError}=await sb
-    .from("getlink_manual_groups")
-    .select("group_key,name,rule_type,rule_value,enabled")
-    .eq("group_key",groupKey)
-    .eq("enabled",true)
-    .maybeSingle();
+  const [{data:group,error:groupError},rules]=await Promise.all([
+    sb
+      .from("getlink_manual_groups")
+      .select("group_key,name,rule_type,rule_value,enabled")
+      .eq("group_key",groupKey)
+      .eq("enabled",true)
+      .maybeSingle(),
+    fetchAll(
+      "getlink_manual_group_rules",
+      "group_key,rule_type,rule_value,rule_order,enabled",
+      (q:any)=>q.eq("group_key",groupKey).eq("enabled",true).order("rule_order",{ascending:true})
+    )
+  ]);
   if(groupError)throw groupError;
   if(!group)return null;
 
@@ -1616,9 +1633,11 @@ async function sourceManagerManualGroupDetail(groupKey:string){
       name:clean(group.name),
       rule_type:clean(group.rule_type),
       rule_value:clean(group.rule_value),
-      rule_label:group.rule_type==="name_contains"
-        ?'Tên chứa “'+clean(group.rule_value)+'”'
-        :clean(group.rule_value)
+      rules:rules.map((r:any)=>({
+        rule_type:clean(r.rule_type),
+        rule_value:clean(r.rule_value)
+      })),
+      rule_label:"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · ")
     },
     products:{...counts,all:counts.bhx+counts.wm+counts.go},
     items
@@ -1629,12 +1648,17 @@ async function sourceManagerSnapshot(force=false){
   if(!force&&sourceManagerCache&&Date.now()-sourceManagerCacheAt<SOURCE_MANAGER_CACHE_MS){
     return sourceManagerCache;
   }
-  const [ids,links,aliases,manualGroups,manualMembers]=await Promise.all([
+  const [ids,links,aliases,manualGroups,manualMembers,manualRules]=await Promise.all([
     fetchAll("getlink_source_product_identity","link_url,source_name,brand,raw_brand,category,raw_category,bhx_group_name"),
     fetchAll("getlink_links","canonical_url,last_status,source,name",(q:any)=>q.eq("link_type","product")),
     loadBrandAliases(),
     fetchAll("getlink_manual_groups","group_key,name,rule_type,rule_value,enabled",(q:any)=>q.eq("enabled",true)),
-    fetchAll("getlink_manual_group_members","group_key,link_url,match_origin,matched_at")
+    fetchAll("getlink_manual_group_members","group_key,link_url,match_origin,matched_at"),
+    fetchAll(
+      "getlink_manual_group_rules",
+      "group_key,rule_type,rule_value,rule_order,enabled",
+      (q:any)=>q.eq("enabled",true).order("rule_order",{ascending:true})
+    )
   ]);
   const activeRows=links.filter((x:any)=>x.last_status!=="unlisted");
   const activeLinks=new Set(activeRows.map((x:any)=>x.canonical_url));
@@ -1681,16 +1705,26 @@ async function sourceManagerSnapshot(force=false){
   }
 
 
+  const rulesByGroup=new Map<string,any[]>();
+  for(const rule of manualRules){
+    const key=clean(rule.group_key);
+    if(!rulesByGroup.has(key))rulesByGroup.set(key,[]);
+    rulesByGroup.get(key)!.push(rule);
+  }
+
   const manualMap=new Map<string,any>();
   for(const group of manualGroups){
+    const rules=rulesByGroup.get(clean(group.group_key))||[];
     manualMap.set(group.group_key,{
       key:group.group_key,
       name:clean(group.name),
       rule_type:clean(group.rule_type),
       rule_value:clean(group.rule_value),
-      rule_label:group.rule_type==="name_contains"
-        ?'Tên chứa “'+clean(group.rule_value)+'”'
-        :clean(group.rule_value),
+      rules:rules.map((r:any)=>({
+        rule_type:clean(r.rule_type),
+        rule_value:clean(r.rule_value)
+      })),
+      rule_label:"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · "),
       total:0,
       sources:sourceBucket(),
       variants:{bhx:[],wm:[],go:[]}

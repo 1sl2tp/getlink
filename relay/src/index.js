@@ -434,6 +434,11 @@ async function inspectApiStrings(rawUrl) {
         const text = await r.text();
         if (!/GetCate|GetFilters|GetHeadingPolicy|AjaxProduct|\/gw\/Category|categoryUrl|GetMenu/i.test(text)) return null;
         const found = [];
+        const contexts = [];
+        for (const term of ["GetMenuV2","GetMenuHeader","getMenuCategory","GetCategoryRelative","GetCateVegetable"]) {
+          const at = text.indexOf(term);
+          if (at >= 0) contexts.push({ term, text: text.slice(Math.max(0, at - 700), at + 1200) });
+        }
         for (const re of [
           /[^"'\s]{0,80}GetCate[^"'\s]{0,160}/gi,
           /[^"'\s]{0,80}AjaxProduct[^"'\s]{0,160}/gi,
@@ -448,7 +453,7 @@ async function inspectApiStrings(rawUrl) {
           }
           if (found.length >= 30) break;
         }
-        return found.length ? { src, length: text.length, found: [...new Set(found)] } : null;
+        return (found.length || contexts.length) ? { src, length: text.length, found: [...new Set(found)], contexts } : null;
       } catch (error) {
         return { src, error: String(error?.message || error).slice(0, 200) };
       }

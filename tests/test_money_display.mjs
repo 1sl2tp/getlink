@@ -103,12 +103,13 @@ assert.equal(money(0),"—");
 
 {
   const searchKeyMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
+  const stripCartonMatch=app.match(/function stripCartonPackPhrase\(value\)\{[\s\S]*?\n\}/);
   const searchDisplayNameMatch=app.match(/function searchDisplayName\(row\)\{[\s\S]*?\n\}/);
   const productSearchKeyMatch=app.match(/function productSearchKey\(row\)\{[\s\S]*?\n\}/);
   const matchesSearchMatch=app.match(/function matchesSearch\(row,query\)\{[\s\S]*?\n\}/);
-  assert.ok(searchKeyMatch&&searchDisplayNameMatch&&productSearchKeyMatch&&matchesSearchMatch,"search helpers not found");
+  assert.ok(searchKeyMatch&&stripCartonMatch&&searchDisplayNameMatch&&productSearchKeyMatch&&matchesSearchMatch,"search helpers not found");
   const api=new Function(
-    searchKeyMatch[0]+"\n"+searchDisplayNameMatch[0]+"\n"+productSearchKeyMatch[0]+"\n"+matchesSearchMatch[0]+
+    searchKeyMatch[0]+"\n"+stripCartonMatch[0]+"\n"+searchDisplayNameMatch[0]+"\n"+productSearchKeyMatch[0]+"\n"+matchesSearchMatch[0]+
     "\nreturn {matchesSearch};"
   )();
 

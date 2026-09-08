@@ -4367,3 +4367,22 @@ body.image-zoom-open{overflow:hidden!important}
     max-height:94vh;
   }
 }
+
+
+/* Carton card QC: show quantity × unit price / 1 unit without truncation */
+.grid-product-bottom{
+  align-items:center!important;
+}
+.grid-qc{
+  flex:1 1 auto!important;
+  min-width:0!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:nowrap!important;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:-.01em;
+}
+@media(max-width:720px){
+  .grid-product-bottom{gap:5px!important}
+  .grid-qc{font-size:8.3px!important}
+}

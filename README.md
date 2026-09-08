@@ -1,52 +1,76 @@
-# GETLINK — Price Tracker
+# GETLINK — Price Catalog
 
-Theo dõi giá sản phẩm từ link web, bắt đầu với Bách Hóa XANH.
+GETLINK là catalog giá tạp hóa lấy dữ liệu từ Bách Hóa XANH, WinMart và GO!, chuẩn hóa về một kho Supabase rồi hiển thị qua giao diện tĩnh.
 
-## Mục tiêu dữ liệu
+## Kiến trúc hiện tại
 
-Mỗi sản phẩm được chuẩn hóa thành 3 lớp:
+```text
+GitHub Pages / get.taphoa.xyz
+        |
+        v
+Supabase Edge Function: getlink-api
+        |
+        +-- Supabase Postgres (nguồn dữ liệu chính)
+        |
+        +-- WinMart API
+        +-- GO! API
+        +-- Cloudflare Worker -> BHX API
+```
 
-1. Giá nguồn — giá hiện tại trên website nguồn.
-2. Ưu đãi — nội dung/giá khuyến mãi nếu phát hiện được.
-3. Giá của mình — dữ liệu do mình sở hữu, scraper không tự ghi đè.
+### Owner từng lớp
 
-Ngoài ra lưu nguồn, nhóm, nhánh, tên, quy cách, trạng thái theo dõi, ảnh, link gốc, thời điểm kiểm tra và lịch sử giá.
+- **GitHub**: source code, review, test, workflow, Pages.
+- **GitHub Pages**: chỉ giao diện tĩnh; không giữ service-role key.
+- **Supabase Edge Function**: API công khai của GETLINK, chuẩn hóa dữ liệu, phân loại, ghi/đọc database.
+- **Supabase Postgres**: source of truth cho link, giá, identity, phân loại, quy tắc và preference.
+- **Cloudflare Worker**: transport-only cho BHX; không lưu database và không chứa business logic.
+- **GitHub Actions**: verify, smoke, deploy relay và tác vụ định kỳ. Không nằm trên đường request trực tiếp khi người dùng bấm Getlink.
 
-## Cách chạy
+## Bảo mật
 
-Sau khi merge workflow vào main:
+- Frontend chỉ có Supabase publishable key; đây không phải service-role secret.
+- Service-role key chỉ dùng trong Supabase Edge Function.
+- Request ghi từ browser phải có publishable key và Origin thuộc allowlist.
+- Non-browser write có thể dùng `GETLINK_INTERNAL_WRITE_KEY` nếu được cấu hình trong môi trường Edge Function.
+- Supabase -> Cloudflare hỗ trợ `BHX_RELAY_SHARED_SECRET` / `RELAY_SHARED_SECRET`; token tương thích cũ chỉ là fallback cho tới khi secret thật được provision.
+- Cloudflare `/bhx` và `/category` đều áp dụng cùng relay auth gate.
 
-1. Mở Actions → BHX price tracker.
-2. Chọn Run workflow.
-3. Dán URL sản phẩm hoặc URL danh mục.
-4. Có thể nhập Giá của mình và chọn Theo dõi.
-5. Workflow chạy Playwright, cập nhật data/products.json + data/products.csv và commit kết quả về main.
+## CI/CD
 
-Workflow cũng chạy theo lịch để cập nhật lại các sản phẩm đã đánh dấu watch=true.
+### Verify GETLINK
+Chạy khi push vào `main` và khi có pull request:
 
-## Owner dữ liệu
+- Python unit tests
+- Python compile gate
+- `node --check` frontend + relay
+- `deno check` Supabase Edge Function
+- contract tests cho tiền, BHX, GO và name filter
+- gate xác nhận frontend trỏ Supabase-only
 
-Scraper được phép cập nhật:
-- source
-- group
-- branch
-- name
-- packaging
-- competitor price
-- promotion
-- image
-- last_checked_at
-- history
+### Smoke Supabase GETLINK
+Chạy khi API/migration/config thay đổi:
 
-User-owned, scraper chỉ thay khi có lệnh rõ ràng:
-- my_price
-- watch
-- short_name
-- note
+- `/health`
+- library search
+- source manager
+- xác nhận write không có trusted Origin bị chặn
 
-## Lưu ý
+### Deploy BHX Relay
+Chỉ chạy khi `relay/**` hoặc workflow deploy thay đổi:
 
-- Không bypass CAPTCHA/anti-bot.
-- Không rotate IP.
-- Parser ưu tiên JSON-LD/meta trước rồi mới fallback DOM/text.
-- GitHub Pages là giao diện tĩnh; việc scrape chạy bằng GitHub Actions.
+- Node syntax check
+- Wrangler được pin phiên bản
+- deploy Worker
+- health check
+- auth gate
+- BHX GetCate + Ajax continuation smoke
+
+## Nguyên tắc dữ liệu
+
+Scraper/API được phép cập nhật dữ liệu nguồn như tên, nguồn, quy cách, giá nguồn, promotion, image, identity và thời điểm kiểm tra.
+
+Dữ liệu người dùng như giá của mình, trạng thái quan tâm, ghi chú và các phân loại thủ công không được tự ý ghi đè bởi scraper.
+
+## Phát triển
+
+Kiến trúc mục tiêu là **Supabase-only cho business/data**, Cloudflare chỉ transport BHX. Không quay lại mô hình GitHub Actions scrape rồi commit JSON/CSV vào `main`.

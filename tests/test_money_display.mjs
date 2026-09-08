@@ -187,6 +187,18 @@ assert.equal(money(0),"—");
 }
 
 {
+  // Thùng/Lẻ is a global shopping-mode selection and must survive
+  // category and brand navigation. Search already only changes result rows.
+  const categoryHandler=app.match(/\$\("#categoryTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
+  const brandHandler=app.match(/\$\("#brandTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
+  const packRenderer=app.match(/function renderPackTabs\(\)\{[\s\S]*?\n\}/);
+  assert.ok(categoryHandler&&brandHandler&&packRenderer,"pack-navigation handlers not found");
+  assert.equal(categoryHandler[0].includes('activePackKind=""'),false);
+  assert.equal(brandHandler[0].includes('activePackKind=""'),false);
+  assert.equal(packRenderer[0].includes('selectedCount===0'),false);
+}
+
+{
   const forbidden=[
     "function inferSheetPack(",
     "function simpleRowPrice(",

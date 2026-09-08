@@ -21,6 +21,13 @@ const ALLOWED_ORIGINS = new Set([
 function clean(v: unknown): string {
   return String(v ?? "").replace(/\s+/g, " ").trim();
 }
+function errorText(e: unknown): string {
+  if(e instanceof Error)return e.message;
+  if(e&&typeof e==="object"&&"message" in e){
+    return String((e as {message?: unknown}).message ?? e);
+  }
+  return String(e ?? "");
+}
 function plain(v: unknown): string {
   return clean(v)
     .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -755,7 +762,7 @@ async function bhxTransportCategory(url:string) {
       if(body&&Number(body.code)===0&&body.data!=null)return body;
       last="code_"+String(body?.code);
     }catch(e){
-      last=String(e&&e.message||e).slice(0,300);
+      last=errorText(e).slice(0,300);
     }
   }
   throw new Error("bhx_transport_failed:"+last);
@@ -778,7 +785,7 @@ async function bhxTransportMenu() {
       if(body&&Number(body.code)===0&&body.data!=null)return body;
       last="code_"+String(body?.code);
     }catch(e){
-      last=String(e&&e.message||e).slice(0,300);
+      last=errorText(e).slice(0,300);
     }
   }
   throw new Error("bhx_menu_failed:"+last);
@@ -1351,7 +1358,7 @@ Deno.serve(async(req:Request)=>{
         const saved=await persistPayload(fetched.payload,fetched.engine);
         return response(req,{request_id:requestId,status:"complete",input_url:input,link_type:fetched.payload.input_type,...saved,cache_hit:false});
       }catch(e){
-        const detail=String(e?.message||e).slice(0,1200);
+        const detail=errorText(e).slice(0,1200);
         await sb.from("getlink_jobs").update({status:"error",error:detail,updated_at:new Date().toISOString()}).eq("request_id",requestId);
         return response(req,{error:"source_fetch_failed",detail,request_id:requestId},502);
       }
@@ -1407,6 +1414,6 @@ Deno.serve(async(req:Request)=>{
     }
     return response(req,{error:"not_found"},404);
   }catch(e){
-    return response(req,{error:"server_error",detail:String(e?.message||e).slice(0,1500)},500);
+    return response(req,{error:"server_error",detail:errorText(e).slice(0,1500)},500);
   }
 });

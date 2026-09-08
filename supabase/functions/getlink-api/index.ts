@@ -1292,14 +1292,35 @@ function routePath(req:Request){
   const p=new URL(req.url).pathname; const marker="/getlink-api"; const i=p.indexOf(marker); return i>=0?(p.slice(i+marker.length)||"/"):p;
 }
 
+const STALE_JOB_MS=10*60*1000;
+async function expireStaleJobs():Promise<number>{
+  const cutoff=new Date(Date.now()-STALE_JOB_MS).toISOString();
+  const now=new Date().toISOString();
+  const {data,error}=await sb
+    .from("getlink_jobs")
+    .update({status:"error",error:"stale_running_timeout",updated_at:now})
+    .eq("status","running")
+    .lt("updated_at",cutoff)
+    .select("request_id");
+  if(error){
+    console.warn("getlink_stale_job_cleanup_failed",String(error.message||error));
+    return 0;
+  }
+  return Array.isArray(data)?data.length:0;
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   if(!authorized(req))return response(req,{error:"unauthorized"},401);
   const url=new URL(req.url), route=routePath(req);
   try{
+    let staleJobsCleaned=0;
+    if(route==="/health"||route==="/api/get-price"||route==="/api/result"){
+      staleJobsCleaned=await expireStaleJobs();
+    }
     if(req.method==="GET"&&route==="/health"){
       const {count,error}=await sb.from("getlink_links").select("*",{count:"exact",head:true}); if(error)throw error;
-      return response(req,{ok:true,mode:"supabase-only",links:Number(count||0)});
+      return response(req,{ok:true,mode:"supabase-only",links:Number(count||0),stale_jobs_cleaned:staleJobsCleaned});
     }
     if(req.method==="POST"&&route==="/api/get-price"){
       const body=await req.json(); const raw=clean(body?.url); if(!raw)return response(req,{error:"missing_url"},400);

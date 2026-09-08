@@ -15,4 +15,11 @@ assert.match(source, /filterGetlinkProducts\(raw\.items\.map\(\(x:any\)=>normali
 assert.match(source, /isNumericBrandException\(name,brand\)/);
 assert.match(source, /nc\.startsWith\(bc\)/);
 
+
+// Running jobs abandoned by interrupted Edge executions must not stay running forever.
+assert.match(source, /const STALE_JOB_MS=10\*60\*1000/);
+assert.match(source, /function expireStaleJobs\(\):Promise<number>/);
+assert.match(source, /stale_running_timeout/);
+assert.match(source, /route==="\/health"\|\|route==="\/api\/get-price"\|\|route==="\/api\/result"/);
+
 console.log("GETLINK name filter contract: OK");

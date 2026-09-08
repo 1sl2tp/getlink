@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - "config.js"
+      - "supabase/functions/getlink-api/**"
+      - "supabase/migrations/**"
       - ".github/workflows/smoke-supabase.yml"
   workflow_dispatch:
 

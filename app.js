@@ -1732,26 +1732,22 @@ function renderCategoryMenu(){
       a.name.localeCompare(b.name,"vi")
     );
 
-  // Source groups stay available for audit/detail only.
-  // Primary catalog navigation is the user-owned manual grouping layer.
   activeGroupUrl="";
 
-  const out=[
-    '<button class="category-chip '+(!activeRootGroup?"active":"")+'" data-root="" data-group="" type="button">'+
-      '<span>Tất cả</span><small>'+visibleLibrary.length+'</small>'+
-    '</button>'
-  ];
-
-  for(const group of groupRows){
-    out.push(
-      '<button class="category-chip category-root '+(activeRootGroup===group.key?"active":"")+'" '+
-        'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
-        '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
-      '</button>'
-    );
+  const allPinned=$("#categoryAllPinned");
+  const allPinnedCount=$("#categoryAllPinnedCount");
+  if(allPinned){
+    allPinned.classList.toggle("active",!activeRootGroup);
+    allPinned.setAttribute("aria-pressed",!activeRootGroup?"true":"false");
   }
+  if(allPinnedCount)allPinnedCount.textContent=String(visibleLibrary.length);
 
-  host.innerHTML=out.join("");
+  host.innerHTML=groupRows.map(group=>
+    '<button class="category-chip category-root '+(activeRootGroup===group.key?"active":"")+'" '+
+      'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
+      '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
+    '</button>'
+  ).join("");
 
   const current=$("#mobileCategoryCurrent");
   if(current){
@@ -2290,14 +2286,14 @@ function nextTableSourceFilter(){
 
 function sourceLogoMark(key){
   const logos={
-    bhx:"https://www.bachhoaxanh.com/favicon.ico",
-    wm:"https://www.winmart.vn/favicon.ico",
-    go:"https://sieuthi-go.vn/favicon.ico"
+    bhx:"assets/logo-bhx.svg",
+    wm:"assets/logo-winmart.svg",
+    go:"assets/logo-go.svg"
   };
   if(logos[key]){
-    const fallback=key==="bhx"?"BHX":(key==="wm"?"W":"GO!");
+    const fallback=key==="bhx"?"BHX":(key==="wm"?"WinMart":"GO!");
     return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true">'+
-      '<img class="source-logo-image" src="'+logos[key]+'" alt="" loading="lazy" onerror="this.hidden=true">'+
+      '<img class="source-logo-image" src="'+logos[key]+'" alt="" loading="eager" decoding="async" onerror="this.hidden=true">'+
       '<b class="source-logo-fallback">'+fallback+'</b>'+
     '</span>';
   }
@@ -2311,9 +2307,11 @@ function sourceChipHtml(key,count,active,compact=false){
     wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
     go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"}
   }[key]||{full:key,short:key,title:key};
+
+  const label=escapeHtml(compact?meta.short:meta.full);
   return '<button class="source-chip source-chip-brand '+(active?"active ":"")+'source-'+(key||"all")+'" '+
     'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" title="'+escapeAttr(meta.title)+'">'+
-      '<span class="source-chip-main">'+sourceLogoMark(key)+'<span class="source-chip-label">'+escapeHtml(compact?meta.short:meta.full)+'</span></span>'+
+      '<span class="source-chip-main"><span class="source-chip-label">'+label+'</span>'+sourceLogoMark(key)+'</span>'+
       (compact?'':'<small class="source-chip-count">'+count+'</small>')+
     '</button>';
 }
@@ -2797,8 +2795,7 @@ $("#stateFilters").addEventListener("click",e=>{
   renderLibraryProducts();
 });
 
-$("#categoryTabs").addEventListener("click",e=>{
-  const chip=e.target.closest(".category-chip");
+function selectCategoryChip(chip){
   if(!chip)return;
   activeRootGroup=chip.dataset.root||"";
   activeGroupUrl=chip.dataset.group||"";
@@ -2811,7 +2808,16 @@ $("#categoryTabs").addEventListener("click",e=>{
   closeMobileCategoryNav();
   renderCategoryMenu();
   renderLibraryProducts();
+}
+
+$("#categoryTabs").addEventListener("click",e=>{
+  selectCategoryChip(e.target.closest(".category-chip"));
 });
+
+const categoryAllPinned=$("#categoryAllPinned");
+if(categoryAllPinned){
+  categoryAllPinned.addEventListener("click",()=>selectCategoryChip(categoryAllPinned));
+}
 
 function openMobileCategoryNav(){
   if(!isCompactBrowse())return;

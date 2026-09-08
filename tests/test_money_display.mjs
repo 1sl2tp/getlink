@@ -103,24 +103,22 @@ assert.equal(money(0),"—");
 
 {
   const moneyMatch2=app.match(/function money\(v\)\{[\s\S]*?\n\}/);
-  const packTextMatch=app.match(/function packHierarchyText\(qty,label\)\{[\s\S]*?\n\}/);
-  const cartonCardMatch=app.match(/function rowCartonCardQc\(row,packPrice\)\{[\s\S]*?\n\}/);
-  assert.ok(moneyMatch2&&packTextMatch&&cartonCardMatch,"carton card QC helper not found");
+  const cartonCardMatch=app.match(/function rowCartonCardMeta\(row,packPrice\)\{[\s\S]*?\n\}/);
+  assert.ok(moneyMatch2&&cartonCardMatch,"carton card meta helper not found");
   const api=new Function(
     moneyMatch2[0]+"\n"+
-    packTextMatch[0]+"\n"+
     "function rowPackHierarchy(row){return row.h;}\n"+
     "function rowPrimaryQc(){return '—';}\n"+
     cartonCardMatch[0]+
-    "\nreturn {rowCartonCardQc};"
+    "\nreturn {rowCartonCardMeta};"
   )();
-  assert.equal(
-    api.rowCartonCardQc({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"Hộp",qty3:24}},240000),
-    "24 × 10 / 1 hộp"
+  assert.deepEqual(
+    api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"Hộp",qty3:24}},240000),
+    {pack:"24 hộp",unitPrice:"10/hộp"}
   );
-  assert.equal(
-    api.rowCartonCardQc({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"",qty3:0}},240000),
-    "Thùng"
+  assert.deepEqual(
+    api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"",qty3:0}},240000),
+    {pack:"Thùng",unitPrice:""}
   );
 }
 

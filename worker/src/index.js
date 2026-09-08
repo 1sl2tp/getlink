@@ -1926,6 +1926,108 @@ async function bhxDirectJson(apiUrl,referer){
   }
   throw new Error("bhx_direct_api_failed:"+lastError);
 }
+async function bhxDirectPostJson(apiUrl,referer,payload){
+  let lastError="";
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const response=await fetch(apiUrl,{
+        method:"POST",
+        headers:{
+          ...bhxDirectHeaders(referer),
+          "content-type":"application/json"
+        },
+        body:JSON.stringify(payload||{})
+      });
+      if(!response.ok){
+        lastError="http_"+response.status;
+      }else{
+        const body=await response.json();
+        if(
+          body&&Number(body.code)===0&&
+          body.data!==undefined&&body.data!==null
+        ){
+          return body;
+        }
+        lastError="invalid_payload_code_"+String(body&&body.code);
+      }
+    }catch(error){
+      lastError=String(error&&error.message||error).slice(0,300);
+    }
+  }
+  throw new Error("bhx_direct_post_failed:"+lastError);
+}
+
+function bhxDirectV2ApiUrl(inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const slug=pathParts(canonical)[0]||"";
+  if(!slug)throw new Error("bhx_category_slug_missing");
+  const context=bhxDirectContext();
+  const api=new URL(
+    "https://api.bachhoaxanh.com/gw/Category/V2/GetCate"
+  );
+  api.searchParams.set("provinceId",context.provinceId);
+  api.searchParams.set("wardId",context.wardId);
+  api.searchParams.set("districtId",context.districtId);
+  api.searchParams.set("storeId",context.storeId);
+  api.searchParams.set("categoryUrl",slug);
+  api.searchParams.set("isMobile","true");
+  api.searchParams.set("isV2","true");
+  api.searchParams.set("pageSize","500");
+  return api.toString();
+}
+
+async function bhxDirectV2Data(inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const apiUrl=bhxDirectV2ApiUrl(canonical);
+  const body=await bhxDirectJson(apiUrl,canonical);
+  return {
+    body,
+    products:bhxDirectCollectCategoryProducts(body,canonical),
+    response_url:apiUrl
+  };
+}
+
+async function bhxDirectAjaxData(
+  inputUrl,categoryId,pageIndex,lastShowProductId=0,priorityProductIds=""
+){
+  const canonical=canonicalBhx(inputUrl);
+  const context=bhxDirectContext();
+  const apiUrl="https://api.bachhoaxanh.com/gw/Category/AjaxProduct";
+  const body=await bhxDirectPostJson(
+    apiUrl,
+    canonical,
+    {
+      provinceId:Number(context.provinceId),
+      wardId:Number(context.wardId),
+      districtId:Number(context.districtId),
+      storeId:Number(context.storeId),
+      CategoryId:Number(categoryId),
+      SelectedBrandId:"",
+      PropertyIdList:"",
+      PageIndex:Number(pageIndex)||1,
+      PageSize:10,
+      SortStr:"",
+      PriorityProductIds:String(priorityProductIds||""),
+      PropertySelected:[],
+      LastShowProductId:Number(lastShowProductId)||0
+    }
+  );
+  const products=bhxDirectCollectCategoryProducts(body,canonical);
+  return {body,products,response_url:apiUrl};
+}
+
+function bhxDirectProductId(item){
+  return Number(
+    item&&(
+      item.id||
+      item.productId||
+      item.productID||
+      item.ProductId||
+      item.ProductID
+    )||0
+  )||0;
+}
+
 
 function bhxDirectProductApiUrl(inputUrl){
   const canonical=canonicalBhx(inputUrl);
@@ -3568,20 +3670,56 @@ async function handleBhxDirectProbe(request,env){
       },200,"");
     }
 
-    const direct=await bhxDirectCategoryData(env,inputUrl);
+    const resolved=await bhxResolveCategoryIdFromD1(env,inputUrl);
+    const categoryId=resolved.category_id;
+    const v2=await bhxDirectV2Data(inputUrl);
+    const vegetable=await bhxDirectCategoryData(env,inputUrl);
+
+    const ajax1=await bhxDirectAjaxData(
+      inputUrl,categoryId,1,0,""
+    );
+    const last1=bhxDirectProductId(
+      ajax1.products[ajax1.products.length-1]
+    );
+    const ajax2=await bhxDirectAjaxData(
+      inputUrl,categoryId,2,last1,""
+    );
+
+    const merged=new Map();
+    for(const item of [
+      ...v2.products,
+      ...(vegetable.data&&vegetable.data.products||[]),
+      ...ajax1.products,
+      ...ajax2.products
+    ]){
+      const key=String(
+        item&&(
+          item.url||item.id||item.productCode||item.productId
+        )||""
+      );
+      if(key)merged.set(key,item);
+    }
+
     return json({
       ok:true,
       kind:"category",
-      response_url:direct.response_url,
-      category_id:direct.category_id,
-      products:Array.isArray(direct.data&&direct.data.products)
-        ?direct.data.products.length:0,
-      existing_count:direct.existing_count,
-      sample:(direct.data&&direct.data.products||[])
-        .slice(0,5)
-        .map(item=>cleanText(item&&(
+      category_id:categoryId,
+      v2_products:v2.products.length,
+      vegetable_products:(vegetable.data&&vegetable.data.products||[]).length,
+      ajax1_products:ajax1.products.length,
+      ajax2_products:ajax2.products.length,
+      ajax1_last_id:last1,
+      merged_products:merged.size,
+      ajax1_sample:ajax1.products.slice(0,3).map(item=>cleanText(
+        item&&(
           item.fullName||item.name
-        )||""))
+        )||""
+      )),
+      ajax2_sample:ajax2.products.slice(0,3).map(item=>cleanText(
+        item&&(
+          item.fullName||item.name
+        )||""
+      ))
     },200,"");
   }catch(error){
     return json({

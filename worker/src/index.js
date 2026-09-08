@@ -1,7 +1,6 @@
 const OWNER="1sl2tp";
 const REPO="getlink";
 const WORKFLOW_BHX="scrape.yml";
-const WORKFLOW_WINMART="scrape-winmart.yml";
 const WORKFLOW_GO="scrape-go.yml";
 
 function json(data,status=200,origin=""){
@@ -866,9 +865,10 @@ async function idForUrl(value){
 
 async function dispatchGithub(env,url,requestId,sourceKey="bachhoaxanh"){
   if(!env.GITHUB_TOKEN)throw new Error("github_token_missing");
-  const workflow=sourceKey==="winmart"
-    ?WORKFLOW_WINMART
-    :(sourceKey==="go"?WORKFLOW_GO:WORKFLOW_BHX);
+  if(sourceKey==="winmart"){
+    throw new Error("winmart_github_dispatch_disabled");
+  }
+  const workflow=sourceKey==="go"?WORKFLOW_GO:WORKFLOW_BHX;
   return fetch(
     "https://api.github.com/repos/"+OWNER+"/"+REPO+
     "/actions/workflows/"+workflow+"/dispatches",

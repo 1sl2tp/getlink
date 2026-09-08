@@ -14,7 +14,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: getlink-winmart-${{ inputs.request_id || github.run_id }}
@@ -23,14 +23,8 @@ concurrency:
 jobs:
   get-price:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
-      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
-      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
-      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
-      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
-      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
-      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
       INPUT_URL: ${{ inputs.url }}
       INPUT_REQUEST_ID: ${{ inputs.request_id }}
       GETLINK_API_BASE: "https://getlink-api.taphoa-4ab8161d.workers.dev"
@@ -49,19 +43,16 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Cài Playwright client
-        run: pip install -r scraper/requirements.txt
-
-      - name: Báo đang mở Bright Data / WinMart
+      - name: Báo đang lấy API WinMart trực tiếp
         run: |
           curl --silent --show-error --fail             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data "{\"request_id\":\"$INPUT_REQUEST_ID\",\"stage\":\"brightdata\"}"             "$GETLINK_API_BASE/api/progress" >/dev/null
 
-      - name: Mở link tổng WinMart và lấy các nhóm con + sản phẩm lẻ
+      - name: Lấy trực tiếp API tổng WinMart
         id: scrape
         continue-on-error: true
         run: |
           set +e
-          python scraper/brightdata_winmart.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --output "data/jobs/$INPUT_REQUEST_ID.json"             2>&1 | tee /tmp/getlink-winmart.log
+          python scraper/winmart_api.py             --url "$INPUT_URL"             --request-id "$INPUT_REQUEST_ID"             --output "data/jobs/$INPUT_REQUEST_ID.json"             2>&1 | tee /tmp/getlink-winmart.log
           CODE=${PIPESTATUS[0]}
           echo "code=$CODE" >> "$GITHUB_OUTPUT"
           exit 0
@@ -89,7 +80,7 @@ jobs:
           test -s "data/jobs/$INPUT_REQUEST_ID.json"
           test -n "$GETLINK_CALLBACK_TOKEN"
 
-          HTTP_CODE="$(curl --silent --show-error             --retry 5 --retry-delay 2 --retry-all-errors             -o /tmp/getlink-callback.json             -w '%{http_code}'             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data-binary @"data/jobs/$INPUT_REQUEST_ID.json"             "$GETLINK_API_BASE/api/complete")"
+          HTTP_CODE="$(curl --silent --show-error             --retry 5 --retry-delay 1 --retry-all-errors             -o /tmp/getlink-callback.json             -w '%{http_code}'             -H "Authorization: Bearer $GETLINK_CALLBACK_TOKEN"             -H "Content-Type: application/json"             --data-binary @"data/jobs/$INPUT_REQUEST_ID.json"             "$GETLINK_API_BASE/api/complete")"
 
           echo "Callback HTTP $HTTP_CODE"
           cat /tmp/getlink-callback.json | jq . || cat /tmp/getlink-callback.json
@@ -100,5 +91,5 @@ jobs:
       - name: Báo trạng thái
         if: steps.scrape.outputs.code != '0'
         run: |
-          echo "WinMart chưa trả dữ liệu hợp lệ; xem log scraper."
+          echo "WinMart direct API chưa trả dữ liệu hợp lệ; xem log scraper."
           exit 1

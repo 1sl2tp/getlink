@@ -16,10 +16,10 @@ assert.doesNotMatch(edge, /F7029C832B7798D1754A64B8F927D09B/, "captured browser 
 
 assert.match(proxy, /Category\/V2\/GetCate/, "relay must bootstrap from GetCate");
 assert.match(proxy, /Category\/AjaxProduct/, "relay must continue with AjaxProduct");
-assert.match(proxy, /PageIndex:page/, "relay must advance AjaxProduct page index");
-assert.match(proxy, /PriorityProductIds:priority/, "relay must reuse priorityProductIds");
-assert.match(proxy, /LastShowProductId:lastShowProductId/, "relay must carry LastShowProductId");
-assert.match(proxy, /storage:"none"/, "BHX relay must remain stateless");
+assert.match(proxy, /PageIndex:\\s*page/, "relay must advance AjaxProduct page index");
+assert.match(proxy, /PriorityProductIds:\\s*priority/, "relay must reuse priorityProductIds");
+assert.match(proxy, /LastShowProductId:\\s*lastShowProductId/, "relay must carry LastShowProductId");
+assert.match(proxy, /storage:\\s*"none"/, "BHX relay must remain stateless");
 assert.doesNotMatch(proxy, /D1|\.prepare\(/, "BHX relay must not use Cloudflare storage");
 
 console.log("BHX stateless transport contract: OK");

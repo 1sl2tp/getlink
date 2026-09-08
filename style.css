@@ -5520,3 +5520,144 @@ body.image-zoom-open{overflow:hidden!important}
     padding-right:3px!important;
   }
 }
+
+
+/* Split filter alignment v2
+   Quy cách hugs the left edge; Nguồn hàng hugs the right edge.
+   No redundant "Tất cả/Cả hai" chip: click the active chip again to clear it. */
+.purchase-mode-row{
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:28px!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  padding:7px 11px 6px!important;
+}
+
+.purchase-mode-row .filter-block{
+  width:auto!important;
+  min-width:0!important;
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  gap:6px!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+}
+
+.purchase-mode-row .filter-block-pack{
+  margin-right:auto!important;
+  justify-content:flex-start!important;
+}
+.purchase-mode-row .filter-block-source{
+  margin-left:auto!important;
+  justify-content:flex-end!important;
+}
+
+.purchase-mode-row .filter-label{
+  flex:0 0 auto!important;
+  color:#6d7782!important;
+  font-size:9.5px!important;
+  font-weight:800!important;
+  letter-spacing:.01em!important;
+  white-space:nowrap!important;
+}
+
+.purchase-mode-row .catalog-pack-tabs,
+.purchase-mode-row .source-tabs{
+  width:auto!important;
+  display:flex!important;
+  grid-template-columns:none!important;
+  align-items:center!important;
+  gap:4px!important;
+  overflow:visible!important;
+}
+
+.purchase-mode-row .pack-chip,
+.purchase-mode-row .source-chip{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  height:30px!important;
+  min-height:30px!important;
+  padding:0 8px!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  white-space:nowrap!important;
+}
+
+@media(max-width:760px){
+  .purchase-mode-row{
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:12px!important;
+    padding:7px 8px 6px!important;
+  }
+  .purchase-mode-row .filter-block{
+    width:auto!important;
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:5px!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs,
+  .purchase-mode-row .source-tabs{
+    width:auto!important;
+    display:flex!important;
+    grid-template-columns:none!important;
+    gap:3px!important;
+  }
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip{
+    width:auto!important;
+    height:30px!important;
+    min-height:30px!important;
+    padding:0 6px!important;
+    font-size:9px!important;
+  }
+}
+
+@media(max-width:600px){
+  .purchase-mode-row .pack-chip small,
+  .purchase-mode-row .source-chip small{
+    display:none!important;
+  }
+  .purchase-mode-row .filter-label{
+    font-size:9px!important;
+  }
+}
+
+@media(max-width:460px){
+  .purchase-mode-row{
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:5px!important;
+  }
+  .purchase-mode-row .filter-block-pack{
+    align-self:flex-start!important;
+    margin-right:0!important;
+  }
+  .purchase-mode-row .filter-block-source{
+    align-self:flex-end!important;
+    margin-left:0!important;
+  }
+}
+
+@media(max-width:350px){
+  .purchase-mode-row .filter-label{
+    font-size:8.5px!important;
+  }
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip{
+    height:29px!important;
+    min-height:29px!important;
+    padding-left:5px!important;
+    padding-right:5px!important;
+    font-size:8.6px!important;
+  }
+}

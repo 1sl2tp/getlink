@@ -1816,9 +1816,8 @@ function renderPackTabs(){
   }
 
   host.innerHTML=
-    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Cả hai <small>'+base.length+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button">Thùng <small>'+cartonCount+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
+    '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button" aria-pressed="'+(activePackKind==="Thùng"?"true":"false")+'" title="'+(activePackKind==="Thùng"?"Bấm lại để bỏ lọc":"Lọc theo quy cách Thùng")+'">Thùng <small>'+cartonCount+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button" aria-pressed="'+(activePackKind==="Lẻ"?"true":"false")+'" title="'+(activePackKind==="Lẻ"?"Bấm lại để bỏ lọc":"Lọc theo quy cách Lẻ")+'">Lẻ <small>'+retailCount+'</small></button>';
 }
 
 function rowSourceFilterKey(row){
@@ -1856,10 +1855,9 @@ function renderSourceTabs(){
   }
 
   host.innerHTML=
-    '<button class="source-chip '+(!activeSourceFilter?"active":"")+'" data-source="" type="button">Tất cả <small>'+base.length+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button">BHX <small>'+counts.bhx+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button">WM <small>'+counts.wm+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button">GO <small>'+counts.go+'</small></button>';
+    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button" aria-pressed="'+(activeSourceFilter==="bhx"?"true":"false")+'" title="'+(activeSourceFilter==="bhx"?"Bấm lại để bỏ lọc":"Lọc nguồn Bách Hóa XANH")+'">BHX <small>'+counts.bhx+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button" aria-pressed="'+(activeSourceFilter==="wm"?"true":"false")+'" title="'+(activeSourceFilter==="wm"?"Bấm lại để bỏ lọc":"Lọc nguồn WinMart")+'">WM <small>'+counts.wm+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button" aria-pressed="'+(activeSourceFilter==="go"?"true":"false")+'" title="'+(activeSourceFilter==="go"?"Bấm lại để bỏ lọc":"Lọc nguồn GO!")+'">GO <small>'+counts.go+'</small></button>';
 }
 
 function filteredLibraryProducts(){
@@ -2182,7 +2180,7 @@ function renderLibraryProducts(){
   }else if(activeRootGroup){
     $("#libraryTitle").textContent=activeRootGroup;
   }else{
-    $("#libraryTitle").textContent="Tất cả sản phẩm";
+    $("#libraryTitle").textContent="Sản phẩm";
   }
 
   const hint=$("#catalogHint");
@@ -2406,20 +2404,20 @@ $("#brandTabs").addEventListener("click",e=>{
 $("#packTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".pack-chip");
   if(!chip)return;
-  activePackKind=chip.dataset.pack||"";
+  const nextPack=chip.dataset.pack||"";
+  activePackKind=activePackKind===nextPack?"":nextPack;
   libraryPage=1;
   if(activePackKind)localStorage.setItem("getlink:filter-pack",activePackKind);
   else localStorage.removeItem("getlink:filter-pack");
   resetBrowseDetail();
-  document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
-  chip.classList.add("active");
   renderLibraryProducts();
 });
 
 $("#sourceTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".source-chip");
   if(!chip)return;
-  activeSourceFilter=chip.dataset.source||"";
+  const nextSource=chip.dataset.source||"";
+  activeSourceFilter=activeSourceFilter===nextSource?"":nextSource;
   if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
   else localStorage.removeItem("getlink:filter-source");
 

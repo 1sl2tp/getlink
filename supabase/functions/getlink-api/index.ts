@@ -408,7 +408,7 @@ function bhxMenuNodes(body:any) {
   return out;
 }
 function bhxTextKey(v:any) {
-  return deAccent(clean(v)).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+  return plain(v).replace(/[^a-z0-9]+/g," ").trim();
 }
 function resolveBhxMenuNode(slug:string, body:any) {
   const nodes=bhxMenuNodes(body);

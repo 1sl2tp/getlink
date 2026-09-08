@@ -857,6 +857,13 @@ function renderProduct(payload){
   $("#categoryChildren").hidden=true;
   $("#linkType").textContent="So sánh giá";
   $("#source").textContent=(p.source&&p.source.name)||"Bách Hóa XANH";
+  const detailSourceClass=sourceDisplayClass({
+    source:p.source&&p.source.name,
+    source_name:p.source&&p.source.name,
+    canonical_url:p.url||payload.input_url||""
+  }).trim();
+  $("#result").classList.remove("source-bhx","source-winmart","source-go");
+  if(detailSourceClass)$("#result").classList.add(detailSourceClass);
   $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
   $("#group").textContent=displayCategoryLabel(p.group)||"—";
   $("#branch").textContent=p.branch||"—";
@@ -1557,7 +1564,7 @@ function productCard(row){
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
-  return '<tr class="product-card xls-row '+(pref==="hidden"?"is-hidden ":"")+
+  return '<tr class="product-card xls-row'+sourceDisplayClass(row)+' '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" '+

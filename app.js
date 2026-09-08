@@ -1690,10 +1690,22 @@ function rowManualGroupSort(row){
   return Number(row&&row.manual_group_sort_order||999999);
 }
 
+const UNCLASSIFIED_GROUP_KEY="__unclassified__";
+function rowBrowseGroupKey(row){
+  return rowManualGroupKey(row)||UNCLASSIFIED_GROUP_KEY;
+}
+function rowBrowseGroupName(row){
+  return rowManualGroupName(row)||"Chưa phân loại";
+}
+function rowBrowseGroupSort(row){
+  return rowManualGroupKey(row)?rowManualGroupSort(row):9999999;
+}
+
 function activeManualGroupName(){
   if(!activeRootGroup)return "";
-  const row=libraryCache.find(x=>rowManualGroupKey(x)===activeRootGroup);
-  return row?rowManualGroupName(row):"";
+  if(activeRootGroup===UNCLASSIFIED_GROUP_KEY)return "Chưa phân loại";
+  const row=libraryCache.find(x=>rowBrowseGroupKey(x)===activeRootGroup);
+  return row?rowBrowseGroupName(row):"";
 }
 
 
@@ -1710,20 +1722,19 @@ function renderCategoryMenu(){
 
   const groups=new Map();
   for(const row of visibleLibrary){
-    const key=rowManualGroupKey(row);
-    const name=rowManualGroupName(row);
-    if(!key||!name)continue;
+    const key=rowBrowseGroupKey(row);
+    const name=rowBrowseGroupName(row);
     if(!groups.has(key)){
       groups.set(key,{
         key,
         name,
         count:0,
-        sort:rowManualGroupSort(row)
+        sort:rowBrowseGroupSort(row)
       });
     }
     const entry=groups.get(key);
     entry.count+=1;
-    entry.sort=Math.min(entry.sort,rowManualGroupSort(row));
+    entry.sort=Math.min(entry.sort,rowBrowseGroupSort(row));
   }
 
   const groupRows=[...groups.values()]
@@ -2159,7 +2170,7 @@ function rowsBeforeSearch(){
     }
 
     if(activeRootGroup){
-      products=products.filter(row=>rowManualGroupKey(row)===activeRootGroup);
+      products=products.filter(row=>rowBrowseGroupKey(row)===activeRootGroup);
     }
     activeGroupUrl="";
     if(activeBrand){
@@ -2188,7 +2199,7 @@ function categoryBaseRows(){
   return memoBrowseRows(key,()=>{
     let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
     if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
-    if(activeRootGroup)rows=rows.filter(row=>rowManualGroupKey(row)===activeRootGroup);
+    if(activeRootGroup)rows=rows.filter(row=>rowBrowseGroupKey(row)===activeRootGroup);
     activeGroupUrl="";
     return rows;
   });
@@ -2254,7 +2265,7 @@ function sourceRowsForSelection(source){
 
 function normalizeBrowseCategoryForSource(source){
   const sourceRows=sourceRowsForSelection(source);
-  if(activeRootGroup&&!sourceRows.some(row=>rowManualGroupKey(row)===activeRootGroup)){
+  if(activeRootGroup&&!sourceRows.some(row=>rowBrowseGroupKey(row)===activeRootGroup)){
     activeRootGroup="";
     activeBrand="";
   }

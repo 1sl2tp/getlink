@@ -7866,3 +7866,60 @@ body.source-manager-open{overflow:hidden!important}
     width:100%!important;
   }
 }
+
+
+/* Source price palette v4 */
+/* One price palette everywhere:
+   BHX = green, WinMart = red, GO! = orange. */
+:root{
+  --price-bhx:#087a40;
+  --price-winmart:#d92d20;
+  --price-go:#e85d04;
+}
+
+/* Image cards */
+.grid-product.source-bhx .grid-price,
+.grid-product.source-bhx .grid-unit-price{
+  color:var(--price-bhx)!important;
+}
+.grid-product.source-winmart .grid-price,
+.grid-product.source-winmart .grid-unit-price,
+.grid-price.source-price-winmart{
+  color:var(--price-winmart)!important;
+}
+.grid-product.source-go .grid-price,
+.grid-product.source-go .grid-unit-price,
+.grid-price.source-price-go{
+  color:var(--price-go)!important;
+}
+
+/* Table: only source/web prices are colored; "Giá mình" remains neutral. */
+.xls-row.source-bhx .xls-num .xls-price-main,
+.xls-row.source-bhx .xls-num .xls-price-compact .xls-price-main{
+  color:var(--price-bhx)!important;
+}
+.xls-row.source-winmart .xls-num .xls-price-main,
+.xls-row.source-winmart .xls-num .xls-price-compact .xls-price-main{
+  color:var(--price-winmart)!important;
+}
+.xls-row.source-go .xls-num .xls-price-main,
+.xls-row.source-go .xls-num .xls-price-compact .xls-price-main{
+  color:var(--price-go)!important;
+}
+
+/* Detail panel + variants */
+#result.source-bhx #webPrice,
+#result.source-bhx #webPriceNote,
+#result.source-bhx .variant-price strong{
+  color:var(--price-bhx)!important;
+}
+#result.source-winmart #webPrice,
+#result.source-winmart #webPriceNote,
+#result.source-winmart .variant-price strong{
+  color:var(--price-winmart)!important;
+}
+#result.source-go #webPrice,
+#result.source-go #webPriceNote,
+#result.source-go .variant-price strong{
+  color:var(--price-go)!important;
+}

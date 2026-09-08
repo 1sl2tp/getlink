@@ -221,6 +221,92 @@ const BHX_HTTP1_CLIENT = Deno.createHttpClient({
   poolIdleTimeout: 30
 });
 
+function decodeChunkedHttpBody(text:string){
+  let pos=0,out="";
+  while(pos<text.length){
+    const lineEnd=text.indexOf("\r\n",pos);
+    if(lineEnd<0)break;
+    const rawLen=text.slice(pos,lineEnd).split(";")[0].trim();
+    const len=parseInt(rawLen,16);
+    if(!Number.isFinite(len))break;
+    pos=lineEnd+2;
+    if(len===0)break;
+    out+=text.slice(pos,pos+len);
+    pos+=len+2;
+  }
+  return out;
+}
+
+async function bhxRawHttp11(
+  apiUrl:string,
+  referer:string,
+  body?:unknown
+){
+  const u=new URL(apiUrl);
+  const conn=await Deno.connectTls({
+    hostname:u.hostname,
+    port:Number(u.port||443),
+    alpnProtocols:["http/1.1"]
+  });
+  try{
+    const method=body===undefined?"GET":"POST";
+    const payload=body===undefined?"":JSON.stringify(body);
+    const lines=[
+      method+" "+u.pathname+u.search+" HTTP/1.1",
+      "Host: "+u.hostname,
+      "Accept: application/json, text/plain, */*",
+      "Accept-Language: vi-VN,vi;q=0.9,en;q=0.7",
+      "Origin: https://www.bachhoaxanh.com",
+      "Referer: "+referer,
+      "User-Agent: Mozilla/5.0",
+      "Accept-Encoding: identity",
+      "Connection: close"
+    ];
+    if(body!==undefined){
+      lines.push("Content-Type: application/json");
+      lines.push("Content-Length: "+new TextEncoder().encode(payload).length);
+    }
+    const requestText=lines.join("\r\n")+"\r\n\r\n"+payload;
+    await conn.write(new TextEncoder().encode(requestText));
+
+    const chunks:Uint8Array[]=[];
+    let total=0;
+    const buf=new Uint8Array(65536);
+    while(true){
+      const n=await conn.read(buf);
+      if(n===null)break;
+      if(n<=0)continue;
+      const copy=buf.slice(0,n);
+      chunks.push(copy);
+      total+=n;
+      if(total>20_000_000)throw new Error("bhx_raw_response_too_large");
+    }
+    const all=new Uint8Array(total);
+    let off=0;
+    for(const chunk of chunks){all.set(chunk,off);off+=chunk.length;}
+    const text=new TextDecoder().decode(all);
+    const split=text.indexOf("\r\n\r\n");
+    if(split<0)throw new Error("bhx_raw_invalid_http");
+    const head=text.slice(0,split);
+    let bodyText=text.slice(split+4);
+    const statusMatch=head.match(/^HTTP\/1\.[01]\s+(\d+)/i);
+    const status=Number(statusMatch&&statusMatch[1]||0);
+    if(/transfer-encoding:\s*chunked/i.test(head)){
+      bodyText=decodeChunkedHttpBody(bodyText);
+    }
+    if(status<200||status>=300){
+      throw new Error("bhx_raw_http_"+status+":"+bodyText.slice(0,300));
+    }
+    const data=JSON.parse(bodyText);
+    if(!data||Number(data.code)!==0||data.data==null){
+      throw new Error("bhx_raw_code_"+String(data&&data.code));
+    }
+    return data;
+  }finally{
+    try{conn.close();}catch{}
+  }
+}
+
 function bhxHeaders(referer: string) {
   return {
     "accept":"application/json, text/plain, */*",
@@ -331,17 +417,17 @@ async function bhxCategoryRaw(url:string) {
 async function bhxRegionProbe(url:string){
   const c=canonicalBhx(url);
   const slug=pathParts(c)[0]||"";
-  if(!slug)throw new Error("bhx_category_slug_missing");
   const api=new URL("https://api.bachhoaxanh.com/gw/Category/V2/GetCate");
   for(const [k,v] of Object.entries({
     provinceId:"1027",wardId:"0",districtId:"0",storeId:"2546",
     categoryUrl:slug,isMobile:"true",isV2:"true",pageSize:"500"
   }))api.searchParams.set(k,v);
   const t=Date.now();
-  const body=await bhxJson(api.toString(),c);
+  const body=await bhxRawHttp11(api.toString(),c);
   const items=collectBhx(body,c);
   return {
     ok:true,
+    transport:"raw-tls-http1",
     region:Deno.env.get("SB_REGION")||"",
     ms:Date.now()-t,
     products:items.length,

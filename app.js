@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v16");
+      const req=tx.objectStore("cache").get("library-v17");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v16");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v17");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1321,8 +1321,10 @@ function rowCartonCardMeta(row,packPrice){
   // The chip already tells the user the inner unit (e.g. "24 lon"),
   // so the compact per-unit price only needs the number.
   return {
-    pack:qty+" "+unit,
-    unitPrice:each>0?money(each):""
+    // Keep the relationship in one compact chip: "12 hộp × 14".
+    // The red value at the right remains the whole-carton price.
+    pack:qty+" "+unit+(each>0?" × "+money(each):""),
+    unitPrice:""
   };
 }
 

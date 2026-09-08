@@ -7205,3 +7205,21 @@ body.source-manager-open{overflow:hidden!important}
     height:20px!important;
   }
 }
+
+
+/* Prefer brand artwork from each source website; keep CSS mark as fallback. */
+.source-logo-image{
+  position:absolute!important;
+  inset:2px!important;
+  width:calc(100% - 4px)!important;
+  height:calc(100% - 4px)!important;
+  object-fit:contain!important;
+  border-radius:4px!important;
+  background:#fff!important;
+  z-index:2!important;
+}
+.source-logo-mark{position:relative!important}
+.source-logo-fallback{z-index:1!important}
+.source-logo-image:not([hidden]) + .source-logo-fallback{
+  visibility:hidden!important;
+}

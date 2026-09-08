@@ -47,6 +47,9 @@ let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"gri
 let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
+let libraryRenderVersion=0;
+let activeRenderToken=0;
+const viewRenderKeys={grid:"",table:""};
 function isCompactBrowse(){
   return window.matchMedia("(max-width: 1100px)").matches;
 }
@@ -870,6 +873,9 @@ function mergePayloadIntoLibraryCache(payload){
   }
   libraryCache=[...map.values()];
   libraryLoaded=true;
+  libraryRenderVersion+=1;
+  viewRenderKeys.grid="";
+  viewRenderKeys.table="";
   const registry=$("#registryCount");
   if(registry)registry.textContent="Kho link: "+libraryCache.length;
   renderCategoryMenu();
@@ -1382,6 +1388,9 @@ async function ensureLibraryCache(force=false){
   if(!r.ok)throw new Error(data.error||"library_error");
   libraryCache=Array.isArray(data.products)?data.products:[];
   libraryLoaded=true;
+  libraryRenderVersion+=1;
+  viewRenderKeys.grid="";
+  viewRenderKeys.table="";
   const registry=$("#registryCount");
   if(registry)registry.textContent="Kho link: "+libraryCache.length;
 }
@@ -1598,6 +1607,97 @@ function renderCategoryContext(visibleProducts){
   }
 }
 
+
+function productViewKey(products){
+  return [
+    libraryRenderVersion,
+    libraryState,
+    activeRootGroup,
+    activeGroupUrl,
+    activeBrand,
+    activePackKind,
+    libraryQuery,
+    products.length
+  ].join("|");
+}
+
+function scheduleUiChunk(fn){
+  if("requestIdleCallback" in window){
+    window.requestIdleCallback(fn,{timeout:80});
+  }else{
+    requestAnimationFrame(()=>fn({timeRemaining:()=>8,didTimeout:true}));
+  }
+}
+
+function hydrateTableRows(rows){
+  for(const row of rows)updateSheetRow(row);
+}
+
+function renderGridProgressively(products,key){
+  const host=$("#productGrid");
+  if(!host)return;
+  if(viewRenderKeys.grid===key)return;
+
+  const token=++activeRenderToken;
+  const chunk=120;
+  const first=Math.min(chunk,products.length);
+  host.innerHTML=products.slice(0,first).map(gridProductCard).join("");
+  let index=first;
+  viewRenderKeys.grid=key;
+
+  const more=()=>{
+    if(token!==activeRenderToken||libraryView!=="grid"||viewRenderKeys.grid!==key)return;
+    const end=Math.min(index+chunk,products.length);
+    if(end>index){
+      host.insertAdjacentHTML("beforeend",products.slice(index,end).map(gridProductCard).join(""));
+      index=end;
+    }
+    if(index<products.length)scheduleUiChunk(more);
+  };
+  if(index<products.length)scheduleUiChunk(more);
+}
+
+function renderTableProgressively(products,key){
+  const body=$("#libraryProducts");
+  if(!body)return;
+  if(viewRenderKeys.table===key)return;
+
+  const token=++activeRenderToken;
+  const chunk=100;
+  const append=(start,end,replace=false)=>{
+    const html=products.slice(start,end).map(productCard).join("");
+    const before=replace?0:body.children.length;
+    if(replace)body.innerHTML=html;
+    else body.insertAdjacentHTML("beforeend",html);
+    const children=body.children;
+    const added=[];
+    for(let i=before;i<children.length;i++)added.push(children[i]);
+    hydrateTableRows(added);
+  };
+
+  const first=Math.min(chunk,products.length);
+  append(0,first,true);
+  let index=first;
+  viewRenderKeys.table=key;
+
+  const more=()=>{
+    if(token!==activeRenderToken||libraryView!=="table"||viewRenderKeys.table!==key)return;
+    const end=Math.min(index+chunk,products.length);
+    if(end>index){
+      append(index,end,false);
+      index=end;
+    }
+    if(index<products.length)scheduleUiChunk(more);
+  };
+  if(index<products.length)scheduleUiChunk(more);
+}
+
+function renderActiveProductView(products){
+  const key=productViewKey(products);
+  if(libraryView==="table")renderTableProgressively(products,key);
+  else renderGridProgressively(products,key);
+}
+
 function renderResultPager(){
   // Intentionally no pagination: browsing stays continuous.
 }
@@ -1648,9 +1748,7 @@ function renderLibraryProducts(){
     ?products.length+" sản phẩm"
     :"";
 
-  $("#productGrid").innerHTML=visible.map(gridProductCard).join("");
-  $("#libraryProducts").innerHTML=visible.map(productCard).join("");
-  document.querySelectorAll("#libraryProducts .product-card").forEach(updateSheetRow);
+  renderActiveProductView(visible);
   $("#libraryEmpty").hidden=products.length!==0;
 
   if(!products.length){
@@ -1883,9 +1981,12 @@ $("#toggleMatchAudit").addEventListener("click",async()=>{
 document.querySelector(".view-switch").addEventListener("click",e=>{
   const button=e.target.closest(".view-button");
   if(!button)return;
-  libraryView=button.dataset.view==="table"?"table":"grid";
+  const next=button.dataset.view==="table"?"table":"grid";
+  if(next===libraryView)return;
+  libraryView=next;
   localStorage.setItem("getlink:view-mode",libraryView);
   syncViewMode();
+  renderActiveProductView(filteredLibraryProducts());
 });
 
 $("#productGrid").addEventListener("click",async e=>{

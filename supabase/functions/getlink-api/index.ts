@@ -1001,6 +1001,9 @@ function normalizeWinmart(item:any, rootName:string, store:string, checked:strin
   };
 }
 
+const GO_API_CLIENT_ID=(Deno.env.get("GO_API_CLIENT_ID")||"8472594").trim();
+const GO_STORE_ID=Number(Deno.env.get("GO_STORE_ID")||"151")||151;
+
 function goCategoryId(url:string){
   const m=new URL(url).pathname.match(/-i\.(\d+)$/i); return m?Number(m[1]):0;
 }

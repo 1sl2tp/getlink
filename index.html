@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-detail-polish-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-compact-table-v1">
 </head>
 <body>
 <main class="wrap">
@@ -116,11 +116,16 @@
           <thead>
             <tr>
               <th>Tên</th>
-              <th>Nguồn</th>
-              <th>Thùng</th>
+              <th id="tableSourceHeader" aria-sort="none">
+                <button id="tableSourceSort" class="xls-sort-button" type="button" title="Sắp xếp theo nguồn">
+                  <span>Nguồn</span>
+                  <svg class="ui-icon xls-sort-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 9l4-4 4 4M16 15l-4 4-4-4"/></svg>
+                </button>
+              </th>
+              <th><span class="xls-desktop-only">Thùng</span><span class="xls-compact-only">Quy cách</span></th>
               <th>Giữa</th>
               <th>Lẻ</th>
-              <th class="th-num">Giá nguồn / Thùng</th>
+              <th class="th-num"><span class="xls-desktop-only">Giá nguồn / Thùng</span><span class="xls-compact-only">Giá</span></th>
               <th class="th-num">Giá nguồn / Giữa</th>
               <th class="th-num">Giá nguồn / Lẻ</th>
               <th class="th-num">Giá mình / Thùng</th>
@@ -247,6 +252,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-detail-polish-v1"></script>
+<script src="app.js?v=20260908-compact-table-v1"></script>
 </body>
 </html>

@@ -344,4 +344,22 @@ assert.equal(money(0),"—");
   assert.equal(css.includes("Carton footer v5:"),false);
 }
 
+
+{
+  assert.match(html,/id="tableSourceSort"/);
+  assert.match(html,/aria-sort="none"/);
+  assert.match(html,/xls-compact-only">Quy cách/);
+  assert.match(html,/xls-compact-only">Giá/);
+  assert.match(app,/function tableCompactQc\(levels\)/);
+  assert.match(app,/function tablePrimarySourcePrice\(levels\)/);
+  assert.match(app,/function sortTableProducts\(products\)/);
+  assert.match(app,/tableSourceSort=tableSourceSort==="asc"\?"desc":"asc"/);
+  assert.match(css,/Compact table v1/);
+  assert.match(css,/@media\(max-width:900px\)/);
+  assert.match(css,/th:nth-child\(1\),[\s\S]*?width:47%!important/);
+  assert.match(css,/th:nth-child\(2\),[\s\S]*?width:12%!important/);
+  assert.match(css,/th:nth-child\(3\),[\s\S]*?width:23%!important/);
+  assert.match(css,/th:nth-child\(6\),[\s\S]*?width:18%!important/);
+}
+
 console.log("money and hierarchy UI tests passed");

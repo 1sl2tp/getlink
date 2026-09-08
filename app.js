@@ -96,6 +96,7 @@ let activeGroupUrl="";
 let activeBrand="";
 let activePackKind=localStorage.getItem("getlink:filter-pack")||"";
 let activeSourceFilter=localStorage.getItem("getlink:filter-source")||"";
+let tableSourceSort="";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
@@ -1467,6 +1468,62 @@ function xlsWebPrice(main,promo){
       :'');
 }
 
+function tableCompactQc(levels){
+  const h=levels&&levels.hierarchy||{};
+  if(String(h.label1||"").trim()==="Thùng"){
+    const inner=h.label2
+      ?packHierarchyText(h.qty2||1,h.label2)
+      :(h.label3?packHierarchyText(h.qty3||1,h.label3):"");
+    return inner?"Thùng · "+inner:"Thùng";
+  }
+  if(h.label2&&h.label3){
+    return packHierarchyText(h.qty2||1,h.label2)+" · "+packHierarchyText(h.qty3||1,h.label3);
+  }
+  if(h.label3)return packHierarchyText(h.qty3||1,h.label3);
+  if(h.label2)return packHierarchyText(h.qty2||1,h.label2);
+  return "—";
+}
+
+function tablePrimarySourcePrice(levels){
+  if(activePackKind==="Lẻ"){
+    return xlsWebPrice(levels.leafPrice,levels.promoLeafPrice);
+  }
+  if(activePackKind==="Thùng"){
+    return xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice);
+  }
+  if(Number(levels.cartonPrice)>0)return xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice);
+  if(Number(levels.middlePrice)>0)return xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice);
+  return xlsWebPrice(levels.leafPrice,levels.promoLeafPrice);
+}
+
+function tableSourceRank(row){
+  const key=rowSourceFilterKey(row);
+  return key==="bhx"?0:(key==="wm"?1:(key==="go"?2:9));
+}
+
+function sortTableProducts(products){
+  if(!tableSourceSort)return products;
+  const dir=tableSourceSort==="desc"?-1:1;
+  return [...products].sort((a,b)=>{
+    const rank=(tableSourceRank(a)-tableSourceRank(b))*dir;
+    if(rank)return rank;
+    const sourceA=sourceDisplayLabel(a);
+    const sourceB=sourceDisplayLabel(b);
+    const sourceCmp=sourceA.localeCompare(sourceB,"vi")*dir;
+    if(sourceCmp)return sourceCmp;
+    return canonicalDisplayName(a).localeCompare(canonicalDisplayName(b),"vi");
+  });
+}
+
+function syncTableSourceSortHeader(){
+  const head=document.getElementById("tableSourceHeader");
+  const button=document.getElementById("tableSourceSort");
+  if(!head||!button)return;
+  head.setAttribute("aria-sort",tableSourceSort==="asc"?"ascending":(tableSourceSort==="desc"?"descending":"none"));
+  button.dataset.direction=tableSourceSort;
+}
+
+
 function productCard(row){
   const levels=rowPriceLevels(row);
   const hierarchy=levels.hierarchy;
@@ -1495,9 +1552,12 @@ function productCard(row){
       '</td>'+
       '<td class="xls-source'+sourceDisplayClass(row)+'" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
       '<td class="xls-pack-level">'+
-        (hierarchy.label1
-          ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
-          :'<span class="xls-empty">—</span>')+
+        '<span class="xls-desktop-only">'+
+          (hierarchy.label1
+            ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
+            :'<span class="xls-empty">—</span>')+
+        '</span>'+
+        '<span class="xls-compact-only xls-qc-compact">'+escapeHtml(tableCompactQc(levels))+'</span>'+
       '</td>'+
       '<td class="xls-pack-level">'+
         (hierarchy.label2
@@ -1509,7 +1569,10 @@ function productCard(row){
           ?escapeHtml(packHierarchyText(hierarchy.qty3,hierarchy.label3))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-num">'+xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice)+'</td>'+
+      '<td class="xls-num">'+
+        '<span class="xls-desktop-only">'+xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice)+'</span>'+
+        '<span class="xls-compact-only xls-price-compact">'+tablePrimarySourcePrice(levels)+'</span>'+
+      '</td>'+
       '<td class="xls-num">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
       '<td class="xls-num">'+xlsWebPrice(levels.leafPrice,levels.promoLeafPrice)+'</td>'+
       '<td>'+
@@ -2143,11 +2206,12 @@ function appendLocalViewBatch(view){
 
 function renderActiveProductView(products){
   const view=libraryView;
-  const key=productViewKey(products);
+  const viewProducts=view==="table"?sortTableProducts(products):products;
+  const key=productViewKey(viewProducts)+(view==="table"?"|source-sort:"+tableSourceSort:"");
   const state=viewRenderState[view];
   if(state.key!==key){
     state.key=key;
-    state.products=products;
+    state.products=viewProducts;
     state.rendered=0;
     if(view==="grid"){
       const host=$("#productGrid");
@@ -2158,9 +2222,10 @@ function renderActiveProductView(products){
     }
     appendLocalViewBatch(view);
   }else if(state.rendered===0){
-    state.products=products;
+    state.products=viewProducts;
     appendLocalViewBatch(view);
   }
+  syncTableSourceSortHeader();
   updateCatalogRenderMore();
 }
 
@@ -2528,6 +2593,13 @@ $("#toggleMatchAudit").addEventListener("click",async()=>{
   }else{
     renderLibraryProducts();
   }
+});
+
+$("#tableSourceSort").addEventListener("click",()=>{
+  tableSourceSort=tableSourceSort==="asc"?"desc":"asc";
+  viewRenderState.table.key="";
+  viewRenderState.table.rendered=0;
+  renderLibraryProducts();
 });
 
 document.querySelector(".view-switch").addEventListener("click",e=>{

@@ -1504,10 +1504,44 @@ async function loadManualGroupRules(force=false):Promise<any[]>{
   manualGroupRuleCacheAt=Date.now();
   return manualGroupRuleCache;
 }
+function manualGroupComparableName(name:unknown):string{
+  let value=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
+  value=value.replace(/^[\s\-–—:;|·]+/u,"");
+
+  // Source/product systems can prepend technical identifiers before the real
+  // merchandise name. Strip only well-formed technical prefixes; RAW stays untouched.
+  for(let i=0;i<4;i++){
+    const before=value;
+
+    // "Mã 123...", "Mã hàng ABC-123...", "SKU: 123...", "Code XYZ..."
+    value=value.replace(
+      /^(?:mã|ma|sku|msp|code|sp)\s*(?:(?:sản phẩm|hàng)\s*)?[:#._-]*\s*[a-z0-9][a-z0-9._\/-]{1,40}\s*(?:[-–—:;|·]\s*)?/iu,
+      ""
+    );
+
+    // Bare long technical code, but never short product names such as "3 Miền".
+    value=value.replace(
+      /^(?:\d{6,}|[a-z]{1,4}\d{4,})\s*(?:[-–—:;|·]\s*)?/iu,
+      ""
+    );
+
+    // "Thùng 24 lon Bia...", "Lô 10 gói Dầu gội...", "Lô 2 bánh..."
+    value=value.replace(
+      /^(?:thùng|lốc|lô|vỉ|vĩ|khay)\s+\d+(?:\s*(?:\+|x|×)\s*\d+)*(?:\s*(?:chai|lon|hộp|hũ|túi|gói|bịch|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|ly|tô|bình|lốc|vỉ|khay))?\s+/iu,
+      ""
+    );
+
+    value=value.replace(/^[\s\-–—:;|·]+/u,"");
+    if(value===before)break;
+  }
+  return clean(value);
+}
+
 function manualGroupMatches(name:unknown,rule:any):boolean{
   const value=clean(rule?.rule_value||"").normalize("NFC").toLocaleLowerCase("vi-VN");
   if(!value)return false;
-  const hay=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
+  const raw=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
+  const hay=rule?.rule_type==="name_starts"?manualGroupComparableName(name):raw;
 
   if(rule?.rule_type==="name_starts")return hay.startsWith(value);
   if(rule?.rule_type==="name_contains")return hay.includes(value);

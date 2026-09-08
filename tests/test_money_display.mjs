@@ -102,6 +102,29 @@ assert.equal(money(0),"—");
 }
 
 {
+  const moneyMatch2=app.match(/function money\(v\)\{[\s\S]*?\n\}/);
+  const packTextMatch=app.match(/function packHierarchyText\(qty,label\)\{[\s\S]*?\n\}/);
+  const cartonCardMatch=app.match(/function rowCartonCardQc\(row,packPrice\)\{[\s\S]*?\n\}/);
+  assert.ok(moneyMatch2&&packTextMatch&&cartonCardMatch,"carton card QC helper not found");
+  const api=new Function(
+    moneyMatch2[0]+"\n"+
+    packTextMatch[0]+"\n"+
+    "function rowPackHierarchy(row){return row.h;}\n"+
+    "function rowPrimaryQc(){return '—';}\n"+
+    cartonCardMatch[0]+
+    "\nreturn {rowCartonCardQc};"
+  )();
+  assert.equal(
+    api.rowCartonCardQc({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"Hộp",qty3:24}},240000),
+    "24 × 10 / 1 hộp"
+  );
+  assert.equal(
+    api.rowCartonCardQc({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"",qty3:0}},240000),
+    "Thùng"
+  );
+}
+
+{
   const searchKeyMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
   const stripCartonMatch=app.match(/function stripCartonPackPhrase\(value\)\{[\s\S]*?\n\}/);
   const searchDisplayNameMatch=app.match(/function searchDisplayName\(row\)\{[\s\S]*?\n\}/);

@@ -132,47 +132,57 @@ function normalizeUnit(raw: string) {
   return clean(raw);
 }
 function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit?: unknown) {
-  const text = clean([name, packaging, count, unit].filter(Boolean).join(" "));
-  const p = plain(text);
+  const text = clean([name, packaging, count, unit].filter(Boolean).join(" ")).toLowerCase().normalize("NFC");
   const h = { label1:"", qty1:0, label2:"", qty2:0, label3:"", qty3:0, evidence:"source", locked:false };
 
-  const pairRe = /(\d+)\s*(thung|loc|khay|vi|chai|lon|hop|goi|tui|bich|hu|lo|can|mieng|thanh|vien)\b/g;
-  const pairs: {qty:number,key:string,label:string}[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = pairRe.exec(p))) {
-    pairs.push({ qty:Number(m[1])||0, key:m[2], label:normalizeUnit(m[2]) });
+  const unitMap:Record<string,string>={
+    "thùng":"Thùng","lốc":"Lốc","khay":"Khay","vỉ":"Vỉ","chai":"Chai","lon":"Lon",
+    "hộp":"Hộp","gói":"Gói","túi":"Túi","bịch":"Bịch","hũ":"Hũ","lọ":"Lọ","can":"Can",
+    "miếng":"Miếng","thanh":"Thanh","viên":"Viên","cái":"Cái","cây":"Cây","bộ":"Bộ","đôi":"Đôi",
+    "tuýp":"Tuýp","túyp":"Tuýp"
+  };
+  const unitPattern="thùng|lốc|khay|vỉ|chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp";
+  const pairRe=new RegExp("(?:^|[^\\p{L}\\p{N}])(\\d+)\\s*("+unitPattern+")(?![\\p{L}])","gu");
+  const pairs:{qty:number,key:string,label:string}[]=[];
+  for(const m of text.matchAll(pairRe)){
+    const key=String(m[2]||"").toLowerCase();
+    pairs.push({qty:Number(m[1])||0,key,label:unitMap[key]||clean(m[2])});
   }
 
-  if (/\bthung\b/.test(p) || plain(unit) === "thung") {
-    h.label1 = "Thùng"; h.qty1 = 1;
-    const middle = pairs.find(x => ["loc","khay","vi"].includes(x.key));
-    const leaf = [...pairs].reverse().find(x => !["thung","loc","khay","vi"].includes(x.key));
-    if (middle) { h.label2 = middle.label; h.qty2 = middle.qty; }
-    if (leaf) { h.label3 = leaf.label; h.qty3 = leaf.qty; }
-    else {
-      const u = normalizeUnit(clean(unit || packaging));
-      if (u && u !== "Thùng") { h.label3 = u; h.qty3 = Number(count)||1; }
+  const rawUnit=clean(unit||packaging).toLowerCase().normalize("NFC");
+  const hasCarton=new RegExp("(?:^|[^\\p{L}])thùng(?![\\p{L}])","u").test(text)||
+    rawUnit==="thùng";
+  if(hasCarton){
+    h.label1="Thùng"; h.qty1=1;
+    const middle=pairs.find(x=>["lốc","khay","vỉ"].includes(x.key));
+    const leaf=[...pairs].reverse().find(x=>!["thùng","lốc","khay","vỉ"].includes(x.key));
+    if(middle){h.label2=middle.label;h.qty2=middle.qty;}
+    if(leaf){h.label3=leaf.label;h.qty3=leaf.qty;}
+    else if(rawUnit&&rawUnit!=="thùng"&&unitMap[rawUnit]){
+      h.label3=unitMap[rawUnit];h.qty3=Number(count)||1;
     }
     return h;
   }
 
-  const middleWord = p.match(/\b(loc|khay|vi)\b\s*(\d+)?/) || p.match(/\b(goi|hop)\b\s*(\d+)\b/);
-  if (middleWord && middleWord[2]) {
-    h.label2 = normalizeUnit(middleWord[1]);
-    h.qty2 = Number(middleWord[2])||1;
-    const leaf = [...pairs].reverse().find(x => !["loc","khay","vi","goi","hop"].includes(x.key));
-    if (leaf) { h.label3 = leaf.label; h.qty3 = leaf.qty; }
+  const middlePair=pairs.find(x=>["lốc","khay","vỉ"].includes(x.key));
+  if(middlePair){
+    h.label2=middlePair.label;h.qty2=middlePair.qty||1;
+    const leaf=[...pairs].reverse().find(x=>!["lốc","khay","vỉ"].includes(x.key));
+    if(leaf){h.label3=leaf.label;h.qty3=leaf.qty;}
     return h;
   }
 
-  let leaf = normalizeUnit(clean(unit || packaging));
-  if (!leaf || /\d/.test(leaf)) {
-    const known = p.match(/\b(chai|lon|hop|goi|tui|bich|hu|lo|can|mieng|thanh|vien)\b/);
-    leaf = known ? normalizeUnit(known[1]) : "";
+  if(rawUnit&&unitMap[rawUnit]&&rawUnit!=="thùng"){
+    h.label3=unitMap[rawUnit];
+    h.qty3=1;
+    return h;
   }
-  if (leaf && leaf !== "Thùng") {
-    h.label3 = leaf;
-    h.qty3 = 1;
+
+  // Last resort: a real packaging word in the original accented text.
+  const leafMatch=text.match(new RegExp("(?:^|[^\\p{L}])("+unitPattern+")(?![\\p{L}])","u"));
+  if(leafMatch){
+    const key=String(leafMatch[1]||"").toLowerCase();
+    if(key!=="thùng"){h.label3=unitMap[key]||clean(leafMatch[1]);h.qty3=1;}
   }
   return h;
 }
@@ -350,14 +360,14 @@ function chooseBhxProduct(input:any,refs:BhxGroupRef[]) {
     if(inputSizes.size&&refSizes.size&&!setIntersectionSize(inputSizes,refSizes))continue;
 
     const score=groupMatchScore(input,ref);
-    if(score>=0.72)ranked.push({ref,score});
+    if(score>=0.90)ranked.push({ref,score});
   }
 
   ranked.sort((a,b)=>b.score-a.score);
   const best=ranked[0], second=ranked[1];
   if(!best)return null;
   const margin=best.score-(second?.score||0);
-  if(second&&margin<0.05)return null;
+  if(second&&margin<0.08)return null;
   return {ref:best.ref,score:best.score,margin,basis:"brand_name_size_kind"};
 }
 function mergedHierarchy(primary:any,donor:any,wantedKind:string) {
@@ -420,8 +430,10 @@ async function loadBhxGroupRefs() {
   const refs:BhxGroupRef[]=[];
   for(const l of links){
     const id=identityByUrl.get(l.canonical_url)||{};
-    const h=hierarchyByUrl.get(l.canonical_url)||hierarchyFromRaw(l.name,l.packaging||"");
-    const cmp=comparisonByUrl.get(l.canonical_url)||comparisonFrom(null,null,h,l.packaging||"",l.name);
+    const h=hierarchyFromRaw(l.name,l.packaging||"");
+    const storedCmp=comparisonByUrl.get(l.canonical_url)||{};
+    const parsedCmp=comparisonFrom(null,null,h,l.packaging||"",l.name);
+    const cmp={...storedCmp,...parsedCmp,size_value:parsedCmp.size_value??storedCmp.size_value??null,size_unit:parsedCmp.size_unit||storedCmp.size_unit||""};
     const group=clean(l.group_name);
     const brand=clean(id.brand||l.branch_name);
     const name=clean(id.raw_name||l.name);

@@ -5661,3 +5661,137 @@ body.image-zoom-open{overflow:hidden!important}
     font-size:8.6px!important;
   }
 }
+
+
+/* Source-in-navigation v1
+   Source is a global browse context, so it lives with the category menu. */
+.workspace-nav .nav-source-block{
+  flex:0 0 auto;
+  margin:0 0 8px;
+  padding:0 0 9px;
+  border-bottom:1px solid #edf0f2;
+}
+.workspace-nav .nav-section-label{
+  margin:0 0 5px;
+  padding:0 1px;
+  color:#7b8590;
+  font-size:9px;
+  font-weight:800;
+  letter-spacing:.05em;
+  text-transform:uppercase;
+}
+.workspace-nav .nav-source-tabs{
+  width:100%!important;
+  min-width:0!important;
+  display:grid!important;
+  grid-template-columns:1fr!important;
+  gap:4px!important;
+  overflow:visible!important;
+}
+.workspace-nav .nav-source-tabs .source-chip{
+  width:100%!important;
+  min-width:0!important;
+  height:30px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:7px!important;
+  padding:0 9px!important;
+  border:1px solid #dfe5e9!important;
+  border-radius:7px!important;
+  background:#fff!important;
+  color:#58636f!important;
+  font-size:9.5px!important;
+  font-weight:750!important;
+  text-align:left!important;
+  white-space:nowrap!important;
+}
+.workspace-nav .nav-source-tabs .source-chip span{
+  min-width:0!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+}
+.workspace-nav .nav-source-tabs .source-chip small{
+  flex:0 0 auto!important;
+  margin:0!important;
+  color:#9ba4ae!important;
+  font-size:8px!important;
+  font-weight:650!important;
+}
+.workspace-nav .nav-source-tabs .source-chip.active{
+  border-color:#0b9855!important;
+  background:#0b9855!important;
+  color:#fff!important;
+}
+.workspace-nav .nav-source-tabs .source-chip.active small{
+  color:#d9f4e5!important;
+}
+
+/* With source moved left, the top row is only the pack decision. */
+.purchase-mode-row{
+  justify-content:flex-start!important;
+  gap:0!important;
+}
+.purchase-mode-row .filter-block-pack{
+  margin-right:0!important;
+}
+
+/* Search and presentation controls always share one row. */
+.catalog-search-row{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) auto!important;
+  grid-template-areas:none!important;
+  align-items:center!important;
+  gap:6px!important;
+  width:100%!important;
+}
+.catalog-search-row .catalog-search{
+  grid-area:auto!important;
+  width:100%!important;
+  min-width:0!important;
+  padding:0!important;
+}
+.catalog-search-row .catalog-search input{
+  width:100%!important;
+  min-width:0!important;
+  box-sizing:border-box!important;
+}
+.catalog-search-row .view-switch{
+  grid-area:auto!important;
+  justify-self:end!important;
+  flex:0 0 auto!important;
+  width:auto!important;
+  margin:0!important;
+  white-space:nowrap!important;
+}
+
+@media(max-width:1100px){
+  .workspace-nav .nav-source-block{
+    margin-bottom:7px!important;
+    padding-bottom:8px!important;
+  }
+  .catalog-search-row{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-areas:none!important;
+  }
+}
+
+@media(max-width:480px){
+  .workspace-nav .nav-source-tabs{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+  .workspace-nav .nav-source-tabs .source-chip{
+    height:31px!important;
+    padding:0 7px!important;
+  }
+  .catalog-search-row{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-areas:none!important;
+    gap:5px!important;
+  }
+  .catalog-search-row .view-button{
+    min-width:40px!important;
+    padding-left:5px!important;
+    padding-right:5px!important;
+  }
+}

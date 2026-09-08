@@ -1840,11 +1840,14 @@ function renderSourceTabs(){
   const host=$("#sourceTabs");
   if(!host)return;
 
-  const base=rowsBeforeSearch().filter(row=>{
-    if(activePackKind==="Thùng")return rowIsCarton(row);
-    if(activePackKind==="Lẻ")return rowIsRetail(row);
-    return true;
-  });
+  let base=libraryCache.filter(row=>
+    String(row.preference_state||"normal")!=="hidden"
+  );
+  if(activePackKind==="Thùng"){
+    base=base.filter(row=>rowIsCarton(row));
+  }else if(activePackKind==="Lẻ"){
+    base=base.filter(row=>rowIsRetail(row));
+  }
 
   const counts={bhx:0,wm:0,go:0};
   for(const row of base)counts[rowSourceFilterKey(row)]++;
@@ -1855,9 +1858,10 @@ function renderSourceTabs(){
   }
 
   host.innerHTML=
-    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button" aria-pressed="'+(activeSourceFilter==="bhx"?"true":"false")+'" title="'+(activeSourceFilter==="bhx"?"Bấm lại để bỏ lọc":"Lọc nguồn Bách Hóa XANH")+'">BHX <small>'+counts.bhx+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button" aria-pressed="'+(activeSourceFilter==="wm"?"true":"false")+'" title="'+(activeSourceFilter==="wm"?"Bấm lại để bỏ lọc":"Lọc nguồn WinMart")+'">WM <small>'+counts.wm+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button" aria-pressed="'+(activeSourceFilter==="go"?"true":"false")+'" title="'+(activeSourceFilter==="go"?"Bấm lại để bỏ lọc":"Lọc nguồn GO!")+'">GO <small>'+counts.go+'</small></button>';
+    '<button class="source-chip '+(!activeSourceFilter?"active":"")+'" data-source="" type="button" aria-pressed="'+(!activeSourceFilter?"true":"false")+'" title="Xem đồng thời cả 3 nguồn"><span>3 nguồn</span><small>'+base.length+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button" aria-pressed="'+(activeSourceFilter==="bhx"?"true":"false")+'" title="Bách Hóa XANH"><span>BHX</span><small>'+counts.bhx+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button" aria-pressed="'+(activeSourceFilter==="wm"?"true":"false")+'" title="WinMart"><span>WM</span><small>'+counts.wm+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button" aria-pressed="'+(activeSourceFilter==="go"?"true":"false")+'" title="GO!"><span>GO</span><small>'+counts.go+'</small></button>';
 }
 
 function filteredLibraryProducts(){
@@ -2416,8 +2420,7 @@ $("#packTabs").addEventListener("click",e=>{
 $("#sourceTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".source-chip");
   if(!chip)return;
-  const nextSource=chip.dataset.source||"";
-  activeSourceFilter=activeSourceFilter===nextSource?"":nextSource;
+  activeSourceFilter=chip.dataset.source||"";
   if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
   else localStorage.removeItem("getlink:filter-source");
 

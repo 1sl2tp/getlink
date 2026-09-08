@@ -290,13 +290,14 @@ assert.equal(money(0),"—");
   const sourceRenderer=app.match(/function renderSourceTabs\(\)\{[\s\S]*?\n\}/);
   const packHandler=app.match(/\$\("#packTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
   const sourceHandler=app.match(/\$\("#sourceTabs"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
-  assert.ok(packRenderer&&sourceRenderer&&packHandler&&sourceHandler,"split filter helpers not found");
+  assert.ok(packRenderer&&sourceRenderer&&packHandler&&sourceHandler,"source-menu helpers not found");
   assert.equal(packRenderer[0].includes(">Cả hai <small>"),false);
-  assert.equal(sourceRenderer[0].includes(">Tất cả <small>"),false);
-  assert.match(packHandler[0],/activePackKind===nextPack\?"":nextPack/);
-  assert.match(sourceHandler[0],/activeSourceFilter===nextSource\?"":nextSource/);
+  assert.match(sourceRenderer[0],/>3 nguồn<\/span>/);
+  assert.match(sourceHandler[0],/activeSourceFilter=chip\.dataset\.source\|\|""/);
+  assert.match(html,/nav-source-block/);
+  assert.match(html,/id="sourceTabs" class="source-tabs nav-source-tabs"/);
   assert.match(html,/Quy cách:<\/span>/);
-  assert.match(html,/Nguồn hàng:<\/span>/);
+  assert.equal(html.includes('filter-block-source'),false);
 }
 
 console.log("money and hierarchy UI tests passed");

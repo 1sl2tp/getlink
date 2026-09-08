@@ -93,7 +93,7 @@ assert.match(source,/getlink_manual_group_rules/);
 assert.match(source,/name_product_phrase/);
 assert.match(source,/hay\.startsWith\(value\)\|\|\(hay\.startsWith\("thùng "\)&&hay\.includes\(value\)\)/);
 assert.match(source,/const members:any\[\]=\[\]/);
-assert.match(source,/\.eq\("match_origin","rule"\)/);
+assert.match(source,/assignedUrls\.has\(linkUrl\)/);
 assert.match(manualRulesMigration,/create table if not exists public\.getlink_manual_group_rules/i);
 assert.match(manualRulesMigration,/'dầu cooking'/i);
 assert.match(manualRulesMigration,/'dầu đậu nành'/i);

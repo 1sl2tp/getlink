@@ -190,6 +190,31 @@ async function category(rawUrl){
   };
 }
 
+
+async function inspectWeb(rawUrl){
+  const url=canonicalBhx(rawUrl);
+  const r=await fetch(url,{
+    headers:{
+      "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
+      "user-agent":"Mozilla/5.0"
+    }
+  });
+  const text=await r.text();
+  const scripts=[...text.matchAll(/<script[^>]+src=["']([^"']+)["']/gi)]
+    .map(m=>m[1]).slice(0,40);
+  const tokenLike=[...new Set(
+    [...text.matchAll(/[A-F0-9]{32}/g)].map(m=>m[0])
+  )].slice(0,20);
+  return {
+    status:r.status,
+    setCookie:r.headers.get("set-cookie")||"",
+    length:text.length,
+    scripts,
+    tokenLike
+  };
+}
+
 export default {
   async fetch(request){
     if(request.method==="OPTIONS")return new Response(null,{status:204,headers:{
@@ -200,6 +225,14 @@ export default {
     const u=new URL(request.url);
     if(request.method==="GET"&&u.pathname==="/health"){
       return json({ok:true,mode:"stateless-bhx-transport",storage:"none"});
+    }
+    if(request.method==="POST"&&u.pathname==="/inspect"){
+      try{
+        const body=await request.json();
+        return json(await inspectWeb(body&&body.url));
+      }catch(e){
+        return json({error:"inspect_error",detail:String(e&&e.message||e).slice(0,1000)},502);
+      }
     }
     if(request.method==="POST"&&u.pathname==="/category"){
       try{

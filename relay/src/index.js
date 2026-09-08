@@ -388,7 +388,7 @@ async function inspectCategoryLinks(rawUrl) {
     const key = slug + "|" + label;
     if (!map.has(key)) map.set(key, { slug, label });
   }
-  const scripts = [...html.matchAll(/<script\\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
+  const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
     .map(m => {
       try { return new URL(m[1], url).toString(); } catch { return ""; }
     })
@@ -418,7 +418,7 @@ async function inspectApiStrings(rawUrl) {
     }
   });
   const html = await page.text();
-  const scripts = [...html.matchAll(/<script\\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
+  const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
     .map(m => {
       try { return new URL(m[1], url).toString(); } catch { return ""; }
     })
@@ -435,10 +435,10 @@ async function inspectApiStrings(rawUrl) {
         if (!/GetCate|GetFilters|GetHeadingPolicy|AjaxProduct|\/gw\/Category|categoryUrl|GetMenu/i.test(text)) return null;
         const found = [];
         for (const re of [
-          /[^"'\\s]{0,80}GetCate[^"'\\s]{0,160}/gi,
-          /[^"'\\s]{0,80}AjaxProduct[^"'\\s]{0,160}/gi,
-          /[^"'\\s]{0,80}GetFilters[^"'\\s]{0,160}/gi,
-          /[^"'\\s]{0,80}GetHeadingPolicy[^"'\\s]{0,160}/gi,
+          /[^"'\s]{0,80}GetCate[^"'\s]{0,160}/gi,
+          /[^"'\s]{0,80}AjaxProduct[^"'\s]{0,160}/gi,
+          /[^"'\s]{0,80}GetFilters[^"'\s]{0,160}/gi,
+          /[^"'\s]{0,80}GetHeadingPolicy[^"'\s]{0,160}/gi,
           /\/gw\/Category\/[A-Za-z0-9_\/-]+/g,
           /[A-Za-z0-9_\/-]{0,80}GetMenu[A-Za-z0-9_\/?=&.-]{0,120}/gi
         ]) {

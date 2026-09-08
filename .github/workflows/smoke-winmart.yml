@@ -1,5 +1,5 @@
 name: Smoke WinMart
-# direct Worker benchmark
+# direct Worker benchmark after legacy cleanup
 
 on:
   push:

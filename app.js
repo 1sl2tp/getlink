@@ -213,13 +213,26 @@ function searchKey(value){
 }
 
 
-function stripCartonPackPhrase(value){
+function stripCartonPackPhrase(value,mode="carton"){
   let text=String(value||"").normalize("NFC").trim();
   if(!text)return "";
-  const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
-  const qty="\\d+(?:\\s*\\+\\s*\\d+)*";
+  const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
+  const qty="\\d+(?:\\s*\\+\\s*\\d+)*(?![\\p{L}\\p{N}])";
+  const cartonRe=new RegExp(
+    "(^|\\s)(?:thùng|khay|vỉ)\\s+"+qty+
+    "(?:\\s+"+unit+"(?:\\s+"+qty+"(?:\\s+"+unit+")?)?)?"+
+    "(?:\\s*[x×]\\s*)?",
+    "giu"
+  );
+  const middleRe=new RegExp(
+    "(^|\\s)"+unit+"\\s+"+qty+
+    "(?:\\s+"+unit+")?"+
+    "(?:\\s*[x×]\\s*)?",
+    "giu"
+  );
+  const re=mode==="middle"?middleRe:cartonRe;
   return text
-    .replace(new RegExp("(^|\\s)(?:thùng|khay|vỉ)\\s+"+qty+"\\s+"+unit+"(?:\\s*[x×]\\s*)?","giu")," ")
+    .replace(re," ")
     .replace(/\s{2,}/g," ")
     .trim();
 }
@@ -233,12 +246,20 @@ function searchDisplayName(row){
     )||""
   ).trim();
 
+  const packaging=String(row&&row.packaging||"").trim();
+  const packKey=searchKey(packaging);
   const isCarton=
     String(row&&row.pack_label_1||"").trim().toLowerCase()==="thùng"||
-    String(row&&row.packaging||"").trim().toLowerCase()==="thùng"||
+    /^thung(?:\s|$)/.test(packKey)||
     String(row&&row.pack_kind||"").trim().toLowerCase()==="carton";
+  const isMiddle=!isCarton&&Boolean(
+    String(row&&row.pack_label_2||"").trim()||
+    /\d/.test(packaging)
+  );
 
-  return isCarton?stripCartonPackPhrase(text):text;
+  if(isCarton)return stripCartonPackPhrase(text,"carton");
+  if(isMiddle)return stripCartonPackPhrase(text,"middle");
+  return text;
 }
 
 function productSearchKey(row){
@@ -1243,8 +1264,12 @@ function capitalizeDisplayName(value){
 function compactCartonDisplayName(name,hierarchy){
   let text=String(name||"").trim();
   if(!text)return "Sản phẩm";
-  if(String(hierarchy&&hierarchy.label1||"").trim()==="Thùng"){
-    text=stripCartonPackPhrase(text);
+  const isCarton=String(hierarchy&&hierarchy.label1||"").trim()==="Thùng";
+  const isMiddle=!isCarton&&Boolean(String(hierarchy&&hierarchy.label2||"").trim());
+  if(isCarton){
+    text=stripCartonPackPhrase(text,"carton");
+  }else if(isMiddle){
+    text=stripCartonPackPhrase(text,"middle");
   }
   return capitalizeDisplayName(text);
 }

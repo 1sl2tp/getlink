@@ -99,6 +99,40 @@ assert.equal(money(0),"—");
     api.compactCartonDisplayName("Thùng 24 bi\u0323ch sữa dinh dưỡng Dutch Lady 180ml",h),
     "Sữa dinh dưỡng Dutch Lady 180ml"
   );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 24 Pepsi không đường 330ml",h),
+    "Pepsi không đường 330ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 12 lốc nước ngọt Pepsi 330ml",h),
+    "Nước ngọt Pepsi 330ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Thùng 12 lốc 4 hộp sữa Demo 180ml",h),
+    "Sữa Demo 180ml"
+  );
+
+  const middle={label1:"",label2:"Lốc",label3:""};
+  assert.equal(
+    api.compactCartonDisplayName("Lốc 6 Pepsi không đường 330ml",middle),
+    "Pepsi không đường 330ml"
+  );
+  assert.equal(
+    api.compactCartonDisplayName("Lốc 6 lon Pepsi không đường 330ml",middle),
+    "Pepsi không đường 330ml"
+  );
+
+  const numberedLeafWordAsMiddle={label1:"",label2:"Gói 6",label3:""};
+  assert.equal(
+    api.compactCartonDisplayName("Gói 6 khăn giấy bỏ túi",numberedLeafWordAsMiddle),
+    "Khăn giấy bỏ túi"
+  );
+
+  const leafOnly={label1:"",label2:"",label3:"Gói"};
+  assert.equal(
+    api.compactCartonDisplayName("Gói 65g mì 3 Miền tôm chua cay",leafOnly),
+    "Gói 65g mì 3 Miền tôm chua cay"
+  );
 }
 
 {

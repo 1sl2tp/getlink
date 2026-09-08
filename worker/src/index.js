@@ -1881,6 +1881,278 @@ function winmartRawComparison(name,current){
   };
 }
 
+
+function bhxDirectContext(){
+  return {
+    provinceId:"1027",
+    wardId:"0",
+    districtId:"0",
+    storeId:"2546"
+  };
+}
+
+function bhxDirectHeaders(referer){
+  return {
+    "accept":"application/json, text/plain, */*",
+    "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
+    "origin":"https://www.bachhoaxanh.com",
+    "referer":referer||"https://www.bachhoaxanh.com/"
+  };
+}
+
+async function bhxDirectJson(apiUrl,referer){
+  let lastError="";
+  for(let attempt=0;attempt<3;attempt++){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),8000);
+    try{
+      const response=await fetch(apiUrl,{
+        method:"GET",
+        headers:bhxDirectHeaders(referer),
+        signal:controller.signal
+      });
+      clearTimeout(timer);
+      if(!response.ok){
+        lastError="http_"+response.status;
+      }else{
+        const body=await response.json();
+        if(
+          body&&Number(body.code)===0&&
+          body.data!==undefined&&body.data!==null
+        ){
+          return body;
+        }
+        lastError="invalid_payload_code_"+String(body&&body.code);
+      }
+    }catch(error){
+      clearTimeout(timer);
+      lastError=String(error&&error.message||error).slice(0,300);
+    }
+    if(attempt<2){
+      await new Promise(resolve=>setTimeout(resolve,250*(attempt+1)));
+    }
+  }
+  throw new Error("bhx_direct_api_failed:"+lastError);
+}
+
+function bhxDirectProductApiUrl(inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const parts=pathParts(canonical);
+  if(parts.length<2)throw new Error("bhx_product_url_required");
+  const context=bhxDirectContext();
+  const api=new URL(
+    "https://api.bachhoaxanh.com/gw/Product/GetProductDetail"
+  );
+  api.searchParams.set("provinceId",context.provinceId);
+  api.searchParams.set("wardId",context.wardId);
+  api.searchParams.set("districtId",context.districtId);
+  api.searchParams.set("storeId",context.storeId);
+  api.searchParams.set("CategoryUrl",parts[0]);
+  api.searchParams.set("ProductUrl",parts[1]);
+  return api.toString();
+}
+
+async function bhxDirectProductData(inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const body=await bhxDirectJson(
+    bhxDirectProductApiUrl(canonical),
+    canonical
+  );
+  const data=body&&body.data;
+  if(!data||!Array.isArray(data.boxBuys)||!data.boxBuys.length){
+    throw new Error("bhx_direct_product_empty");
+  }
+  return {
+    data,
+    response_url:bhxDirectProductApiUrl(canonical)
+  };
+}
+
+function bhxDirectCollectCategoryProducts(payload,inputUrl){
+  const slug=pathParts(canonicalBhx(inputUrl))[0]||"";
+  const best=new Map();
+
+  function itemKey(item){
+    return String(
+      item&&(
+        item.url||
+        item.id||
+        item.productCode||
+        item.productId
+      )||
+      JSON.stringify(item).slice(0,500)
+    );
+  }
+
+  function belongsToCategory(item){
+    const raw=String(item&&item.url||"");
+    if(!raw)return false;
+    try{
+      const u=new URL(
+        raw,
+        "https://www.bachhoaxanh.com/"
+      );
+      const parts=pathParts(u.toString());
+      return parts.length>=2&&
+        String(parts[0]).toLowerCase()===String(slug).toLowerCase();
+    }catch{
+      return false;
+    }
+  }
+
+  function walk(value){
+    if(Array.isArray(value)){
+      const productLike=value.filter(item=>
+        item&&typeof item==="object"&&
+        item.url&&
+        (
+          item.name||
+          item.fullName||
+          item.productPrices||
+          item.avatar
+        )
+      );
+      for(const item of productLike){
+        if(belongsToCategory(item)){
+          best.set(itemKey(item),item);
+        }
+      }
+      for(const child of value)walk(child);
+      return;
+    }
+    if(value&&typeof value==="object"){
+      for(const child of Object.values(value))walk(child);
+    }
+  }
+
+  walk(payload);
+  return [...best.values()];
+}
+
+async function bhxResolveCategoryIdFromD1(env,inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const result=await env.DB.prepare(
+    "SELECT canonical_url FROM links "+
+    "WHERE source='Bách Hóa XANH' "+
+    "AND link_type='product' "+
+    "AND parent_url=? "+
+    "AND COALESCE(last_status,'')<>'unlisted' "+
+    "ORDER BY updated_at DESC LIMIT 8"
+  ).bind(canonical).all();
+
+  const candidates=result.results||[];
+  if(!candidates.length){
+    throw new Error("bhx_direct_category_seed_missing");
+  }
+
+  let lastError="";
+  for(const row of candidates){
+    try{
+      const detail=await bhxDirectProductData(row.canonical_url);
+      const categoryId=Number(detail.data&&detail.data.categoryId)||0;
+      if(categoryId>0){
+        return {
+          category_id:categoryId,
+          seed_url:row.canonical_url
+        };
+      }
+      lastError="category_id_missing";
+    }catch(error){
+      lastError=String(error&&error.message||error).slice(0,300);
+    }
+  }
+  throw new Error(
+    "bhx_direct_category_id_unresolved:"+lastError
+  );
+}
+
+async function bhxDirectCategoryData(env,inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+  const resolved=await bhxResolveCategoryIdFromD1(env,canonical);
+  const context=bhxDirectContext();
+  const api=new URL(
+    "https://api.bachhoaxanh.com/gw/Category/GetCateVegetable"
+  );
+  api.searchParams.set("provinceId",context.provinceId);
+  api.searchParams.set("wardId",context.wardId);
+  api.searchParams.set("districtId",context.districtId);
+  api.searchParams.set("storeId",context.storeId);
+  api.searchParams.set("cateId",String(resolved.category_id));
+  api.searchParams.set("customerId","0");
+
+  const body=await bhxDirectJson(api.toString(),canonical);
+  const products=bhxDirectCollectCategoryProducts(body,canonical);
+  if(!products.length){
+    throw new Error("bhx_direct_category_empty");
+  }
+
+  const countRow=await env.DB.prepare(
+    "SELECT COUNT(*) AS n FROM links "+
+    "WHERE source='Bách Hóa XANH' "+
+    "AND link_type='product' "+
+    "AND parent_url=? "+
+    "AND COALESCE(last_status,'')<>'unlisted'"
+  ).bind(canonical).first();
+  const existingCount=Number(countRow&&countRow.n||0);
+
+  // Direct refresh must never silently shrink a known category. If BHX
+  // returns a partial batch, fall back to the browser capture which can
+  // scroll/merge additional API batches.
+  if(existingCount>0&&products.length<existingCount){
+    throw new Error(
+      "bhx_direct_category_partial:"+
+      products.length+"/"+existingCount
+    );
+  }
+
+  return {
+    data:{
+      products,
+      _getlink_direct_count:products.length,
+      _getlink_category_id:resolved.category_id
+    },
+    response_url:api.toString(),
+    category_id:resolved.category_id,
+    existing_count:existingCount
+  };
+}
+
+async function fetchBhxDirect(env,inputUrl,requestId){
+  const canonical=canonicalBhx(inputUrl);
+  const kind=heuristicType(canonical);
+
+  if(kind==="product"){
+    const direct=await bhxDirectProductData(canonical);
+    const payload=productDetailPayload(
+      canonical,requestId,direct.data
+    );
+    payload.capture_engine="bhx-direct-worker";
+    payload.capture_country="vn";
+    payload.response_url=direct.response_url;
+    return {
+      payload,
+      response_url:direct.response_url,
+      kind:"product"
+    };
+  }
+
+  const direct=await bhxDirectCategoryData(env,canonical);
+  const payload=categoryPayload(
+    canonical,requestId,direct.data
+  );
+  payload.capture_engine="bhx-direct-worker";
+  payload.capture_country="vn";
+  payload.response_url=direct.response_url;
+  payload.category_id=direct.category_id;
+  return {
+    payload,
+    response_url:direct.response_url,
+    kind:"category",
+    direct_count:payload.products.length,
+    existing_count:direct.existing_count
+  };
+}
+
 function winmartDirectSlug(inputUrl){
   const u=new URL(canonicalWinmart(inputUrl));
   return cleanText(
@@ -3127,6 +3399,47 @@ async function handleCreate(request,env,origin){
     last_status:"queued",
     last_request_id:requestId
   });
+
+  // BHX direct-first: use its JSON APIs from the Worker. If BHX blocks
+  // the Worker, a category has no D1 seed yet, or a category response is
+  // suspiciously partial, fall through to the existing Bright Data path.
+  if(sourceKey==="bachhoaxanh"){
+    try{
+      await env.DB.prepare(
+        "UPDATE jobs SET status='running',error=NULL,updated_at=? WHERE request_id=?"
+      ).bind(new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='running',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+
+      const direct=await fetchBhxDirect(
+        env,url,requestId
+      );
+      const saved=await persistPayload(
+        env,direct.payload
+      );
+      return json({
+        request_id:requestId,
+        status:"complete",
+        input_url:url,
+        link_type:direct.kind,
+        ...saved,
+        engine:"bhx-direct-worker",
+        response_url:direct.response_url,
+        direct_count:direct.direct_count||null,
+        cache_hit:false
+      },200,origin);
+    }catch(error){
+      // Restore queued state before the legacy GitHub dispatcher runs.
+      // Do not expose a failed direct attempt as a user-facing error.
+      await env.DB.prepare(
+        "UPDATE jobs SET status='queued',error=NULL,updated_at=? WHERE request_id=?"
+      ).bind(new Date().toISOString(),requestId).run();
+      await env.DB.prepare(
+        "UPDATE links SET last_status='queued',updated_at=? WHERE canonical_url=?"
+      ).bind(new Date().toISOString(),url).run();
+    }
+  }
 
   // WinMart no longer needs GitHub Actions, Playwright or Bright Data.
   // Its public category API already returns name + source type + price

@@ -2566,7 +2566,7 @@ $("#get").addEventListener("click",async()=>{
     const r=await apiFetch("/api/get-price",{
       method:"POST",
       headers:{"content-type":"application/json"},
-      body:JSON.stringify({url})
+      body:JSON.stringify({url,force:true})
     });
     const data=await r.json();
 

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 82" role="img" aria-label="GO!">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f04423"/>
+      <stop offset=".62" stop-color="#f58220"/>
+      <stop offset="1" stop-color="#f7a21b"/>
+    </linearGradient>
+  </defs>
+  <g font-family="Arial Black,Arial,Helvetica,sans-serif" font-weight="900">
+    <text x="5" y="62" font-size="70" fill="url(#g)">GO</text>
+    <text x="145" y="62" font-size="70" fill="#e62d24">!</text>
+  </g>
+</svg>

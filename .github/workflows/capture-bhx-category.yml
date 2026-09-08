@@ -1,0 +1,33 @@
+name: Capture BHX category contract
+
+on:
+  push:
+    paths:
+      - ".github/workflows/capture-bhx-category.yml"
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    env:
+      BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+      BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+      SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+      BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+      BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+      BRIGHTDATA_COUNTRY: ${{ vars.BRIGHTDATA_COUNTRY || 'vn' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r scraper/requirements.txt
+      - name: Capture one BHX category request
+        run: |
+          set +e
+          python scraper/brightdata_bhx.py             --url 'https://www.bachhoaxanh.com/hat-nem'             --request-id 'probe-category'             --output '/tmp/bhx-category.json'
+          CODE=$?
+          echo "exit=$CODE"
+          if [ -s /tmp/bhx-category.json ]; then
+            jq '{status,kind,response_url,error,detail,api_keys:(.bhx_response|keys)}' /tmp/bhx-category.json
+          fi
+          exit $CODE

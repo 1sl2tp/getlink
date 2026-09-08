@@ -1,5 +1,12 @@
 name: Smoke Supabase GETLINK
 
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-supabase-getlink
+  cancel-in-progress: true
+
 on:
   push:
     paths:
@@ -41,3 +48,13 @@ jobs:
           jq -e '.products.wm | type=="number"' /tmp/source-manager.json >/dev/null
           jq -e '.products.bhx | type=="number"' /tmp/source-manager.json >/dev/null
           jq -e '.products.go | type=="number"' /tmp/source-manager.json >/dev/null
+
+
+      - name: Reject untrusted write
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
+          KEY="$(sed -n 's/^window.GETLINK_API_KEY="\([^"]*\)";/\1/p' config.js)"
+          CODE="$(curl --silent --output /tmp/write.json --write-out '%{http_code}'             -H "apikey: $KEY"             -H 'content-type: application/json'             -X POST "$API/api/preference"             --data '{}')"
+          test "$CODE" = "403"

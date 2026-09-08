@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v14");
+      const req=tx.objectStore("cache").get("library-v15");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v14");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v15");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1318,9 +1318,11 @@ function rowCartonCardMeta(row,packPrice){
   const total=Number(packPrice||0);
   const each=total>0?total/qty:0;
 
+  // The chip already tells the user the inner unit (e.g. "24 lon"),
+  // so the compact per-unit price only needs the number.
   return {
     pack:qty+" "+unit,
-    unitPrice:each>0?money(each)+"/"+unit:""
+    unitPrice:each>0?money(each):""
   };
 }
 
@@ -1568,11 +1570,11 @@ function gridProductCard(row){
       '<div class="grid-product-body">'+
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
-          '<span class="grid-qc-group">'+
-            '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<span class="grid-price-group">'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
+            '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
           '</span>'+
-          '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
         '</div>'+
       '</div>'+
     '</article>';

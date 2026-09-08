@@ -8946,3 +8946,64 @@ body.source-manager-open{overflow:hidden!important}
     grid-template-columns:minmax(0,1fr);
   }
 }
+
+
+/* Two-column root category menus v11 */
+/*
+  Root category names are short enough to use two columns even at the
+  280px gate. This applies to both the floating quick menu and the mobile
+  category drawer. Long labels ellipsize instead of forcing a wider column.
+*/
+@media(max-width:1100px){
+  .workspace-nav .category-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    align-content:start!important;
+    gap:5px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+  }
+
+  .workspace-nav .category-tabs .category-chip{
+    width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+  }
+
+  .workspace-nav .category-tabs .category-chip span{
+    min-width:0!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+
+  .workspace-nav .category-tabs .category-scroll-end-spacer{
+    grid-column:1 / -1!important;
+    width:100%!important;
+  }
+
+  .quick-category-list{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+  }
+}
+
+@media(max-width:340px){
+  .workspace-nav .category-tabs,
+  .quick-category-list{
+    grid-template-columns:repeat(2,minmax(0,1fr))!important;
+    gap:4px!important;
+  }
+
+  .workspace-nav .category-tabs .category-chip,
+  .quick-category-chip{
+    min-height:32px!important;
+    padding-left:6px!important;
+    padding-right:6px!important;
+    font-size:9px!important;
+  }
+
+  .workspace-nav .category-tabs .category-chip small,
+  .quick-category-chip small{
+    font-size:7.5px!important;
+  }
+}

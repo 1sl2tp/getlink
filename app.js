@@ -981,10 +981,8 @@ function syncDetailCategoryLabel(url){
   if(!host)return;
   const key=canonical(url||"");
   const row=libraryByUrl.get(key);
-  const label=row
-    ?(rowChildGroup(row)||rowRootGroup(row)||"")
-    :(activeGroupUrl||activeRootGroup||"");
-  host.textContent=displayCategoryLabel(label);
+  const label=row?rowManualGroupName(row):activeManualGroupName();
+  host.textContent=label||"Tất cả";
 }
 
 function sourceObjectFromRow(row){
@@ -1680,6 +1678,25 @@ function rowChildGroup(row){
   return searchKey(child)===searchKey(root)?"":child;
 }
 
+function rowManualGroupKey(row){
+  return String(row&&row.manual_group_key||"").trim();
+}
+
+function rowManualGroupName(row){
+  return String(row&&row.manual_group_name||"").trim();
+}
+
+function rowManualGroupSort(row){
+  return Number(row&&row.manual_group_sort_order||999999);
+}
+
+function activeManualGroupName(){
+  if(!activeRootGroup)return "";
+  const row=libraryCache.find(x=>rowManualGroupKey(x)===activeRootGroup);
+  return row?rowManualGroupName(row):"";
+}
+
+
 function renderCategoryMenu(){
   const host=$("#categoryTabs");
   if(!host)return;
@@ -1691,57 +1708,54 @@ function renderCategoryMenu(){
     visibleLibrary=visibleLibrary.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
   }
 
-  const roots=new Map();
+  const groups=new Map();
   for(const row of visibleLibrary){
-    const root=rowRootGroup(row);
-    if(!root)continue;
-    if(!roots.has(root)){
-      roots.set(root,{count:0,children:new Map()});
+    const key=rowManualGroupKey(row);
+    const name=rowManualGroupName(row);
+    if(!key||!name)continue;
+    if(!groups.has(key)){
+      groups.set(key,{
+        key,
+        name,
+        count:0,
+        sort:rowManualGroupSort(row)
+      });
     }
-    const entry=roots.get(root);
+    const entry=groups.get(key);
     entry.count+=1;
-    const child=rowChildGroup(row);
-    if(child){
-      entry.children.set(child,(entry.children.get(child)||0)+1);
-    }
+    entry.sort=Math.min(entry.sort,rowManualGroupSort(row));
   }
 
-  const rootRows=[...roots.entries()]
-    .sort((a,b)=>a[0].localeCompare(b[0],"vi"));
+  const groupRows=[...groups.values()]
+    .sort((a,b)=>
+      Number(a.sort||999999)-Number(b.sort||999999)||
+      a.name.localeCompare(b.name,"vi")
+    );
 
-  const html=[
-    '<button class="category-chip '+(!activeRootGroup&&!activeGroupUrl?"active":"")+'" data-root="" data-group="" type="button">'+
+  // Source groups stay available for audit/detail only.
+  // Primary catalog navigation is the user-owned manual grouping layer.
+  activeGroupUrl="";
+
+  const out=[
+    '<button class="category-chip '+(!activeRootGroup?"active":"")+'" data-root="" data-group="" type="button">'+
       '<span>Tất cả</span><small>'+visibleLibrary.length+'</small>'+
     '</button>'
   ];
 
-  for(const [root,entry] of rootRows){
-    const rootActive=activeRootGroup===root&&!activeGroupUrl;
-    const expanded=activeRootGroup===root;
-    html.push(
-      '<button class="category-chip category-root '+(rootActive?"active":"")+'" data-root="'+escapeAttr(root)+'" data-group="" type="button">'+
-        '<span>'+escapeHtml(displayCategoryLabel(root))+'</span><small>'+entry.count+'</small>'+
+  for(const group of groupRows){
+    out.push(
+      '<button class="category-chip category-root '+(activeRootGroup===group.key?"active":"")+'" '+
+        'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
+        '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
       '</button>'
     );
-
-    if(expanded&&entry.children.size){
-      const children=[...entry.children.entries()]
-        .sort((a,b)=>a[0].localeCompare(b[0],"vi"));
-      for(const [child,count] of children){
-        html.push(
-          '<button class="category-chip category-child '+(activeGroupUrl===child?"active":"")+'" data-root="'+escapeAttr(root)+'" data-group="'+escapeAttr(child)+'" type="button">'+
-            '<span>↳ '+escapeHtml(displayCategoryLabel(child))+'</span><small>'+count+'</small>'+
-          '</button>'
-        );
-      }
-    }
   }
 
-  host.innerHTML=html.join("");
+  host.innerHTML=out.join("");
 
   const current=$("#mobileCategoryCurrent");
   if(current){
-    current.textContent=displayCategoryLabel(activeGroupUrl||activeRootGroup)||"Tất cả";
+    current.textContent=activeManualGroupName()||"Tất cả";
   }
 }
 function gridProductCard(row){
@@ -2149,11 +2163,9 @@ function rowsBeforeSearch(){
     }
 
     if(activeRootGroup){
-      products=products.filter(row=>rowRootGroup(row)===activeRootGroup);
+      products=products.filter(row=>rowManualGroupKey(row)===activeRootGroup);
     }
-    if(activeGroupUrl){
-      products=products.filter(row=>rowChildGroup(row)===activeGroupUrl);
-    }
+    activeGroupUrl="";
     if(activeBrand){
       products=products.filter(row=>
         brandKeyValue(rowCanonicalBrand(row))===activeBrand
@@ -2180,8 +2192,8 @@ function categoryBaseRows(){
   return memoBrowseRows(key,()=>{
     let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
     if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
-    if(activeRootGroup)rows=rows.filter(row=>rowRootGroup(row)===activeRootGroup);
-    if(activeGroupUrl)rows=rows.filter(row=>rowChildGroup(row)===activeGroupUrl);
+    if(activeRootGroup)rows=rows.filter(row=>rowManualGroupKey(row)===activeRootGroup);
+    activeGroupUrl="";
     return rows;
   });
 }
@@ -2246,14 +2258,11 @@ function sourceRowsForSelection(source){
 
 function normalizeBrowseCategoryForSource(source){
   const sourceRows=sourceRowsForSelection(source);
-  if(activeRootGroup&&!sourceRows.some(row=>rowRootGroup(row)===activeRootGroup)){
+  if(activeRootGroup&&!sourceRows.some(row=>rowManualGroupKey(row)===activeRootGroup)){
     activeRootGroup="";
-    activeGroupUrl="";
-    activeBrand="";
-  }else if(activeGroupUrl&&!sourceRows.some(row=>rowChildGroup(row)===activeGroupUrl)){
-    activeGroupUrl="";
     activeBrand="";
   }
+  activeGroupUrl="";
 }
 
 function setActiveSourceFilter(nextSource,{scroll=true}={}){
@@ -2429,7 +2438,7 @@ function renderCategoryContext(visibleProducts){
 
   const base=categoryBaseRows();
   const visible=Array.isArray(visibleProducts)?visibleProducts:filteredLibraryProducts();
-  const title=activeGroupUrl||activeRootGroup||"Toàn bộ thư viện";
+  const title=activeManualGroupName()||"Toàn bộ thư viện";
 
   const titleHost=$("#categoryDetailTitle");
   const countHost=$("#categoryDetailCount");
@@ -2455,24 +2464,9 @@ function renderCategoryContext(visibleProducts){
 
   const childWrap=$("#categoryDetailChildrenWrap");
   const childHost=$("#categoryDetailChildren");
-  const childCounts=new Map();
-  if(activeRootGroup&&!activeGroupUrl){
-    for(const row of base){
-      const child=contextChildName(row);
-      if(!child)continue;
-      childCounts.set(child,(childCounts.get(child)||0)+1);
-    }
-  }
-  const children=[...childCounts.entries()]
-    .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"))
-    .slice(0,8);
+  if(childWrap)childWrap.hidden=true;
+  if(childHost)childHost.innerHTML="";
 
-  if(childWrap)childWrap.hidden=!children.length;
-  if(childHost){
-    childHost.innerHTML=children.map(([name,count])=>
-      '<div class="category-mini-row"><span>'+escapeHtml(name)+'</span><small>'+count+'</small></div>'
-    ).join("");
-  }
 }
 
 
@@ -2627,10 +2621,8 @@ function renderLibraryProducts(){
   syncStateControls();
   const products=filteredLibraryProducts();
 
-  if(activeGroupUrl){
-    $("#libraryTitle").textContent=displayCategoryLabel(activeGroupUrl);
-  }else if(activeRootGroup){
-    $("#libraryTitle").textContent=displayCategoryLabel(activeRootGroup);
+  if(activeRootGroup){
+    $("#libraryTitle").textContent=activeManualGroupName()||"Sản phẩm";
   }else{
     $("#libraryTitle").textContent="Sản phẩm";
   }

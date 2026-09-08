@@ -1856,22 +1856,32 @@ async function sourceManagerSnapshot(force=false){
 }
 
 async function libraryRows(includeHidden=true){
-  const [links,prefs,assets,comps,hier,ids]=await Promise.all([
+  const [links,prefs,assets,comps,hier,ids,manualMembers,manualGroups]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").neq("last_status","unlisted").order("name",{ascending:true})),
     fetchAll("getlink_link_preferences"),
     fetchAll("getlink_link_assets"),
     fetchAll("getlink_link_comparison"),
     fetchAll("getlink_link_pack_hierarchy"),
-    fetchAll("getlink_source_product_identity")
+    fetchAll("getlink_source_product_identity"),
+    fetchAll("getlink_manual_group_members","group_key,link_url,match_origin"),
+    fetchAll(
+      "getlink_manual_groups",
+      "group_key,name,sort_order,is_fallback,enabled",
+      (q:any)=>q.eq("enabled",true)
+    )
   ]);
   const pref=new Map(prefs.map((x:any)=>[x.link_url,x])), asset=new Map(assets.map((x:any)=>[x.link_url,x])),
-    cmp=new Map(comps.map((x:any)=>[x.link_url,x])), hm=new Map(hier.map((x:any)=>[x.link_url,x])), im=new Map(ids.map((x:any)=>[x.link_url,x]));
+    cmp=new Map(comps.map((x:any)=>[x.link_url,x])), hm=new Map(hier.map((x:any)=>[x.link_url,x])), im=new Map(ids.map((x:any)=>[x.link_url,x])),
+    manualMemberByUrl=new Map(manualMembers.map((x:any)=>[x.link_url,x])),
+    manualGroupByKey=new Map(manualGroups.map((x:any)=>[x.group_key,x]));
   const categories=await fetchAll("getlink_links","canonical_url,name,source,last_request_id",(q:any)=>q.eq("link_type","category"));
   const rootByReq=new Map(categories.filter((x:any)=>String(x.source).includes("WinMart")).map((x:any)=>[x.last_request_id,x.name]));
   const rows:any[]=[];
   for(const l of links){
     if(!l.name || (!l.current_price&&!l.promotion_price))continue;
     const p=pref.get(l.canonical_url)||{}, a=asset.get(l.canonical_url)||{}, c=cmp.get(l.canonical_url)||{}, h=hm.get(l.canonical_url)||{}, id=im.get(l.canonical_url)||{};
+    const manualMember=manualMemberByUrl.get(l.canonical_url)||{};
+    const manualGroup=manualGroupByKey.get(manualMember.group_key)||{};
     const state=p.state||"normal"; if(!includeHidden&&state==="hidden")continue;
     const isW=String(l.source||"").toLowerCase().includes("winmart");
     const isCarton=Boolean(h.label1), isMiddle=!isCarton&&Boolean(h.label2);
@@ -1884,6 +1894,10 @@ async function libraryRows(includeHidden=true){
       regular_unit_price:c.regular_unit_price??null,promo_unit_price:c.promo_unit_price??null,promotion_active:c.promotion_active?1:0,has_promo:c.promotion_active?1:0,
       pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,pack_evidence:h.evidence||"",hierarchy_locked:0,
       source_product_id:id.source_product_id||"",source_code:id.source_code||"",barcode:id.barcode||"",sku:id.sku||"",
+      manual_group_key:clean(manualGroup.group_key||manualMember.group_key||""),
+      manual_group_name:clean(manualGroup.name||""),
+      manual_group_sort_order:Number(manualGroup.sort_order||999999),
+      manual_group_fallback:manualGroup.is_fallback?1:0,
       source_raw_name:id.raw_name||l.name,source_raw_description:id.raw_description||"",match_key:id.match_key||"",match_basis:id.match_basis||"",
       source_category_name:id.category||"",bhx_group_name:id.bhx_group_name||"",bhx_brand_name:id.bhx_brand_name||"",bhx_match_url:id.bhx_match_url||"",bhx_match_name:id.bhx_match_name||"",source_root_name:isW?(rootByReq.get(l.last_request_id)||l.group_name):"",
       web_carton_price:!isW&&isCarton?levelPrice:null,promo_carton_price:null,
@@ -2011,8 +2025,26 @@ Deno.serve(async(req:Request)=>{
       }
       if(view==="groups"){
         const rows=await libraryRows(false); const map=new Map<string,any>();
-        for(const r of rows){const name=clean(r.group_name);if(!name)continue;const x=map.get(name)||{url:r.parent_url||"",name,product_count:0,updated_at:r.updated_at||""};x.product_count++;map.set(name,x);}
-        return response(req,{groups:[...map.values()].sort((a,b)=>a.name.localeCompare(b.name,"vi"))});
+        for(const r of rows){
+          const key=clean(r.manual_group_key);
+          const name=clean(r.manual_group_name);
+          if(!key||!name)continue;
+          const x=map.get(key)||{
+            key,
+            name,
+            product_count:0,
+            sort_order:Number(r.manual_group_sort_order||999999),
+            is_fallback:Boolean(r.manual_group_fallback)
+          };
+          x.product_count++;
+          map.set(key,x);
+        }
+        return response(req,{
+          groups:[...map.values()].sort((a,b)=>
+            Number(a.sort_order||999999)-Number(b.sort_order||999999)||
+            a.name.localeCompare(b.name,"vi")
+          )
+        });
       }
       if(view==="item"){
         const raw=clean(url.searchParams.get("url")); if(!raw)return response(req,{error:"invalid_url"},400); const itemUrl=canonical(raw);

@@ -434,4 +434,14 @@ assert.equal(money(0),"—");
   assert.match(app,/function openSourceManager\(\)[\s\S]*?loadSourceManager\(true\)/);
 }
 
+
+{
+  assert.match(app,/function rowManualGroupKey\(row\)/);
+  assert.match(app,/function rowManualGroupName\(row\)/);
+  assert.match(app,/function activeManualGroupName\(\)/);
+  assert.match(app,/rowManualGroupKey\(row\)===activeRootGroup/);
+  assert.match(app,/Primary catalog navigation is the user-owned manual grouping layer/);
+  assert.match(app,/current\.textContent=activeManualGroupName\(\)\|\|"Tất cả"/);
+}
+
 console.log("money and hierarchy UI tests passed");

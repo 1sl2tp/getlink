@@ -170,4 +170,12 @@ assert.match(basicGroupingMigration,/'nuoc-tuong','Nước tương'/);
 assert.match(basicGroupingMigration,/'sua-chua','name_contains_all','sữa\|lên men'/);
 assert.match(basicGroupingMigration,/else 'chua-phan-loai'/i);
 
+
+// Main library rows carry the manual-group classification used by primary navigation.
+assert.match(source,/fetchAll\("getlink_manual_group_members","group_key,link_url,match_origin"\)/);
+assert.match(source,/manual_group_key:clean\(manualGroup\.group_key\|\|manualMember\.group_key\|\|""\)/);
+assert.match(source,/manual_group_name:clean\(manualGroup\.name\|\|""\)/);
+assert.match(source,/manual_group_sort_order:Number\(manualGroup\.sort_order\|\|999999\)/);
+assert.match(source,/if\(view==="groups"\)[\s\S]*?manual_group_key[\s\S]*?manual_group_name/);
+
 console.log("GETLINK name filter contract: OK");

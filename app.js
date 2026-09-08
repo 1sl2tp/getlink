@@ -34,8 +34,8 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v1";
-const UI_LIBRARY_CACHE_FALLBACK_KEYS=["library-v20","library-v19","library-v18"];
+const UI_LIBRARY_CACHE_KEY="library-data-v2";
+const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
   try{

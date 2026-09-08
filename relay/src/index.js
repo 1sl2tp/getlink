@@ -166,6 +166,186 @@ async function handleBhx(request, env) {
   }
 }
 
+function canonicalCategoryUrl(raw) {
+  const u = new URL(clean(raw));
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  if (host !== "bachhoaxanh.com") throw new Error("invalid_bhx_url");
+  const parts = u.pathname.split("/").filter(Boolean);
+  if (parts.length !== 1 || !/^[a-z0-9-]{1,160}$/i.test(parts[0])) {
+    throw new Error("bhx_category_url_required");
+  }
+  return { url: "https://www.bachhoaxanh.com/" + parts[0], slug: parts[0] };
+}
+
+function productId(item) {
+  return Number(item?.id || item?.productId || item?.productID || item?.ProductId || item?.ProductID || 0) || 0;
+}
+
+function productKey(item) {
+  const id = productId(item);
+  if (id > 0) return "id:" + id;
+  const code = clean(item?.productCode || "");
+  if (code) return "code:" + code;
+  return "url:" + clean(item?.url || "");
+}
+
+function isProduct(item) {
+  return Boolean(
+    item && typeof item === "object" && item.url &&
+    (Array.isArray(item.productPrices) || item.price != null || item.sysPrice != null ||
+     item.avatar || item.fullName || item.productCode || item.skuInfo)
+  );
+}
+
+function collectProducts(payload, slug) {
+  const map = new Map();
+  const walk = (value) => {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isProduct(item)) {
+          try {
+            const u = new URL(String(item.url), "https://www.bachhoaxanh.com/");
+            const first = u.pathname.split("/").filter(Boolean)[0] || "";
+            if (first.toLowerCase() === slug.toLowerCase()) {
+              map.set(productKey(item), item);
+            }
+          } catch {}
+        }
+        walk(item);
+      }
+    } else if (value && typeof value === "object") {
+      for (const child of Object.values(value)) walk(child);
+    }
+  };
+  walk(payload);
+  return [...map.values()];
+}
+
+function directProducts(payload, slug) {
+  const direct = payload?.data?.products;
+  if (Array.isArray(direct)) {
+    const map = new Map();
+    for (const item of direct) if (isProduct(item)) map.set(productKey(item), item);
+    if (map.size) return [...map.values()];
+  }
+  return collectProducts(payload, slug);
+}
+
+function responseCategoryId(payload, products) {
+  const infoId = Number(payload?.data?.info?.id) || 0;
+  if (infoId > 0) return infoId;
+  for (const item of products) {
+    const cat = item?.category && typeof item.category === "object" ? item.category : {};
+    for (const v of [item?.categoryId, item?.categoryID, cat.id, cat.categoryId, cat.categoryID]) {
+      const n = Number(v) || 0;
+      if (n > 0) return n;
+    }
+  }
+  return 0;
+}
+
+function responsePriorityIds(payload) {
+  const ids = payload?.data?.info?.priorityProductIds;
+  return Array.isArray(ids)
+    ? ids.map(x => Number(x) || 0).filter(Boolean).join(",")
+    : clean(ids || "");
+}
+
+async function fetchWholeCategory(rawUrl, env) {
+  const { url: referer, slug } = canonicalCategoryUrl(rawUrl);
+  const pageSize = 10;
+  const ctx = fixedContext();
+
+  const firstUrl = new URL("https://" + BHX_HOST + "/gw/Category/V2/GetCate");
+  for (const [k, v] of Object.entries({
+    ...ctx,
+    categoryUrl: slug,
+    isMobile: "true",
+    isV2: "true",
+    pageSize
+  })) firstUrl.searchParams.set(k, String(v));
+
+  const started = Date.now();
+  const firstBody = await bhxFetch(firstUrl.toString(), referer, env);
+  const first = directProducts(firstBody, slug);
+  const categoryId = responseCategoryId(firstBody, first);
+  if (!categoryId) throw new Error("bhx_category_id_missing");
+
+  const total = Math.max(0, Number(firstBody?.data?.total) || 0);
+  const info = firstBody?.data?.info || {};
+  const priority = responsePriorityIds(firstBody);
+  const map = new Map();
+  for (const item of first) map.set(productKey(item), item);
+
+  let lastShowProductId = productId(first[first.length - 1]);
+  let pages = 1;
+  const maxPage = Math.min(100, Math.max(3, total ? Math.ceil(total / pageSize) + 2 : 50));
+  const ajaxUrl = "https://" + BHX_HOST + "/gw/Category/AjaxProduct";
+
+  for (let page = 2; page <= maxPage; page++) {
+    if (total > 0 && map.size >= total) break;
+
+    const body = await bhxFetch(ajaxUrl, referer, env, {
+      ...ctx,
+      CategoryId: categoryId,
+      SelectedBrandId: "",
+      PropertyIdList: "",
+      PageIndex: page,
+      PageSize: pageSize,
+      SortStr: "",
+      PriorityProductIds: priority,
+      PropertySelected: [],
+      LastShowProductId: lastShowProductId
+    });
+
+    const batch = directProducts(body, slug);
+    pages = page;
+    if (!batch.length) break;
+
+    const before = map.size;
+    for (const item of batch) map.set(productKey(item), item);
+
+    const next = productId(batch[batch.length - 1]);
+    if (next > 0) lastShowProductId = next;
+    if (map.size === before) break;
+  }
+
+  return {
+    code: 0,
+    data: {
+      products: [...map.values()],
+      total,
+      info: {
+        id: categoryId,
+        name: clean(info.name) || slug,
+        url: clean(info.url) || ("/" + slug),
+        priorityProductIds: Array.isArray(info.priorityProductIds) ? info.priorityProductIds : []
+      },
+      transport: {
+        engine: "cloudflare-bhx-relay",
+        storage: "none",
+        pages,
+        pageSize,
+        ms: Date.now() - started
+      }
+    }
+  };
+}
+
+async function handleCategory(request, env) {
+  let raw;
+  try { raw = await request.json(); }
+  catch { return json({ error: "invalid_json" }, 400); }
+  try {
+    return json(await fetchWholeCategory(raw?.url, env));
+  } catch (error) {
+    return json({
+      error: "bhx_category_relay_failed",
+      detail: String(error?.message || error).slice(0, 1200)
+    }, 502);
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -174,6 +354,9 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/bhx") {
       return handleBhx(request, env);
+    }
+    if (request.method === "POST" && url.pathname === "/category") {
+      return handleCategory(request, env);
     }
     return json({ error: "not_found" }, 404);
   }

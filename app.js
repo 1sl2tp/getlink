@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v3");
+      const req=tx.objectStore("cache").get("library-v4");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v3");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v4");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -870,7 +870,7 @@ function payloadFromLibraryRow(row){
   const product={
     source,
     group:rowRootGroup(row)||row.group_name||"",
-    branch:row.brand_name||row.branch_name||"",
+    branch:rowCanonicalBrand(row),
     name:row.source_name||row.name||"Sản phẩm",
     packaging:{text:row.packaging||""},
     hierarchy:h,
@@ -932,6 +932,8 @@ function libraryRowFromProduct(p,previous=null){
     group_name:p.group||"",
     branch_name:p.branch||"",
     brand_name:p.branch||"",
+    bhx_group_name:p.source_identity&&p.source_identity.bhx_group_name||previous&&previous.bhx_group_name||"",
+    bhx_brand_name:p.source_identity&&p.source_identity.bhx_brand_name||previous&&previous.bhx_brand_name||"",
     packaging:p.packaging&&p.packaging.text||"",
     current_price:current,
     original_price:Number(p.price&&p.price.original||0)||null,
@@ -1558,6 +1560,19 @@ async function ensureLibraryCache(force=false){
 }
 
 
+function brandKeyValue(value){
+  return searchKey(value||"").replace(/\s+/g,"");
+}
+
+function rowCanonicalBrand(row){
+  return String(
+    row&&row.bhx_brand_name||
+    row&&row.brand_name||
+    row&&row.branch_name||
+    ""
+  ).trim();
+}
+
 function rowsBeforeSearch(){
   let products=libraryCache.slice();
 
@@ -1577,7 +1592,7 @@ function rowsBeforeSearch(){
   }
   if(activeBrand){
     products=products.filter(row=>
-      String(row.brand_name||row.branch_name||"")===activeBrand
+      brandKeyValue(rowCanonicalBrand(row))===activeBrand
     );
   }
   return products;
@@ -1676,14 +1691,31 @@ function renderBrandTabs(){
 
   const base=categoryBaseRows();
   const counts=new Map();
+  const labels=new Map();
+  const bhxPreferred=new Set();
+
   for(const row of base){
-    const brand=String(row.brand_name||row.branch_name||"").trim();
-    if(!brand)continue;
-    counts.set(brand,(counts.get(brand)||0)+1);
+    const brand=rowCanonicalBrand(row);
+    const key=brandKeyValue(brand);
+    if(!key)continue;
+    counts.set(key,(counts.get(key)||0)+1);
+
+    const isBhx=String(row.source||"").toLowerCase().includes("bách hóa xanh")||
+      String(row.source||"").toLowerCase().includes("bach hoa xanh");
+    const current=labels.get(key)||"";
+    if(isBhx){
+      if(!bhxPreferred.has(key)){
+        labels.set(key,brand);
+        bhxPreferred.add(key);
+      }
+    }else if(!current){
+      labels.set(key,brand);
+    }
   }
 
   const allBrands=[...counts.entries()]
-    .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"));
+    .map(([key,count])=>[key,labels.get(key)||key,count])
+    .sort((a,b)=>(b[2]-a[2])||a[1].localeCompare(b[1],"vi"));
 
   if(!allBrands.length){
     activeBrand="";
@@ -1695,17 +1727,17 @@ function renderBrandTabs(){
 
   if(activeBrand&&!counts.has(activeBrand))activeBrand="";
   let brands=allBrands.slice(0,10);
-  if(activeBrand&&!brands.some(([name])=>name===activeBrand)){
-    brands=[...brands,[activeBrand,counts.get(activeBrand)||0]];
+  if(activeBrand&&!brands.some(([key])=>key===activeBrand)){
+    brands=[...brands,[activeBrand,labels.get(activeBrand)||activeBrand,counts.get(activeBrand)||0]];
   }
 
   if(section)section.hidden=false;
   host.hidden=false;
   host.innerHTML=
     '<button class="brand-chip '+(!activeBrand?"active":"")+'" data-brand="" type="button">Tất cả <small>'+base.length+'</small></button>'+
-    brands.map(([brand,count])=>
-      '<button class="brand-chip '+(activeBrand===brand?"active":"")+'" data-brand="'+escapeAttr(brand)+'" type="button">'+
-        escapeHtml(brand)+' <small>'+count+'</small>'+
+    brands.map(([key,label,count])=>
+      '<button class="brand-chip '+(activeBrand===key?"active":"")+'" data-brand="'+escapeAttr(key)+'" type="button">'+
+        escapeHtml(label)+' <small>'+count+'</small>'+
       '</button>'
     ).join("");
 }

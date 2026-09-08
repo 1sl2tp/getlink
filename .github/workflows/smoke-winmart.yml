@@ -22,7 +22,7 @@ jobs:
       - name: GET link tổng WinMart
         env:
           API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
-          SAMPLE: "https://winmart.vn/sua-cac-loai--c08?storeCode=1535&cate2=sua-dac--c01161"
+          SAMPLE: "https://winmart.vn/sua-cac-loai--c08?storeCode=1535"
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$API/health" | jq .
@@ -65,36 +65,49 @@ jobs:
             fi
           done
 
-          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             "$API/api/library?view=search&limit=2000&include_hidden=1"             > /tmp/library.json
+          RAW_COUNT="$(jq '.payload.products|length' /tmp/winmart-result.json)"
+          RAW_TYPE_COUNT="$(jq '[.payload.products[]|select(((.packaging.text // "")|tostring|length)>0)]|length' /tmp/winmart-result.json)"
+          RAW_CLASSIFIED_COUNT="$(jq '[.payload.products[]|select(
+            ((.hierarchy.label1 // "") != "") or
+            ((.hierarchy.label2 // "") != "") or
+            ((.hierarchy.label3 // "") != "")
+          )]|length' /tmp/winmart-result.json)"
 
-          jq '{
-            winmart_count:([.products[]|select(.source=="WinMart")]|length),
-            wm_image_count:([.products[]|select(.source=="WinMart" and (.image // "") != "")]|length),
-            wm_brand_count:([.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length),
-            wm_listing_unit_count:([.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_listing_card" and (.pack_label_3 // "") != "")]|length),
-            mapped_groups:([.products[]|select(.source=="WinMart" and .parent_url!=null)|.group_name]|unique),
-            simply_rbo:([.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0] // {}),
-            ajinomoto_2kg:([.products[]|select(.source=="WinMart" and ((.name // "")|contains("Ajinomoto 2kg")))][0] // {})
-          }' /tmp/library.json
+          echo "raw_products=$RAW_COUNT raw_types=$RAW_TYPE_COUNT classified=$RAW_CLASSIFIED_COUNT"
+          test "$RAW_COUNT" -ge 250
+          # WinMart total cards expose the source sale type on line 2.
+          # Missing raw types are a source-adapter bug and must be visible.
+          test "$RAW_TYPE_COUNT" -eq "$RAW_COUNT"
+          # RAW ONLY: ingestion must not force source types into Thùng/Giữa/Lẻ.
+          test "$RAW_CLASSIFIED_COUNT" -eq 0
+
+          jq '[.payload.products[0:8][] | {
+            name,
+            type:(.packaging.text // ""),
+            price:(.price.current // null),
+            size_value:(.comparison.size_value // null),
+            size_unit:(.comparison.size_unit // "")
+          }]' /tmp/winmart-result.json
+
+          curl --fail --silent --show-error \
+            -H 'Origin: https://get.taphoa.xyz' \
+            "$API/api/library?view=search&limit=2000&include_hidden=1" \
+            > /tmp/library.json
 
           WM_COUNT="$(jq '[.products[]|select(.source=="WinMart")]|length' /tmp/library.json)"
-          WM_UNIT_COUNT="$(jq '[.products[]|select(.source=="WinMart" and .pack_evidence=="winmart_listing_card" and (.pack_label_3 // "") != "")]|length' /tmp/library.json)"
-          test "$WM_COUNT" -ge 1
-          test "$(jq '[.products[]|select(.source=="WinMart" and (.image // "") != "")]|length' /tmp/library.json)" -ge 1
-          test "$(jq '[.products[]|select(.source=="WinMart" and ((.branch_name // .brand_name // "") != ""))]|length' /tmp/library.json)" -ge 1
-          # The selected Sữa đặc page has 8 visible cards per API page.
-          # Listing-card proof must exist, but missing unit metadata must not
-          # trigger hundreds of detail-page navigations.
-          test "$WM_UNIT_COUNT" -ge 8
+          WM_CLASSIFIED="$(jq '[.products[]|select(
+            .source=="WinMart" and (
+              ((.pack_label_1 // "") != "") or
+              ((.pack_label_2 // "") != "") or
+              ((.pack_label_3 // "") != "")
+            )
+          )]|length' /tmp/library.json)"
+          WM_TYPE_COUNT="$(jq '[.products[]|select(
+            .source=="WinMart" and (((.packaging // "")|tostring|length)>0)
+          )]|length' /tmp/library.json)"
 
-          SIMPLY_UNIT="$(jq -r '[.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0].pack_label_3 // empty' /tmp/library.json)"
-          SIMPLY_GROUP="$(jq -r '[.products[]|select(.source=="WinMart" and ((.name // "")|contains("Simply RBO 1 lít")))][0].group_name // empty' /tmp/library.json)"
-          if [ -n "$SIMPLY_UNIT" ]; then
-            test "$SIMPLY_UNIT" = "Chai"
-            test "$SIMPLY_GROUP" = "Dầu ăn"
-          fi
+          echo "library_winmart=$WM_COUNT library_raw_types=$WM_TYPE_COUNT library_classified=$WM_CLASSIFIED"
+          test "$WM_COUNT" -ge 250
+          test "$WM_TYPE_COUNT" -eq "$WM_COUNT"
+          test "$WM_CLASSIFIED" -eq 0
 
-          AJI_UNIT="$(jq -r '[.products[]|select(.source=="WinMart" and ((.name // "")|contains("Ajinomoto 2kg")))][0].pack_label_3 // empty' /tmp/library.json)"
-          if [ -n "$AJI_UNIT" ]; then
-            test "$AJI_UNIT" = "Gói"
-          fi

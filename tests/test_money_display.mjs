@@ -354,7 +354,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function tableCompactQc\(levels\)/);
   assert.match(app,/function tablePrimarySourcePrice\(levels\)/);
   assert.match(app,/function sortTableProducts\(products\)/);
-  assert.match(app,/tableSourceSort=tableSourceSort==="asc"\?"desc":"asc"/);
+  assert.match(app,/function nextTableSourceFilter\(\)/);
   assert.match(css,/Compact table v2/);
   assert.match(css,/container-type:inline-size/);
   assert.match(css,/@container \(max-width:980px\)/);
@@ -366,12 +366,14 @@ assert.equal(money(0),"—");
 
 
 {
-  const sourceSortHandler=app.match(/\$\("#tableSourceSort"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
-  assert.ok(sourceSortHandler,"table source sort handler not found");
-  assert.match(sourceSortHandler[0],/if\(activeSourceFilter\)/);
-  assert.match(sourceSortHandler[0],/activeSourceFilter=""/);
-  assert.match(sourceSortHandler[0],/tableSourceSort="asc"/);
-  assert.match(sourceSortHandler[0],/renderCategoryMenu\(\)/);
+  const sourceCycleHandler=app.match(/\$\("#tableSourceSort"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
+  assert.ok(sourceCycleHandler,"table source cycle handler not found");
+  assert.match(sourceCycleHandler[0],/setActiveSourceFilter\(nextTableSourceFilter\(\)\)/);
+  assert.match(app,/const TABLE_SOURCE_CYCLE=\["","bhx","wm","go"\]/);
+  assert.match(app,/function nextTableSourceFilter\(\)/);
+  assert.match(app,/function memoBrowseRows\(key,builder\)/);
+  assert.match(app,/function scheduleCategoryMenuRefresh\(\)/);
+  assert.match(app,/return table&&table\.clientWidth>0&&table\.clientWidth<=980\?36:60/);
   assert.match(css,/Table sticky header \+ actionable source sort v1/);
   assert.match(css,/\.xls-price-table thead th,[\s\S]*?position:sticky!important/);
   assert.match(css,/top:0!important/);

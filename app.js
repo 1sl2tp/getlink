@@ -111,6 +111,9 @@ let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
 let libraryRenderVersion=0;
+const browseRowsMemo=new Map();
+let browseRowsMemoVersion=-1;
+let categoryMenuRefreshToken=0;
 let libraryByUrl=new Map();
 let searchFrame=0;
 let catalogObserver=null;
@@ -1519,12 +1522,11 @@ function syncTableSourceSortHeader(){
   const head=document.getElementById("tableSourceHeader");
   const button=document.getElementById("tableSourceSort");
   if(!head||!button)return;
-  head.setAttribute("aria-sort",tableSourceSort==="asc"?"ascending":(tableSourceSort==="desc"?"descending":"none"));
-  button.dataset.direction=tableSourceSort;
-  const activeName=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WM":(activeSourceFilter==="go"?"GO":""));
-  button.title=activeName
-    ?"Đang lọc "+activeName+" · bấm để xem 3 nguồn và sắp xếp"
-    :(tableSourceSort==="desc"?"Đang sắp GO → WM → BHX · bấm để đảo":"Sắp xếp BHX → WM → GO");
+  head.setAttribute("aria-sort","none");
+  button.dataset.direction="";
+  const labels={"":"3 nguồn",bhx:"BHX",wm:"WM",go:"GO"};
+  const next=nextTableSourceFilter();
+  button.title="Đang xem "+labels[activeSourceFilter]+" · bấm chuyển sang "+labels[next];
 }
 
 
@@ -1860,46 +1862,84 @@ function rowCanonicalBrand(row){
   ).trim();
 }
 
-function rowsBeforeSearch(){
-  let products=libraryCache.slice();
+function memoBrowseRows(key,builder){
+  if(browseRowsMemoVersion!==libraryRenderVersion){
+    browseRowsMemo.clear();
+    browseRowsMemoVersion=libraryRenderVersion;
+  }
+  const cacheKey=String(key||"");
+  if(browseRowsMemo.has(cacheKey))return browseRowsMemo.get(cacheKey);
+  const value=builder();
+  if(browseRowsMemo.size>=64){
+    const first=browseRowsMemo.keys().next().value;
+    if(first!==undefined)browseRowsMemo.delete(first);
+  }
+  browseRowsMemo.set(cacheKey,value);
+  return value;
+}
 
-  if(libraryState==="watch"){
-    products=products.filter(row=>String(row.preference_state||"normal")==="watch");
-  }else if(libraryState==="hidden"){
-    products=products.filter(row=>String(row.preference_state||"normal")==="hidden");
+function scheduleCategoryMenuRefresh(){
+  const token=++categoryMenuRefreshToken;
+  const run=()=>{
+    if(token!==categoryMenuRefreshToken)return;
+    renderCategoryMenu();
+  };
+  if("requestIdleCallback" in window){
+    requestIdleCallback(run,{timeout:180});
   }else{
-    products=products.filter(row=>String(row.preference_state||"normal")!=="hidden");
+    setTimeout(run,0);
   }
+}
 
-  if(activeRootGroup){
-    products=products.filter(row=>rowRootGroup(row)===activeRootGroup);
-  }
-  if(activeGroupUrl){
-    products=products.filter(row=>rowChildGroup(row)===activeGroupUrl);
-  }
-  if(activeBrand){
-    products=products.filter(row=>
-      brandKeyValue(rowCanonicalBrand(row))===activeBrand
-    );
-  }
-  return products;
+function rowsBeforeSearch(){
+  const key=["before",libraryState,activeRootGroup,activeGroupUrl,activeBrand].join("|");
+  return memoBrowseRows(key,()=>{
+    let products=libraryCache.slice();
+
+    if(libraryState==="watch"){
+      products=products.filter(row=>String(row.preference_state||"normal")==="watch");
+    }else if(libraryState==="hidden"){
+      products=products.filter(row=>String(row.preference_state||"normal")==="hidden");
+    }else{
+      products=products.filter(row=>String(row.preference_state||"normal")!=="hidden");
+    }
+
+    if(activeRootGroup){
+      products=products.filter(row=>rowRootGroup(row)===activeRootGroup);
+    }
+    if(activeGroupUrl){
+      products=products.filter(row=>rowChildGroup(row)===activeGroupUrl);
+    }
+    if(activeBrand){
+      products=products.filter(row=>
+        brandKeyValue(rowCanonicalBrand(row))===activeBrand
+      );
+    }
+    return products;
+  });
 }
 
 function visibleRowsBeforePack(){
-  let products=rowsBeforeSearch();
-  if(libraryQuery){
-    const tokens=searchTokens(libraryQuery);
-    products=products.filter(row=>matchesSearchTokens(row,tokens));
-  }
-  return products;
+  const key=["visible",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery].join("|");
+  return memoBrowseRows(key,()=>{
+    let products=rowsBeforeSearch();
+    if(libraryQuery){
+      const tokens=searchTokens(libraryQuery);
+      products=products.filter(row=>matchesSearchTokens(row,tokens));
+    }
+    return products;
+  });
 }
 
 function categoryBaseRows(){
-  let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
-  if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
-  if(activeRootGroup)rows=rows.filter(row=>rowRootGroup(row)===activeRootGroup);
-  if(activeGroupUrl)rows=rows.filter(row=>rowChildGroup(row)===activeGroupUrl);
-  return rows;
+  const key=["category-base",activeSourceFilter,activeRootGroup,activeGroupUrl].join("|");
+  return memoBrowseRows(key,()=>{
+    let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+    if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    if(activeRootGroup)rows=rows.filter(row=>rowRootGroup(row)===activeRootGroup);
+    if(activeGroupUrl)rows=rows.filter(row=>rowChildGroup(row)===activeGroupUrl);
+    return rows;
+  });
 }
 
 function renderPackTabs(){
@@ -1938,13 +1978,61 @@ function rowSourceFilterKey(row){
 }
 
 function rowsAfterPackBeforeSource(){
-  let products=visibleRowsBeforePack();
-  if(activePackKind==="Thùng"){
-    products=products.filter(row=>rowIsCarton(row));
-  }else if(activePackKind==="Lẻ"){
-    products=products.filter(row=>rowIsRetail(row));
+  const key=["after-pack",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery,activePackKind].join("|");
+  return memoBrowseRows(key,()=>{
+    let products=visibleRowsBeforePack();
+    if(activePackKind==="Thùng"){
+      products=products.filter(row=>rowIsCarton(row));
+    }else if(activePackKind==="Lẻ"){
+      products=products.filter(row=>rowIsRetail(row));
+    }
+    return products;
+  });
+}
+
+const TABLE_SOURCE_CYCLE=["","bhx","wm","go"];
+
+function sourceRowsForSelection(source){
+  const key=["source-selection",source].join("|");
+  return memoBrowseRows(key,()=>libraryCache.filter(row=>
+    String(row.preference_state||"normal")!=="hidden" &&
+    (!source||rowSourceFilterKey(row)===source)
+  ));
+}
+
+function normalizeBrowseCategoryForSource(source){
+  const sourceRows=sourceRowsForSelection(source);
+  if(activeRootGroup&&!sourceRows.some(row=>rowRootGroup(row)===activeRootGroup)){
+    activeRootGroup="";
+    activeGroupUrl="";
+    activeBrand="";
+  }else if(activeGroupUrl&&!sourceRows.some(row=>rowChildGroup(row)===activeGroupUrl)){
+    activeGroupUrl="";
+    activeBrand="";
   }
-  return products;
+}
+
+function setActiveSourceFilter(nextSource,{scroll=true}={}){
+  activeSourceFilter=TABLE_SOURCE_CYCLE.includes(nextSource)?nextSource:"";
+  if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
+  else localStorage.removeItem("getlink:filter-source");
+
+  normalizeBrowseCategoryForSource(activeSourceFilter);
+  libraryPage=1;
+  resetBrowseDetail();
+
+  if(scroll){
+    const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
+    if(activeScroller)activeScroller.scrollTop=0;
+  }
+
+  renderLibraryProducts();
+  scheduleCategoryMenuRefresh();
+}
+
+function nextTableSourceFilter(){
+  const i=TABLE_SOURCE_CYCLE.indexOf(activeSourceFilter);
+  return TABLE_SOURCE_CYCLE[(i+1+TABLE_SOURCE_CYCLE.length)%TABLE_SOURCE_CYCLE.length];
 }
 
 function renderSourceTabs(){
@@ -1976,19 +2064,20 @@ function renderSourceTabs(){
 }
 
 function filteredLibraryProducts(){
-  let products=rowsAfterPackBeforeSource();
+  const key=["filtered",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery,activePackKind,activeSourceFilter].join("|");
+  return memoBrowseRows(key,()=>{
+    let products=rowsAfterPackBeforeSource();
 
-  if(activeSourceFilter){
-    products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
-  }
+    if(activeSourceFilter){
+      products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    }
 
-  products.sort((a,b)=>{
-    const nameA=String(a.source_name||a.name||"");
-    const nameB=String(b.source_name||b.name||"");
-    return nameA.localeCompare(nameB,"vi");
+    return [...products].sort((a,b)=>{
+      const nameA=String(a.source_name||a.name||"");
+      const nameB=String(b.source_name||b.name||"");
+      return nameA.localeCompare(nameB,"vi");
+    });
   });
-
-  return products;
 }
 
 function headerLibraryProducts(){
@@ -2162,7 +2251,9 @@ function hydrateTableRows(rows){
 }
 
 function batchSizeForView(view){
-  return view==="table"?72:48;
+  if(view!=="table")return 48;
+  const table=$("#tableView");
+  return table&&table.clientWidth>0&&table.clientWidth<=980?36:60;
 }
 
 function updateCatalogRenderMore(){
@@ -2533,31 +2624,7 @@ $("#packTabs").addEventListener("click",e=>{
 $("#sourceTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".source-chip");
   if(!chip)return;
-  activeSourceFilter=chip.dataset.source||"";
-  if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
-  else localStorage.removeItem("getlink:filter-source");
-
-  // Source is global browse context. Rebuild category choices/counts immediately.
-  // If the selected category does not exist in this source, return to Tất cả.
-  const sourceRows=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden" &&
-    (!activeSourceFilter||rowSourceFilterKey(row)===activeSourceFilter)
-  );
-  if(activeRootGroup&&!sourceRows.some(row=>rowRootGroup(row)===activeRootGroup)){
-    activeRootGroup="";
-    activeGroupUrl="";
-    activeBrand="";
-  }else if(activeGroupUrl&&!sourceRows.some(row=>rowChildGroup(row)===activeGroupUrl)){
-    activeGroupUrl="";
-    activeBrand="";
-  }
-
-  libraryPage=1;
-  resetBrowseDetail();
-  const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
-  if(activeScroller)activeScroller.scrollTop=0;
-  renderCategoryMenu();
-  renderLibraryProducts();
+  setActiveSourceFilter(chip.dataset.source||"");
 });
 
 function queueLibrarySearch(value){
@@ -2600,19 +2667,10 @@ $("#toggleMatchAudit").addEventListener("click",async()=>{
 });
 
 $("#tableSourceSort").addEventListener("click",()=>{
-  if(activeSourceFilter){
-    activeSourceFilter="";
-    localStorage.removeItem("getlink:filter-source");
-    tableSourceSort="asc";
-    renderCategoryMenu();
-  }else{
-    tableSourceSort=tableSourceSort==="asc"?"desc":"asc";
-  }
+  tableSourceSort="";
   viewRenderState.table.key="";
   viewRenderState.table.rendered=0;
-  const table=$("#tableView");
-  if(table)table.scrollTop=0;
-  renderLibraryProducts();
+  setActiveSourceFilter(nextTableSourceFilter());
 });
 
 document.querySelector(".view-switch").addEventListener("click",e=>{
@@ -2656,9 +2714,12 @@ $("#productGrid").addEventListener("click",async e=>{
     // Optimistic UI: the heart changes immediately; persistence happens after.
     watch.dataset.watch=wasWatch?"0":"1";
     watch.classList.toggle("active",!wasWatch);
-    watch.querySelector("span").textContent=wasWatch?"♡":"♥";
+    watch.innerHTML=watchIconSvg(!wasWatch);
     watch.setAttribute("aria-label",wasWatch?"Đánh dấu quan tâm":"Bỏ quan tâm");
-    if(row)row.preference_state=next;
+    if(row){
+      row.preference_state=next;
+      libraryRenderVersion+=1;
+    }
 
     watch.disabled=true;
     try{

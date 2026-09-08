@@ -1833,16 +1833,9 @@ function winmartTextKey(value){
     .trim();
 }
 
-function winmartUnitEvidence(value){
-  const raw=String(value||"");
-  if(raw==="winmart_api_type")return "winmart_api_type";
-  // Legacy rows stay readable until the next refresh.
-  if(raw==="listing_card")return "winmart_listing_card";
-  if(raw==="detail_type")return "winmart_detail_type";
-  return "";
-}
-
 function winmartSourceType(product){
+  // RAW ONLY: preserve exactly the sale type returned by WinMart.
+  // No normalization and no mapping to Thùng/Giữa/Lẻ at ingestion time.
   return cleanText(product&&(
     product.unit||
     product.packaging||
@@ -1851,97 +1844,34 @@ function winmartSourceType(product){
   )||"");
 }
 
-function winmartSourceHierarchy(product){
-  const evidence=winmartUnitEvidence(product&&product.unit_evidence);
-  const sourceType=winmartSourceType(product);
-  const empty={
+function winmartRawHierarchy(){
+  return {
     keep:true,reason:"",
-    label1:"",qty1:0,label2:"",qty2:0,label3:"",qty3:0,
+    label1:"",qty1:0,
+    label2:"",qty2:0,
+    label3:"",qty3:0,
     evidence:"",locked:false
   };
-  if(!evidence||!sourceType)return empty;
-
-  const plain=getlinkPlain(sourceType);
-  const match=plain.match(
-    /^(thung|loc|goi|hop|bich|tui|chai|lon|hu|ly|to|can|vi|cay|vien|tuyp)(?:\s+([0-9]+(?:[.,][0-9]+)?))?\b/
-  );
-  if(!match)return empty;
-
-  const label=normalizePackWord(match[1]);
-  const qtyRaw=Number(String(match[2]||"").replace(",","."));
-  const qty=Number.isFinite(qtyRaw)&&qtyRaw>0?qtyRaw:0;
-
-  if(label==="Thùng"){
-    return {
-      ...empty,
-      label1:"Thùng",qty1:qty||1,
-      evidence,locked:true
-    };
-  }
-
-  // WinMart explicitly exposes bundle labels such as "GÓI 4".
-  // Keep the source quantity at the middle level instead of inventing a leaf.
-  if(qty>1||label==="Lốc"){
-    return {
-      ...empty,
-      label2:label,qty2:qty||1,
-      evidence,locked:true
-    };
-  }
-
-  return {
-    ...empty,
-    label3:label,qty3:1,
-    evidence,locked:true
-  };
 }
 
-function winmartStoredHierarchy(row){
-  const evidence=winmartUnitEvidence(row&&row.pack_evidence);
-  if(!evidence){
-    return {
-      keep:true,reason:"",
-      label1:"",qty1:0,label2:"",qty2:0,label3:"",qty3:0,
-      evidence:"",locked:false
-    };
-  }
-  const label1=cleanText(row&&row.pack_label_1||"");
-  const label2=cleanText(row&&row.pack_label_2||"");
-  const label3=cleanText(row&&row.pack_label_3||"");
-  return {
-    keep:true,reason:"",
-    label1,qty1:label1?(Number(row&&row.pack_qty_1)||1):0,
-    label2,qty2:label2?(Number(row&&row.pack_qty_2)||1):0,
-    label3,qty3:label3?(Number(row&&row.pack_qty_3)||1):0,
-    evidence:(label1||label2||label3)?evidence:"",
-    locked:Boolean(label1||label2||label3)
-  };
-}
-
-function winmartComparisonFromHierarchy(name,current,hierarchy){
-  const h=hierarchy||{};
+function winmartRawComparison(name,current){
   const price=Number(current||0)||null;
   const size=parseSize(name||"");
-  const isCarton=Boolean(h.label1);
-  const isMiddle=!isCarton&&Boolean(h.label2);
-  const isLeaf=!isCarton&&!isMiddle;
   return {
-    pack_kind:isCarton?"Thùng":(isMiddle?h.label2:"Lẻ"),
-    pack_quantity:isCarton
-      ?Math.max(1,Number(h.qty1)||1)
-      :(isMiddle?Math.max(1,Number(h.qty2)||1):1),
-    pack_unit:isCarton?h.label1:(isMiddle?h.label2:(h.label3||"")),
+    pack_kind:"",
+    pack_quantity:1,
+    pack_unit:"",
     size_value:size.value,
     size_unit:size.unit,
     regular_pack_price:price,
     promo_pack_price:null,
-    regular_unit_price:price,
+    regular_unit_price:null,
     promo_unit_price:null,
-    regular_carton_price:isCarton?price:null,
+    regular_carton_price:null,
     promo_carton_price:null,
-    regular_middle_price:isMiddle?price:null,
+    regular_middle_price:null,
     promo_middle_price:null,
-    regular_leaf_price:isLeaf?price:null,
+    regular_leaf_price:null,
     promo_leaf_price:null,
     promotion_active:false,
     promotion_text:"",
@@ -2205,10 +2135,8 @@ async function persistWinmartResponse(env,job,requestId,raw){
     );
     const original=originalRaw&&originalRaw>current?originalRaw:null;
     const packaging=winmartSourceType(rawProduct);
-    const hierarchy=winmartSourceHierarchy(rawProduct);
-    const comparison=winmartComparisonFromHierarchy(
-      name,current,hierarchy
-    );
+    const hierarchy=winmartRawHierarchy();
+    const comparison=winmartRawComparison(name,current);
     const tax=matchBhxTaxonomyForWinmart(rawProduct,taxonomy);
     if(tax.parent_url)mapped+=1;
     else unmapped+=1;
@@ -3736,13 +3664,12 @@ async function handleLibrary(url,env,origin){
       let fresh;
 
       if(isWinmart){
-        // WinMart rows are already typed by the source API. Read the stored
-        // source hierarchy as-is; do not rebuild it from the product name.
-        hierarchy=winmartStoredHierarchy(row);
-        fresh=winmartComparisonFromHierarchy(
+        // RAW ONLY: WinMart type stays in links.packaging. Never classify it
+        // into Thùng/Giữa/Lẻ inside the ingestion/library layer.
+        hierarchy=winmartRawHierarchy();
+        fresh=winmartRawComparison(
           row.name||"",
-          row.current_price||row.promotion_price||0,
-          hierarchy
+          row.current_price||row.promotion_price||0
         );
       }else{
         // BHX keeps the established three-level parser.
@@ -3910,16 +3837,15 @@ async function handleLibrary(url,env,origin){
 
     const rowIsWinmart=String(row.source||"").toLowerCase().includes("winmart");
     const mainHierarchy=rowIsWinmart
-      ?winmartStoredHierarchy(row)
+      ?winmartRawHierarchy()
       :packHierarchyData(
           row.name||"",itemUrl,row.packaging||"",
           row.cmp_pack_quantity||1,row.cmp_pack_unit||""
         );
     const mainComparison=rowIsWinmart
-      ?winmartComparisonFromHierarchy(
+      ?winmartRawComparison(
           row.name||"",
-          row.current_price||row.promotion_price||0,
-          mainHierarchy
+          row.current_price||row.promotion_price||0
         )
       :comparisonData({
           name:row.name||"",

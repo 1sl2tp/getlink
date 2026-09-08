@@ -1589,8 +1589,8 @@ function variantBucket(){
 async function fetchRowsByValues(table:string,select:string,column:string,values:string[]):Promise<any[]>{
   const out:any[]=[];
   const unique=[...new Set(values.filter(Boolean))];
-  for(let i=0;i<unique.length;i+=400){
-    const batch=unique.slice(i,i+400);
+  for(let i=0;i<unique.length;i+=40){
+    const batch=unique.slice(i,i+40);
     const {data,error}=await sb.from(table).select(select).in(column,batch);
     if(error)throw error;
     out.push(...(data||[]));

@@ -372,6 +372,103 @@ async function bhxTransportCategory(url:string) {
   }
   throw new Error("bhx_transport_failed:"+last);
 }
+
+async function bhxTransportMenu() {
+  let last="";
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const r=await fetch(BHX_TRANSPORT_URL+"/bhx",{
+        method:"POST",
+        headers:{
+          "content-type":"application/json",
+          "x-getlink-relay":"supabase-bhx-v1"
+        },
+        body:JSON.stringify({op:"getMenuCategory"})
+      });
+      if(!r.ok){last="http_"+r.status+":"+(await r.text()).slice(0,300);continue;}
+      const body=await r.json();
+      if(body&&Number(body.code)===0&&body.data!=null)return body;
+      last="code_"+String(body?.code);
+    }catch(e){
+      last=String(e&&e.message||e).slice(0,300);
+    }
+  }
+  throw new Error("bhx_menu_failed:"+last);
+}
+function bhxMenuNodes(body:any) {
+  const roots=Array.isArray(body?.data?.menus)?body.data.menus:[];
+  const out:any[]=[];
+  const walk=(node:any)=>{
+    if(!node||typeof node!=="object")return;
+    out.push(node);
+    const kids=Array.isArray(node.childrens)?node.childrens:[];
+    for(const child of kids)walk(child);
+  };
+  for(const root of roots)walk(root);
+  return out;
+}
+function bhxTextKey(v:any) {
+  return deAccent(clean(v)).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+}
+function resolveBhxMenuNode(slug:string, body:any) {
+  const nodes=bhxMenuNodes(body);
+  const exact=nodes.find((n:any)=>clean(n?.url).toLowerCase()===slug.toLowerCase());
+  if(exact)return exact;
+
+  const tokens=bhxTextKey(slug).split(" ").filter(Boolean);
+  const scored=nodes.map((n:any)=>{
+    const url=bhxTextKey(n?.url||"");
+    const name=bhxTextKey(n?.name||"");
+    const hay=(url+" "+name).trim();
+    if(!tokens.length||!tokens.every((t:string)=>hay.includes(t)))return null;
+    const kids=Array.isArray(n?.childrens)?n.childrens.length:0;
+    const contiguous=url.includes(tokens.join(" "))?4:0;
+    return {node:n,score:(kids?100:0)+contiguous+tokens.length};
+  }).filter(Boolean).sort((a:any,b:any)=>b.score-a.score);
+  return scored[0]?.node||null;
+}
+function bhxLeafMenuNodes(node:any) {
+  const kids=Array.isArray(node?.childrens)?node.childrens.filter(Boolean):[];
+  if(!kids.length)return [node];
+  const out:any[]=[];
+  for(const child of kids)out.push(...bhxLeafMenuNodes(child));
+  return out;
+}
+async function bhxParentCategoryRaw(c:string, directError:any) {
+  const slug=pathParts(c)[0]||"";
+  const menu=await bhxTransportMenu();
+  const node=resolveBhxMenuNode(slug,menu);
+  if(!node)throw directError;
+
+  const leaves=bhxLeafMenuNodes(node)
+    .filter((n:any)=>clean(n?.url))
+    .filter((n:any)=>clean(n?.url).toLowerCase()!==slug.toLowerCase());
+  if(!leaves.length)throw directError;
+
+  const map=new Map<string,any>();
+  let total=0;
+  for(let start=0;start<leaves.length;start+=3){
+    const batch=leaves.slice(start,start+3);
+    const bodies=await Promise.all(batch.map((leaf:any)=>
+      bhxTransportCategory("https://www.bachhoaxanh.com/"+clean(leaf.url))
+    ));
+    for(let i=0;i<bodies.length;i++){
+      const body=bodies[i];
+      total+=bhxCategoryTotal(body);
+      for(const item of bhxPayloadProducts(body,clean(batch[i]?.url||""))){
+        map.set(bhxProductKey(item),item);
+      }
+    }
+  }
+  if(!map.size)throw directError;
+  return {
+    items:[...map.values()],
+    categoryId:Number(node?.id)||0,
+    rootName:clean(node?.name||slugTitle(c)),
+    total:total||map.size
+  };
+}
+
 async function bhxProductDetail(url:string) {
   const c=canonicalBhx(url);
   const parts=pathParts(c);
@@ -394,16 +491,20 @@ async function bhxProductDetail(url:string) {
 }
 async function bhxCategoryRaw(url:string) {
   const c=canonicalBhx(url);
-  const body=await bhxTransportCategory(c);
-  const items=bhxPayloadProducts(body,c);
-  const categoryId=bhxCategoryId(items,body);
-  if(!categoryId)throw new Error("bhx_category_id_missing");
-  const total=bhxCategoryTotal(body);
-  const rootName=clean(body?.data?.info?.name||items[0]?.category?.name||slugTitle(c));
-  if(total>0&&items.length<Math.min(total,10)){
-    throw new Error("bhx_transport_partial:"+items.length+"/"+total);
+  try{
+    const body=await bhxTransportCategory(c);
+    const items=bhxPayloadProducts(body,c);
+    const categoryId=bhxCategoryId(items,body);
+    if(!categoryId)throw new Error("bhx_category_id_missing");
+    const total=bhxCategoryTotal(body);
+    const rootName=clean(body?.data?.info?.name||items[0]?.category?.name||slugTitle(c));
+    if(total>0&&items.length<Math.min(total,10)){
+      throw new Error("bhx_transport_partial:"+items.length+"/"+total);
+    }
+    return {items,categoryId,rootName,total};
+  }catch(e){
+    return await bhxParentCategoryRaw(c,e);
   }
-  return {items,categoryId,rootName,total};
 }
 
 function normalizeBhx(raw:any, rootGroup:string, checked:string): Product | null {

@@ -2136,7 +2136,16 @@ async function persistWinmartResponse(env,job,requestId,raw){
     const original=originalRaw&&originalRaw>current?originalRaw:null;
     const packaging=winmartSourceType(rawProduct);
     const hierarchy=winmartRawHierarchy();
-    const comparison=winmartRawComparison(name,current);
+    const size=parseSize([
+      name,
+      rawProduct.source_description||"",
+      rawProduct.source_short_description||""
+    ].filter(Boolean).join(" "));
+    const comparison={
+      ...winmartRawComparison(name,current),
+      size_value:size.value,
+      size_unit:size.unit
+    };
     const tax=matchBhxTaxonomyForWinmart(rawProduct,taxonomy);
     if(tax.parent_url)mapped+=1;
     else unmapped+=1;
@@ -2243,7 +2252,10 @@ async function persistWinmartResponse(env,job,requestId,raw){
         product_id:cleanText(rawProduct.source_product_id||""),
         item_no:cleanText(rawProduct.source_item_no||""),
         sku:cleanText(rawProduct.source_sku||""),
-        barcode:cleanText(rawProduct.barcode||"")
+        barcode:cleanText(rawProduct.barcode||""),
+        uom:cleanText(rawProduct.source_uom||""),
+        uom_name:cleanText(rawProduct.source_uom_name||""),
+        quantity_per_unit:rawProduct.source_quantity_per_unit??null
       },
       last_checked_at:checked
     });

@@ -158,17 +158,26 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
   if(hasCarton){
     h.label1="Thùng"; h.qty1=1;
 
+    const leadingBundle=/^\s*(khay|vỉ)\s+\d+\s+/iu.test(text);
     if(bundle){
       const middleKey=String(bundle[1]||"").toLowerCase();
       const leafKey=String(bundle[3]||"").toLowerCase();
-      h.label2=unitMap[middleKey]||clean(bundle[1]); h.qty2=1;
-      h.label3=unitMap[leafKey]||clean(bundle[3]); h.qty3=Number(bundle[2])||1;
+
+      // Source packaging already defines the sold unit as Thùng.
+      // "Khay 24 lon..." / "Vỉ 24 gói..." means one carton contains
+      // 24 leaf units; "khay/vỉ" is presentation wording, not another level.
+      if(leadingBundle){
+        h.label3=unitMap[leafKey]||clean(bundle[3]); h.qty3=Number(bundle[2])||1;
+      }else{
+        h.label2=unitMap[middleKey]||clean(bundle[1]); h.qty2=1;
+        h.label3=unitMap[leafKey]||clean(bundle[3]); h.qty3=Number(bundle[2])||1;
+      }
       return h;
     }
 
     const middle=pairs.find(x=>["lốc","khay","vỉ"].includes(x.key));
     const leaf=[...pairs].reverse().find(x=>!["thùng","lốc","khay","vỉ"].includes(x.key));
-    if(middle){h.label2=middle.label;h.qty2=middle.qty;}
+    if(middle&&!leadingBundle){h.label2=middle.label;h.qty2=middle.qty;}
     if(leaf){h.label3=leaf.label;h.qty3=leaf.qty;}
 
     if(!h.label3){

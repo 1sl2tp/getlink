@@ -213,6 +213,18 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
     return h;
   }
 
+  // Prefer the explicit source packaging field before scanning the product name.
+  // This prevents words such as "trái cây" from being mistaken for unit "Cây".
+  const rawUnitMatch=rawUnit.match(new RegExp("(?:^|[^\\p{L}])("+unitPattern+")(?![\\p{L}])","u"));
+  if(rawUnitMatch){
+    const key=String(rawUnitMatch[1]||"").toLowerCase();
+    if(key!=="thùng"){
+      h.label3=unitMap[key]||clean(rawUnitMatch[1]);
+      h.qty3=1;
+      return h;
+    }
+  }
+
   // Last resort: a real packaging word in the original accented text.
   const leafMatch=text.match(new RegExp("(?:^|[^\\p{L}])("+unitPattern+")(?![\\p{L}])","u"));
   if(leafMatch){

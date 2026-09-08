@@ -9,24 +9,21 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify exact WinMart category API contract
+      - name: Test WinMart page size
         shell: bash
         run: |
           set -euo pipefail
-          URL='https://api-crownx.winmart.vn/it/api/web/v3/item/category?storeCode=1535&slug=sua-cac-loai--c08&pageNumber=1&pageSize=8&orderByDesc=true&storeGroupCode=1998'
-          time curl -L -sS --connect-timeout 10 --max-time 20             -A 'Mozilla/5.0'             -H 'Accept: application/json'             -H 'X-API-MERCHANT: WCM'             -H 'Origin: https://winmart.vn'             -H 'Referer: https://winmart.vn/'             "$URL" -o /tmp/wm.json
-
-          jq -c '{
-            code,
-            message,
-            name:(.data.name // ""),
-            items:((.data.items // [])|length),
-            paging:(.data.paging // .paging // null),
-            sample:((.data.items // [])[0] | {
-              id,itemNo,sku,barcode,name,title,seoName,
-              uom,uomName,price,salePrice,categoryCode,categoryName
-            })
-          }' /tmp/wm.json
-
-          test "$(jq -r '.code // empty' /tmp/wm.json)" = "S200"
-          test "$(jq '(.data.items // [])|length' /tmp/wm.json)" -gt 0
+          BASE='https://api-crownx.winmart.vn/it/api/web/v3/item/category'
+          COMMON='storeCode=1535&slug=sua-cac-loai--c08&pageNumber=1&orderByDesc=true&storeGroupCode=1998'
+          for size in 8 50 100 200 500; do
+            echo "=== pageSize=$size ==="
+            START="$(date +%s%3N)"
+            curl -L -sS --connect-timeout 10 --max-time 20               -A 'Mozilla/5.0'               -H 'Accept: application/json'               -H 'X-API-MERCHANT: WCM'               -H 'Origin: https://winmart.vn'               -H 'Referer: https://winmart.vn/'               "$BASE?$COMMON&pageSize=$size" -o "/tmp/wm-$size.json"
+            END="$(date +%s%3N)"
+            jq -c '{
+              items:((.data.items // [])|length),
+              paging:(.paging // .data.paging // null),
+              name:(.data.name // "")
+            }' "/tmp/wm-$size.json"
+            echo "ms=$((END-START))"
+          done

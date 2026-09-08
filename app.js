@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v17");
+      const req=tx.objectStore("cache").get("library-v18");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v17");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v18");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1999,6 +1999,17 @@ function initCatalogLocalObserver(){
   if(table){
     table.addEventListener("scroll",()=>maybeAppend(table,"table"),{passive:true});
   }
+
+  // Safety net for browsers switching between document-scroll and local-scroll
+  // during viewport/toolbar changes. It costs no API calls; it only mounts the
+  // next already-loaded local batch when the visible catalog nears its end.
+  window.addEventListener("scroll",()=>{
+    if(!isCompactBrowse())return;
+    const host=libraryView==="table"?table:grid;
+    if(!host||host.hidden)return;
+    const rect=host.getBoundingClientRect();
+    if(rect.bottom-window.innerHeight<900)appendLocalViewBatch(libraryView);
+  },{passive:true});
 
   requestAnimationFrame(()=>{
     maybeAppend(grid,"grid");

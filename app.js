@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v10");
+      const req=tx.objectStore("cache").get("library-v11");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v10");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v11");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -196,6 +196,17 @@ function searchKey(value){
 }
 
 
+function stripCartonPackPhrase(value){
+  let text=String(value||"").normalize("NFC").trim();
+  if(!text)return "";
+  const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
+  const qty="\\d+(?:\\s*\\+\\s*\\d+)*";
+  return text
+    .replace(new RegExp("(^|\\s)(?:thùng|khay|vỉ)\\s+"+qty+"\\s+"+unit+"(?:\\s*[x×]\\s*)?","giu")," ")
+    .replace(/\s{2,}/g," ")
+    .trim();
+}
+
 function searchDisplayName(row){
   let text=String(
     row&&(
@@ -210,14 +221,7 @@ function searchDisplayName(row){
     String(row&&row.packaging||"").trim().toLowerCase()==="thùng"||
     String(row&&row.pack_kind||"").trim().toLowerCase()==="carton";
 
-  if(isCarton&&text){
-    const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
-    text=text
-      .replace(new RegExp("(^|\\s)(?:thùng|khay|vỉ)\\s+\\d+\\s+"+unit+"(?:\\s*[x×]\\s*)?","giu")," ")
-      .replace(/\s{2,}/g," ")
-      .trim();
-  }
-  return text;
+  return isCarton?stripCartonPackPhrase(text):text;
 }
 
 function productSearchKey(row){
@@ -1223,13 +1227,7 @@ function compactCartonDisplayName(name,hierarchy){
   let text=String(name||"").trim();
   if(!text)return "Sản phẩm";
   if(String(hierarchy&&hierarchy.label1||"").trim()==="Thùng"){
-    const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
-    // Once source packaging already says Thùng, pack text belongs to QC, not the name.
-    // Remove it whether it is at the start or in the middle.
-    text=text
-      .replace(new RegExp("(^|\\s)(?:thùng|khay)\\s+\\d+\\s+"+unit+"(?:\\s*[x×]\\s*)?","giu")," ")
-      .replace(/\s{2,}/g," ")
-      .trim();
+    text=stripCartonPackPhrase(text);
   }
   return capitalizeDisplayName(text);
 }

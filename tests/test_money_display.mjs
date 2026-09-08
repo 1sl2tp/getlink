@@ -355,12 +355,13 @@ assert.equal(money(0),"—");
   assert.match(app,/function tablePrimarySourcePrice\(levels\)/);
   assert.match(app,/function sortTableProducts\(products\)/);
   assert.match(app,/tableSourceSort=tableSourceSort==="asc"\?"desc":"asc"/);
-  assert.match(css,/Compact table v1/);
-  assert.match(css,/@media\(max-width:900px\)/);
-  assert.match(css,/th:nth-child\(1\),[\s\S]*?width:47%!important/);
-  assert.match(css,/th:nth-child\(2\),[\s\S]*?width:12%!important/);
-  assert.match(css,/th:nth-child\(3\),[\s\S]*?width:23%!important/);
-  assert.match(css,/th:nth-child\(6\),[\s\S]*?width:18%!important/);
+  assert.match(css,/Compact table v2/);
+  assert.match(css,/container-type:inline-size/);
+  assert.match(css,/@container \(max-width:980px\)/);
+  assert.match(css,/th:nth-child\(2\),[\s\S]*?width:54px!important/);
+  assert.match(css,/th:nth-child\(3\),[\s\S]*?width:112px!important/);
+  assert.match(css,/th:nth-child\(6\),[\s\S]*?width:76px!important/);
+  assert.match(css,/@container \(max-width:520px\)/);
 }
 
 console.log("money and hierarchy UI tests passed");

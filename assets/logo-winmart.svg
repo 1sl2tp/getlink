@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 230 72" role="img" aria-label="WinMart">
+  <g fill="#e31f26">
+    <text x="12" y="43" font-family="Arial,Helvetica,sans-serif" font-size="39" font-weight="700" font-style="italic">WinMart</text>
+    <path d="M102 48h28l-3.2 12H108z" fill="none" stroke="#e31f26" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M106 52l6 7m7-7l-5 7m12-7l-4 7" fill="none" stroke="#e31f26" stroke-width="2.6" stroke-linecap="round"/>
+  </g>
+</svg>

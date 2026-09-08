@@ -98,6 +98,31 @@ async function handleBhx(request, env) {
   const ctx = fixedContext();
 
   try {
+    if (op === "getMenuCategory") {
+      const api = new URL("https://" + BHX_HOST + "/gw/Menu/GetMenuV2");
+      for (const [k, v] of Object.entries(ctx)) api.searchParams.set(k, String(v));
+      const data = await bhxFetch(api.toString(), "https://www.bachhoaxanh.com/", env);
+      return json(data);
+    }
+
+    if (op === "getCategoryRelative") {
+      const categoryId = boundedInt(raw?.categoryId, 1, 99999999, 0);
+      if (!categoryId) return json({ error: "invalid_category_id" }, 400);
+      const api = new URL("https://" + BHX_HOST + "/gw/Category/GetCategoryRelative");
+      for (const [k, v] of Object.entries({ ...ctx, categoryId })) api.searchParams.set(k, String(v));
+      const data = await bhxFetch(api.toString(), "https://www.bachhoaxanh.com/", env);
+      return json(data);
+    }
+
+    if (op === "categoryFather") {
+      const categoryId = boundedInt(raw?.categoryId, 1, 99999999, 0);
+      if (!categoryId) return json({ error: "invalid_category_id" }, 400);
+      const api = new URL("https://" + BHX_HOST + "/gw/Category/CategoryFather");
+      for (const [k, v] of Object.entries({ ...ctx, categoryId })) api.searchParams.set(k, String(v));
+      const data = await bhxFetch(api.toString(), "https://www.bachhoaxanh.com/", env);
+      return json(data);
+    }
+
     if (op === "getCate") {
       const categoryUrl = clean(raw?.categoryUrl).replace(/^\/+|\/+$/g, "");
       if (!/^[a-z0-9-]{1,160}$/i.test(categoryUrl)) {

@@ -696,6 +696,14 @@ const BHX_BEARER_TOKEN = clean(Deno.env.get("BHX_BEARER_TOKEN") || "");
 const BHX_DEVICE_ID = clean(Deno.env.get("BHX_DEVICE_ID") || "");
 const BHX_PAGE_SIZE = 10;
 const BHX_TRANSPORT_URL = clean(Deno.env.get("BHX_TRANSPORT_URL") || "https://getlink-bhx-relay.taphoa-4ab8161d.workers.dev");
+const BHX_RELAY_SHARED_SECRET = clean(Deno.env.get("BHX_RELAY_SHARED_SECRET") || "supabase-bhx-v1");
+
+function bhxRelayHeaders(){
+  return {
+    "content-type":"application/json",
+    "x-getlink-relay":BHX_RELAY_SHARED_SECRET
+  };
+}
 
 function bhxWebReferer(referer: string) {
   try {
@@ -830,7 +838,7 @@ async function bhxTransportCategory(url:string, capture:RawCapture) {
       const endpoint=BHX_TRANSPORT_URL+"/category";
       const r=await fetch(endpoint,{
         method:"POST",
-        headers:{"content-type":"application/json"},
+        headers:bhxRelayHeaders(),
         body:JSON.stringify({url:categoryUrl})
       });
       const body=await readCapturedJson(r,capture,endpoint,"POST");
@@ -851,10 +859,7 @@ async function bhxTransportMenu(capture:RawCapture) {
       const endpoint=BHX_TRANSPORT_URL+"/bhx";
       const r=await fetch(endpoint,{
         method:"POST",
-        headers:{
-          "content-type":"application/json",
-          "x-getlink-relay":"supabase-bhx-v1"
-        },
+        headers:bhxRelayHeaders(),
         body:JSON.stringify({op:"getMenuCategory"})
       });
       const body=await readCapturedJson(r,capture,endpoint,"POST");
@@ -1954,10 +1959,20 @@ async function reconstructItem(url:string){
 function cors(req:Request){
   const origin=req.headers.get("origin")||"";
   const allow=[...ALLOWED_ORIGINS].some(x=>origin===x||origin.startsWith(x+":"))?origin:"https://get.taphoa.xyz";
-  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 }
 function response(req:Request,data:any,status=200){return new Response(JSON.stringify(data),{status,headers:cors(req)});}
+const INTERNAL_WRITE_KEY = clean(Deno.env.get("GETLINK_INTERNAL_WRITE_KEY") || "");
+function trustedOrigin(req:Request){
+  const origin=req.headers.get("origin")||"";
+  return [...ALLOWED_ORIGINS].some(x=>origin===x||origin.startsWith(x+":"));
+}
 function authorized(req:Request){return Boolean(PUBLIC_KEY)&&req.headers.get("apikey")===PUBLIC_KEY;}
+function writeAuthorized(req:Request){
+  if(!authorized(req))return false;
+  if(trustedOrigin(req))return true;
+  return Boolean(INTERNAL_WRITE_KEY)&&req.headers.get("x-getlink-internal")===INTERNAL_WRITE_KEY;
+}
 function routePath(req:Request){
   const p=new URL(req.url).pathname; const marker="/getlink-api"; const i=p.indexOf(marker); return i>=0?(p.slice(i+marker.length)||"/"):p;
 }
@@ -1982,6 +1997,7 @@ async function expireStaleJobs():Promise<number>{
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   if(!authorized(req))return response(req,{error:"unauthorized"},401);
+  if(req.method!=="GET"&&!writeAuthorized(req))return response(req,{error:"write_forbidden"},403);
   const url=new URL(req.url), route=routePath(req);
   try{
     let staleJobsCleaned=0;

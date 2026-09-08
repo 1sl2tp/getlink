@@ -4044,3 +4044,51 @@ h1{
     padding:8px 9px!important;
   }
 }
+
+
+/* Product detail back navigation */
+.detail-back-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  min-height:28px;
+  margin:-2px 0 9px;
+}
+.detail-back-button{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  height:28px;
+  padding:0 8px;
+  border:1px solid #dfe4e8;
+  border-radius:7px;
+  background:#fff;
+  color:#4f5a66;
+  font-size:9.5px;
+  font-weight:740;
+  line-height:1;
+  transition:background .12s ease,border-color .12s ease,color .12s ease;
+}
+.detail-back-button>span:first-child{
+  color:var(--green-strong);
+  font-size:13px;
+  line-height:1;
+}
+.detail-back-button:hover{
+  border-color:#b8cfc2;
+  background:#f6faf8;
+  color:var(--green-strong);
+}
+.detail-category-label{
+  min-width:0;
+  overflow:hidden;
+  color:#929aa4;
+  font-size:8.5px;
+  font-weight:680;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+@media(max-width:1100px){
+  .detail-back-button{height:30px;font-size:10px}
+}

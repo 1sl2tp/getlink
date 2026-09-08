@@ -76,4 +76,12 @@ assert.match(manualGroupMigration,/create table if not exists public\.getlink_ma
 assert.match(manualGroupMigration,/'dau-an','Dầu ăn','name_contains','dầu ăn'/);
 assert.match(manualGroupMigration,/lower\(coalesce\(l\.name,''\)\) like '%dầu ăn%'/);
 
+
+// Manual group detail must expose the actual products for auditing, not only totals.
+assert.match(source,/function sourceManagerManualGroupDetail\(groupKey:string\)/);
+assert.match(source,/function fetchRowsByValues\(/);
+assert.match(source,/view==="manual-group"/);
+assert.match(source,/raw_group:clean\(id\.raw_category\|\|id\.category\)/);
+assert.match(source,/brand:clean\(id\.brand\|\|link\.branch_name\)/);
+
 console.log("GETLINK name filter contract: OK");

@@ -116,6 +116,8 @@ let sourceManagerKind="brand";
 let sourceManagerSource="all";
 let sourceManagerQuery="";
 let sourceManagerLimit=200;
+let sourceManagerManualKey="";
+let sourceManagerManualDetail=null;
 let libraryRenderVersion=0;
 const browseRowsMemo=new Map();
 let browseRowsMemoVersion=-1;
@@ -1872,6 +1874,10 @@ function sourceManagerBadges(item){
 }
 
 function renderSourceManager(){
+  if(sourceManagerManualKey&&sourceManagerManualDetail){
+    renderSourceManagerManualDetail();
+    return;
+  }
   if(!sourceManagerCache)return;
   document.querySelectorAll("#sourceManagerKinds button").forEach(btn=>{
     btn.classList.toggle("active",btn.dataset.kind===sourceManagerKind);
@@ -1905,10 +1911,14 @@ function renderSourceManager(){
       const variants=sourceManagerKind==="manual"
         ?String(item.rule_label||"")
         :sourceManagerVariantLine(item);
-      return '<article class="source-manager-row">'+
+      const manualAttrs=sourceManagerKind==="manual"
+        ?' role="button" tabindex="0" data-manual-key="'+escapeAttr(item.key||"")+'" title="Mở danh sách sản phẩm trong nhóm"'
+        :"";
+      return '<article class="source-manager-row'+(sourceManagerKind==="manual"?" source-manager-manual-row":"")+'"'+manualAttrs+'>'+
         '<div class="source-manager-name">'+
           '<strong>'+escapeHtml(displayName||"—")+'</strong>'+
           (variants?'<small>'+escapeHtml(variants)+'</small>':'')+
+          (sourceManagerKind==="manual"?'<small class="source-manager-open-hint">Xem '+count+' sản phẩm →</small>':'')+
         '</div>'+
         '<div class="source-manager-badges">'+sourceManagerBadges(item)+'</div>'+
         '<strong class="source-manager-total">'+count+'</strong>'+
@@ -1925,6 +1935,92 @@ function renderSourceManager(){
   const more=$("#sourceManagerMore");
   more.hidden=items.length<=sourceManagerLimit;
   if(!more.hidden)more.textContent="Xem thêm · "+sourceManagerLimit+" / "+items.length;
+}
+
+function sourceManagerDetailItems(){
+  const detail=sourceManagerManualDetail;
+  if(!detail||!Array.isArray(detail.items))return [];
+  const q=searchKey(sourceManagerQuery);
+  return detail.items.filter(item=>{
+    if(sourceManagerSource!=="all"&&item.source!==sourceManagerSource)return false;
+    if(!q)return true;
+    return searchKey([
+      item.name,
+      item.brand,
+      item.raw_brand,
+      item.raw_group,
+      sourceManagerSourceLabel(item.source)
+    ].join(" ")).includes(q);
+  });
+}
+
+function renderSourceManagerManualDetail(){
+  const detail=sourceManagerManualDetail;
+  if(!detail)return;
+  document.querySelectorAll("#sourceManagerKinds button").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.kind==="manual");
+  });
+  document.querySelectorAll("#sourceManagerSources button").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.source===sourceManagerSource);
+  });
+
+  const productCounts=detail.products||{};
+  $("#sourceManagerAllCount").textContent=String(Number(productCounts.all||0));
+  $("#sourceManagerWmCount").textContent=String(Number(productCounts.wm||0));
+  $("#sourceManagerBhxCount").textContent=String(Number(productCounts.bhx||0));
+  $("#sourceManagerGoCount").textContent=String(Number(productCounts.go||0));
+
+  const items=sourceManagerDetailItems();
+  const host=$("#sourceManagerRows");
+  const groupName=String(detail.group&&detail.group.name||"Nhóm tự lập");
+  const ruleLabel=String(detail.group&&detail.group.rule_label||"");
+  const sourceLabel=sourceManagerSource==="all"?"3 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+
+  host.innerHTML=
+    '<div class="source-manager-detail-head">'+
+      '<button id="sourceManagerDetailBack" type="button">← Nhóm tự lập</button>'+
+      '<div><strong>'+escapeHtml(groupName)+'</strong>'+
+        (ruleLabel?'<small>'+escapeHtml(ruleLabel)+'</small>':'')+
+      '</div>'+
+    '</div>'+
+    (items.length
+      ?items.map(item=>
+        '<article class="source-manager-product-row">'+
+          '<div class="source-manager-product-name">'+
+            '<strong>'+escapeHtml(item.name||"—")+'</strong>'+
+            '<small>'+
+              (item.brand?'Hãng: '+escapeHtml(item.brand):'Chưa có hãng')+
+              (item.raw_group?' · Nhóm nguồn: '+escapeHtml(item.raw_group):'')+
+            '</small>'+
+          '</div>'+
+          '<span class="source-manager-source-badge '+escapeAttr(item.source||"")+'">'+
+            escapeHtml(sourceManagerSourceLabel(item.source))+
+          '</span>'+
+        '</article>'
+      ).join("")
+      :'<div class="source-manager-empty">Không có sản phẩm phù hợp.</div>');
+
+  $("#sourceManagerSummary").textContent=
+    items.length+" / "+Number(productCounts[sourceManagerSource==="all"?"all":sourceManagerSource]||0)+" SP · "+sourceLabel;
+  $("#sourceManagerMore").hidden=true;
+}
+
+async function openSourceManagerManualGroup(groupKey){
+  if(!groupKey)return;
+  sourceManagerManualKey=groupKey;
+  sourceManagerManualDetail=null;
+  $("#sourceManagerRows").innerHTML='<div class="source-manager-loading">Đang đọc sản phẩm trong nhóm...</div>';
+  const r=await apiFetch("/api/library?view=manual-group&group="+encodeURIComponent(groupKey),{cache:"no-store"});
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.error||"manual_group_error");
+  sourceManagerManualDetail=data;
+  renderSourceManagerManualDetail();
+}
+
+function closeSourceManagerManualGroup(){
+  sourceManagerManualKey="";
+  sourceManagerManualDetail=null;
+  renderSourceManager();
 }
 
 async function loadSourceManager(force=false){
@@ -1960,6 +2056,8 @@ function closeSourceManager(){
   panel.hidden=true;
   panel.setAttribute("aria-hidden","true");
   document.body.classList.remove("source-manager-open");
+  sourceManagerManualKey="";
+  sourceManagerManualDetail=null;
 }
 
 async function refreshLibraryInBackground(){
@@ -2977,9 +3075,11 @@ $("#sourceManagerPanel").addEventListener("click",e=>{
 $("#sourceManagerKinds").addEventListener("click",e=>{
   const btn=e.target.closest("button[data-kind]");
   if(!btn)return;
-  sourceManagerKind=btn.dataset.kind==="manual"
+  const nextKind=btn.dataset.kind==="manual"
     ?"manual"
     :(btn.dataset.kind==="group"?"group":"brand");
+  if(nextKind!==sourceManagerKind||nextKind!=="manual")closeSourceManagerManualGroup();
+  sourceManagerKind=nextKind;
   sourceManagerLimit=200;
   renderSourceManager();
 });
@@ -2998,6 +3098,27 @@ $("#sourceManagerSearch").addEventListener("input",e=>{
 $("#sourceManagerMore").addEventListener("click",()=>{
   sourceManagerLimit+=200;
   renderSourceManager();
+});
+
+$("#sourceManagerRows").addEventListener("click",e=>{
+  const back=e.target.closest("#sourceManagerDetailBack");
+  if(back){
+    closeSourceManagerManualGroup();
+    return;
+  }
+  const row=e.target.closest("[data-manual-key]");
+  if(!row)return;
+  openSourceManagerManualGroup(row.dataset.manualKey||"").catch(()=>{
+    $("#sourceManagerRows").innerHTML=
+      '<div class="source-manager-empty">Chưa đọc được sản phẩm trong nhóm.</div>';
+  });
+});
+$("#sourceManagerRows").addEventListener("keydown",e=>{
+  if(e.key!=="Enter"&&e.key!==" ")return;
+  const row=e.target.closest("[data-manual-key]");
+  if(!row)return;
+  e.preventDefault();
+  row.click();
 });
 
 $("#toggleImport").addEventListener("click",()=>{

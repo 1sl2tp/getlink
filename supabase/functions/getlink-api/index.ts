@@ -1544,6 +1544,87 @@ function variantBucket(){
   return {bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>()};
 }
 
+async function fetchRowsByValues(table:string,select:string,column:string,values:string[]):Promise<any[]>{
+  const out:any[]=[];
+  const unique=[...new Set(values.filter(Boolean))];
+  for(let i=0;i<unique.length;i+=400){
+    const batch=unique.slice(i,i+400);
+    const {data,error}=await sb.from(table).select(select).in(column,batch);
+    if(error)throw error;
+    out.push(...(data||[]));
+  }
+  return out;
+}
+
+async function sourceManagerManualGroupDetail(groupKey:string){
+  const {data:group,error:groupError}=await sb
+    .from("getlink_manual_groups")
+    .select("group_key,name,rule_type,rule_value,enabled")
+    .eq("group_key",groupKey)
+    .eq("enabled",true)
+    .maybeSingle();
+  if(groupError)throw groupError;
+  if(!group)return null;
+
+  const members=await fetchAll(
+    "getlink_manual_group_members",
+    "group_key,link_url,match_origin,matched_at",
+    (q:any)=>q.eq("group_key",groupKey)
+  );
+  const urls=members.map((x:any)=>clean(x.link_url)).filter(Boolean);
+  const [links,ids]=await Promise.all([
+    fetchRowsByValues(
+      "getlink_links",
+      "canonical_url,source,name,branch_name,last_status",
+      "canonical_url",
+      urls
+    ),
+    fetchRowsByValues(
+      "getlink_source_product_identity",
+      "link_url,source_name,brand,raw_brand,category,raw_category",
+      "link_url",
+      urls
+    )
+  ]);
+
+  const idByUrl=new Map(ids.map((x:any)=>[x.link_url,x]));
+  const counts=sourceBucket();
+  const items:any[]=[];
+  for(const link of links){
+    if(link.last_status==="unlisted")continue;
+    const source=managerSourceKey(link.source);
+    if(!source)continue;
+    const id=idByUrl.get(link.canonical_url)||{};
+    counts[source]++;
+    items.push({
+      url:link.canonical_url,
+      name:clean(link.name),
+      source,
+      brand:clean(id.brand||link.branch_name),
+      raw_brand:clean(id.raw_brand||id.brand||link.branch_name),
+      raw_group:clean(id.raw_category||id.category),
+      match_origin:"rule"
+    });
+  }
+  items.sort((a,b)=>{
+    const rank=(x:string)=>x==="bhx"?0:(x==="wm"?1:2);
+    return (rank(a.source)-rank(b.source))||a.name.localeCompare(b.name,"vi");
+  });
+  return {
+    group:{
+      key:group.group_key,
+      name:clean(group.name),
+      rule_type:clean(group.rule_type),
+      rule_value:clean(group.rule_value),
+      rule_label:group.rule_type==="name_contains"
+        ?'Tên chứa “'+clean(group.rule_value)+'”'
+        :clean(group.rule_value)
+    },
+    products:{...counts,all:counts.bhx+counts.wm+counts.go},
+    items
+  };
+}
+
 async function sourceManagerSnapshot(force=false){
   if(!force&&sourceManagerCache&&Date.now()-sourceManagerCacheAt<SOURCE_MANAGER_CACHE_MS){
     return sourceManagerCache;
@@ -1785,6 +1866,13 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method==="GET"&&route==="/api/library"){
       const view=clean(url.searchParams.get("view")||"groups");
+      if(view==="manual-group"){
+        const groupKey=clean(url.searchParams.get("group")||"");
+        if(!groupKey)return response(req,{error:"missing_group"},400);
+        const detail=await sourceManagerManualGroupDetail(groupKey);
+        if(!detail)return response(req,{error:"group_not_found"},404);
+        return response(req,detail);
+      }
       if(view==="source-manager"){
         return response(req,await sourceManagerSnapshot(false));
       }

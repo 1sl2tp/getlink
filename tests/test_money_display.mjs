@@ -413,4 +413,14 @@ assert.equal(money(0),"—");
   assert.match(css,/Manual groups inside Source Manager/);
 }
 
+
+{
+  assert.match(app,/function renderSourceManagerManualDetail\(\)/);
+  assert.match(app,/function openSourceManagerManualGroup\(groupKey\)/);
+  assert.match(app,/view=manual-group&group=/);
+  assert.match(app,/data-manual-key=/);
+  assert.match(css,/Manual group drill-down/);
+  assert.match(css,/\.source-manager-product-row/);
+}
+
 console.log("money and hierarchy UI tests passed");

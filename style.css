@@ -6850,3 +6850,99 @@ body.source-manager-open{overflow:hidden!important}
     grid-template-columns:repeat(3,minmax(0,1fr))!important;
   }
 }
+
+
+/* Manual group drill-down */
+.source-manager-manual-row{
+  cursor:pointer;
+}
+.source-manager-manual-row:hover,
+.source-manager-manual-row:focus{
+  background:#f5faf7;
+  outline:none;
+}
+.source-manager-open-hint{
+  color:var(--green-strong)!important;
+  font-weight:750;
+}
+.source-manager-detail-head{
+  position:sticky;
+  top:0;
+  z-index:4;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:9px 16px;
+  border-bottom:1px solid #e4e9ec;
+  background:#fbfcfb;
+}
+.source-manager-detail-head button{
+  flex:0 0 auto;
+  min-height:28px;
+  padding:0 8px;
+  border:1px solid #dfe4e8;
+  border-radius:7px;
+  background:#fff;
+  color:#56636f;
+  font-size:9px;
+  font-weight:750;
+}
+.source-manager-detail-head div{min-width:0}
+.source-manager-detail-head strong{
+  display:block;
+  color:var(--text-primary);
+  font-size:11px;
+}
+.source-manager-detail-head small{
+  display:block;
+  margin-top:2px;
+  color:var(--text-muted);
+  font-size:8.5px;
+}
+.source-manager-product-row{
+  min-height:50px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+  gap:10px;
+  padding:8px 16px;
+  border-bottom:1px solid #edf0f2;
+}
+.source-manager-product-row:hover{background:#fafcfb}
+.source-manager-product-name{min-width:0}
+.source-manager-product-name strong{
+  display:block;
+  overflow:hidden;
+  color:var(--text-primary);
+  font-size:10px;
+  font-weight:700;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.source-manager-product-name small{
+  display:block;
+  margin-top:3px;
+  overflow:hidden;
+  color:var(--text-muted);
+  font-size:8.3px;
+  line-height:1.3;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+@media(max-width:720px){
+  .source-manager-detail-head,
+  .source-manager-product-row{
+    padding-left:12px;
+    padding-right:12px;
+  }
+  .source-manager-product-name strong{
+    white-space:normal;
+    line-height:1.3;
+  }
+  .source-manager-product-name small{
+    white-space:normal;
+    display:-webkit-box;
+    -webkit-box-orient:vertical;
+    -webkit-line-clamp:2;
+  }
+}

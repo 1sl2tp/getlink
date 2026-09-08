@@ -122,7 +122,7 @@ function slugTitle(url: string) {
 function normalizeUnit(raw: string) {
   const key = plain(raw);
   const map: Record<string,string> = {
-    "chai":"Chai","lon":"Lon","hop":"Hộp","goi":"Gói","tui":"Túi","bich":"Bịch",
+    "chai":"Chai","chia":"Chai","lon":"Lon","hop":"Hộp","goi":"Gói","tui":"Túi","bich":"Bịch",
     "hu":"Hũ","lo":"Lọ","can":"Can","mieng":"Miếng","thanh":"Thanh","vien":"Viên",
     "loc":"Lốc","khay":"Khay","vi":"Vỉ","thung":"Thùng","ly":"Ly","to":"Tô","binh":"Bình"
   };
@@ -141,7 +141,7 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
     "miếng":"Miếng","thanh":"Thanh","viên":"Viên","cái":"Cái","cây":"Cây","bộ":"Bộ","đôi":"Đôi",
     "tuýp":"Tuýp","túyp":"Tuýp","ly":"Ly","tô":"Tô","bình":"Bình"
   };
-  const unitPattern="thùng|lốc|khay|vỉ|chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp|ly|tô|bình";
+  const unitPattern="thùng|lốc|khay|vỉ|chai|chia|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp|ly|tô|bình";
   const pairRe=new RegExp("(?:^|[^\\p{L}\\p{N}])(\\d+)\\s*("+unitPattern+")(?![\\p{L}])","gu");
   const pairs:{qty:number,key:string,label:string}[]=[];
   for(const m of text.matchAll(pairRe)){
@@ -150,7 +150,7 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
   }
 
   // Handles "lốc 4 hộp", "khay 6 chai", "vỉ 10 gói".
-  const bundleRe=new RegExp("(?:^|[^\\p{L}])(lốc|khay|vỉ)\\s*(\\d+)\\s*(chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","u");
+  const bundleRe=new RegExp("(?:^|[^\\p{L}])(lốc|khay|vỉ)\\s*(\\d+)\\s*(chai|chia|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","u");
   const bundle=text.match(bundleRe);
   const rawUnit=clean(unit||packaging).toLowerCase().normalize("NFC");
   const hasCarton=new RegExp("(?:^|[^\\p{L}])thùng(?![\\p{L}])","u").test(text)||
@@ -183,7 +183,7 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
     if(!h.label3){
       // Handles source values such as "Thùng 24" while the product name says "lon".
       const cartonCount=text.match(new RegExp("(?:^|[^\\p{L}])thùng\\s*(\\d+)(?![\\p{L}\\p{N}])","u"));
-      const leafWord=[...text.matchAll(new RegExp("(?:^|[^\\p{L}])(chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","gu"))].pop();
+      const leafWord=[...text.matchAll(new RegExp("(?:^|[^\\p{L}])(chai|chia|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","gu"))].pop();
       if(cartonCount&&leafWord){
         const key=String(leafWord[1]||"").toLowerCase();
         h.label3=unitMap[key]||clean(leafWord[1]);h.qty3=Number(cartonCount[1])||1;

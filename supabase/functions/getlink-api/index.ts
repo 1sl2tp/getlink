@@ -1055,6 +1055,14 @@ Deno.serve(async(req:Request)=>{
         if(data?.result_json){
           const cached=sanitizeCatalogPayload(data.result_json);
           if(cached){
+            if(cached?.source?.key==="winmart"&&Array.isArray(cached.products)){
+              await mapIncomingWinmartGroups(cached.products);
+              if(cached.product){
+                const one=[cached.product] as Product[];
+                await mapIncomingWinmartGroups(one);
+                cached.product=one[0];
+              }
+            }
             const {count}=await sb.from("getlink_links").select("*",{count:"exact",head:true});
             return response(req,{request_id:data.request_id,status:"complete",input_url:input,link_type:data.link_type,payload:cached,registry_count:Number(count||0),engine:"supabase-cache",cache_hit:true});
           }
@@ -1113,13 +1121,7 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
-    }
-    if(req.method==="POST"&&route==="/api/admin/group-sync"){
-      const body=await req.json();
-      if(clean(body?.confirm)!=="BHX_GROUP_SYNC_V1")return response(req,{error:"confirmation_required"},400);
-      return response(req,await syncExistingWinmartGroups(Boolean(body?.apply)));
-    }
-    if(req.method==="POST"&&route==="/api/preference"){
+    }    if(req.method==="POST"&&route==="/api/preference"){
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();
       const row={link_url:link,state,auto_refresh:state==="watch",refresh_hours:Math.max(1,Number(body?.refresh_hours)||24),pinned:false,updated_at:now};
       await must(sb.from("getlink_link_preferences").upsert(row,{onConflict:"link_url"}));

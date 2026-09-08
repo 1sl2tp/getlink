@@ -377,117 +377,6 @@ async function handleCategory(request, env) {
   }
 }
 
-function stripHtml(text) {
-  return clean(String(text || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&#39;/g, "'")
-    .replace(/&quot;/gi, '"'));
-}
-
-async function inspectCategoryLinks(rawUrl) {
-  const { url } = canonicalCategoryUrl(rawUrl);
-  const r = await fetch(url, {
-    headers: {
-      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language": "vi-VN,vi;q=0.9,en;q=0.7",
-      "user-agent": "Mozilla/5.0"
-    }
-  });
-  const html = await r.text();
-  const map = new Map();
-  for (const m of html.matchAll(/<a\b[^>]*href=["']([^"'?#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
-    const href = clean(m[1]);
-    const label = stripHtml(m[2]);
-    let slug = "";
-    try {
-      const u = new URL(href, "https://www.bachhoaxanh.com/");
-      if (u.hostname.replace(/^www\./, "") !== "bachhoaxanh.com") continue;
-      const parts = u.pathname.split("/").filter(Boolean);
-      if (parts.length !== 1) continue;
-      slug = parts[0];
-    } catch { continue; }
-    const key = slug + "|" + label;
-    if (!map.has(key)) map.set(key, { slug, label });
-  }
-  const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
-    .map(m => {
-      try { return new URL(m[1], url).toString(); } catch { return ""; }
-    })
-    .filter(Boolean);
-  const lower = html.toLowerCase();
-  const snippets = [];
-  for (const needle of ["gia-vi", "tuong", "category", "getcate", "__next_data__"]) {
-    let at = lower.indexOf(needle);
-    if (at >= 0) snippets.push({ needle, text: html.slice(Math.max(0, at - 250), at + 750) });
-  }
-  return {
-    status: r.status,
-    length: html.length,
-    links: [...map.values()].slice(0, 500),
-    scripts: scripts.slice(0, 80),
-    snippets
-  };
-}
-
-async function inspectApiStrings(rawUrl) {
-  const { url } = canonicalCategoryUrl(rawUrl);
-  const page = await fetch(url, {
-    headers: {
-      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language": "vi-VN,vi;q=0.9,en;q=0.7",
-      "user-agent": "Mozilla/5.0"
-    }
-  });
-  const html = await page.text();
-  const scripts = [...html.matchAll(/<script\b[^>]*src=["']([^"']+)["'][^>]*>/gi)]
-    .map(m => {
-      try { return new URL(m[1], url).toString(); } catch { return ""; }
-    })
-    .filter(Boolean)
-    .slice(0, 48);
-
-  const matches = [];
-  for (let start = 0; start < scripts.length; start += 5) {
-    const batch = scripts.slice(start, start + 5);
-    const rows = await Promise.all(batch.map(async src => {
-      try {
-        const r = await fetch(src, { headers: { "accept": "*/*", "user-agent": "Mozilla/5.0" } });
-        const text = await r.text();
-        if (!/GetCate|GetFilters|GetHeadingPolicy|AjaxProduct|\/gw\/Category|categoryUrl|GetMenu/i.test(text)) return null;
-        const found = [];
-        const contexts = [];
-        for (const term of ["GetMenuV2","GetMenuHeader","getMenuCategory","GetCategoryRelative","GetCateVegetable"]) {
-          const at = text.indexOf(term);
-          if (at >= 0) contexts.push({ term, text: text.slice(Math.max(0, at - 700), at + 1200) });
-        }
-        for (const re of [
-          /[^"'\s]{0,80}GetCate[^"'\s]{0,160}/gi,
-          /[^"'\s]{0,80}AjaxProduct[^"'\s]{0,160}/gi,
-          /[^"'\s]{0,80}GetFilters[^"'\s]{0,160}/gi,
-          /[^"'\s]{0,80}GetHeadingPolicy[^"'\s]{0,160}/gi,
-          /\/gw\/Category\/[A-Za-z0-9_\/-]+/g,
-          /[A-Za-z0-9_\/-]{0,80}GetMenu[A-Za-z0-9_\/?=&.-]{0,120}/gi
-        ]) {
-          for (const m of text.matchAll(re)) {
-            found.push(m[0].slice(0, 300));
-            if (found.length >= 30) break;
-          }
-          if (found.length >= 30) break;
-        }
-        return (found.length || contexts.length) ? { src, length: text.length, found: [...new Set(found)], contexts } : null;
-      } catch (error) {
-        return { src, error: String(error?.message || error).slice(0, 200) };
-      }
-    }));
-    for (const row of rows) if (row && (row.found?.length || row.error)) matches.push(row);
-  }
-  return { pageStatus: page.status, scriptCount: scripts.length, matches };
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -499,22 +388,10 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/category") {
       return handleCategory(request, env);
-    }
-    if (request.method === "POST" && url.pathname === "/inspect-links") {
-      if (request.headers.get(RELAY_HEADER) !== RELAY_VALUE) return json({ error: "unauthorized" }, 401);
-      try {
-        const body = await request.json();
-        return json(await inspectCategoryLinks(body?.url));
-      } catch (error) {
+    } catch (error) {
         return json({ error: "inspect_links_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
       }
-    }
-    if (request.method === "POST" && url.pathname === "/inspect-apis") {
-      if (request.headers.get(RELAY_HEADER) !== RELAY_VALUE) return json({ error: "unauthorized" }, 401);
-      try {
-        const body = await request.json();
-        return json(await inspectApiStrings(body?.url));
-      } catch (error) {
+    } catch (error) {
         return json({ error: "inspect_apis_failed", detail: String(error?.message || error).slice(0, 1000) }, 502);
       }
     }

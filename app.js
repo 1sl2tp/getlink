@@ -1364,25 +1364,19 @@ function categoryPagerButtons(page,total){
 }
 
 function rowRootGroup(row){
-  if(isWinmartRow(row)){
-    return String(
-      row&&row.source_root_name||
-      row&&row.group_name||
-      ""
-    ).trim();
-  }
+  // group_name is the canonical browsing group. For WinMart this may already
+  // be normalized to the matching BHX group; source_root_name remains audit-only.
   return String(row&&row.group_name||"").trim();
 }
 
 function rowChildGroup(row){
   if(!isWinmartRow(row))return "";
-  const child=String(
-    row&&row.source_category_name||
-    row&&row.group_name||
-    ""
-  ).trim();
+  const child=String(row&&row.source_category_name||"").trim();
   const root=rowRootGroup(row);
-  return child&&child!==root?child:"";
+  if(!child)return "";
+  // Do not show a duplicate child when WinMart's original category only differs
+  // by case/accents from the canonical BHX group.
+  return searchKey(child)===searchKey(root)?"":child;
 }
 
 function renderCategoryMenu(){

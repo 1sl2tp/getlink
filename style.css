@@ -5355,3 +5355,168 @@ body.image-zoom-open{overflow:hidden!important}
     font-size:8px!important;
   }
 }
+
+
+/* Filter decision flow v1
+   Clear order: Giá -> Nguồn -> Tìm kiếm -> Kiểu xem.
+   This final block intentionally overrides the older compact-control layers. */
+.purchase-mode-row{
+  display:flex!important;
+  align-items:center!important;
+  gap:8px!important;
+  width:100%!important;
+  margin:0!important;
+  padding:6px 10px 7px!important;
+}
+.purchase-mode-row > .control-label{display:none!important}
+
+.filter-block{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:6px;
+  padding:4px 5px 4px 8px;
+  border:1px solid #e2e7eb;
+  border-radius:10px;
+  background:#f8fafb;
+}
+.filter-block-pack{flex:0 1 auto}
+.filter-block-source{flex:0 1 auto}
+
+.filter-label{
+  flex:0 0 auto;
+  color:#697480;
+  font-size:9.5px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:.02em;
+  white-space:nowrap;
+}
+
+.purchase-mode-row .catalog-pack-tabs,
+.purchase-mode-row .source-tabs{
+  width:auto!important;
+  min-width:0!important;
+  display:flex!important;
+  align-items:center!important;
+  gap:4px!important;
+  overflow:visible!important;
+  white-space:nowrap!important;
+}
+
+.purchase-mode-row .pack-chip,
+.purchase-mode-row .source-chip{
+  flex:0 0 auto!important;
+  width:auto!important;
+  min-width:0!important;
+  height:30px!important;
+  min-height:30px!important;
+  padding:0 8px!important;
+  border:1px solid #dde3e8!important;
+  border-radius:7px!important;
+  background:#fff!important;
+  color:#5d6874!important;
+  font-size:9.5px!important;
+  font-weight:760!important;
+  line-height:1!important;
+  text-align:center!important;
+  white-space:nowrap!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+}
+
+.purchase-mode-row .pack-chip small,
+.purchase-mode-row .source-chip small{
+  display:inline!important;
+  margin-left:3px!important;
+  color:#9aa3ad!important;
+  font-size:7.8px!important;
+  font-weight:650!important;
+}
+
+.purchase-mode-row .pack-chip.active,
+.purchase-mode-row .source-chip.active{
+  border-color:#0b8f50!important;
+  background:#0b8f50!important;
+  color:#fff!important;
+}
+.purchase-mode-row .pack-chip.active small,
+.purchase-mode-row .source-chip.active small{
+  color:#d8f2e4!important;
+}
+
+@media(max-width:760px){
+  .purchase-mode-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:6px!important;
+    padding:7px 8px 6px!important;
+  }
+
+  .filter-block{
+    width:100%!important;
+    box-sizing:border-box!important;
+    display:grid!important;
+    grid-template-columns:48px minmax(0,1fr)!important;
+    align-items:center!important;
+    gap:5px!important;
+    padding:4px 5px 4px 7px!important;
+  }
+
+  .filter-label{
+    font-size:9.5px!important;
+  }
+
+  .purchase-mode-row .catalog-pack-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:4px!important;
+    width:100%!important;
+  }
+  .purchase-mode-row .source-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:4px!important;
+    width:100%!important;
+  }
+
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip{
+    width:100%!important;
+    min-width:0!important;
+    height:31px!important;
+    padding:0 4px!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    font-size:9.2px!important;
+  }
+
+  .purchase-mode-row .source-chip small{
+    display:none!important;
+  }
+
+  .catalog-search-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:6px!important;
+    padding:0 8px 8px!important;
+  }
+}
+
+@media(max-width:380px){
+  .filter-block{
+    grid-template-columns:42px minmax(0,1fr)!important;
+  }
+  .filter-label{
+    font-size:8.8px!important;
+  }
+  .purchase-mode-row .pack-chip small{
+    display:none!important;
+  }
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip{
+    font-size:8.8px!important;
+    padding-left:3px!important;
+    padding-right:3px!important;
+  }
+}

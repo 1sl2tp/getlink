@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-compact-controls-v4">
+  <link rel="stylesheet" href="style.css?v=20260908-filter-flow-v1">
 </head>
 <body>
 <main class="wrap">
@@ -67,10 +67,15 @@
           </div>
         </div>
 
-        <div class="catalog-controls purchase-mode-row">
-          <span class="control-label">Xem theo</span>
-          <div id="packTabs" class="pack-tabs catalog-pack-tabs"></div>
-          <div id="sourceTabs" class="source-tabs" aria-label="Lọc theo nguồn"></div>
+        <div class="catalog-controls purchase-mode-row" aria-label="Bộ lọc sản phẩm">
+          <div class="filter-block filter-block-pack">
+            <span class="filter-label">Giá</span>
+            <div id="packTabs" class="pack-tabs catalog-pack-tabs" aria-label="Chọn giá thùng hoặc giá lẻ"></div>
+          </div>
+          <div class="filter-block filter-block-source">
+            <span class="filter-label">Nguồn</span>
+            <div id="sourceTabs" class="source-tabs" aria-label="Lọc theo nguồn"></div>
+          </div>
         </div>
 
         <div class="catalog-search-row">

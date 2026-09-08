@@ -1775,7 +1775,7 @@ function renderPackTabs(){
   }
 
   host.innerHTML=
-    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Tất cả <small>'+base.length+'</small></button>'+
+    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button">Cả hai <small>'+base.length+'</small></button>'+
     '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button">Thùng <small>'+cartonCount+'</small></button>'+
     '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
 }

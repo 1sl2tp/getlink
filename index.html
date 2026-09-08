@@ -4,16 +4,21 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-source-filter-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-category-in-header-v1">
 </head>
 <body>
 <main class="wrap">
   <header class="site-head">
     <div class="logo">GL</div>
-    <div>
+    <div class="site-brand-copy">
       <h1>GETLINK</h1>
       <p>Thư viện giá BHX + WM + GO · Tra cứu và so sánh theo quy cách</p>
     </div>
+    <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
+      <span aria-hidden="true">☰</span>
+      <strong>Danh mục</strong>
+      <span id="mobileCategoryCurrent">Tất cả</span>
+    </button>
   </header>
 
   <section class="card import-card" id="importCard" hidden>
@@ -40,11 +45,6 @@
     </div>
   </section>
 
-  <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
-    <span aria-hidden="true">☰</span>
-    <strong>Danh mục</strong>
-    <span id="mobileCategoryCurrent">Tất cả</span>
-  </button>
   <div id="mobileNavScrim" class="mobile-nav-scrim" hidden></div>
 
   <div class="workspace">

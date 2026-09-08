@@ -295,7 +295,7 @@ assert.equal(money(0),"—");
   assert.ok(packRenderer&&sourceRenderer&&packHandler&&sourceHandler,"source-menu helpers not found");
   assert.equal(packRenderer[0].includes(">Cả hai <small>"),false);
   assert.match(sourceRenderer[0],/>3 nguồn<\/span>/);
-  assert.match(sourceHandler[0],/activeSourceFilter=chip\.dataset\.source\|\|""/);
+  assert.match(sourceHandler[0],/setActiveSourceFilter\(chip\.dataset\.source\|\|""\)/);
   assert.match(html,/nav-source-block/);
   assert.match(html,/id="sourceTabs" class="source-tabs nav-source-tabs"/);
   assert.match(html,/Quy cách:<\/span>/);

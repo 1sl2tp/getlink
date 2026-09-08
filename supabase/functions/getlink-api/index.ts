@@ -1286,7 +1286,9 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
-    }if(req.method==="POST"&&route==="/api/preference"){
+    }
+
+    if(req.method==="POST"&&route==="/api/preference"){
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();
       const row={link_url:link,state,auto_refresh:state==="watch",refresh_hours:Math.max(1,Number(body?.refresh_hours)||24),pinned:false,updated_at:now};
       await must(sb.from("getlink_link_preferences").upsert(row,{onConflict:"link_url"}));

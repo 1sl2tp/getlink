@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v4");
+      const req=tx.objectStore("cache").get("library-v5");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v4");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v5");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -715,7 +715,7 @@ function renderProduct(payload){
   $("#name").textContent=p.name||"Sản phẩm";
   $("#group").textContent=p.group||"—";
   $("#branch").textContent=p.branch||"—";
-  $("#packaging").textContent=(p.packaging&&p.packaging.text)||"—";
+  $("#packaging").textContent=productHierarchyText(p);
 
   const cmp=p.comparison||{};
   activeComparison=cmp;
@@ -822,7 +822,10 @@ function detailSizeForUrl(url){
   const key=canonical(url||"");
   const row=libraryByUrl.get(key);
   if(!row||!row.size_value)return "—";
-  return String(row.size_value)+" "+String(row.size_unit||"").trim();
+  const h=rowPackHierarchy(row);
+  const leaf=String(h.label3||"").trim();
+  const base=String(row.size_value)+" "+String(row.size_unit||"").trim();
+  return leaf?base+" / "+leaf.toLowerCase():base;
 }
 
 function detailGroupForUrl(url){
@@ -895,7 +898,11 @@ function payloadFromLibraryRow(row){
       brand:row.brand_name||row.branch_name||"",
       category:row.source_category_name||row.group_name||"",
       raw_name:row.source_raw_name||row.name||"",
-      raw_description:row.source_raw_description||""
+      raw_description:row.source_raw_description||"",
+      bhx_group_name:row.bhx_group_name||"",
+      bhx_brand_name:row.bhx_brand_name||"",
+      bhx_match_url:row.bhx_match_url||"",
+      bhx_match_name:row.bhx_match_name||""
     },
     last_checked_at:row.last_checked_at||row.updated_at||""
   };
@@ -1118,20 +1125,7 @@ function winmartDisplayPack(row){
 }
 
 function rowPackHierarchy(row){
-  if(isWinmartRow(row)){
-    const wm=winmartDisplayPack(row);
-    return {
-      label1:wm.kind==="carton"?wm.label:"",
-      qty1:0,
-      label2:wm.kind==="middle"?wm.label:"",
-      qty2:0,
-      label3:wm.kind==="leaf"?wm.label:"",
-      qty3:0,
-      evidence:wm.kind?"winmart-display-only":"",
-      locked:false
-    };
-  }
-  return {
+  const stored={
     label1:String(row&&row.pack_label_1||"").trim(),
     qty1:Number(row&&row.pack_qty_1)||0,
     label2:String(row&&row.pack_label_2||"").trim(),
@@ -1141,12 +1135,25 @@ function rowPackHierarchy(row){
     evidence:String(row&&row.pack_evidence||"").trim(),
     locked:Number(row&&row.hierarchy_locked||0)>0
   };
+  if(stored.label1||stored.label2||stored.label3)return stored;
+
+  if(isWinmartRow(row)){
+    const wm=winmartDisplayPack(row);
+    return {
+      label1:wm.kind==="carton"?"Thùng":"",
+      qty1:wm.kind==="carton"?1:0,
+      label2:wm.kind==="middle"?wm.label:"",
+      qty2:0,
+      label3:wm.kind==="leaf"?wm.label:"",
+      qty3:wm.kind==="leaf"?1:0,
+      evidence:wm.kind?"winmart-fallback":"",
+      locked:false
+    };
+  }
+  return stored;
 }
 
 function rowIsCarton(row){
-  if(isWinmartRow(row)){
-    return winmartDisplayPack(row).kind==="carton";
-  }
   return rowPackHierarchy(row).label1==="Thùng";
 }
 
@@ -1248,14 +1255,33 @@ function sourceDisplayClass(row){
 function rowPrimaryQc(row){
   const h=rowPackHierarchy(row);
   if(h.label1==="Thùng"){
-    if(h.label2)return packHierarchyText(h.qty2,h.label2);
-    if(h.label3)return packHierarchyText(h.qty3,h.label3);
-    return "1 Thùng";
+    const child=h.label2
+      ?packHierarchyText(h.qty2||1,h.label2)
+      :(h.label3?packHierarchyText(h.qty3||1,h.label3):"");
+    return child?"Thùng · "+child:"Thùng";
   }
-  if(h.label2&&h.label3)return packHierarchyText(h.qty3,h.label3);
+  if(h.label2&&h.label3){
+    return packHierarchyText(h.qty2||1,h.label2)+" · "+packHierarchyText(h.qty3||1,h.label3);
+  }
   if(h.label3)return packHierarchyText(h.qty3||1,h.label3);
   if(h.label2)return packHierarchyText(h.qty2||1,h.label2);
   return "—";
+}
+
+function productHierarchyText(p){
+  const h=p&&p.hierarchy||{};
+  if(String(h.label1||"").trim()==="Thùng"){
+    const child=h.label2
+      ?packHierarchyText(h.qty2||1,h.label2)
+      :(h.label3?packHierarchyText(h.qty3||1,h.label3):"");
+    return child?"Thùng / "+child:"Thùng";
+  }
+  if(h.label2&&h.label3){
+    return packHierarchyText(h.qty2||1,h.label2)+" / "+packHierarchyText(h.qty3||1,h.label3);
+  }
+  if(h.label3)return packHierarchyText(h.qty3||1,h.label3);
+  if(h.label2)return packHierarchyText(h.qty2||1,h.label2);
+  return String(p&&p.packaging&&p.packaging.text||"").trim()||"—";
 }
 
 function packHierarchyText(qty,label){
@@ -1463,9 +1489,7 @@ function gridProductCard(row){
         ?(levels.promoMiddlePrice||levels.middlePrice)
         :(levels.promoLeafPrice||levels.leafPrice)));
   const image=String(row.image||"").trim();
-  const qc=rawWinmart
-    ?String(row.packaging||"").trim()
-    :rowPrimaryQc(row);
+  const qc=rowPrimaryQc(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+

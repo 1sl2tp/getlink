@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-catalog-v2">
+  <link rel="stylesheet" href="style.css?v=20260908-catalog-v3">
 </head>
 <body>
 <main class="wrap">
@@ -153,6 +153,14 @@
       </section>
 
       <section class="card result detail-panel" id="result" hidden>
+        <div class="detail-back-row">
+          <button id="backToCategory" class="detail-back-button" type="button" aria-label="Quay lại danh mục">
+            <span aria-hidden="true">←</span>
+            <span>Danh mục</span>
+          </button>
+          <span id="detailCategoryLabel" class="detail-category-label"></span>
+        </div>
+
         <div class="detail-image-wrap">
           <img id="detailImage" alt="" hidden>
           <div id="detailImageFallback" class="detail-image-fallback">GL</div>
@@ -226,6 +234,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-catalog-v2"></script>
+<script src="app.js?v=20260908-catalog-v3"></script>
 </body>
 </html>

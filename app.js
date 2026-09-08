@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v19");
+      const req=tx.objectStore("cache").get("library-v20");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v19");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v20");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1480,9 +1480,12 @@ function renderCategoryMenu(){
   const host=$("#categoryTabs");
   if(!host)return;
 
-  const visibleLibrary=libraryCache.filter(row=>
+  let visibleLibrary=libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden"
   );
+  if(activeSourceFilter){
+    visibleLibrary=visibleLibrary.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+  }
 
   const roots=new Map();
   for(const row of visibleLibrary){
@@ -1699,6 +1702,7 @@ function visibleRowsBeforePack(){
 
 function categoryBaseRows(){
   let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+  if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
   if(activeRootGroup)rows=rows.filter(row=>rowRootGroup(row)===activeRootGroup);
   if(activeGroupUrl)rows=rows.filter(row=>rowChildGroup(row)===activeGroupUrl);
   return rows;
@@ -1708,7 +1712,10 @@ function renderPackTabs(){
   const host=$("#packTabs");
   if(!host)return;
 
-  const base=rowsBeforeSearch();
+  let base=rowsBeforeSearch();
+  if(activeSourceFilter){
+    base=base.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+  }
   const cartonCount=base.filter(row=>rowIsCarton(row)).length;
   const retailCount=base.filter(row=>rowIsRetail(row)).length;
 
@@ -2332,10 +2339,27 @@ $("#sourceTabs").addEventListener("click",e=>{
   activeSourceFilter=chip.dataset.source||"";
   if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
   else localStorage.removeItem("getlink:filter-source");
+
+  // Source is global browse context. Rebuild category choices/counts immediately.
+  // If the selected category does not exist in this source, return to Tất cả.
+  const sourceRows=libraryCache.filter(row=>
+    String(row.preference_state||"normal")!=="hidden" &&
+    (!activeSourceFilter||rowSourceFilterKey(row)===activeSourceFilter)
+  );
+  if(activeRootGroup&&!sourceRows.some(row=>rowRootGroup(row)===activeRootGroup)){
+    activeRootGroup="";
+    activeGroupUrl="";
+    activeBrand="";
+  }else if(activeGroupUrl&&!sourceRows.some(row=>rowChildGroup(row)===activeGroupUrl)){
+    activeGroupUrl="";
+    activeBrand="";
+  }
+
   libraryPage=1;
   resetBrowseDetail();
   const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
   if(activeScroller)activeScroller.scrollTop=0;
+  renderCategoryMenu();
   renderLibraryProducts();
 });
 

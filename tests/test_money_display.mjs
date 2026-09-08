@@ -89,8 +89,24 @@ assert.equal(money(0),"—");
     false
   );
   assert.equal(
-    api.matchesSearch({name:"Mì Hảo Hảo tôm chua cay",brand_name:"Hảo Hảo"},"hao hao"),
+    api.matchesSearch({name:"Mì Hảo Hảo tôm chua cay"},"hao hao"),
     true
+  );
+  assert.equal(
+    api.matchesSearch({name:"Nước khoáng Vĩnh Hảo 500ml",brand_name:"Vĩnh Hảo"},"hao hao"),
+    false
+  );
+  assert.equal(
+    api.matchesSearch({name:"Sữa đặc có đường Hoàn Hảo 380g",brand_name:"Hoàn Hảo"},"hao hao"),
+    false
+  );
+  const haoHao={name:"Mì tôm Hảo Hảo 30 gói",brand_name:"Hảo Hảo",packaging:"Thùng"};
+  assert.equal(api.matchesSearch(haoHao,"mi hao"),true);
+  assert.equal(api.matchesSearch(haoHao,"tom hao"),true);
+  assert.equal(api.matchesSearch(haoHao,"hao 30"),true);
+  assert.equal(
+    api.matchesSearch({name:"Nước khoáng Vĩnh Hảo 500ml",brand_name:"Hảo Hảo"},"hao hao"),
+    false
   );
 }
 

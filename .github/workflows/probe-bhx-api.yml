@@ -1,0 +1,52 @@
+name: Probe BHX direct API
+
+on:
+  push:
+    paths:
+      - ".github/workflows/probe-bhx-api.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe BHX product and category APIs directly
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://api.bachhoaxanh.com/gw'
+          UA='Mozilla/5.0'
+          REF='https://www.bachhoaxanh.com/hat-nem'
+          COMMON='provinceId=1027&wardId=0&districtId=0&storeId=2546'
+
+          echo '=== PRODUCT ==='
+          curl -L -sS --connect-timeout 10 --max-time 20             -A "$UA" -H 'Accept: application/json'             -H 'Origin: https://www.bachhoaxanh.com'             -H "Referer: $REF"             "$BASE/Product/GetProductDetail?$COMMON&CategoryUrl=hat-nem&ProductUrl=bot-ngot-ajinomoto-1kg-cl"             -o /tmp/product.json
+          jq -c '{code,message,data_type:(.data|type),data_keys:((.data // {})|keys|.[0:30])}' /tmp/product.json
+
+          echo '=== CATEGORY CANDIDATES ==='
+          candidates=(
+            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&pageIndex=1&pageSize=500'
+            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&categoryUrl=hat-nem&pageIndex=1&pageSize=500'
+            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&page=1&pageSize=500'
+            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&category=hat-nem&pageIndex=1&pageSize=500'
+          )
+          n=0
+          for path in "${candidates[@]}"; do
+            n=$((n+1))
+            echo "CANDIDATE $n $path"
+            curl -L -sS --connect-timeout 10 --max-time 20               -A "$UA" -H 'Accept: application/json'               -H 'Origin: https://www.bachhoaxanh.com'               -H "Referer: $REF"               "$BASE/$path" -o "/tmp/cat-$n.json" || true
+            if jq -e . "/tmp/cat-$n.json" >/dev/null 2>&1; then
+              jq -c '{
+                code,message,
+                data_type:(.data|type),
+                data_keys:((.data // {})|keys|.[0:30]),
+                products_guess:([
+                  .. | arrays | select(length>0) |
+                  select((.[0]|type)=="object") |
+                  select((.[0]|has("url")) or (.[0]|has("name")) or (.[0]|has("productPrices")))
+                ] | map(length) | max // 0)
+              }' "/tmp/cat-$n.json"
+            else
+              head -c 800 "/tmp/cat-$n.json" || true
+              echo
+            fi
+          done

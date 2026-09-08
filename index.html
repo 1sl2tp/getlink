@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260908-table-sticky-source-v1">
+  <link rel="stylesheet" href="style.css?v=20260908-source-manager-v1">
 </head>
 <body>
 <main class="wrap">
@@ -56,6 +56,10 @@
       <div class="nav-source-block" aria-label="Chọn nguồn hàng">
         <div class="nav-section-label">Nguồn hàng</div>
         <div id="sourceTabs" class="source-tabs nav-source-tabs" aria-label="Lọc theo nguồn"></div>
+        <button id="openSourceManager" class="nav-source-manager" type="button">
+          <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M10 17h10M4 17h2"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>
+          <span>Quản lý nguồn</span>
+        </button>
       </div>
       <div id="categoryTabs" class="category-tabs nav-list">
         <button class="category-chip active" type="button">Đang tải...</button>
@@ -243,6 +247,46 @@
   </div>
 </main>
 
+<div id="sourceManagerPanel" class="source-manager-overlay" hidden aria-hidden="true">
+  <section class="source-manager-card" role="dialog" aria-modal="true" aria-labelledby="sourceManagerTitle">
+    <header class="source-manager-head">
+      <div>
+        <h2 id="sourceManagerTitle">Quản lý nguồn</h2>
+        <p>Đối chiếu Hãng và Nhóm giữa WM · BHX · GO</p>
+      </div>
+      <button id="closeSourceManager" class="source-manager-close" type="button" aria-label="Đóng">
+        <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </header>
+
+    <div class="source-manager-toolbar">
+      <div id="sourceManagerKinds" class="source-manager-segment" aria-label="Loại dữ liệu">
+        <button class="active" data-kind="brand" type="button">Hãng <small id="sourceManagerBrandCount">0</small></button>
+        <button data-kind="group" type="button">Nhóm <small id="sourceManagerGroupCount">0</small></button>
+      </div>
+      <div id="sourceManagerSources" class="source-manager-segment source-manager-source-tabs" aria-label="Nguồn">
+        <button class="active" data-source="all" type="button">Tất cả</button>
+        <button data-source="wm" type="button">WM</button>
+        <button data-source="bhx" type="button">BHX</button>
+        <button data-source="go" type="button">GO</button>
+      </div>
+    </div>
+
+    <div class="source-manager-search">
+      <input id="sourceManagerSearch" autocomplete="off" placeholder="Tìm hãng, nhóm, tên tại nguồn...">
+      <span id="sourceManagerSummary"></span>
+    </div>
+
+    <div class="source-manager-list-head" aria-hidden="true">
+      <span>Tên chuẩn / theo dõi</span>
+      <span>Nguồn</span>
+      <span>SP</span>
+    </div>
+    <div id="sourceManagerRows" class="source-manager-rows" aria-live="polite"></div>
+    <button id="sourceManagerMore" class="source-manager-more" type="button" hidden>Xem thêm</button>
+  </section>
+</div>
+
 <div id="imageZoom" class="image-zoom" hidden aria-hidden="true">
   <button id="closeImageZoom" class="image-zoom-close" type="button" aria-label="Đóng ảnh"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   <img id="imageZoomTarget" alt="">
@@ -252,6 +296,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260908-source-cycle-fast-v1"></script>
+<script src="app.js?v=20260908-source-manager-v1"></script>
 </body>
 </html>

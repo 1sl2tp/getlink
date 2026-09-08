@@ -380,4 +380,19 @@ assert.equal(money(0),"—");
   assert.match(css,/z-index:12!important/);
 }
 
+
+{
+  assert.match(html,/id="openSourceManager"/);
+  assert.match(html,/id="sourceManagerPanel"/);
+  assert.match(html,/data-kind="brand"/);
+  assert.match(html,/data-kind="group"/);
+  assert.match(html,/data-source="all"/);
+  assert.match(html,/data-source="wm"/);
+  assert.match(html,/data-source="bhx"/);
+  assert.match(html,/data-source="go"/);
+  assert.match(app,/function renderSourceManager\(\)/);
+  assert.match(app,/\/api\/library\?view=source-manager/);
+  assert.match(css,/Source manager v1/);
+}
+
 console.log("money and hierarchy UI tests passed");

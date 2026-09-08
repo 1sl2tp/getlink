@@ -1277,7 +1277,10 @@ async function resolveCanonicalProductBrands(products:Product[]):Promise<void>{
 
   for(const p of products){
     const si=p.source_identity||(p.source_identity={});
-    const rawMain=clean(si.brand||p.branch);
+    const rawMain=clean(si.raw_brand||si.brand||p.branch);
+    if(rawMain&&!clean(si.raw_brand))si.raw_brand=rawMain;
+    const rawCategory=clean(si.raw_category||si.category||p.group);
+    if(rawCategory&&!clean(si.raw_category))si.raw_category=rawCategory;
     const canonicalMain=canonicalFor(rawMain);
     if(canonicalMain){
       p.branch=canonicalMain;
@@ -1332,14 +1335,18 @@ async function persistPayload(payload:any, engine:string){
     if(p.image)assets.push({link_url:p.url,image_url:p.image,updated_at:now});
     comps.push({link_url:p.url,pack_kind:cmp.pack_kind||"",pack_quantity:Number(cmp.pack_quantity)||1,pack_unit:cmp.pack_unit||"",size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",regular_pack_price:cmp.regular_pack_price??p.price?.current??null,promo_pack_price:cmp.promo_pack_price??null,regular_unit_price:cmp.regular_unit_price??null,promo_unit_price:cmp.promo_unit_price??null,promotion_active:Boolean(cmp.promotion_active),updated_at:now});
     hier.push({link_url:p.url,label1:h.label1||"",qty1:Number(h.qty1)||0,label2:h.label2||"",qty2:Number(h.qty2)||0,label3:h.label3||"",qty3:Number(h.qty3)||0,evidence:h.evidence||"",updated_at:now});
-    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),category:clean(si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),bhx_match_url:clean(si.bhx_match_url),bhx_match_name:clean(si.bhx_match_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
+    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),raw_brand:clean(si.raw_brand||si.brand||p.branch),category:clean(si.category||p.group),raw_category:clean(si.raw_category||si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),bhx_match_url:clean(si.bhx_match_url),bhx_match_name:clean(si.bhx_match_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
     snaps.push({link_id:id,request_id:requestId,checked_at:p.last_checked_at||payload.checked_at,current_price:p.price?.current||null,original_price:p.price?.original||null,promotion_price:p.promotion?.price||null,promotion_text:p.promotion?.text||"",result_json:p});
   }
   await must(sb.from("getlink_links").upsert(rows,{onConflict:"canonical_url"}));
   if(assets.length)await must(sb.from("getlink_link_assets").upsert(assets,{onConflict:"link_url"}));
   if(comps.length)await must(sb.from("getlink_link_comparison").upsert(comps,{onConflict:"link_url"}));
   if(hier.length)await must(sb.from("getlink_link_pack_hierarchy").upsert(hier,{onConflict:"link_url"}));
-  if(identities.length)await must(sb.from("getlink_source_product_identity").upsert(identities,{onConflict:"link_url"}));
+  if(identities.length){
+    await must(sb.from("getlink_source_product_identity").upsert(identities,{onConflict:"link_url"}));
+    sourceManagerCache=null;
+    sourceManagerCacheAt=0;
+  }
   if(snaps.length)await must(sb.from("getlink_price_snapshots").upsert(snaps,{onConflict:"link_id,request_id"}));
 
   await must(sb.from("getlink_jobs").update({link_type:payload.input_type,status:"complete",result_json:payload,error:null,updated_at:now}).eq("request_id",requestId));
@@ -1357,6 +1364,104 @@ async function fetchAll(table:string, select="*", filter?:(q:any)=>any){
   }
   return out;
 }
+let sourceManagerCache:any=null;
+let sourceManagerCacheAt=0;
+const SOURCE_MANAGER_CACHE_MS=5*60*1000;
+
+function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|""{
+  const s=plain(value);
+  if(s.includes("bach hoa xanh"))return "bhx";
+  if(s.includes("winmart"))return "wm";
+  if(/^go\b/.test(s)||s==="go!")return "go";
+  return "";
+}
+function managerGroupDisplay(value:unknown):string{
+  return clean(value).replace(/\s+[A-Z]\.\d+\s*$/iu,"").trim();
+}
+function managerGroupKey(value:unknown):string{
+  return getlinkNameKey(managerGroupDisplay(value));
+}
+function sourceBucket(){
+  return {bhx:0,wm:0,go:0};
+}
+function variantBucket(){
+  return {bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>()};
+}
+
+async function sourceManagerSnapshot(force=false){
+  if(!force&&sourceManagerCache&&Date.now()-sourceManagerCacheAt<SOURCE_MANAGER_CACHE_MS){
+    return sourceManagerCache;
+  }
+  const [ids,links,aliases]=await Promise.all([
+    fetchAll("getlink_source_product_identity","link_url,source_name,brand,raw_brand,category,raw_category,bhx_group_name"),
+    fetchAll("getlink_links","canonical_url,last_status",(q:any)=>q.eq("link_type","product")),
+    loadBrandAliases()
+  ]);
+  const activeLinks=new Set(
+    links.filter((x:any)=>x.last_status!=="unlisted").map((x:any)=>x.canonical_url)
+  );
+  const brandMap=new Map<string,any>();
+  const groupMap=new Map<string,any>();
+  const products=sourceBucket();
+
+  for(const i of ids){
+    if(!activeLinks.has(i.link_url))continue;
+    const source=managerSourceKey(i.source_name);
+    if(!source)continue;
+    products[source]++;
+
+    const rawBrand=clean(i.raw_brand||i.brand);
+    const brandKey=groupBrandKey(i.brand||rawBrand);
+    const canonicalBrand=aliases.get(brandKey)||canonicalBrandFallback(i.brand||rawBrand);
+    if(brandKey&&canonicalBrand){
+      if(!brandMap.has(brandKey)){
+        brandMap.set(brandKey,{
+          key:brandKey,name:canonicalBrand,total:0,
+          sources:sourceBucket(),variants:variantBucket()
+        });
+      }
+      const row=brandMap.get(brandKey);
+      row.total++; row.sources[source]++;
+      if(rawBrand)row.variants[source].add(rawBrand);
+    }
+
+    const rawGroup=clean(i.raw_category||i.category);
+    const canonicalGroup=managerGroupDisplay(i.bhx_group_name||i.category||rawGroup);
+    const groupKey=managerGroupKey(canonicalGroup||rawGroup);
+    if(groupKey){
+      if(!groupMap.has(groupKey)){
+        groupMap.set(groupKey,{
+          key:groupKey,name:canonicalGroup||rawGroup,total:0,
+          sources:sourceBucket(),variants:variantBucket()
+        });
+      }
+      const row=groupMap.get(groupKey);
+      row.total++; row.sources[source]++;
+      if(rawGroup)row.variants[source].add(rawGroup);
+    }
+  }
+
+  const finalize=(map:Map<string,any>)=>[...map.values()]
+    .map(row=>({
+      ...row,
+      variants:{
+        bhx:[...row.variants.bhx].sort((a,b)=>a.localeCompare(b,"vi")),
+        wm:[...row.variants.wm].sort((a,b)=>a.localeCompare(b,"vi")),
+        go:[...row.variants.go].sort((a,b)=>a.localeCompare(b,"vi"))
+      }
+    }))
+    .sort((a,b)=>(b.total-a.total)||a.name.localeCompare(b.name,"vi"));
+
+  sourceManagerCache={
+    generated_at:new Date().toISOString(),
+    products:{...products,all:products.bhx+products.wm+products.go},
+    brands:finalize(brandMap),
+    groups:finalize(groupMap)
+  };
+  sourceManagerCacheAt=Date.now();
+  return sourceManagerCache;
+}
+
 async function libraryRows(includeHidden=true){
   const [links,prefs,assets,comps,hier,ids]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").neq("last_status","unlisted").order("name",{ascending:true})),
@@ -1493,6 +1598,9 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method==="GET"&&route==="/api/library"){
       const view=clean(url.searchParams.get("view")||"groups");
+      if(view==="source-manager"){
+        return response(req,await sourceManagerSnapshot(false));
+      }
       if(view==="search"||view==="products"){
         const limit=Math.min(10000,Math.max(1,Number(url.searchParams.get("limit")||500)));
         let rows=await libraryRows(url.searchParams.get("include_hidden")==="1");

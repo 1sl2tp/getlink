@@ -110,6 +110,12 @@ let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"gri
 let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
+let sourceManagerCache=null;
+let sourceManagerLoadedAt=0;
+let sourceManagerKind="brand";
+let sourceManagerSource="all";
+let sourceManagerQuery="";
+let sourceManagerLimit=200;
 let libraryRenderVersion=0;
 const browseRowsMemo=new Map();
 let browseRowsMemoVersion=-1;
@@ -1816,6 +1822,134 @@ async function fetchLibraryFromSupabase(){
   persistUiLibraryCacheSoon();
 }
 
+const SOURCE_MANAGER_CACHE_MS=5*60*1000;
+
+function sourceManagerSourceLabel(key){
+  return key==="bhx"?"BHX":(key==="wm"?"WM":(key==="go"?"GO":""));
+}
+
+function sourceManagerActiveItems(){
+  if(!sourceManagerCache)return [];
+  const sourceItems=sourceManagerKind==="group"
+    ?sourceManagerCache.groups
+    :sourceManagerCache.brands;
+  const q=searchKey(sourceManagerQuery);
+  return (Array.isArray(sourceItems)?sourceItems:[]).filter(item=>{
+    const sourceCount=sourceManagerSource==="all"
+      ?Number(item.total||0)
+      :Number(item.sources&&item.sources[sourceManagerSource]||0);
+    if(!sourceCount)return false;
+    if(!q)return true;
+    const hay=searchKey([
+      item.name,
+      ...(Object.values(item.variants||{}).flat())
+    ].join(" "));
+    return hay.includes(q);
+  });
+}
+
+function sourceManagerVariantLine(item){
+  const variants=item&&item.variants||{};
+  const keys=sourceManagerSource==="all"?["bhx","wm","go"]:[sourceManagerSource];
+  const parts=[];
+  for(const key of keys){
+    const values=Array.isArray(variants[key])?variants[key]:[];
+    if(!values.length)continue;
+    parts.push(sourceManagerSourceLabel(key)+": "+values.slice(0,3).join(" · "));
+  }
+  return parts.join("  |  ");
+}
+
+function sourceManagerBadges(item){
+  const sources=item&&item.sources||{};
+  const keys=sourceManagerSource==="all"?["bhx","wm","go"]:[sourceManagerSource];
+  return keys
+    .filter(key=>Number(sources[key]||0)>0)
+    .map(key=>'<span class="source-manager-source-badge '+key+'">'+
+      sourceManagerSourceLabel(key)+' <small>'+Number(sources[key]||0)+'</small></span>')
+    .join("");
+}
+
+function renderSourceManager(){
+  if(!sourceManagerCache)return;
+  document.querySelectorAll("#sourceManagerKinds button").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.kind===sourceManagerKind);
+  });
+  document.querySelectorAll("#sourceManagerSources button").forEach(btn=>{
+    btn.classList.toggle("active",btn.dataset.source===sourceManagerSource);
+  });
+
+  $("#sourceManagerBrandCount").textContent=String((sourceManagerCache.brands||[]).length);
+  $("#sourceManagerGroupCount").textContent=String((sourceManagerCache.groups||[]).length);
+
+  const items=sourceManagerActiveItems();
+  const visible=items.slice(0,sourceManagerLimit);
+  const host=$("#sourceManagerRows");
+  if(!visible.length){
+    host.innerHTML='<div class="source-manager-empty">Không có dữ liệu phù hợp.</div>';
+  }else{
+    host.innerHTML=visible.map(item=>{
+      const count=sourceManagerSource==="all"
+        ?Number(item.total||0)
+        :Number(item.sources&&item.sources[sourceManagerSource]||0);
+      const displayName=sourceManagerKind==="group"
+        ?displayCategoryLabel(item.name)
+        :String(item.name||"");
+      const variants=sourceManagerVariantLine(item);
+      return '<article class="source-manager-row">'+
+        '<div class="source-manager-name">'+
+          '<strong>'+escapeHtml(displayName||"—")+'</strong>'+
+          (variants?'<small>'+escapeHtml(variants)+'</small>':'')+
+        '</div>'+
+        '<div class="source-manager-badges">'+sourceManagerBadges(item)+'</div>'+
+        '<strong class="source-manager-total">'+count+'</strong>'+
+      '</article>';
+    }).join("");
+  }
+
+  const sourceLabel=sourceManagerSource==="all"?"3 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  $("#sourceManagerSummary").textContent=
+    items.length+" "+(sourceManagerKind==="brand"?"hãng":"nhóm")+" · "+sourceLabel;
+  const more=$("#sourceManagerMore");
+  more.hidden=items.length<=sourceManagerLimit;
+  if(!more.hidden)more.textContent="Xem thêm · "+sourceManagerLimit+" / "+items.length;
+}
+
+async function loadSourceManager(force=false){
+  if(!force&&sourceManagerCache&&Date.now()-sourceManagerLoadedAt<SOURCE_MANAGER_CACHE_MS){
+    renderSourceManager();
+    return;
+  }
+  $("#sourceManagerRows").innerHTML='<div class="source-manager-loading">Đang đọc Hãng / Nhóm từ Supabase...</div>';
+  const r=await apiFetch("/api/library?view=source-manager",{cache:"no-store"});
+  const data=await r.json();
+  if(!r.ok)throw new Error(data.error||"source_manager_error");
+  sourceManagerCache=data;
+  sourceManagerLoadedAt=Date.now();
+  sourceManagerLimit=200;
+  renderSourceManager();
+}
+
+function openSourceManager(){
+  closeMobileCategoryNav();
+  const panel=$("#sourceManagerPanel");
+  panel.hidden=false;
+  panel.setAttribute("aria-hidden","false");
+  document.body.classList.add("source-manager-open");
+  loadSourceManager(false).catch(()=>{
+    $("#sourceManagerRows").innerHTML=
+      '<div class="source-manager-empty">Chưa đọc được dữ liệu quản lý nguồn.</div>';
+  });
+}
+
+function closeSourceManager(){
+  const panel=$("#sourceManagerPanel");
+  if(!panel)return;
+  panel.hidden=true;
+  panel.setAttribute("aria-hidden","true");
+  document.body.classList.remove("source-manager-open");
+}
+
 async function refreshLibraryInBackground(){
   try{
     await fetchLibraryFromSupabase();
@@ -2579,6 +2713,7 @@ document.addEventListener("keydown",e=>{
   if(e.key!=="Escape")return;
   closeImageZoom();
   closeMobileCategoryNav();
+  closeSourceManager();
 });
 
 $("#backToCategory").addEventListener("click",()=>{
@@ -2820,6 +2955,35 @@ $("#childList").addEventListener("click",e=>{
   const row=e.target.closest(".library-child");
   if(!row)return;
   openLibraryItem(row.dataset.url||"");
+});
+
+$("#openSourceManager").addEventListener("click",openSourceManager);
+$("#closeSourceManager").addEventListener("click",closeSourceManager);
+$("#sourceManagerPanel").addEventListener("click",e=>{
+  if(e.target===$("#sourceManagerPanel"))closeSourceManager();
+});
+$("#sourceManagerKinds").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-kind]");
+  if(!btn)return;
+  sourceManagerKind=btn.dataset.kind==="group"?"group":"brand";
+  sourceManagerLimit=200;
+  renderSourceManager();
+});
+$("#sourceManagerSources").addEventListener("click",e=>{
+  const btn=e.target.closest("button[data-source]");
+  if(!btn)return;
+  sourceManagerSource=["all","wm","bhx","go"].includes(btn.dataset.source)?btn.dataset.source:"all";
+  sourceManagerLimit=200;
+  renderSourceManager();
+});
+$("#sourceManagerSearch").addEventListener("input",e=>{
+  sourceManagerQuery=String(e.target.value||"").trim();
+  sourceManagerLimit=200;
+  renderSourceManager();
+});
+$("#sourceManagerMore").addEventListener("click",()=>{
+  sourceManagerLimit+=200;
+  renderSourceManager();
 });
 
 $("#toggleImport").addEventListener("click",()=>{

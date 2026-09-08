@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 const source = fs.readFileSync("supabase/functions/getlink-api/index.ts", "utf8");
 const brandMigration = fs.readFileSync("supabase/migrations/20260908163000_brand_canonical_registry.sql","utf8");
+const sourceManagerMigration = fs.readFileSync("supabase/migrations/20260908164000_source_manager_raw_fields.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -33,5 +34,16 @@ assert.match(brandMigration,/create table if not exists public\.getlink_brand_al
 assert.match(brandMigration,/getlink_brand_key/i);
 assert.match(brandMigration,/update public\.getlink_links/i);
 assert.match(brandMigration,/update public\.getlink_source_product_identity/i);
+
+
+// Source manager preserves raw source labels and exposes one lazy summary endpoint.
+assert.match(source,/raw_brand:clean\(si\.raw_brand\|\|si\.brand\|\|p\.branch\)/);
+assert.match(source,/raw_category:clean\(si\.raw_category\|\|si\.category\|\|p\.group\)/);
+assert.match(source,/function sourceManagerSnapshot\(force=false\)/);
+assert.match(source,/view==="source-manager"/);
+assert.match(source,/sourceManagerCache=null/);
+assert.match(sourceManagerMigration,/add column if not exists raw_brand text/i);
+assert.match(sourceManagerMigration,/add column if not exists raw_category text/i);
+assert.match(sourceManagerMigration,/getlink_price_snapshots/i);
 
 console.log("GETLINK name filter contract: OK");

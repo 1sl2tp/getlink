@@ -149,18 +149,47 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
     pairs.push({qty:Number(m[1])||0,key,label:unitMap[key]||clean(m[2])});
   }
 
+  // Handles "lốc 4 hộp", "khay 6 chai", "vỉ 10 gói".
+  const bundleRe=new RegExp("(?:^|[^\\p{L}])(lốc|khay|vỉ)\\s*(\\d+)\\s*(chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","u");
+  const bundle=text.match(bundleRe);
   const rawUnit=clean(unit||packaging).toLowerCase().normalize("NFC");
   const hasCarton=new RegExp("(?:^|[^\\p{L}])thùng(?![\\p{L}])","u").test(text)||
     rawUnit==="thùng";
   if(hasCarton){
     h.label1="Thùng"; h.qty1=1;
+
+    if(bundle){
+      const middleKey=String(bundle[1]||"").toLowerCase();
+      const leafKey=String(bundle[3]||"").toLowerCase();
+      h.label2=unitMap[middleKey]||clean(bundle[1]); h.qty2=1;
+      h.label3=unitMap[leafKey]||clean(bundle[3]); h.qty3=Number(bundle[2])||1;
+      return h;
+    }
+
     const middle=pairs.find(x=>["lốc","khay","vỉ"].includes(x.key));
     const leaf=[...pairs].reverse().find(x=>!["thùng","lốc","khay","vỉ"].includes(x.key));
     if(middle){h.label2=middle.label;h.qty2=middle.qty;}
     if(leaf){h.label3=leaf.label;h.qty3=leaf.qty;}
-    else if(rawUnit&&rawUnit!=="thùng"&&unitMap[rawUnit]){
-      h.label3=unitMap[rawUnit];h.qty3=Number(count)||1;
+
+    if(!h.label3){
+      // Handles source values such as "Thùng 24" while the product name says "lon".
+      const cartonCount=text.match(new RegExp("(?:^|[^\\p{L}])thùng\\s*(\\d+)(?![\\p{L}\\p{N}])","u"));
+      const leafWord=[...text.matchAll(new RegExp("(?:^|[^\\p{L}])(chai|lon|hộp|gói|túi|bịch|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)(?![\\p{L}])","gu"))].pop();
+      if(cartonCount&&leafWord){
+        const key=String(leafWord[1]||"").toLowerCase();
+        h.label3=unitMap[key]||clean(leafWord[1]);h.qty3=Number(cartonCount[1])||1;
+      }else if(rawUnit&&rawUnit!=="thùng"&&unitMap[rawUnit]){
+        h.label3=unitMap[rawUnit];h.qty3=Number(count)||1;
+      }
     }
+    return h;
+  }
+
+  if(bundle){
+    const middleKey=String(bundle[1]||"").toLowerCase();
+    const leafKey=String(bundle[3]||"").toLowerCase();
+    h.label2=unitMap[middleKey]||clean(bundle[1]); h.qty2=1;
+    h.label3=unitMap[leafKey]||clean(bundle[3]); h.qty3=Number(bundle[2])||1;
     return h;
   }
 
@@ -169,6 +198,12 @@ function hierarchyFromRaw(name: string, packaging: string, count?: unknown, unit
     h.label2=middlePair.label;h.qty2=middlePair.qty||1;
     const leaf=[...pairs].reverse().find(x=>!["lốc","khay","vỉ"].includes(x.key));
     if(leaf){h.label3=leaf.label;h.qty3=leaf.qty;}
+    return h;
+  }
+
+  const directPair=pairs.find(x=>x.qty>1&&x.key!=="thùng");
+  if(directPair){
+    h.label2=directPair.label;h.qty2=directPair.qty;
     return h;
   }
 
@@ -371,7 +406,7 @@ function chooseBhxProduct(input:any,refs:BhxGroupRef[]) {
     if((inputVariant||refVariant)&&inputVariant!==refVariant)continue;
 
     const score=groupMatchScore(input,ref);
-    if(score>=0.90)ranked.push({ref,score});
+    if(score>=0.95)ranked.push({ref,score});
   }
 
   ranked.sort((a,b)=>b.score-a.score);
@@ -651,6 +686,44 @@ async function syncExistingWinmartEnrichment(apply:boolean,contains="") {
     sizes_filled:sizesFilled,
     samples
   };
+}
+
+async function reparseExistingBhxHierarchy(apply:boolean) {
+  const [links,hier,comps]=await Promise.all([
+    fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").eq("source","Bách Hóa XANH").neq("last_status","unlisted")),
+    fetchAll("getlink_link_pack_hierarchy"),
+    fetchAll("getlink_link_comparison")
+  ]);
+  const oldHByUrl=new Map(hier.map((x:any)=>[x.link_url,x]));
+  const oldCByUrl=new Map(comps.map((x:any)=>[x.link_url,x]));
+  const hUpdates:any[]=[],cUpdates:any[]=[],samples:any[]=[];
+  let changed=0,cartons=0;
+
+  for(const l of links){
+    const oldH=oldHByUrl.get(l.canonical_url)||{};
+    const oldC=oldCByUrl.get(l.canonical_url)||{};
+    const h=hierarchyFromRaw(l.name,l.packaging||"");
+    if(h.label1==="Thùng")cartons++;
+    const cmp=comparisonFrom(money(l.current_price),money(l.original_price),h,l.packaging||"",l.name);
+    const hRow={...oldH,link_url:l.canonical_url,label1:h.label1||"",qty1:Number(h.qty1)||0,label2:h.label2||"",qty2:Number(h.qty2)||0,label3:h.label3||"",qty3:Number(h.qty3)||0,evidence:h.evidence||"",updated_at:new Date().toISOString()};
+    const cRow={...oldC,link_url:l.canonical_url,pack_kind:cmp.pack_kind,pack_quantity:cmp.pack_quantity,pack_unit:cmp.pack_unit,size_value:cmp.size_value,size_unit:cmp.size_unit,regular_pack_price:money(l.current_price),regular_unit_price:cmp.regular_unit_price,updated_at:new Date().toISOString()};
+    const before=[oldH.label1,oldH.qty1,oldH.label2,oldH.qty2,oldH.label3,oldH.qty3,oldC.size_value,oldC.size_unit].join("|");
+    const after=[hRow.label1,hRow.qty1,hRow.label2,hRow.qty2,hRow.label3,hRow.qty3,cRow.size_value,cRow.size_unit].join("|");
+    if(before!==after){
+      changed++;
+      if(samples.length<40)samples.push({name:l.name,packaging:l.packaging||"",before,after});
+    }
+    hUpdates.push(hRow);cUpdates.push(cRow);
+  }
+
+  if(apply){
+    const upsertChunks=async(table:string,rows:any[])=>{
+      for(let i=0;i<rows.length;i+=350)await must(sb.from(table).upsert(rows.slice(i,i+350),{onConflict:"link_url"}));
+    };
+    await upsertChunks("getlink_link_pack_hierarchy",hUpdates);
+    await upsertChunks("getlink_link_comparison",cUpdates);
+  }
+  return {apply,total_bhx:links.length,changed,cartons,samples};
 }
 
 function getlinkNameKey(v: unknown) {
@@ -1385,7 +1458,12 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
-    }    if(req.method==="POST"&&route==="/api/admin/enrich-winmart"){
+    }    if(req.method==="POST"&&route==="/api/admin/reparse-bhx"){
+      const body=await req.json();
+      if(clean(body?.confirm)!=="BHX_REPARSE_V1")return response(req,{error:"confirmation_required"},400);
+      return response(req,await reparseExistingBhxHierarchy(Boolean(body?.apply)));
+    }
+    if(req.method==="POST"&&route==="/api/admin/enrich-winmart"){
       const body=await req.json();
       if(clean(body?.confirm)!=="BHX_ENRICH_WM_V1")return response(req,{error:"confirmation_required"},400);
       return response(req,await syncExistingWinmartEnrichment(Boolean(body?.apply),clean(body?.contains||"")));

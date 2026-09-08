@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v6");
+      const req=tx.objectStore("cache").get("library-v7");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v6");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v7");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1204,12 +1204,16 @@ function capitalizeDisplayName(value){
 function compactCartonDisplayName(name,hierarchy){
   let text=String(name||"").trim();
   if(!text)return "Sản phẩm";
-  if(String(hierarchy&&hierarchy.label1||"").trim()==="Thùng"){
-    text=text.replace(
-      /^thùng\s+\d+\s+(?:lốc|túi|hộp|chai|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp)\s+/iu,
-      ""
-    ).trim()||text;
-  }
+
+  // Display rule only: if the name STARTS with "Thùng + số + đơn vị",
+  // move that information to the QC chip and remove it from the visible name.
+  // Never remove the same words when they occur in the middle of a product name.
+  const stripped=text.replace(
+    /^thùng\s+\d+\s+(?:lốc|túi|hộp|chai|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)\s+/iu,
+    ""
+  ).trim();
+
+  if(stripped&&stripped!==text)text=stripped;
   return capitalizeDisplayName(text);
 }
 

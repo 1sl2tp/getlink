@@ -4099,3 +4099,29 @@ h1{
 #tableView[hidden]{
   display:none!important;
 }
+
+
+/* Local catalog rendering: keep large libraries smooth without extra API calls */
+.catalog-render-more{
+  min-height:28px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:5px 12px 11px;
+  color:#929aa4;
+  font-size:9px;
+  font-weight:680;
+  text-align:center;
+}
+.catalog-render-more[hidden]{display:none!important}
+.grid-product{
+  content-visibility:auto;
+  contain-intrinsic-size:210px 150px;
+}
+@media(max-width:720px){
+  .catalog-render-more{
+    min-height:24px;
+    padding-bottom:8px;
+    font-size:8.5px;
+  }
+}

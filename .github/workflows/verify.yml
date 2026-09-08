@@ -18,7 +18,11 @@ jobs:
       - run: python -m unittest discover -s tests -v
       - run: python -m py_compile scraper/brightdata_bhx.py scraper/brightdata_go.py
       - run: node --check app.js
-      - run: node --check worker/src/index.js
       - run: node tests/test_pack_parser.mjs
       - run: node tests/test_go_parser.mjs
       - run: node tests/test_money_display.mjs
+      - name: Supabase-only gate
+        run: |
+          grep -q 'supabase.co/functions/v1/getlink-api' config.js
+          ! grep -q 'workers.dev' config.js
+          test -f supabase/functions/getlink-api/index.ts

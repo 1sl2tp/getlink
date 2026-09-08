@@ -1004,38 +1004,107 @@ function normalizeWinmart(item:any, rootName:string, store:string, checked:strin
 function goCategoryId(url:string){
   const m=new URL(url).pathname.match(/-i\.(\d+)$/i); return m?Number(m[1]):0;
 }
+
+let GO_RUNTIME_CACHE:any=null;
+async function goRuntimeConfig(){
+  const env={
+    apiclientid:clean(Deno.env.get("GO_API_CLIENT_ID")||""),
+    sign:clean(Deno.env.get("GO_API_SIGN")||""),
+    token:clean(Deno.env.get("GO_API_TOKEN")||""),
+    store:clean(Deno.env.get("GO_STORE_ID")||"")
+  };
+  if(env.apiclientid&&env.sign&&env.token&&env.store)return env;
+  if(GO_RUNTIME_CACHE)return GO_RUNTIME_CACHE;
+
+  const {data,error}=await sb.rpc("getlink_go_runtime_config");
+  if(error)throw new Error("go_runtime_config_error");
+  const cfg=(data&&typeof data==="object")?data:{};
+  const out={
+    apiclientid:clean(cfg.apiclientid||""),
+    sign:clean(cfg.sign||""),
+    token:clean(cfg.token||""),
+    store:clean(cfg.store||"")
+  };
+  if(!out.apiclientid||!out.sign||!out.token||!out.store){
+    throw new Error("go_runtime_config_missing");
+  }
+  GO_RUNTIME_CACHE=out;
+  return out;
+}
+
 async function goCategory(url:string){
-  const c=canonicalGo(url), category=goCategoryId(c); if(!category)throw new Error("go_category_id_missing");
-  // GO's source API is public. Default store/site context used by the site can
-  // change, so try a small set of known/default payloads and keep the first success.
-  const endpoint="https://sieuthi-go.vn/api/order2_listProduct";
-  const candidates=[
-    {store:null,sitecode:null},
-    {store:"",sitecode:""}
-  ];
-  let first:any=null, base:any=null;
-  for(const ctx of candidates){
-    const payload:any={page:1,category,filter_brand:[],filter_subfamily:[],search:null,platform:2,lang:"vi"};
-    if(ctx.store!==null)payload.store=ctx.store;
-    if(ctx.sitecode!==null)payload.sitecode=ctx.sitecode;
-    try{
-      const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json","accept":"application/json","origin":"https://sieuthi-go.vn","referer":c},body:JSON.stringify(payload)});
-      const b=await r.json();
-      if(r.ok&&b?.status==="success"&&Array.isArray(b.products)){first=b;base=payload;break;}
-    }catch{}
+  const c=canonicalGo(url), category=goCategoryId(c);
+  if(!category)throw new Error("go_category_id_missing");
+
+  const cfg=await goRuntimeConfig();
+  const endpoint="https://sieuthi-go.vn/api/order2_listProduct?platform=2&lang=vi";
+  const store=Number(cfg.store)||cfg.store;
+  const headers={
+    "content-type":"application/json",
+    "accept":"application/json, text/plain, */*",
+    "apiclientid":cfg.apiclientid,
+    "sign":cfg.sign,
+    "token":cfg.token
+  };
+  const base:any={
+    page:1,
+    category,
+    filter_brand:[],
+    filter_subfamily:[],
+    search:null,
+    store,
+    sitecode:store,
+    platform:2,
+    lang:"vi"
+  };
+
+  const fetchPage=async(page:number)=>{
+    const payload={...base,page};
+    const r=await fetch(endpoint,{
+      method:"POST",
+      headers,
+      body:JSON.stringify(payload)
+    });
+    let b:any=null;
+    try{b=await r.json();}catch{}
+    if(!r.ok||b?.status!=="success"||!Array.isArray(b?.products)){
+      const message=clean(b?.message||"");
+      if(r.status===403&&/token|signature|client/i.test(message)){
+        GO_RUNTIME_CACHE=null;
+        throw new Error("go_auth_refresh_required");
+      }
+      throw new Error("go_page_"+page+"_http_"+r.status);
+    }
+    return b;
+  };
+
+  const first=await fetchPage(1);
+  const pages=Math.max(1,Number(first.pagination?.total_pages)||1);
+  const byId=new Map<string,any>();
+
+  const add=(items:any[])=>{
+    for(const item of items||[]){
+      const key=clean(item?.id||item?.barcode||item?.alias||"");
+      if(key)byId.set(key,item);
+    }
+  };
+  add(first.products);
+
+  // GO currently returns 15 products/page. Keep a bounded parallel window so a
+  // large category stays fast without hammering the source.
+  for(let start=2;start<=pages;start+=10){
+    const nums=Array.from({length:Math.min(10,pages-start+1)},(_,i)=>start+i);
+    const bodies=await Promise.all(nums.map(fetchPage));
+    for(const body of bodies)add(body.products||[]);
   }
-  if(!first||!base)throw new Error("go_direct_context_required");
-  const pages=Math.max(1,Number(first.pagination?.total_pages)||1), all=[...first.products];
-  for(let start=2;start<=pages;start+=8){
-    const nums=Array.from({length:Math.min(8,pages-start+1)},(_,i)=>start+i);
-    const rows=await Promise.all(nums.map(async page=>{
-      const payload={...base,page};
-      const r=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/json","accept":"application/json","origin":"https://sieuthi-go.vn","referer":c},body:JSON.stringify(payload)});
-      const b=await r.json(); if(!r.ok||b?.status!=="success")throw new Error("go_page_"+page); return b.products||[];
-    }));
-    for(const row of rows)all.push(...row);
-  }
-  return {items:all,rootName:slugTitle(c)};
+
+  return {
+    items:[...byId.values()],
+    rootName:slugTitle(c),
+    totalPages:pages,
+    pageSize:Number(first.pagination?.page_size)||15,
+    store:Number(first.metadata?.store)||store
+  };
 }
 function goDetailValue(product:any, label:string){
   const re=new RegExp(label,"i");

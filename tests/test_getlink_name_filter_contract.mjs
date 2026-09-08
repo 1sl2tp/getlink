@@ -8,6 +8,7 @@ const rawMigration = fs.readFileSync("supabase/migrations/20260908165000_immutab
 const manualGroupMigration = fs.readFileSync("supabase/migrations/20260908170000_manual_product_groups.sql","utf8");
 const manualRulesMigration = fs.readFileSync("supabase/migrations/20260908171000_manual_group_multi_rules.sql","utf8");
 const miChinhMigration = fs.readFileSync("supabase/migrations/20260908172000_manual_group_mi_chinh.sql","utf8");
+const exclusiveCoffeeMigration = fs.readFileSync("supabase/migrations/20260908173000_manual_group_exclusive_coffee.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -107,5 +108,20 @@ assert.match(miChinhMigration,/'mì chính'/i);
 assert.match(miChinhMigration,/'bột ngọt'/i);
 assert.match(miChinhMigration,/getlink_manual_group_rules/i);
 assert.match(miChinhMigration,/getlink_manual_group_members/i);
+
+
+// Manual classification is exclusive/sticky and new groups skip already-classified products.
+assert.match(source,/once a product has been classified, later groups must skip it/);
+assert.match(source,/const assignedUrls=new Set/);
+assert.match(source,/if\(!linkUrl\|\|assignedUrls\.has\(linkUrl\)\)continue/);
+assert.match(source,/assignedUrls\.add\(linkUrl\);\s*break;/);
+assert.match(source,/normalize\("NFC"\)/);
+assert.match(exclusiveCoffeeMigration,/create unique index if not exists ux_getlink_manual_group_members_link_url/i);
+assert.match(exclusiveCoffeeMigration,/'ca-phe','Cà phê'/);
+assert.match(exclusiveCoffeeMigration,/'cafe'/i);
+assert.match(exclusiveCoffeeMigration,/'café'/i);
+assert.match(exclusiveCoffeeMigration,/'caffe'/i);
+assert.match(exclusiveCoffeeMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
+assert.match(exclusiveCoffeeMigration,/normalize\(lower\(l\.name\),NFC\)/i);
 
 console.log("GETLINK name filter contract: OK");

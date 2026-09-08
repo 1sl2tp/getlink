@@ -1474,22 +1474,32 @@ async function loadManualGroupRules(force=false):Promise<any[]>{
     return manualGroupRuleCache;
   }
   const [groups,rules]=await Promise.all([
-    fetchAll("getlink_manual_groups","group_key,enabled",(q:any)=>q.eq("enabled",true)),
+    fetchAll("getlink_manual_groups","group_key,enabled,created_at",(q:any)=>q.eq("enabled",true)),
     fetchAll(
       "getlink_manual_group_rules",
       "group_key,rule_type,rule_value,rule_order,enabled",
       (q:any)=>q.eq("enabled",true).order("rule_order",{ascending:true})
     )
   ]);
-  const enabledGroups=new Set(groups.map((x:any)=>clean(x.group_key)));
-  manualGroupRuleCache=rules.filter((x:any)=>enabledGroups.has(clean(x.group_key)));
+  const orderedGroups=[...groups].sort((a:any,b:any)=>
+    String(a.created_at||"").localeCompare(String(b.created_at||""))||
+    clean(a.group_key).localeCompare(clean(b.group_key))
+  );
+  const groupRank=new Map(orderedGroups.map((x:any,i:number)=>[clean(x.group_key),i]));
+  manualGroupRuleCache=rules
+    .filter((x:any)=>groupRank.has(clean(x.group_key)))
+    .sort((a:any,b:any)=>
+      Number(groupRank.get(clean(a.group_key))??999999)-Number(groupRank.get(clean(b.group_key))??999999)||
+      Number(a.rule_order||0)-Number(b.rule_order||0)||
+      clean(a.rule_value).localeCompare(clean(b.rule_value),"vi")
+    );
   manualGroupRuleCacheAt=Date.now();
   return manualGroupRuleCache;
 }
 function manualGroupMatches(name:unknown,rule:any):boolean{
-  const value=clean(rule?.rule_value||"").toLocaleLowerCase("vi-VN");
+  const value=clean(rule?.rule_value||"").normalize("NFC").toLocaleLowerCase("vi-VN");
   if(!value)return false;
-  const hay=clean(name).toLocaleLowerCase("vi-VN");
+  const hay=clean(name).normalize("NFC").toLocaleLowerCase("vi-VN");
   if(rule?.rule_type==="name_contains")return hay.includes(value);
   if(rule?.rule_type==="name_product_phrase"){
     return hay.startsWith(value)||(hay.startsWith("thùng ")&&hay.includes(value));
@@ -1500,33 +1510,40 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
   const productRows=rows.filter((r:any)=>r?.link_type==="product"&&r?.canonical_url);
   if(!productRows.length)return;
   const urls=[...new Set(productRows.map((r:any)=>r.canonical_url))];
-  const rules=await loadManualGroupRules();
+  const [rules,existing]=await Promise.all([
+    loadManualGroupRules(),
+    fetchRowsByValues(
+      "getlink_manual_group_members",
+      "group_key,link_url,match_origin,matched_at",
+      "link_url",
+      urls
+    )
+  ]);
 
-  const {error:deleteError}=await sb
-    .from("getlink_manual_group_members")
-    .delete()
-    .eq("match_origin","rule")
-    .in("link_url",urls);
-  if(deleteError)throw deleteError;
-
+  // Manual groups are exclusive and sticky:
+  // once a product has been classified, later groups must skip it.
+  const assignedUrls=new Set(existing.map((x:any)=>clean(x.link_url)).filter(Boolean));
   const now=new Date().toISOString();
-  const members=new Map<string,any>();
+  const members:any[]=[];
   for(const row of productRows){
+    const linkUrl=clean(row.canonical_url);
+    if(!linkUrl||assignedUrls.has(linkUrl))continue;
     for(const rule of rules){
       if(!manualGroupMatches(row.name,rule))continue;
-      const key=clean(rule.group_key)+"|"+row.canonical_url;
-      members.set(key,{
+      members.push({
         group_key:rule.group_key,
-        link_url:row.canonical_url,
+        link_url:linkUrl,
         match_origin:"rule",
         matched_at:now
       });
+      assignedUrls.add(linkUrl);
+      break;
     }
   }
-  if(members.size){
+  if(members.length){
     const {error}=await sb
       .from("getlink_manual_group_members")
-      .upsert([...members.values()],{onConflict:"group_key,link_url"});
+      .insert(members);
     if(error)throw error;
   }
   sourceManagerCache=null;

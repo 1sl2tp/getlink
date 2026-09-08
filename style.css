@@ -4125,3 +4125,111 @@ h1{
     font-size:8.5px;
   }
 }
+
+
+/* Desktop scroll ownership: lock the page; only data regions scroll */
+@media(min-width:1101px){
+  html,
+  body{
+    height:100%;
+    overflow:hidden!important;
+  }
+
+  .wrap{
+    height:100vh!important;
+    height:100dvh!important;
+    min-height:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+    padding-bottom:12px!important;
+  }
+
+  .site-head,
+  .import-card{
+    flex:0 0 auto;
+  }
+
+  .workspace{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    align-items:stretch!important;
+  }
+
+  .workspace-nav{
+    position:static!important;
+    top:auto!important;
+    height:100%!important;
+    max-height:none!important;
+    min-height:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+
+  .workspace-nav .nav-head{
+    flex:0 0 auto!important;
+  }
+
+  .workspace-nav .category-tabs{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+  }
+
+  .workspace-list{
+    height:100%!important;
+    min-height:0!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+
+  .catalog-sticky-head{
+    position:static!important;
+    top:auto!important;
+    flex:0 0 auto!important;
+  }
+
+  #productGrid{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    align-content:start!important;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+  }
+
+  #tableView{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    overflow:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+  }
+
+  #matchAudit{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:auto!important;
+  }
+
+  .catalog-render-more{
+    flex:0 0 auto!important;
+  }
+
+  .workspace-detail{
+    position:static!important;
+    top:auto!important;
+    height:100%!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+  }
+}

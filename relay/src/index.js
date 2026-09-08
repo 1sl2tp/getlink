@@ -282,7 +282,6 @@ async function fetchWholeCategory(rawUrl, env) {
   // loads, so Ajax continuation starts at index 1, not 2.
   let lastShowProductId = 0;
   let pages = 0;
-  let stalePages = 0;
   const maxPage = Math.min(100, Math.max(3, total ? Math.ceil(total / pageSize) + 2 : 50));
   const ajaxUrl = "https://" + BHX_HOST + "/gw/Category/AjaxProduct";
 
@@ -312,9 +311,9 @@ async function fetchWholeCategory(rawUrl, env) {
     const next = productId(batch[batch.length - 1]);
     if (next > 0) lastShowProductId = next;
 
-    if (map.size === before) stalePages += 1;
-    else stalePages = 0;
-    if (stalePages >= 2) break;
+    // BHX may repeat priority products on consecutive Ajax pages.
+    // Keep advancing PageIndex until the API returns an empty batch or total is reached.
+    void before;
   }
 
   return {

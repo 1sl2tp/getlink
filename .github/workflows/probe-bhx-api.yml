@@ -9,42 +9,41 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe BHX APIs over HTTP1
+      - name: Test GETLINK BHX direct path
         shell: bash
         run: |
-          set -uo pipefail
-          BASE='https://api.bachhoaxanh.com/gw'
-          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36'
-          REF='https://www.bachhoaxanh.com/hat-nem'
-          COMMON='provinceId=1027&wardId=0&districtId=0&storeId=2546'
+          set -euo pipefail
+          API='https://getlink-api.taphoa-4ab8161d.workers.dev'
 
           probe () {
             label="$1"
             url="$2"
-            out="$3"
             echo "=== $label ==="
-            code="$(curl --http1.1 -L -sS --connect-timeout 10 --max-time 25               -A "$UA"               -H 'Accept: application/json, text/plain, */*'               -H 'Accept-Language: vi-VN,vi;q=0.9'               -H 'Origin: https://www.bachhoaxanh.com'               -H "Referer: $REF"               -o "$out" -w '%{http_code}' "$url" || true)"
-            echo "HTTP=$code bytes=$(wc -c <"$out" 2>/dev/null || echo 0)"
-            if jq -e . "$out" >/dev/null 2>&1; then
-              jq -c '{
-                code,message,
-                data_type:(.data|type),
-                data_keys:((.data // {})|keys|.[0:40]),
-                array_lengths:([
-                  .. | arrays | length
-                ] | sort | reverse | .[0:10])
-              }' "$out"
-            else
-              head -c 1200 "$out" 2>/dev/null || true
-              echo
+            start="$(date +%s%3N)"
+            code="$(curl -sS --connect-timeout 20 --max-time 90               -o "/tmp/$label.json" -w '%{http_code}'               -H 'Origin: https://get.taphoa.xyz'               -H 'Content-Type: application/json'               -X POST "$API/api/get-price"               --data "$(jq -nc --arg url "$url" '{url:$url,force:true}')")"
+            end="$(date +%s%3N)"
+            echo "HTTP=$code ms=$((end-start))"
+            jq -c '{
+              status,engine,link_type,input_url,
+              request_id,direct_count,
+              products:(.payload.products|length?),
+              error,detail
+            }' "/tmp/$label.json"
+
+            if [ "$code" = "202" ]; then
+              rid="$(jq -r '.request_id' "/tmp/$label.json")"
+              for i in $(seq 1 100); do
+                sleep 1
+                curl -sS                   -H 'Origin: https://get.taphoa.xyz'                   "$API/api/result?id=$rid" > "/tmp/$label-result.json"
+                status="$(jq -r '.status // empty' "/tmp/$label-result.json")"
+                if [ "$status" = "complete" ] || [ "$status" = "error" ]; then
+                  jq -c '{status,engine,error,products:(.payload.products|length?)}' "/tmp/$label-result.json"
+                  break
+                fi
+              done
             fi
           }
 
-          probe PRODUCT             "$BASE/Product/GetProductDetail?$COMMON&CategoryUrl=hat-nem&ProductUrl=bot-ngot-ajinomoto-1kg-cl"             /tmp/product.json
+          probe product             'https://www.bachhoaxanh.com/hat-nem/bot-ngot-ajinomoto-1kg-cl'
 
-          n=0
-          for qs in             'provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&pageIndex=1&pageSize=500'             'provinceId=1027&wardId=0&districtId=0&storeId=2546&categoryUrl=hat-nem&pageIndex=1&pageSize=500'             'provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&page=1&pageSize=500'
-          do
-            n=$((n+1))
-            probe "CATEGORY-$n"               "$BASE/Category/V2/GetCate?$qs"               "/tmp/cat-$n.json"
-          done
+          probe category             'https://www.bachhoaxanh.com/hat-nem'

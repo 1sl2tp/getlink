@@ -1,0 +1,54 @@
+name: Deploy BHX transport
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "transport/bhx-proxy/**"
+      - ".github/workflows/deploy-bhx-proxy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+      - name: Install Wrangler
+        run: npm install -g wrangler@latest
+      - name: Build config
+        run: |
+          cat > transport/bhx-proxy/wrangler.toml <<EOF
+          name = "getlink-bhx-proxy"
+          main = "src/index.js"
+          compatibility_date = "2026-09-08"
+          workers_dev = true
+          account_id = "$CLOUDFLARE_ACCOUNT_ID"
+          EOF
+      - name: Deploy
+        run: |
+          set -euo pipefail
+          wrangler deploy --config transport/bhx-proxy/wrangler.toml 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -Eo 'https://[^ ]+\\.workers\\.dev' /tmp/deploy.log | tail -1)"
+          test -n "$URL"
+          echo "WORKER_URL=$URL" >> "$GITHUB_ENV"
+      - name: Smoke
+        run: |
+          curl --fail --silent --show-error --retry 8 --retry-delay 2 "$WORKER_URL/health" | jq -e '.ok == true'
+          curl --fail --silent --show-error --max-time 90 -H 'content-type: application/json' --data '{"url":"https://www.bachhoaxanh.com/sua-tuoi"}' "$WORKER_URL/category" > /tmp/bhx.json
+          jq '{total:.data.total,products:(.data.products|length),transport:.data.transport}' /tmp/bhx.json
+          test "$(jq -r '.code' /tmp/bhx.json)" = "0"
+          test "$(jq -r '.data.total' /tmp/bhx.json)" -ge 100
+          test "$(jq -r '.data.products|length' /tmp/bhx.json)" -ge 100

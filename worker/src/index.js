@@ -4619,7 +4619,7 @@ export default {
     const url=new URL(request.url);
     try{
       if(request.method==="POST"&&url.pathname==="/api/get-price"){
-        return handleCreate(request,env,origin||"*");
+        return await handleCreate(request,env,origin||"*");
       }
       if(request.method==="POST"&&url.pathname==="/api/progress"){
         return handleProgress(request,env);

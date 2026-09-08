@@ -2160,9 +2160,27 @@ async function bhxResolveCategoryIdFromD1(env,inputUrl){
   );
 }
 
-async function bhxDirectCategoryData(env,inputUrl){
+function bhxDirectCategoryIdFromProducts(products){
+  for(const item of products||[]){
+    const category=item&&item.category&&typeof item.category==="object"
+      ?item.category:{};
+    const candidates=[
+      item&&item.categoryId,
+      item&&item.categoryID,
+      category.id,
+      category.categoryId,
+      category.categoryID
+    ];
+    for(const value of candidates){
+      const id=Number(value)||0;
+      if(id>0)return id;
+    }
+  }
+  return 0;
+}
+
+async function bhxDirectVegetableData(inputUrl,categoryId){
   const canonical=canonicalBhx(inputUrl);
-  const resolved=await bhxResolveCategoryIdFromD1(env,canonical);
   const context=bhxDirectContext();
   const api=new URL(
     "https://api.bachhoaxanh.com/gw/Category/GetCateVegetable"
@@ -2171,11 +2189,72 @@ async function bhxDirectCategoryData(env,inputUrl){
   api.searchParams.set("wardId",context.wardId);
   api.searchParams.set("districtId",context.districtId);
   api.searchParams.set("storeId",context.storeId);
-  api.searchParams.set("cateId",String(resolved.category_id));
+  api.searchParams.set("cateId",String(categoryId));
   api.searchParams.set("customerId","0");
-
   const body=await bhxDirectJson(api.toString(),canonical);
-  const products=bhxDirectCollectCategoryProducts(body,canonical);
+  return {
+    body,
+    products:bhxDirectCollectCategoryProducts(body,canonical),
+    response_url:api.toString()
+  };
+}
+
+async function bhxDirectCategoryData(env,inputUrl){
+  const canonical=canonicalBhx(inputUrl);
+
+  // V2 is keyed by the category slug, so it can bootstrap a category
+  // without opening the HTML page or knowing cateId beforehand.
+  const v2=await bhxDirectV2Data(canonical);
+  let categoryId=bhxDirectCategoryIdFromProducts(v2.products);
+
+  // Some BHX categories may omit category.id from V2. For categories
+  // already present in D1, resolve it from one child detail as fallback.
+  if(!categoryId){
+    const resolved=await bhxResolveCategoryIdFromD1(env,canonical);
+    categoryId=resolved.category_id;
+  }
+  if(!categoryId){
+    throw new Error("bhx_direct_category_id_missing");
+  }
+
+  // These two requests are independent once cateId is known.
+  const [vegetable,ajax1]=await Promise.all([
+    bhxDirectVegetableData(canonical,categoryId),
+    bhxDirectAjaxData(canonical,categoryId,1,0,"")
+  ]);
+
+  const ajaxProducts=[...ajax1.products];
+  let lastPage=ajax1.products;
+  let pageIndex=1;
+
+  // BHX currently uses PageSize=10. Continue until the terminal short page.
+  while(lastPage.length===10&&pageIndex<50){
+    pageIndex+=1;
+    const lastShowProductId=bhxDirectProductId(
+      lastPage[lastPage.length-1]
+    );
+    const page=await bhxDirectAjaxData(
+      canonical,categoryId,pageIndex,lastShowProductId,""
+    );
+    lastPage=page.products;
+    ajaxProducts.push(...lastPage);
+    if(!lastPage.length)break;
+  }
+
+  const merged=new Map();
+  for(const item of [
+    ...v2.products,
+    ...vegetable.products,
+    ...ajaxProducts
+  ]){
+    const key=String(
+      item&&(
+        item.url||item.id||item.productCode||item.productId
+      )||""
+    );
+    if(key)merged.set(key,item);
+  }
+  const products=[...merged.values()];
   if(!products.length){
     throw new Error("bhx_direct_category_empty");
   }
@@ -2189,9 +2268,8 @@ async function bhxDirectCategoryData(env,inputUrl){
   ).bind(canonical).first();
   const existingCount=Number(countRow&&countRow.n||0);
 
-  // Direct refresh must never silently shrink a known category. If BHX
-  // returns a partial batch, fall back to the browser capture which can
-  // scroll/merge additional API batches.
+  // Never silently shrink a known category. If a source request becomes
+  // partial, the caller will fall back to the browser API-capture path.
   if(existingCount>0&&products.length<existingCount){
     throw new Error(
       "bhx_direct_category_partial:"+
@@ -2203,11 +2281,15 @@ async function bhxDirectCategoryData(env,inputUrl){
     data:{
       products,
       _getlink_direct_count:products.length,
-      _getlink_category_id:resolved.category_id
+      _getlink_category_id:categoryId
     },
-    response_url:api.toString(),
-    category_id:resolved.category_id,
-    existing_count:existingCount
+    response_url:v2.response_url,
+    category_id:categoryId,
+    existing_count:existingCount,
+    v2_count:v2.products.length,
+    vegetable_count:vegetable.products.length,
+    ajax_count:ajaxProducts.length,
+    ajax_pages:pageIndex
   };
 }
 
@@ -3670,56 +3752,23 @@ async function handleBhxDirectProbe(request,env){
       },200,"");
     }
 
-    const resolved=await bhxResolveCategoryIdFromD1(env,inputUrl);
-    const categoryId=resolved.category_id;
-    const v2=await bhxDirectV2Data(inputUrl);
-    const vegetable=await bhxDirectCategoryData(env,inputUrl);
-
-    const ajax1=await bhxDirectAjaxData(
-      inputUrl,categoryId,1,0,""
-    );
-    const last1=bhxDirectProductId(
-      ajax1.products[ajax1.products.length-1]
-    );
-    const ajax2=await bhxDirectAjaxData(
-      inputUrl,categoryId,2,last1,""
-    );
-
-    const merged=new Map();
-    for(const item of [
-      ...v2.products,
-      ...(vegetable.data&&vegetable.data.products||[]),
-      ...ajax1.products,
-      ...ajax2.products
-    ]){
-      const key=String(
-        item&&(
-          item.url||item.id||item.productCode||item.productId
-        )||""
-      );
-      if(key)merged.set(key,item);
-    }
-
+    const direct=await bhxDirectCategoryData(env,inputUrl);
     return json({
       ok:true,
       kind:"category",
-      category_id:categoryId,
-      v2_products:v2.products.length,
-      vegetable_products:(vegetable.data&&vegetable.data.products||[]).length,
-      ajax1_products:ajax1.products.length,
-      ajax2_products:ajax2.products.length,
-      ajax1_last_id:last1,
-      merged_products:merged.size,
-      ajax1_sample:ajax1.products.slice(0,3).map(item=>cleanText(
-        item&&(
+      response_url:direct.response_url,
+      category_id:direct.category_id,
+      products:(direct.data&&direct.data.products||[]).length,
+      existing_count:direct.existing_count,
+      v2_products:direct.v2_count,
+      vegetable_products:direct.vegetable_count,
+      ajax_products:direct.ajax_count,
+      ajax_pages:direct.ajax_pages,
+      sample:(direct.data&&direct.data.products||[])
+        .slice(0,5)
+        .map(item=>cleanText(item&&(
           item.fullName||item.name
-        )||""
-      )),
-      ajax2_sample:ajax2.products.slice(0,3).map(item=>cleanText(
-        item&&(
-          item.fullName||item.name
-        )||""
-      ))
+        )||""))
     },200,"");
   }catch(error){
     return json({

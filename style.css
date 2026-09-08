@@ -8454,3 +8454,118 @@ body.source-manager-open{overflow:hidden!important}
   scale:1!important;
   box-sizing:border-box!important;
 }
+
+
+/* Narrow geometry release gate v8 */
+/*
+  Final narrow-width gate.
+  At phone widths the parent filter owns the full row; the label becomes
+  a small header above its children so 4 source buttons never fight a
+  fixed label column.  The table also gives Name the remaining width.
+*/
+@media(max-width:390px){
+  .workspace-list .purchase-mode-row .filter-block{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    align-items:stretch!important;
+    gap:5px!important;
+    padding:7px!important;
+  }
+
+  .workspace-list .purchase-mode-row .filter-label{
+    width:100%!important;
+    height:auto!important;
+    min-height:12px!important;
+    margin:0!important;
+    padding:0 1px!important;
+    display:block!important;
+    font-size:8.5px!important;
+    line-height:12px!important;
+  }
+
+  .workspace-list .purchase-mode-row .catalog-pack-tabs,
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+  }
+}
+
+@media(max-width:340px){
+  .workspace-list{
+    --catalog-inline:7px;
+  }
+
+  .workspace-list .purchase-mode-row{
+    gap:6px!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    gap:3px!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip,
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip-brand,
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-chip-logo-only{
+    padding-left:2px!important;
+    padding-right:2px!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-tabs-inline .source-all small{
+    display:none!important;
+  }
+
+  .workspace-list .purchase-mode-row .source-logo-bhx{
+    width:36px!important;
+    max-width:100%!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-wm{
+    width:38px!important;
+    max-width:100%!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-go{
+    width:28px!important;
+    max-width:100%!important;
+  }
+
+  /* 280px hard gate: keep Tên useful instead of donating most width
+     to already-short metadata columns. */
+  .workspace-list .xls-price-table th:nth-child(2),
+  .workspace-list .xls-price-table td:nth-child(2){
+    width:38px!important;
+    min-width:38px!important;
+    max-width:38px!important;
+  }
+  .workspace-list .xls-price-table th:nth-child(3),
+  .workspace-list .xls-price-table td:nth-child(3){
+    width:72px!important;
+    min-width:72px!important;
+    max-width:72px!important;
+  }
+  .workspace-list .xls-price-table th:nth-child(6),
+  .workspace-list .xls-price-table td:nth-child(6){
+    width:56px!important;
+    min-width:56px!important;
+    max-width:56px!important;
+    padding-right:var(--catalog-inline)!important;
+  }
+  .workspace-list .xls-price-table th,
+  .workspace-list .xls-price-table td{
+    padding-top:6px!important;
+    padding-bottom:6px!important;
+    padding-left:3px!important;
+    padding-right:3px!important;
+  }
+  .workspace-list .xls-open-detail{
+    font-size:9px!important;
+    line-height:1.28!important;
+  }
+  .workspace-list .xls-qc-compact{
+    font-size:8px!important;
+  }
+  .workspace-list .xls-price-compact .xls-price-main{
+    font-size:9.4px!important;
+  }
+}

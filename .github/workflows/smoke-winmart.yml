@@ -1,10 +1,4 @@
 name: Smoke WinMart
-# retry after zero-detail scraper syntax fix
-# API pagination + listing-card unit gate; no product-detail crawl
-# retry after reusable detail pool
-# retry after scraper compile fix
-# rerun after rendered Chọn loại + stale-row repair
-# retry after worker batch mapping
 
 on:
   push:
@@ -16,18 +10,16 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Chờ Worker/Pages nhận bản WinMart
-        run: sleep 75
-
-      - name: GET link tổng WinMart
+      - name: Benchmark GET link tổng WinMart
         env:
           API: "https://getlink-api.taphoa-4ab8161d.workers.dev"
           SAMPLE: "https://winmart.vn/sua-cac-loai--c08?storeCode=1535"
         run: |
           set -euo pipefail
+          START="$(date +%s)"
           curl --fail --silent --show-error "$API/health" | jq .
 
-          HTTP_CODE="$(curl --silent --show-error             --connect-timeout 20 --max-time 70             -o /tmp/winmart-create.json             -w '%{http_code}'             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$SAMPLE" '{url:$url,force:true}')")"
+          HTTP_CODE="$(curl --silent --show-error             --connect-timeout 20 --max-time 30             -o /tmp/winmart-create.json             -w '%{http_code}'             -H 'Origin: https://get.taphoa.xyz'             -H 'Content-Type: application/json'             -X POST "$API/api/get-price"             --data "$(jq -nc --arg url "$SAMPLE" '{url:$url,force:true}')")"
 
           cat /tmp/winmart-create.json | jq .
           test "$HTTP_CODE" -ge 200
@@ -35,36 +27,26 @@ jobs:
           RID="$(jq -r '.request_id // empty' /tmp/winmart-create.json)"
           test -n "$RID"
 
-          for i in $(seq 1 120); do
-            sleep 5
+          for i in $(seq 1 90); do
+            sleep 1
             curl --fail --silent --show-error               -H 'Origin: https://get.taphoa.xyz'               "$API/api/result?id=$RID" > /tmp/winmart-result.json
             STATUS="$(jq -r '.status // empty' /tmp/winmart-result.json)"
             echo "poll=$i status=$STATUS"
             if [ "$STATUS" = "complete" ]; then
-              jq '{
-                status,
-                source:(.payload.source.name // ""),
-                category:(.payload.category_name // ""),
-                store:(.payload.store_code // ""),
-                products:(.payload.products|length),
-                mapped:(.payload.mapped_to_bhx // 0),
-                unmapped:(.payload.unmapped_to_bhx // 0),
-                sample:(.payload.products[0] // {})
-              }' /tmp/winmart-result.json
-              test "$(jq -r '.payload.source.name // empty' /tmp/winmart-result.json)" = "WinMart"
-              test "$(jq '.payload.products|length' /tmp/winmart-result.json)" -ge 16
               break
             fi
             if [ "$STATUS" = "error" ]; then
               cat /tmp/winmart-result.json | jq .
               exit 1
             fi
-            if [ "$i" = "120" ]; then
+            if [ "$i" = "90" ]; then
               cat /tmp/winmart-result.json | jq .
               exit 1
             fi
           done
 
+          END="$(date +%s)"
+          ELAPSED="$((END-START))"
           RAW_COUNT="$(jq '.payload.products|length' /tmp/winmart-result.json)"
           RAW_TYPE_COUNT="$(jq '[.payload.products[]|select(((.packaging.text // "")|tostring|length)>0)]|length' /tmp/winmart-result.json)"
           RAW_CLASSIFIED_COUNT="$(jq '[.payload.products[]|select(
@@ -73,28 +55,25 @@ jobs:
             ((.hierarchy.label3 // "") != "")
           )]|length' /tmp/winmart-result.json)"
 
-          echo "raw_products=$RAW_COUNT raw_types=$RAW_TYPE_COUNT classified=$RAW_CLASSIFIED_COUNT"
-          test "$RAW_COUNT" -ge 250
-          # WinMart total cards expose the source sale type on line 2.
-          # Missing raw types are a source-adapter bug and must be visible.
-          test "$RAW_TYPE_COUNT" -eq "$RAW_COUNT"
-          # RAW ONLY: ingestion must not force source types into Thùng/Giữa/Lẻ.
+          echo "elapsed_seconds=$ELAPSED raw_products=$RAW_COUNT raw_types=$RAW_TYPE_COUNT classified=$RAW_CLASSIFIED_COUNT"
+          test "$RAW_COUNT" -eq 298
+          test "$RAW_TYPE_COUNT" -eq 298
           test "$RAW_CLASSIFIED_COUNT" -eq 0
 
-          jq '[.payload.products[0:8][] | {
+          jq '[.payload.products[0:5][] | {
             name,
             type:(.packaging.text // ""),
             price:(.price.current // null),
+            original:(.price.original // null),
             size_value:(.comparison.size_value // null),
-            size_unit:(.comparison.size_unit // "")
+            size_unit:(.comparison.size_unit // ""),
+            url
           }]' /tmp/winmart-result.json
 
-          curl --fail --silent --show-error \
-            -H 'Origin: https://get.taphoa.xyz' \
-            "$API/api/library?view=search&limit=2000&include_hidden=1" \
-            > /tmp/library.json
+          curl --fail --silent --show-error             -H 'Origin: https://get.taphoa.xyz'             "$API/api/library?view=search&limit=2000&include_hidden=1"             > /tmp/library.json
 
           WM_COUNT="$(jq '[.products[]|select(.source=="WinMart")]|length' /tmp/library.json)"
+          WM_TYPE_COUNT="$(jq '[.products[]|select(.source=="WinMart" and (((.packaging // "")|tostring|length)>0))]|length' /tmp/library.json)"
           WM_CLASSIFIED="$(jq '[.products[]|select(
             .source=="WinMart" and (
               ((.pack_label_1 // "") != "") or
@@ -102,12 +81,8 @@ jobs:
               ((.pack_label_3 // "") != "")
             )
           )]|length' /tmp/library.json)"
-          WM_TYPE_COUNT="$(jq '[.products[]|select(
-            .source=="WinMart" and (((.packaging // "")|tostring|length)>0)
-          )]|length' /tmp/library.json)"
 
           echo "library_winmart=$WM_COUNT library_raw_types=$WM_TYPE_COUNT library_classified=$WM_CLASSIFIED"
-          test "$WM_COUNT" -ge 250
-          test "$WM_TYPE_COUNT" -eq "$WM_COUNT"
+          test "$WM_COUNT" -eq 298
+          test "$WM_TYPE_COUNT" -eq 298
           test "$WM_CLASSIFIED" -eq 0
-

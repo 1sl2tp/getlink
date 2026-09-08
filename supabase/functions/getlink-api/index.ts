@@ -33,13 +33,19 @@ function money(v: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 function parseSize(text: unknown) {
-  const s = clean(text).toLowerCase().replace(/,/g, ".");
-  const m = s.match(/(\d+(?:\.\d+)?)\s*(ml|lít|lit|l|kg|g)\b/i);
-  if (!m) return { value: null as number | null, unit: "" };
-  let value = Number(m[1]);
-  let unit = m[2].toLowerCase();
+  const s = plain(text).replace(/,/g, ".");
+  // Negative lookahead prevents Vietnamese words such as "goi" from being
+  // misread as grams (e.g. "30 goi ... 75g" must resolve to 75g, not 30g).
+  const re=/(\d+(?:\.\d+)?)\s*(ml|lit|l|kg|g)(?![a-z])/gi;
+  let picked:RegExpExecArray|null=null;
+  for(const m of s.matchAll(re)){
+    picked=m as RegExpExecArray;
+  }
+  if (!picked) return { value: null as number | null, unit: "" };
+  let value = Number(picked[1]);
+  let unit = picked[2].toLowerCase();
   if (!Number.isFinite(value) || value <= 0) return { value: null, unit: "" };
-  if (["l","lit","lít"].includes(unit)) { value = Math.round(value * 1000); unit = "ml"; }
+  if (["l","lit"].includes(unit)) { value = Math.round(value * 1000); unit = "ml"; }
   if (unit === "kg") { value = Math.round(value * 1000); unit = "g"; }
   return { value, unit };
 }
@@ -221,6 +227,10 @@ type BhxGroupRef = {
   brand:string;
   brand_key:string;
   barcode:string;
+  packaging:string;
+  hierarchy:any;
+  comparison:any;
+  pack_kind:string;
   tokens:Set<string>;
   sizes:Set<string>;
 };
@@ -314,15 +324,104 @@ function chooseBhxGroup(input:any,refs:BhxGroupRef[]) {
   if(second&&margin<0.08)return null;
   return {group:best.group,score:best.score,margin,ref:best.ref,basis:"brand_name_size"};
 }
+
+function hierarchyKind(h:any) {
+  if(clean(h?.label1)==="Thùng")return "carton";
+  if(clean(h?.label2))return "middle";
+  return "leaf";
+}
+function chooseBhxProduct(input:any,refs:BhxGroupRef[]) {
+  const brandKey=groupBrandKey(input?.brand||"");
+  const barcode=clean(input?.barcode||"");
+  const wantedKind=clean(input?.pack_kind||"");
+  const inputSizes=groupSizeSignatures(input?.name||"");
+  const ranked:any[]=[];
+
+  for(const ref of refs){
+    if(barcode&&ref.barcode&&barcode===ref.barcode){
+      if(!wantedKind||ref.pack_kind===wantedKind){
+        return {ref,score:1.5,margin:1.5,basis:"barcode"};
+      }
+    }
+    if(!brandKey||ref.brand_key!==brandKey)continue;
+    if(wantedKind&&ref.pack_kind!==wantedKind)continue;
+
+    const refSizes=ref.sizes;
+    if(inputSizes.size&&refSizes.size&&!setIntersectionSize(inputSizes,refSizes))continue;
+
+    const score=groupMatchScore(input,ref);
+    if(score>=0.72)ranked.push({ref,score});
+  }
+
+  ranked.sort((a,b)=>b.score-a.score);
+  const best=ranked[0], second=ranked[1];
+  if(!best)return null;
+  const margin=best.score-(second?.score||0);
+  if(second&&margin<0.05)return null;
+  return {ref:best.ref,score:best.score,margin,basis:"brand_name_size_kind"};
+}
+function mergedHierarchy(primary:any,donor:any,wantedKind:string) {
+  const a={label1:clean(primary?.label1),qty1:Number(primary?.qty1)||0,label2:clean(primary?.label2),qty2:Number(primary?.qty2)||0,label3:clean(primary?.label3),qty3:Number(primary?.qty3)||0};
+  const b={label1:clean(donor?.label1),qty1:Number(donor?.qty1)||0,label2:clean(donor?.label2),qty2:Number(donor?.qty2)||0,label3:clean(donor?.label3),qty3:Number(donor?.qty3)||0};
+  const out={...a,evidence:"source",locked:false};
+
+  if(wantedKind==="carton"||a.label1==="Thùng"||b.label1==="Thùng"){
+    out.label1="Thùng";
+    out.qty1=1;
+  }
+  if(!out.label2&&b.label2){out.label2=b.label2;out.qty2=b.qty2||1;}
+  if(!out.label3&&b.label3){out.label3=b.label3;out.qty3=b.qty3||1;}
+
+  // For a carton, "Thùng" is always the parent. Child quantity never replaces it.
+  if(out.label1==="Thùng"&&out.label3&&out.qty3<=0)out.qty3=b.qty3||1;
+  if(out.label1==="Thùng"&&out.label2&&out.qty2<=0)out.qty2=b.qty2||1;
+
+  const borrowed=
+    (!a.label2&&Boolean(out.label2))||
+    (!a.label3&&Boolean(out.label3))||
+    (a.label1!=="Thùng"&&out.label1==="Thùng");
+  out.evidence=borrowed?"source+bhx-match":"source";
+  return out;
+}
+function enrichWinmartProductFromBhx(p:Product,match:any) {
+  if(!match?.ref)return;
+  const ref:BhxGroupRef=match.ref;
+  const si=p.source_identity||(p.source_identity={});
+  const ownH=hierarchyFromRaw(p.name,p.packaging?.text||"");
+  const wantedKind=hierarchyKind(ownH);
+  const mergedH=mergedHierarchy(ownH,ref.hierarchy,wantedKind);
+  const ownCmp=comparisonFrom(p.price?.current||null,p.price?.original||null,mergedH,p.packaging?.text||"",p.name);
+  const donorCmp=ref.comparison||{};
+
+  p.hierarchy=mergedH;
+  p.comparison={
+    ...ownCmp,
+    size_value:ownCmp.size_value??donorCmp.size_value??null,
+    size_unit:ownCmp.size_unit||donorCmp.size_unit||"",
+    pack_kind:hierarchyKind(mergedH),
+    pack_quantity:mergedH.label1
+      ?Number(mergedH.qty3||mergedH.qty2||1)
+      :(mergedH.label2?Number(mergedH.qty3||mergedH.qty2||1):1),
+    pack_unit:mergedH.label1||mergedH.label2||mergedH.label3||ownCmp.pack_unit||""
+  };
+  si.bhx_match_url=ref.url;
+  si.bhx_match_name=ref.name;
+}
 async function loadBhxGroupRefs() {
-  const [links,ids]=await Promise.all([
-    fetchAll("getlink_links","canonical_url,group_name,name,branch_name,last_status",(q:any)=>q.eq("link_type","product").eq("source","Bách Hóa XANH").neq("last_status","unlisted")),
-    fetchAll("getlink_source_product_identity","link_url,brand,barcode,raw_name,source_name",(q:any)=>q.eq("source_name","Bách Hóa XANH"))
+  const [links,ids,hier,comps]=await Promise.all([
+    fetchAll("getlink_links","canonical_url,group_name,name,branch_name,packaging,last_status",(q:any)=>q.eq("link_type","product").eq("source","Bách Hóa XANH").neq("last_status","unlisted")),
+    fetchAll("getlink_source_product_identity","link_url,brand,barcode,raw_name,source_name",(q:any)=>q.eq("source_name","Bách Hóa XANH")),
+    fetchAll("getlink_link_pack_hierarchy"),
+    fetchAll("getlink_link_comparison")
   ]);
   const identityByUrl=new Map(ids.map((x:any)=>[x.link_url,x]));
+  const hierarchyByUrl=new Map(hier.map((x:any)=>[x.link_url,x]));
+  const comparisonByUrl=new Map(comps.map((x:any)=>[x.link_url,x]));
   const refs:BhxGroupRef[]=[];
   for(const l of links){
     const id=identityByUrl.get(l.canonical_url)||{};
+    const h=hierarchyByUrl.get(l.canonical_url)||hierarchyFromRaw(l.name,l.packaging||"");
+    const cmp=comparisonByUrl.get(l.canonical_url)||comparisonFrom(null,null,h,l.packaging||"",l.name);
     const group=clean(l.group_name);
     const brand=clean(id.brand||l.branch_name);
     const name=clean(id.raw_name||l.name);
@@ -331,6 +430,10 @@ async function loadBhxGroupRefs() {
     refs.push({
       url:l.canonical_url,group,name,brand,brand_key:brandKey,
       barcode:clean(id.barcode||""),
+      packaging:clean(l.packaging||""),
+      hierarchy:h,
+      comparison:cmp,
+      pack_kind:hierarchyKind(h),
       tokens:groupNameTokens(name,brand),
       sizes:groupSizeSignatures(name)
     });
@@ -360,14 +463,24 @@ async function mapIncomingWinmartGroups(products:Product[]) {
     const si=p.source_identity||(p.source_identity={});
     const rawBrand=clean(si.brand||p.branch);
     const brandKey=groupBrandKey(rawBrand);
+    const inputName=clean(si.raw_name||p.name);
+    const ownH=hierarchyFromRaw(inputName,p.packaging?.text||"");
     const match=chooseBhxGroup({
-      name:clean(si.raw_name||p.name),
+      name:inputName,
       brand:rawBrand,
       barcode:clean(si.barcode||"")
     },refs);
-    // Keep WinMart source data untouched. BHX supplies browsing group/brand aliases only.
+    const productMatch=chooseBhxProduct({
+      name:inputName,
+      brand:rawBrand,
+      barcode:clean(si.barcode||""),
+      pack_kind:hierarchyKind(ownH)
+    },refs);
+    // Keep WinMart source fields untouched; BHX contributes canonical browse aliases
+    // and missing pack/size metadata only when the product match is confident.
     si.bhx_group_name=match?match.group:"";
     si.bhx_brand_name=canonicalBrand.get(brandKey)||"";
+    if(productMatch)enrichWinmartProductFromBhx(p,productMatch);
   }
 }
 async function syncExistingWinmartGroups(apply:boolean) {
@@ -833,12 +946,14 @@ function normalizeWinmart(item:any, rootName:string, store:string, checked:strin
   if(!url)return null;
   const brand=clean(item?.brandName||item?.brand||"");
   const child=clean(item?.categoryName||item?.category_name||"");
-  const size=parseSize([name,item?.description,item?.shortDescription].filter(Boolean).join(" "));
+  const h=hierarchyFromRaw(name,type,item?.packageItemCount,item?.packageItemUnit||type);
+  const cmp=comparisonFrom(current,original,h,type,name);
+  const size={value:cmp.size_value,unit:cmp.size_unit};
   const ident=matchIdentity(name,brand,clean(item?.barcode||""),size);
   return {
     source:sourceObject("winmart"),group:rootName,branch:brand,name,packaging:{text:type},
-    hierarchy:{label1:"",qty1:0,label2:"",qty2:0,label3:"",qty3:0,evidence:"",locked:false},
-    comparison:{pack_kind:"",pack_quantity:1,pack_unit:"",size_value:size.value,size_unit:size.unit,regular_pack_price:current,promo_pack_price:null,regular_unit_price:null,promo_unit_price:null,promotion_active:Boolean(original&&original>current)},
+    hierarchy:h,
+    comparison:cmp,
     price:{current,original},promotion:{active:Boolean(original&&original>current),price:null,text:""},url,image:winmartImage(item),breadcrumbs:[rootName,child,brand].filter(Boolean),
     source_identity:{
       source_product_id:clean(item?.id||""),source_code:clean(item?.itemNo||""),barcode:clean(item?.barcode||""),sku:clean(item?.sku||""),
@@ -973,7 +1088,7 @@ async function persistPayload(payload:any, engine:string){
     if(p.image)assets.push({link_url:p.url,image_url:p.image,updated_at:now});
     comps.push({link_url:p.url,pack_kind:cmp.pack_kind||"",pack_quantity:Number(cmp.pack_quantity)||1,pack_unit:cmp.pack_unit||"",size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",regular_pack_price:cmp.regular_pack_price??p.price?.current??null,promo_pack_price:cmp.promo_pack_price??null,regular_unit_price:cmp.regular_unit_price??null,promo_unit_price:cmp.promo_unit_price??null,promotion_active:Boolean(cmp.promotion_active),updated_at:now});
     hier.push({link_url:p.url,label1:h.label1||"",qty1:Number(h.qty1)||0,label2:h.label2||"",qty2:Number(h.qty2)||0,label3:h.label3||"",qty3:Number(h.qty3)||0,evidence:h.evidence||"",updated_at:now});
-    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),category:clean(si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
+    identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),category:clean(si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),bhx_match_url:clean(si.bhx_match_url),bhx_match_name:clean(si.bhx_match_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
     snaps.push({link_id:id,request_id:requestId,checked_at:p.last_checked_at||payload.checked_at,current_price:p.price?.current||null,original_price:p.price?.original||null,promotion_price:p.promotion?.price||null,promotion_text:p.promotion?.text||"",result_json:p});
   }
   await must(sb.from("getlink_links").upsert(rows,{onConflict:"canonical_url"}));
@@ -1028,7 +1143,7 @@ async function libraryRows(includeHidden=true){
       pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,pack_evidence:h.evidence||"",hierarchy_locked:0,
       source_product_id:id.source_product_id||"",source_code:id.source_code||"",barcode:id.barcode||"",sku:id.sku||"",
       source_raw_name:id.raw_name||l.name,source_raw_description:id.raw_description||"",match_key:id.match_key||"",match_basis:id.match_basis||"",
-      source_category_name:id.category||"",bhx_group_name:id.bhx_group_name||"",bhx_brand_name:id.bhx_brand_name||"",source_root_name:isW?(rootByReq.get(l.last_request_id)||l.group_name):"",
+      source_category_name:id.category||"",bhx_group_name:id.bhx_group_name||"",bhx_brand_name:id.bhx_brand_name||"",bhx_match_url:id.bhx_match_url||"",bhx_match_name:id.bhx_match_name||"",source_root_name:isW?(rootByReq.get(l.last_request_id)||l.group_name):"",
       web_carton_price:!isW&&isCarton?levelPrice:null,promo_carton_price:null,
       web_middle_price:!isW&&isMiddle?levelPrice:null,promo_middle_price:null,
       web_leaf_price:!isW&&!isCarton&&!isMiddle?levelPrice:null,promo_leaf_price:null,

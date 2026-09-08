@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v18");
+      const req=tx.objectStore("cache").get("library-v19");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v18");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v19");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -79,6 +79,7 @@ let activeRootGroup="";
 let activeGroupUrl="";
 let activeBrand="";
 let activePackKind=localStorage.getItem("getlink:filter-pack")||"";
+let activeSourceFilter=localStorage.getItem("getlink:filter-source")||"";
 let libraryQuery="";
 let libraryCache=[];
 let libraryLoaded=false;
@@ -1730,13 +1731,52 @@ function renderPackTabs(){
     '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button">Lẻ <small>'+retailCount+'</small></button>';
 }
 
-function filteredLibraryProducts(){
-  let products=visibleRowsBeforePack();
+function rowSourceFilterKey(row){
+  if(isWinmartRow(row))return "wm";
+  if(isGoRow(row))return "go";
+  return "bhx";
+}
 
+function rowsAfterPackBeforeSource(){
+  let products=visibleRowsBeforePack();
   if(activePackKind==="Thùng"){
     products=products.filter(row=>rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
     products=products.filter(row=>rowIsRetail(row));
+  }
+  return products;
+}
+
+function renderSourceTabs(){
+  const host=$("#sourceTabs");
+  if(!host)return;
+
+  const base=rowsBeforeSearch().filter(row=>{
+    if(activePackKind==="Thùng")return rowIsCarton(row);
+    if(activePackKind==="Lẻ")return rowIsRetail(row);
+    return true;
+  });
+
+  const counts={bhx:0,wm:0,go:0};
+  for(const row of base)counts[rowSourceFilterKey(row)]++;
+
+  if(!["","bhx","wm","go"].includes(activeSourceFilter)){
+    activeSourceFilter="";
+    localStorage.removeItem("getlink:filter-source");
+  }
+
+  host.innerHTML=
+    '<button class="source-chip '+(!activeSourceFilter?"active":"")+'" data-source="" type="button">Tất cả <small>'+base.length+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button">BHX <small>'+counts.bhx+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button">WM <small>'+counts.wm+'</small></button>'+
+    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button">GO <small>'+counts.go+'</small></button>';
+}
+
+function filteredLibraryProducts(){
+  let products=rowsAfterPackBeforeSource();
+
+  if(activeSourceFilter){
+    products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
   }
 
   products.sort((a,b)=>{
@@ -1754,6 +1794,9 @@ function headerLibraryProducts(){
     products=products.filter(row=>rowIsCarton(row));
   }else if(activePackKind==="Lẻ"){
     products=products.filter(row=>rowIsRetail(row));
+  }
+  if(activeSourceFilter){
+    products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
   }
   return products;
 }
@@ -1905,6 +1948,7 @@ function productViewKey(products){
     activeGroupUrl,
     activeBrand,
     activePackKind,
+    activeSourceFilter,
     libraryQuery,
     products.length
   ].join("|");
@@ -2039,6 +2083,7 @@ function renderLibraryProducts(){
   }
   renderBrandTabs();
   renderPackTabs();
+  renderSourceTabs();
   syncStateControls();
   const products=filteredLibraryProducts();
 
@@ -2278,6 +2323,19 @@ $("#packTabs").addEventListener("click",e=>{
   resetBrowseDetail();
   document.querySelectorAll(".pack-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
+  renderLibraryProducts();
+});
+
+$("#sourceTabs").addEventListener("click",e=>{
+  const chip=e.target.closest(".source-chip");
+  if(!chip)return;
+  activeSourceFilter=chip.dataset.source||"";
+  if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
+  else localStorage.removeItem("getlink:filter-source");
+  libraryPage=1;
+  resetBrowseDetail();
+  const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
+  if(activeScroller)activeScroller.scrollTop=0;
   renderLibraryProducts();
 });
 

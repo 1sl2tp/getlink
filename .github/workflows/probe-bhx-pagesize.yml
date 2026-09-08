@@ -1,4 +1,5 @@
 name: Probe BHX page size
+# rerun after forcing BHX HTTP1
 
 on:
   push:

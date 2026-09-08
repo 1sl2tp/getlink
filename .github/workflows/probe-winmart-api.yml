@@ -1,0 +1,55 @@
+name: Probe WinMart direct API
+
+on:
+  push:
+    paths:
+      - ".github/workflows/probe-winmart-api.yml"
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public WinMart category API
+        shell: bash
+        run: |
+          set -uo pipefail
+          BASE='https://api-crownx.winmart.vn/it/api/web/v3/item/category'
+          UA='Mozilla/5.0'
+          ORIGIN='https://winmart.vn'
+          REF='https://winmart.vn/sua-cac-loai--c08?storeCode=1535'
+          candidates=(
+            'categoryCode=c08&storeCode=1535&pageNumber=1&pageSize=8'
+            'categoryCode=08&storeCode=1535&pageNumber=1&pageSize=8'
+            'categoryCode=8&storeCode=1535&pageNumber=1&pageSize=8'
+            'cateCode=c08&storeCode=1535&pageNumber=1&pageSize=8'
+            'categoryId=c08&storeCode=1535&pageNumber=1&pageSize=8'
+            'categoryCode=c08&pageNumber=1&pageSize=8&storeCode=1535'
+          )
+          n=0
+          for q in "${candidates[@]}"; do
+            n=$((n+1))
+            echo "=== CANDIDATE $n: $q"
+            code="$(curl -L -sS --connect-timeout 10 --max-time 20               -A "$UA" -H "Accept: application/json"               -H "Origin: $ORIGIN" -H "Referer: $REF"               -o "/tmp/wm-$n.json" -w '%{http_code}' "$BASE?$q" || true)"
+            echo "HTTP=$code bytes=$(wc -c < "/tmp/wm-$n.json" 2>/dev/null || echo 0)"
+            python - "$n" <<'PY'
+import json,sys,pathlib
+p=pathlib.Path('/tmp/wm-'+sys.argv[1]+'.json')
+if not p.exists():
+    print('NO_BODY'); raise SystemExit
+raw=p.read_text(errors='replace')
+try:
+    d=json.loads(raw)
+    data=d.get('data') if isinstance(d,dict) else None
+    paging=d.get('paging') if isinstance(d,dict) else None
+    items=(data or {}).get('items') if isinstance(data,dict) else None
+    print(json.dumps({
+      'keys': list(d.keys())[:20] if isinstance(d,dict) else [],
+      'data_keys': list(data.keys())[:20] if isinstance(data,dict) else [],
+      'items': len(items) if isinstance(items,list) else None,
+      'paging': paging,
+      'sample': items[0] if isinstance(items,list) and items else None
+    },ensure_ascii=False)[:4000])
+except Exception:
+    print(raw[:1200])
+PY
+          done

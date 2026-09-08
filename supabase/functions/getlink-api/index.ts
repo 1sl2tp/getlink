@@ -214,27 +214,6 @@ type Product = {
   source_identity:any; last_checked_at:string;
 };
 
-function catalogCompact(v:unknown) {
-  return plain(v).replace(/[^a-z0-9]/g,"");
-}
-function isNumericBrandName(name:string, brand:string) {
-  const n=catalogCompact(name), b=catalogCompact(brand);
-  return /^\d/.test(b) && b.length>=2 && n.startsWith(b);
-}
-function isBlockedCatalogProduct(p:Product) {
-  const name=clean(p?.name||"");
-  const brand=clean(p?.source_identity?.brand||p?.branch||"");
-  const normalized=plain(name);
-  let path="";
-  try { path=new URL(p?.url||"https://invalid.local/").pathname.toLowerCase(); } catch {}
-  if(/\bcombo\b/.test(normalized) || /(^|[\/_-])combo([\/_-]|$)/i.test(path)) return true;
-  if(/^\d+\s*[a-z]/.test(normalized) && !isNumericBrandName(name,brand)) return true;
-  return false;
-}
-function filterCatalogProducts(products:Product[]) {
-  return products.filter(p=>!isBlockedCatalogProduct(p));
-}
-
 function getlinkNameKey(v: unknown) {
   return plain(v).replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
 }
@@ -242,7 +221,9 @@ function isNumericBrandException(name: string, brand: string) {
   const n=getlinkNameKey(name), b=getlinkNameKey(brand);
   if(!/^\d+\s*[a-z]/.test(n))return false;
   if(!b||!/^\d+\s*[a-z]/.test(b))return false;
-  return n===b||n.startsWith(b+" ");
+  const nc=n.replace(/[^a-z0-9]/g,"");
+  const bc=b.replace(/[^a-z0-9]/g,"");
+  return bc.length>=2 && nc.startsWith(bc);
 }
 function keepGetlinkProduct(p: Product) {
   const name=clean(p?.name||"");
@@ -756,10 +737,10 @@ async function must<T>(promise: PromiseLike<{data:T,error:any}>) {
 }
 async function persistPayload(payload:any, engine:string){
   const now=new Date().toISOString(), requestId=payload.request_id, input=payload.input_url, key=payload.source.key;
-  const products:Product[]=filterCatalogProducts(Array.isArray(payload.products)?payload.products:[]);
+  const products:Product[]=filterGetlinkProducts(Array.isArray(payload.products)?payload.products:[]);
   payload.products=products;
   payload.discovered_links=products.map((p:Product)=>p.url);
-  if(payload.input_type==="product"&&payload.product&&isBlockedCatalogProduct(payload.product))throw new Error("blocked_product_name_rule");
+  if(payload.input_type==="product"&&payload.product&&!keepGetlinkProduct(payload.product))throw new Error("product_blocked_by_name_rule");
   const categoryId=await idFor(input);
   const rows:any[]=[{
     id:categoryId,canonical_url:input,source:sourceName(key),link_type:payload.input_type,

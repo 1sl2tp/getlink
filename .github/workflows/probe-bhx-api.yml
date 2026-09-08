@@ -9,44 +9,42 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe BHX product and category APIs directly
+      - name: Probe BHX APIs over HTTP1
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           BASE='https://api.bachhoaxanh.com/gw'
-          UA='Mozilla/5.0'
+          UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/140 Safari/537.36'
           REF='https://www.bachhoaxanh.com/hat-nem'
           COMMON='provinceId=1027&wardId=0&districtId=0&storeId=2546'
 
-          echo '=== PRODUCT ==='
-          curl -L -sS --connect-timeout 10 --max-time 20             -A "$UA" -H 'Accept: application/json'             -H 'Origin: https://www.bachhoaxanh.com'             -H "Referer: $REF"             "$BASE/Product/GetProductDetail?$COMMON&CategoryUrl=hat-nem&ProductUrl=bot-ngot-ajinomoto-1kg-cl"             -o /tmp/product.json
-          jq -c '{code,message,data_type:(.data|type),data_keys:((.data // {})|keys|.[0:30])}' /tmp/product.json
-
-          echo '=== CATEGORY CANDIDATES ==='
-          candidates=(
-            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&pageIndex=1&pageSize=500'
-            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&categoryUrl=hat-nem&pageIndex=1&pageSize=500'
-            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&page=1&pageSize=500'
-            'Category/V2/GetCate?provinceId=1027&wardId=0&districtId=0&storeId=2546&category=hat-nem&pageIndex=1&pageSize=500'
-          )
-          n=0
-          for path in "${candidates[@]}"; do
-            n=$((n+1))
-            echo "CANDIDATE $n $path"
-            curl -L -sS --connect-timeout 10 --max-time 20               -A "$UA" -H 'Accept: application/json'               -H 'Origin: https://www.bachhoaxanh.com'               -H "Referer: $REF"               "$BASE/$path" -o "/tmp/cat-$n.json" || true
-            if jq -e . "/tmp/cat-$n.json" >/dev/null 2>&1; then
+          probe () {
+            label="$1"
+            url="$2"
+            out="$3"
+            echo "=== $label ==="
+            code="$(curl --http1.1 -L -sS --connect-timeout 10 --max-time 25               -A "$UA"               -H 'Accept: application/json, text/plain, */*'               -H 'Accept-Language: vi-VN,vi;q=0.9'               -H 'Origin: https://www.bachhoaxanh.com'               -H "Referer: $REF"               -o "$out" -w '%{http_code}' "$url" || true)"
+            echo "HTTP=$code bytes=$(wc -c <"$out" 2>/dev/null || echo 0)"
+            if jq -e . "$out" >/dev/null 2>&1; then
               jq -c '{
                 code,message,
                 data_type:(.data|type),
-                data_keys:((.data // {})|keys|.[0:30]),
-                products_guess:([
-                  .. | arrays | select(length>0) |
-                  select((.[0]|type)=="object") |
-                  select((.[0]|has("url")) or (.[0]|has("name")) or (.[0]|has("productPrices")))
-                ] | map(length) | max // 0)
-              }' "/tmp/cat-$n.json"
+                data_keys:((.data // {})|keys|.[0:40]),
+                array_lengths:([
+                  .. | arrays | length
+                ] | sort | reverse | .[0:10])
+              }' "$out"
             else
-              head -c 800 "/tmp/cat-$n.json" || true
+              head -c 1200 "$out" 2>/dev/null || true
               echo
             fi
+          }
+
+          probe PRODUCT             "$BASE/Product/GetProductDetail?$COMMON&CategoryUrl=hat-nem&ProductUrl=bot-ngot-ajinomoto-1kg-cl"             /tmp/product.json
+
+          n=0
+          for qs in             'provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&pageIndex=1&pageSize=500'             'provinceId=1027&wardId=0&districtId=0&storeId=2546&categoryUrl=hat-nem&pageIndex=1&pageSize=500'             'provinceId=1027&wardId=0&districtId=0&storeId=2546&CategoryUrl=hat-nem&page=1&pageSize=500'
+          do
+            n=$((n+1))
+            probe "CATEGORY-$n"               "$BASE/Category/V2/GetCate?$qs"               "/tmp/cat-$n.json"
           done

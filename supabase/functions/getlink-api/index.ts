@@ -2057,6 +2057,23 @@ Deno.serve(async(req:Request)=>{
         }
         return response(req,{products:rows.slice(0,limit)});
       }
+      if(view==="classification-version"){
+        const [{data:maxRow,error:maxError},{count,error:countError}]=await Promise.all([
+          sb.from("getlink_manual_group_members")
+            .select("matched_at")
+            .order("matched_at",{ascending:false})
+            .limit(1)
+            .maybeSingle(),
+          sb.from("getlink_manual_group_members")
+            .select("*",{count:"exact",head:true})
+        ]);
+        if(maxError)throw maxError;
+        if(countError)throw countError;
+        return response(req,{
+          version:maxRow?.matched_at||"",
+          member_count:Number(count||0)
+        });
+      }
       if(view==="groups"){
         const rows=await libraryRows(false); const map=new Map<string,any>();
         for(const r of rows){

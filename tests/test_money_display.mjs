@@ -84,6 +84,14 @@ assert.equal(money(0),"—");
     api.matchesSearch({name:"Mì tương đen Bắc Kinh Ottogi gói 83g"},"tuong ot"),
     false
   );
+  assert.equal(
+    api.matchesSearch({name:"Dầu hào Maggi chai 350g",source_name:"Dầu hào Maggi chai 350g",canonical_url:"https://example.com/dau-hao-maggi"},"hao hao"),
+    false
+  );
+  assert.equal(
+    api.matchesSearch({name:"Mì Hảo Hảo tôm chua cay",brand_name:"Hảo Hảo"},"hao hao"),
+    true
+  );
 }
 
 {

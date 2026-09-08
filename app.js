@@ -2232,8 +2232,9 @@ function renderPackTabs(){
   }
 
   host.innerHTML=
-    '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button" aria-pressed="'+(activePackKind==="Thùng"?"true":"false")+'" title="'+(activePackKind==="Thùng"?"Bấm lại để bỏ lọc":"Lọc theo quy cách Thùng")+'">Thùng <small>'+cartonCount+'</small></button>'+
-    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button" aria-pressed="'+(activePackKind==="Lẻ"?"true":"false")+'" title="'+(activePackKind==="Lẻ"?"Bấm lại để bỏ lọc":"Lọc theo quy cách Lẻ")+'">Lẻ <small>'+retailCount+'</small></button>';
+    '<button class="pack-chip '+(!activePackKind?"active":"")+'" data-pack="" type="button" aria-pressed="'+(!activePackKind?"true":"false")+'" title="Xem tất cả quy cách">Tất cả <small>'+base.length+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Thùng"?"active":"")+'" data-pack="Thùng" type="button" aria-pressed="'+(activePackKind==="Thùng"?"true":"false")+'" title="Lọc theo quy cách Thùng">Thùng <small>'+cartonCount+'</small></button>'+
+    '<button class="pack-chip '+(activePackKind==="Lẻ"?"active":"")+'" data-pack="Lẻ" type="button" aria-pressed="'+(activePackKind==="Lẻ"?"true":"false")+'" title="Lọc theo quy cách Lẻ">Lẻ <small>'+retailCount+'</small></button>';
 }
 
 function rowSourceFilterKey(row){

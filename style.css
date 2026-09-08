@@ -7991,3 +7991,226 @@ body.source-manager-open{overflow:hidden!important}
     scroll-padding-bottom:max(12px,env(safe-area-inset-bottom))!important;
   }
 }
+
+
+/* Stable filter geometry v6 */
+/*
+  Quy cách / Nguồn keep a stable footprint.
+  Active/pressed states may change color only — never geometry.
+*/
+.purchase-mode-row{
+  width:100%!important;
+  box-sizing:border-box!important;
+}
+
+.purchase-mode-row .filter-block{
+  box-sizing:border-box!important;
+  min-width:0!important;
+  overflow:hidden!important;
+  border-width:1px!important;
+  border-style:solid!important;
+  border-radius:12px!important;
+}
+
+.purchase-mode-row .filter-block-pack,
+.purchase-mode-row .filter-block-source{
+  flex:0 0 auto!important;
+}
+
+.purchase-mode-row .catalog-pack-tabs,
+.purchase-mode-row .source-tabs-inline{
+  min-width:0!important;
+  box-sizing:border-box!important;
+}
+
+.purchase-mode-row .pack-chip,
+.purchase-mode-row .source-chip,
+.purchase-mode-row .source-chip-brand{
+  box-sizing:border-box!important;
+  border-width:1px!important;
+  border-style:solid!important;
+  margin:0!important;
+  transform:none!important;
+  translate:none!important;
+  scale:1!important;
+  line-height:1!important;
+  vertical-align:middle!important;
+  transition:
+    background-color .14s ease,
+    border-color .14s ease,
+    color .14s ease,
+    box-shadow .14s ease!important;
+}
+
+.purchase-mode-row .pack-chip:hover,
+.purchase-mode-row .pack-chip:focus,
+.purchase-mode-row .pack-chip:focus-visible,
+.purchase-mode-row .pack-chip:active,
+.purchase-mode-row .pack-chip.active,
+.purchase-mode-row .pack-chip[aria-pressed="true"],
+.purchase-mode-row .source-chip:hover,
+.purchase-mode-row .source-chip:focus,
+.purchase-mode-row .source-chip:focus-visible,
+.purchase-mode-row .source-chip:active,
+.purchase-mode-row .source-chip.active,
+.purchase-mode-row .source-chip[aria-pressed="true"],
+.purchase-mode-row .source-chip-brand:hover,
+.purchase-mode-row .source-chip-brand:focus,
+.purchase-mode-row .source-chip-brand:focus-visible,
+.purchase-mode-row .source-chip-brand:active,
+.purchase-mode-row .source-chip-brand.active,
+.purchase-mode-row .source-chip-brand[aria-pressed="true"]{
+  transform:none!important;
+  translate:none!important;
+  scale:1!important;
+  margin:0!important;
+  outline:0!important;
+}
+
+/* Active feedback is inset so it cannot change outer size. */
+.purchase-mode-row .pack-chip.active,
+.purchase-mode-row .pack-chip[aria-pressed="true"]{
+  box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)!important;
+}
+.purchase-mode-row .source-chip.active,
+.purchase-mode-row .source-chip[aria-pressed="true"],
+.purchase-mode-row .source-chip-brand.active,
+.purchase-mode-row .source-chip-brand[aria-pressed="true"]{
+  box-shadow:inset 0 0 0 1px currentColor!important;
+}
+
+/* Desktop: both filter cards have a fixed visual height and stay inside the row.
+   Pack hugs left; Source hugs right. */
+@media(min-width:721px){
+  .purchase-mode-row{
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:stretch!important;
+    justify-content:space-between!important;
+    gap:14px!important;
+    padding:7px 10px 8px!important;
+    overflow:hidden!important;
+  }
+
+  .purchase-mode-row .filter-block{
+    height:48px!important;
+    min-height:48px!important;
+    max-height:48px!important;
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    gap:8px!important;
+    padding:6px 8px!important;
+  }
+
+  .purchase-mode-row .filter-block-pack{
+    margin:0 auto 0 0!important;
+    justify-content:flex-start!important;
+  }
+  .purchase-mode-row .filter-block-source{
+    margin:0 0 0 auto!important;
+    justify-content:flex-end!important;
+  }
+
+  .purchase-mode-row .filter-label{
+    flex:0 0 auto!important;
+    height:34px!important;
+    display:flex!important;
+    align-items:center!important;
+    margin:0!important;
+    padding:0!important;
+  }
+
+  .purchase-mode-row .catalog-pack-tabs,
+  .purchase-mode-row .source-tabs-inline{
+    height:34px!important;
+    min-height:34px!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:6px!important;
+    overflow:hidden!important;
+  }
+
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip,
+  .purchase-mode-row .source-chip-brand{
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+  }
+
+  .purchase-mode-row .catalog-pack-tabs .pack-chip{
+    min-width:70px!important;
+    padding:0 10px!important;
+  }
+
+  .purchase-mode-row .source-tabs-inline .source-all{
+    min-width:88px!important;
+    padding:0 10px!important;
+  }
+
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-bhx{
+    width:64px!important;
+    min-width:64px!important;
+    max-width:64px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-wm{
+    width:68px!important;
+    min-width:68px!important;
+    max-width:68px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-go{
+    width:54px!important;
+    min-width:54px!important;
+    max-width:54px!important;
+  }
+}
+
+/* Mobile: keep both zones full-width and prevent clipping at card edges. */
+@media(max-width:720px){
+  .purchase-mode-row{
+    padding:7px 8px 9px!important;
+    overflow:visible!important;
+  }
+
+  .purchase-mode-row .filter-block{
+    width:100%!important;
+    max-width:100%!important;
+    margin:0!important;
+    padding:8px!important;
+    overflow:hidden!important;
+  }
+
+  .purchase-mode-row .catalog-pack-tabs,
+  .purchase-mode-row .source-tabs-inline{
+    width:100%!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+  }
+
+  .purchase-mode-row .catalog-pack-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:5px!important;
+  }
+  .purchase-mode-row .source-tabs-inline{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+    gap:5px!important;
+  }
+
+  .purchase-mode-row .pack-chip,
+  .purchase-mode-row .source-chip,
+  .purchase-mode-row .source-chip-brand,
+  .purchase-mode-row .source-chip-logo-only{
+    width:100%!important;
+    min-width:0!important;
+    max-width:100%!important;
+    height:34px!important;
+    min-height:34px!important;
+    max-height:34px!important;
+    padding-left:4px!important;
+    padding-right:4px!important;
+    overflow:hidden!important;
+  }
+}

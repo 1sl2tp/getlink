@@ -75,9 +75,12 @@
 
       <div class="catalog-controls">
         <div id="packTabs" class="pack-tabs catalog-pack-tabs"></div>
-        <div class="view-switch" aria-label="Kiểu hiển thị">
-          <button class="view-button active" data-view="grid" type="button" title="Xem ảnh">▦ <span>Ảnh</span></button>
-          <button class="view-button" data-view="table" type="button" title="Xem bảng">☷ <span>Bảng</span></button>
+        <div class="catalog-mode-actions">
+          <button id="toggleMatchAudit" class="audit-toggle" type="button" aria-pressed="false">Ghép thử Sữa</button>
+          <div class="view-switch" aria-label="Kiểu hiển thị">
+            <button class="view-button active" data-view="grid" type="button" title="Xem ảnh">▦ <span>Ảnh</span></button>
+            <button class="view-button" data-view="table" type="button" title="Xem bảng">☷ <span>Bảng</span></button>
+          </div>
         </div>
       </div>
 
@@ -93,6 +96,17 @@
         <button class="state-chip" data-state="hidden" type="button">Ẩn</button>
       </div>
       </div>
+
+      <section id="matchAudit" class="match-audit" hidden aria-live="polite">
+        <div class="match-audit-head">
+          <div>
+            <strong>Audit ghép thử · Sữa · BHX ↔ WinMart</strong>
+            <small>Chỉ xem ứng viên ghép. Không sửa, không gộp, không xóa dữ liệu gốc.</small>
+          </div>
+          <span id="matchAuditSummary"></span>
+        </div>
+        <div id="matchAuditGroups" class="match-audit-groups"></div>
+      </section>
 
       <div id="productGrid" class="product-grid" aria-live="polite"></div>
 
@@ -199,6 +213,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260907-workspace83"></script>
-<script src="app.js?v=20260907-workspace93"></script>
+<script src="app.js?v=20260908-matchaudit1"></script>
 </body>
 </html>

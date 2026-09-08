@@ -147,4 +147,9 @@ assert.match(suaChuaMigration,/'yaourt'/i);
 assert.match(suaChuaMigration,/'th true yogurt'/i);
 assert.match(suaChuaMigration,/not exists\s*\(\s*select 1\s*from public\.getlink_manual_group_members existing/i);
 
+
+// Manual-group detail chunks URL filters to avoid oversized PostgREST .in(...) requests.
+assert.match(source,/for\(let i=0;i<unique\.length;i\+=40\)/);
+assert.match(source,/unique\.slice\(i,i\+40\)/);
+
 console.log("GETLINK name filter contract: OK");

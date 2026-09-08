@@ -1777,6 +1777,26 @@ function renderCategoryMenu(){
   if(current){
     current.textContent=activeManualGroupName()||"Tất cả";
   }
+
+  const quickCategory=$("#quickCategoryList");
+  if(quickCategory){
+    quickCategory.innerHTML=
+      '<button class="quick-category-chip '+(!activeRootGroup?"active":"")+'" data-root="" data-group="" type="button" aria-pressed="'+(!activeRootGroup?"true":"false")+'">'+
+        '<span>Tất cả</span><small>'+visibleLibrary.length+'</small>'+
+      '</button>'+
+      groupRows.map(group=>
+        '<button class="quick-category-chip '+(activeRootGroup===group.key?"active":"")+'" '+
+          'data-root="'+escapeAttr(group.key)+'" data-group="" type="button" aria-pressed="'+(activeRootGroup===group.key?"true":"false")+'">'+
+          '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
+        '</button>'
+      ).join("");
+  }
+
+  const quickCurrent=$("#quickBrowseCurrent");
+  if(quickCurrent){
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn"));
+    quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
+  }
 }
 function gridProductCard(row){
   const levels=rowPriceLevels(row);
@@ -2389,7 +2409,8 @@ function sourceChipHtml(key,count,active,compact=false){
 function renderSourceTabs(){
   const navHost=$("#sourceTabs");
   const inlineHost=$("#sourceTabsInline");
-  if(!navHost&&!inlineHost)return;
+  const quickHost=$("#quickSourceTabs");
+  if(!navHost&&!inlineHost&&!quickHost)return;
 
   let base=libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden"
@@ -2420,6 +2441,15 @@ function renderSourceTabs(){
   }
   if(inlineHost){
     inlineHost.innerHTML=rows.map(([key,count,active])=>sourceChipHtml(key,count,active,true)).join("");
+  }
+  if(quickHost){
+    quickHost.innerHTML=rows.map(([key,count,active])=>sourceChipHtml(key,count,active,true)).join("");
+  }
+
+  const quickCurrent=$("#quickBrowseCurrent");
+  if(quickCurrent){
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn"));
+    quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
 
@@ -2918,6 +2948,58 @@ $("#mobileCategoryButton").addEventListener("click",()=>{
 });
 $("#mobileNavScrim").addEventListener("click",closeMobileCategoryNav);
 
+function closeQuickBrowseMenu(){
+  const menu=$("#quickBrowseMenu");
+  const button=$("#quickBrowseButton");
+  if(menu)menu.hidden=true;
+  if(button)button.setAttribute("aria-expanded","false");
+}
+function openQuickBrowseMenu(){
+  const menu=$("#quickBrowseMenu");
+  const button=$("#quickBrowseButton");
+  if(!menu||!button)return;
+  renderCategoryMenu();
+  renderSourceTabs();
+  menu.hidden=false;
+  button.setAttribute("aria-expanded","true");
+}
+const quickBrowseButton=$("#quickBrowseButton");
+if(quickBrowseButton){
+  quickBrowseButton.addEventListener("click",e=>{
+    e.stopPropagation();
+    const menu=$("#quickBrowseMenu");
+    if(menu&&!menu.hidden)closeQuickBrowseMenu();
+    else openQuickBrowseMenu();
+  });
+}
+const quickBrowseClose=$("#quickBrowseClose");
+if(quickBrowseClose)quickBrowseClose.addEventListener("click",closeQuickBrowseMenu);
+
+const quickCategoryList=$("#quickCategoryList");
+if(quickCategoryList){
+  quickCategoryList.addEventListener("click",e=>{
+    const chip=e.target.closest(".quick-category-chip");
+    if(!chip)return;
+    selectCategoryChip(chip);
+    closeQuickBrowseMenu();
+  });
+}
+const quickSourceTabs=$("#quickSourceTabs");
+if(quickSourceTabs){
+  quickSourceTabs.addEventListener("click",e=>{
+    const chip=e.target.closest(".source-chip[data-source]");
+    if(!chip)return;
+    setActiveSourceFilter(chip.dataset.source||"");
+    closeQuickBrowseMenu();
+  });
+}
+document.addEventListener("click",e=>{
+  const dock=$("#quickBrowseDock");
+  const menu=$("#quickBrowseMenu");
+  if(!dock||!menu||menu.hidden)return;
+  if(!dock.contains(e.target))closeQuickBrowseMenu();
+});
+
 let mobileNavTouchX=0;
 $("#workspaceNav").addEventListener("touchstart",e=>{
   mobileNavTouchX=e.touches&&e.touches[0]?e.touches[0].clientX:0;
@@ -2931,6 +3013,7 @@ document.addEventListener("keydown",e=>{
   if(e.key!=="Escape")return;
   closeImageZoom();
   closeMobileCategoryNav();
+  closeQuickBrowseMenu();
   closeSourceManager();
 });
 

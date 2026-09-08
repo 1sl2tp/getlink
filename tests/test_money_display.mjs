@@ -67,6 +67,26 @@ assert.equal(money(0),"—");
 }
 
 {
+  const searchKeyMatch=app.match(/function searchKey\(value\)\{[\s\S]*?\n\}/);
+  const productSearchKeyMatch=app.match(/function productSearchKey\(row\)\{[\s\S]*?\n\}/);
+  const matchesSearchMatch=app.match(/function matchesSearch\(row,query\)\{[\s\S]*?\n\}/);
+  assert.ok(searchKeyMatch&&productSearchKeyMatch&&matchesSearchMatch,"search helpers not found");
+  const api=new Function(
+    searchKeyMatch[0]+"\n"+productSearchKeyMatch[0]+"\n"+matchesSearchMatch[0]+
+    "\nreturn {matchesSearch};"
+  )();
+
+  assert.equal(
+    api.matchesSearch({name:"Tương ớt Chinsu chai 250g"},"tuong ot"),
+    true
+  );
+  assert.equal(
+    api.matchesSearch({name:"Mì tương đen Bắc Kinh Ottogi gói 83g"},"tuong ot"),
+    false
+  );
+}
+
+{
   const forbidden=[
     "function inferSheetPack(",
     "function simpleRowPrice(",

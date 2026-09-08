@@ -4760,3 +4760,88 @@ body.image-zoom-open{overflow:hidden!important}
     font-weight:760!important;
   }
 }
+
+
+/* Mobile header v1: category selector lives beside GETLINK branding */
+.site-brand-copy{
+  min-width:0;
+}
+@media(max-width:1100px){
+  .site-head{
+    display:grid!important;
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    align-items:center!important;
+    column-gap:9px!important;
+  }
+  .site-brand-copy{
+    min-width:0!important;
+  }
+  .mobile-category-button{
+    justify-self:end!important;
+    width:auto!important;
+    min-width:0!important;
+    min-height:34px!important;
+    height:34px!important;
+    margin:0!important;
+    padding:0 9px!important;
+    gap:5px!important;
+    border-radius:9px!important;
+    box-shadow:none!important;
+    white-space:nowrap!important;
+  }
+  .mobile-category-button>span:first-child{
+    font-size:14px!important;
+  }
+  .mobile-category-button strong{
+    font-size:10px!important;
+  }
+  #mobileCategoryCurrent{
+    max-width:90px!important;
+    font-size:9.5px!important;
+  }
+}
+@media(max-width:720px){
+  .site-head{
+    margin-bottom:7px!important;
+    padding-top:7px!important;
+    padding-bottom:7px!important;
+  }
+  .site-head p{
+    max-width:100%!important;
+  }
+  .mobile-category-button{
+    height:32px!important;
+    min-height:32px!important;
+    padding:0 8px!important;
+  }
+  .mobile-category-button strong{
+    display:none!important;
+  }
+  #mobileCategoryCurrent{
+    max-width:78px!important;
+    font-size:9.5px!important;
+    font-weight:700!important;
+  }
+}
+@media(max-width:390px){
+  .site-head{
+    grid-template-columns:auto minmax(0,1fr) auto!important;
+    column-gap:7px!important;
+  }
+  .site-head .logo{
+    width:36px!important;
+    height:36px!important;
+  }
+  .site-brand-copy h1{
+    font-size:18px!important;
+  }
+  .site-brand-copy p{
+    font-size:9px!important;
+  }
+  .mobile-category-button{
+    padding:0 7px!important;
+  }
+  #mobileCategoryCurrent{
+    max-width:64px!important;
+  }
+}

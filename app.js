@@ -2288,9 +2288,31 @@ function nextTableSourceFilter(){
   return TABLE_SOURCE_CYCLE[(i+1+TABLE_SOURCE_CYCLE.length)%TABLE_SOURCE_CYCLE.length];
 }
 
+function sourceLogoMark(key){
+  if(key==="bhx")return '<span class="source-logo-mark source-logo-bhx" aria-hidden="true"><b>BHX</b></span>';
+  if(key==="wm")return '<span class="source-logo-mark source-logo-wm" aria-hidden="true"><b>W</b></span>';
+  if(key==="go")return '<span class="source-logo-mark source-logo-go" aria-hidden="true"><b>GO!</b></span>';
+  return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>3</b></span>';
+}
+
+function sourceChipHtml(key,count,active,compact=false){
+  const meta={
+    "":{full:"Tất cả",short:"Tất cả",title:"Xem đồng thời cả 3 nguồn"},
+    bhx:{full:"Bách Hóa Xanh",short:"BHX",title:"Bách Hóa Xanh"},
+    wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
+    go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"}
+  }[key]||{full:key,short:key,title:key};
+  return '<button class="source-chip source-chip-brand '+(active?"active ":"")+'source-'+(key||"all")+'" '+
+    'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" title="'+escapeAttr(meta.title)+'">'+
+      '<span class="source-chip-main">'+sourceLogoMark(key)+'<span class="source-chip-label">'+escapeHtml(compact?meta.short:meta.full)+'</span></span>'+
+      (compact?'':'<small class="source-chip-count">'+count+'</small>')+
+    '</button>';
+}
+
 function renderSourceTabs(){
-  const host=$("#sourceTabs");
-  if(!host)return;
+  const navHost=$("#sourceTabs");
+  const inlineHost=$("#sourceTabsInline");
+  if(!navHost&&!inlineHost)return;
 
   let base=libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden"
@@ -2309,12 +2331,21 @@ function renderSourceTabs(){
     localStorage.removeItem("getlink:filter-source");
   }
 
-  host.innerHTML=
-    '<button class="source-chip '+(!activeSourceFilter?"active":"")+'" data-source="" type="button" aria-pressed="'+(!activeSourceFilter?"true":"false")+'" title="Xem đồng thời cả 3 nguồn"><span>3 nguồn</span><small>'+base.length+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="bhx"?"active":"")+'" data-source="bhx" type="button" aria-pressed="'+(activeSourceFilter==="bhx"?"true":"false")+'" title="Bách Hóa XANH"><span>BHX</span><small>'+counts.bhx+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="wm"?"active":"")+'" data-source="wm" type="button" aria-pressed="'+(activeSourceFilter==="wm"?"true":"false")+'" title="WinMart"><span>WM</span><small>'+counts.wm+'</small></button>'+
-    '<button class="source-chip '+(activeSourceFilter==="go"?"active":"")+'" data-source="go" type="button" aria-pressed="'+(activeSourceFilter==="go"?"true":"false")+'" title="GO!"><span>GO</span><small>'+counts.go+'</small></button>';
+  const rows=[
+    ["",base.length,!activeSourceFilter],
+    ["bhx",counts.bhx,activeSourceFilter==="bhx"],
+    ["wm",counts.wm,activeSourceFilter==="wm"],
+    ["go",counts.go,activeSourceFilter==="go"]
+  ];
+
+  if(navHost){
+    navHost.innerHTML=rows.map(([key,count,active])=>sourceChipHtml(key,count,active,false)).join("");
+  }
+  if(inlineHost){
+    inlineHost.innerHTML=rows.map(([key,count,active])=>sourceChipHtml(key,count,active,true)).join("");
+  }
 }
+
 
 function filteredLibraryProducts(){
   const key=["filtered",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery,activePackKind,activeSourceFilter].join("|");
@@ -2858,11 +2889,14 @@ $("#packTabs").addEventListener("click",e=>{
   renderLibraryProducts();
 });
 
-$("#sourceTabs").addEventListener("click",e=>{
-  const chip=e.target.closest(".source-chip");
+function handleSourceChipClick(e){
+  const chip=e.target.closest(".source-chip[data-source]");
   if(!chip)return;
   setActiveSourceFilter(chip.dataset.source||"");
-});
+}
+$("#sourceTabs").addEventListener("click",handleSourceChipClick);
+const sourceTabsInline=$("#sourceTabsInline");
+if(sourceTabsInline)sourceTabsInline.addEventListener("click",handleSourceChipClick);
 
 function queueLibrarySearch(value){
   const next=String(value||"").trim();

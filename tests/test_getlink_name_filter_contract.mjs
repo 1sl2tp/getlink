@@ -7,6 +7,7 @@ const sourceManagerMigration = fs.readFileSync("supabase/migrations/202609081640
 const rawMigration = fs.readFileSync("supabase/migrations/20260908165000_immutable_raw_fetches.sql","utf8");
 const manualGroupMigration = fs.readFileSync("supabase/migrations/20260908170000_manual_product_groups.sql","utf8");
 const manualRulesMigration = fs.readFileSync("supabase/migrations/20260908171000_manual_group_multi_rules.sql","utf8");
+const miChinhMigration = fs.readFileSync("supabase/migrations/20260908172000_manual_group_mi_chinh.sql","utf8");
 
 assert.match(source, /function keepGetlinkProduct\(p: Product\)/);
 assert.match(source, /comboHay/);
@@ -98,5 +99,13 @@ assert.match(manualRulesMigration,/'dầu đậu nành'/i);
 assert.match(manualRulesMigration,/'dầu hướng dương'/i);
 assert.match(manualRulesMigration,/'dầu thực vật'/i);
 assert.match(manualRulesMigration,/with rules as/i);
+
+
+// Manual group Mì chính is derived from product names, not source group names.
+assert.match(miChinhMigration,/'mi-chinh','Mì chính'/);
+assert.match(miChinhMigration,/'mì chính'/i);
+assert.match(miChinhMigration,/'bột ngọt'/i);
+assert.match(miChinhMigration,/getlink_manual_group_rules/i);
+assert.match(miChinhMigration,/getlink_manual_group_members/i);
 
 console.log("GETLINK name filter contract: OK");

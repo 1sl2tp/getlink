@@ -1185,10 +1185,127 @@ async function fetchSource(input:string, requestId:string){
 async function must<T>(promise: PromiseLike<{data:T,error:any}>) {
   const {data,error}=await promise; if(error)throw error; return data;
 }
+
+let brandAliasCache=new Map<string,string>();
+let brandAliasCacheAt=0;
+const BRAND_ALIAS_CACHE_MS=5*60*1000;
+
+function canonicalBrandFallback(value:unknown):string{
+  const raw=clean(value).normalize("NFC");
+  if(!raw)return "";
+  const letters=raw.replace(/[^\p{L}]/gu,"");
+  if(!letters)return raw;
+  const isAllUpper=raw===raw.toLocaleUpperCase("vi-VN");
+  const isAllLower=raw===raw.toLocaleLowerCase("vi-VN");
+  if((isAllUpper||isAllLower)&&letters.length>4){
+    return raw
+      .toLocaleLowerCase("vi-VN")
+      .replace(/(^|[\s\-\/&.])(\p{L})/gu,(_m,sep,ch)=>sep+String(ch).toLocaleUpperCase("vi-VN"));
+  }
+  return raw;
+}
+
+async function loadBrandAliases(force=false):Promise<Map<string,string>>{
+  if(!force&&brandAliasCache.size&&Date.now()-brandAliasCacheAt<BRAND_ALIAS_CACHE_MS){
+    return brandAliasCache;
+  }
+  const rows=await fetchAll("getlink_brand_aliases","brand_key,canonical_name");
+  brandAliasCache=new Map(
+    rows
+      .map((r:any)=>[clean(r.brand_key),clean(r.canonical_name)] as [string,string])
+      .filter(([key,name])=>Boolean(key&&name))
+  );
+  brandAliasCacheAt=Date.now();
+  return brandAliasCache;
+}
+
+async function resolveCanonicalProductBrands(products:Product[]):Promise<void>{
+  if(!products.length)return;
+  const aliases=await loadBrandAliases();
+  const variants=new Map<string,Map<string,number>>();
+
+  const collect=(value:unknown)=>{
+    const raw=clean(value);
+    const key=groupBrandKey(raw);
+    if(!raw||!key||aliases.has(key))return;
+    if(!variants.has(key))variants.set(key,new Map());
+    const counts=variants.get(key)!;
+    counts.set(raw,(counts.get(raw)||0)+1);
+  };
+
+  for(const p of products){
+    const si=p.source_identity||(p.source_identity={});
+    collect(si.brand||p.branch);
+    collect(si.bhx_brand_name);
+  }
+
+  const missing=[...variants.entries()].map(([brand_key,counts])=>{
+    const best=[...counts.entries()]
+      .sort((a,b)=>(b[1]-a[1])||a[0].localeCompare(b[0],"vi"))[0]?.[0]||brand_key;
+    return {
+      brand_key,
+      canonical_name:canonicalBrandFallback(best),
+      updated_at:new Date().toISOString()
+    };
+  });
+
+  if(missing.length){
+    const {error}=await sb
+      .from("getlink_brand_aliases")
+      .upsert(missing,{onConflict:"brand_key",ignoreDuplicates:true});
+    if(error)throw error;
+    const keys=missing.map(x=>x.brand_key);
+    const {data,error:reloadError}=await sb
+      .from("getlink_brand_aliases")
+      .select("brand_key,canonical_name")
+      .in("brand_key",keys);
+    if(reloadError)throw reloadError;
+    for(const row of data||[]){
+      const key=clean(row.brand_key),name=clean(row.canonical_name);
+      if(key&&name)aliases.set(key,name);
+    }
+    brandAliasCache=aliases;
+    brandAliasCacheAt=Date.now();
+  }
+
+  const canonicalFor=(value:unknown)=>{
+    const raw=clean(value);
+    if(!raw)return "";
+    const key=groupBrandKey(raw);
+    return aliases.get(key)||canonicalBrandFallback(raw);
+  };
+
+  for(const p of products){
+    const si=p.source_identity||(p.source_identity={});
+    const rawMain=clean(si.brand||p.branch);
+    const canonicalMain=canonicalFor(rawMain);
+    if(canonicalMain){
+      p.branch=canonicalMain;
+      si.brand=canonicalMain;
+      if(Array.isArray(p.breadcrumbs)){
+        p.breadcrumbs=p.breadcrumbs.map((x:any)=>
+          rawMain&&groupBrandKey(x)===groupBrandKey(rawMain)?canonicalMain:x
+        );
+      }
+    }
+    const bhxCanonical=canonicalFor(si.bhx_brand_name);
+    if(bhxCanonical)si.bhx_brand_name=bhxCanonical;
+  }
+}
+
 async function persistPayload(payload:any, engine:string){
   const now=new Date().toISOString(), requestId=payload.request_id, input=payload.input_url, key=payload.source.key;
   const products:Product[]=filterGetlinkProducts(Array.isArray(payload.products)?payload.products:[]);
   if(key==="winmart"&&products.length)await mapIncomingWinmartGroups(products);
+
+  // Brand canonicalization is a persistence gate:
+  // GET/refresh must resolve aliases before any product row or identity is written.
+  const brandProducts=[...products];
+  if(payload.product&&!brandProducts.some((p:Product)=>canonical(p.url)===canonical(payload.product.url))){
+    brandProducts.push(payload.product as Product);
+  }
+  await resolveCanonicalProductBrands(brandProducts);
+
   payload.products=products;
   payload.discovered_links=products.map((p:Product)=>p.url);
   if(payload.input_type==="product"&&payload.product&&!keepGetlinkProduct(payload.product))throw new Error("product_blocked_by_name_rule");

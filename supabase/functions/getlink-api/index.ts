@@ -340,6 +340,13 @@ function hierarchyKind(h:any) {
   if(clean(h?.label2))return "middle";
   return "leaf";
 }
+function productVariantNumbers(name:unknown) {
+  let s=plain(name);
+  s=s.replace(/\d+(?:\.\d+)?\s*(ml|lit|l|kg|g)(?![a-z])/g," ");
+  s=s.replace(/\d+\s*(thung|loc|khay|vi|chai|lon|hop|goi|tui|bich|hu|lo|can|mieng|thanh|vien|cai|cay|bo|doi|tuyp)(?![a-z])/g," ");
+  return [...s.matchAll(/(?:^|[^a-z0-9])(\d+)(?=$|[^a-z0-9])/g)].map(m=>m[1]).sort().join(",");
+}
+
 function chooseBhxProduct(input:any,refs:BhxGroupRef[]) {
   const brandKey=groupBrandKey(input?.brand||"");
   const barcode=clean(input?.barcode||"");
@@ -358,6 +365,10 @@ function chooseBhxProduct(input:any,refs:BhxGroupRef[]) {
 
     const refSizes=ref.sizes;
     if(inputSizes.size&&refSizes.size&&!setIntersectionSize(inputSizes,refSizes))continue;
+
+    const inputVariant=productVariantNumbers(input?.name||"");
+    const refVariant=productVariantNumbers(ref.name);
+    if((inputVariant||refVariant)&&inputVariant!==refVariant)continue;
 
     const score=groupMatchScore(input,ref);
     if(score>=0.90)ranked.push({ref,score});
@@ -429,6 +440,7 @@ async function loadBhxGroupRefs() {
   const comparisonByUrl=new Map(comps.map((x:any)=>[x.link_url,x]));
   const refs:BhxGroupRef[]=[];
   for(const l of links){
+    if(contains&&!plain(l.name).includes(plain(contains)))continue;
     const id=identityByUrl.get(l.canonical_url)||{};
     const h=hierarchyFromRaw(l.name,l.packaging||"");
     const storedCmp=comparisonByUrl.get(l.canonical_url)||{};
@@ -495,7 +507,7 @@ async function mapIncomingWinmartGroups(products:Product[]) {
     if(productMatch)enrichWinmartProductFromBhx(p,productMatch);
   }
 }
-async function syncExistingWinmartEnrichment(apply:boolean) {
+async function syncExistingWinmartEnrichment(apply:boolean,contains="") {
   const refs=await loadBhxGroupRefs();
   const [links,ids,hier,comps]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").eq("source","WinMart").neq("last_status","unlisted")),
@@ -1376,7 +1388,7 @@ Deno.serve(async(req:Request)=>{
     }    if(req.method==="POST"&&route==="/api/admin/enrich-winmart"){
       const body=await req.json();
       if(clean(body?.confirm)!=="BHX_ENRICH_WM_V1")return response(req,{error:"confirmation_required"},400);
-      return response(req,await syncExistingWinmartEnrichment(Boolean(body?.apply)));
+      return response(req,await syncExistingWinmartEnrichment(Boolean(body?.apply),clean(body?.contains||"")));
     }
     if(req.method==="POST"&&route==="/api/preference"){
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();

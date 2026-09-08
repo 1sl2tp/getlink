@@ -318,6 +318,40 @@ async function bhxCategoryRaw(url:string) {
   for(const item of [...v2items,...vegItems,...ajaxItems]) map.set(String(item.url||item.id||item.productCode||item.productId),item);
   return {items:[...map.values()],categoryId};
 }
+async function bhxProbePageSizes(url:string){
+  const c=canonicalBhx(url);
+  const slug=pathParts(c)[0]||"";
+  const started=Date.now();
+  const v2=new URL("https://api.bachhoaxanh.com/gw/Category/V2/GetCate");
+  for(const [k,v] of Object.entries({provinceId:"1027",wardId:"0",districtId:"0",storeId:"2546",categoryUrl:slug,isMobile:"true",isV2:"true",pageSize:"500"}))v2.searchParams.set(k,v);
+  const t0=Date.now();
+  const v2body=await bhxJson(v2.toString(),c);
+  const v2ms=Date.now()-t0;
+  const v2items=collectBhx(v2body,c);
+  let categoryId=bhxCategoryId(v2items);
+  let detailMs=0;
+  if(!categoryId&&v2items[0]?.url){
+    const td=Date.now();
+    try{categoryId=Number((await bhxProductDetail(new URL(v2items[0].url,"https://www.bachhoaxanh.com").toString())).categoryId)||0;}catch{}
+    detailMs=Date.now()-td;
+  }
+  if(!categoryId)throw new Error("bhx_category_id_missing");
+
+  const ajaxUrl="https://api.bachhoaxanh.com/gw/Category/AjaxProduct";
+  const sizes=[10,25,50,100,200,500];
+  const rows=[];
+  for(const pageSize of sizes){
+    const t=Date.now();
+    try{
+      const body=await bhxJson(ajaxUrl,c,{provinceId:1027,wardId:0,districtId:0,storeId:2546,CategoryId:categoryId,SelectedBrandId:"",PropertyIdList:"",PageIndex:1,PageSize:pageSize,SortStr:"",PriorityProductIds:"",PropertySelected:[],LastShowProductId:0});
+      rows.push({pageSize,ms:Date.now()-t,products:collectBhx(body,c).length,data_keys:body&&body.data&&typeof body.data==="object"&&!Array.isArray(body.data)?Object.keys(body.data).slice(0,30):[]});
+    }catch(e){
+      rows.push({pageSize,ms:Date.now()-t,error:String(e&&e.message||e).slice(0,300)});
+    }
+  }
+  return {slug,categoryId,v2_products:v2items.length,v2_ms:v2ms,detail_ms:detailMs,total_ms:Date.now()-started,tests:rows};
+}
+
 function normalizeBhx(raw:any, rootGroup:string, checked:string): Product | null {
   if(!raw||typeof raw!=="object"||!raw.url)return null;
   let url=""; try{url=canonicalBhx(new URL(String(raw.url),"https://www.bachhoaxanh.com").toString());}catch{return null;}
@@ -632,6 +666,12 @@ Deno.serve(async(req:Request)=>{
   if(!authorized(req))return response(req,{error:"unauthorized"},401);
   const url=new URL(req.url), route=routePath(req);
   try{
+    if(req.method==="GET"&&route==="/api/debug-bhx-page-size"){
+      const raw=clean(url.searchParams.get("url"));
+      if(!raw)return response(req,{error:"missing_url"},400);
+      const data=await bhxProbePageSizes(raw);
+      return response(req,data,200);
+    }
     if(req.method==="GET"&&route==="/health"){
       const {count,error}=await sb.from("getlink_links").select("*",{count:"exact",head:true}); if(error)throw error;
       return response(req,{ok:true,mode:"supabase-only",links:Number(count||0)});

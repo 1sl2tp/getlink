@@ -286,15 +286,37 @@ function matchesSearchTokens(row,tokens){
   if(!tokens.length)return true;
   const words=productSearchWords(row);
   const used=new Array(words.length).fill(false);
-  for(const token of tokens){
+  let previousFound=-1;
+
+  for(let ti=0;ti<tokens.length;ti++){
+    const token=tokens[ti];
     let found=-1;
-    for(let i=0;i<words.length;i++){
-      if(used[i])continue;
-      const ok=words[i].startsWith(token);
-      if(ok){found=i;break;}
+
+    // A 1-2 character token after another word is treated as the user
+    // still typing the immediately following word: "fami c" -> "Fami Canxi".
+    // This avoids false matches such as "tuong ot" -> "... Ottogi".
+    if(token.length<=2&&ti>0){
+      const i=previousFound+1;
+      if(i<words.length&&!used[i]&&words[i].startsWith(token))found=i;
+    }else{
+      const next=tokens[ti+1]||"";
+      const needsAdjacentPrefix=Boolean(next&&next.length<=2);
+      for(let i=0;i<words.length;i++){
+        if(used[i])continue;
+        const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+        if(!ok)continue;
+        if(needsAdjacentPrefix){
+          const j=i+1;
+          if(j>=words.length||used[j]||!words[j].startsWith(next))continue;
+        }
+        found=i;
+        break;
+      }
     }
+
     if(found<0)return false;
     used[found]=true;
+    previousFound=found;
   }
   return true;
 }
@@ -304,15 +326,34 @@ function matchesSearch(row,query){
   if(!tokens.length)return true;
   const words=productSearchKey(row).split(/\s+/).filter(Boolean);
   const used=new Array(words.length).fill(false);
-  for(const token of tokens){
+  let previousFound=-1;
+
+  for(let ti=0;ti<tokens.length;ti++){
+    const token=tokens[ti];
     let found=-1;
-    for(let i=0;i<words.length;i++){
-      if(used[i])continue;
-      const ok=words[i].startsWith(token);
-      if(ok){found=i;break;}
+
+    if(token.length<=2&&ti>0){
+      const i=previousFound+1;
+      if(i<words.length&&!used[i]&&words[i].startsWith(token))found=i;
+    }else{
+      const next=tokens[ti+1]||"";
+      const needsAdjacentPrefix=Boolean(next&&next.length<=2);
+      for(let i=0;i<words.length;i++){
+        if(used[i])continue;
+        const ok=token.length<=2?words[i]===token:words[i].startsWith(token);
+        if(!ok)continue;
+        if(needsAdjacentPrefix){
+          const j=i+1;
+          if(j>=words.length||used[j]||!words[j].startsWith(next))continue;
+        }
+        found=i;
+        break;
+      }
     }
+
     if(found<0)return false;
     used[found]=true;
+    previousFound=found;
   }
   return true;
 }

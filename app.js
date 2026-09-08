@@ -22,6 +22,9 @@ let libraryGroups=[];
 let categoryPage=1;
 let libraryPage=1;
 let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
+let matchAuditActive=false;
+let matchAuditLoaded=false;
+let matchAuditData=null;
 function isCompactBrowse(){
   return window.matchMedia("(max-width: 1100px)").matches;
 }
@@ -122,6 +125,180 @@ function matchesSearch(row,query){
   if(!tokens.length)return true;
   const hay=productSearchKey(row);
   return tokens.every(token=>hay.includes(token));
+}
+
+function auditSourceKey(value){
+  const key=searchKey(value||"");
+  if(key.includes("bach hoa xanh")||key==="bhx")return "bhx";
+  if(key.includes("winmart")||key==="wm")return "wm";
+  return "";
+}
+
+function auditIsMilkItem(row){
+  const key=searchKey([
+    row&&row.raw_name,
+    row&&row.name,
+    row&&row.category,
+    row&&row.group_name,
+    row&&row.parent_url
+  ].filter(Boolean).join(" "));
+  return /(^|\s)sua(\s|$)/.test(key);
+}
+
+function auditQc(row){
+  const parts=[];
+  if(row&&row.pack_label_1){
+    parts.push(String(row.pack_label_1)+" "+(Number(row.pack_qty_1)||1));
+  }
+  if(row&&row.pack_label_2){
+    parts.push(String(row.pack_label_2)+" "+(Number(row.pack_qty_2)||1));
+  }
+  if(row&&row.pack_label_3){
+    parts.push(String(row.pack_label_3)+" "+(Number(row.pack_qty_3)||1));
+  }
+  return parts.length?parts.join(" → "):"—";
+}
+
+function auditCode(row){
+  return String(
+    row&&(
+      row.barcode||
+      row.source_code||
+      row.sku||
+      row.source_product_id
+    )||""
+  ).trim()||"—";
+}
+
+function auditGroupTitle(items){
+  const rows=items||[];
+  const bhx=rows.find(row=>auditSourceKey(row.source_name)==="bhx");
+  const first=bhx||rows[0]||{};
+  const brand=String(first.brand||"").trim();
+  const size=first.size_value
+    ?String(first.size_value)+(first.size_unit||"")
+    :"";
+  return [brand,size].filter(Boolean).join(" · ")||
+    String(first.raw_name||first.name||"Nhóm ứng viên");
+}
+
+function auditRowHtml(row){
+  const source=auditSourceKey(row.source_name);
+  const sourceLabel=source==="bhx"?"BHX":(source==="wm"?"WM":String(row.source_name||""));
+  const sourceClass=source==="bhx"?" audit-source-bhx":" audit-source-wm";
+  const price=Number(row.promotion_price||row.current_price||0);
+  return '<div class="match-audit-row">'+
+    '<span class="match-audit-source'+sourceClass+'">'+escapeHtml(sourceLabel)+'</span>'+
+    '<div class="match-audit-name">'+
+      '<strong>'+escapeHtml(row.raw_name||row.name||"—")+'</strong>'+
+      '<small>'+escapeHtml([row.category,row.brand].filter(Boolean).join(" · "))+'</small>'+
+    '</div>'+
+    '<strong class="match-audit-price">'+money(price)+'</strong>'+
+    '<span class="match-audit-qc">'+escapeHtml(auditQc(row))+'</span>'+
+    '<span class="match-audit-code">'+escapeHtml(auditCode(row))+'</span>'+
+  '</div>';
+}
+
+function renderMatchAudit(){
+  const host=$("#matchAuditGroups");
+  const summary=$("#matchAuditSummary");
+  if(!host||!summary)return;
+
+  const rawGroups=Array.isArray(matchAuditData&&matchAuditData.matches)
+    ?matchAuditData.matches:[];
+  const groups=[];
+  const matchedUrls=new Set();
+
+  for(const group of rawGroups){
+    const items=(Array.isArray(group.items)?group.items:[])
+      .filter(row=>{
+        const source=auditSourceKey(row.source_name);
+        return (source==="bhx"||source==="wm")&&auditIsMilkItem(row);
+      });
+    const sources=new Set(items.map(row=>auditSourceKey(row.source_name)).filter(Boolean));
+    if(!sources.has("bhx")||!sources.has("wm"))continue;
+    items.forEach(row=>matchedUrls.add(canonical(row.link_url||"")));
+    groups.push({...group,items});
+  }
+
+  const milkRows=libraryCache.filter(row=>{
+    const source=auditSourceKey(row.source);
+    return (source==="bhx"||source==="wm")&&auditIsMilkItem({
+      ...row,
+      raw_name:row.source_raw_name||row.name,
+      category:row.group_name
+    });
+  });
+  const standalone=milkRows.filter(row=>!matchedUrls.has(canonical(row.canonical_url))).length;
+  const sure=groups.filter(group=>group.match_basis==="barcode").length;
+  const candidates=groups.length-sure;
+
+  summary.textContent=
+    groups.length+" nhóm · Chắc "+sure+
+    " · Ứng viên "+candidates+
+    " · Đứng riêng "+standalone;
+
+  if(!groups.length){
+    host.innerHTML='<div class="match-audit-empty">Chưa có nhóm Sữa BHX ↔ WinMart đủ điều kiện ghép thử.</div>';
+    return;
+  }
+
+  host.innerHTML=groups.map((group,index)=>{
+    const basis=group.match_basis==="barcode"?"Barcode":"Brand + size + tên";
+    const badge=group.match_basis==="barcode"?"Chắc":"Ứng viên";
+    return '<article class="match-audit-group">'+
+      '<div class="match-audit-group-head">'+
+        '<div><strong>'+escapeHtml(auditGroupTitle(group.items))+'</strong>'+
+        '<small>Nhóm '+(index+1)+' · '+escapeHtml(basis)+'</small></div>'+
+        '<span class="match-audit-badge '+(group.match_basis==="barcode"?"sure":"candidate")+'">'+badge+'</span>'+
+      '</div>'+
+      '<div class="match-audit-columns" aria-hidden="true">'+
+        '<span>Nguồn</span><span>Tên gốc</span><span>Giá</span><span>Quy cách</span><span>Barcode / code</span>'+
+      '</div>'+
+      group.items.map(auditRowHtml).join("")+
+    '</article>';
+  }).join("");
+}
+
+async function loadMatchAudit(force=false){
+  if(!API)return;
+  if(matchAuditLoaded&&!force){
+    renderMatchAudit();
+    return;
+  }
+  $("#matchAuditGroups").innerHTML='<div class="match-audit-empty">Đang đọc nhóm ghép thử...</div>';
+  $("#matchAuditSummary").textContent="";
+  try{
+    await ensureLibraryCache(false);
+    const r=await fetch(API+"/api/library?view=matches",{cache:"no-store"});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error||"match_audit_error");
+    matchAuditData=data;
+    matchAuditLoaded=true;
+    renderMatchAudit();
+  }catch{
+    $("#matchAuditGroups").innerHTML='<div class="match-audit-empty">Chưa đọc được dữ liệu ghép thử.</div>';
+  }
+}
+
+function syncMatchAuditMode(){
+  const audit=$("#matchAudit");
+  const grid=$("#productGrid");
+  const table=$("#tableView");
+  const empty=$("#libraryEmpty");
+  const toggle=$("#toggleMatchAudit");
+  if(audit)audit.hidden=!matchAuditActive;
+  if(grid)grid.hidden=matchAuditActive||libraryView!=="grid";
+  if(table)table.hidden=matchAuditActive||libraryView!=="table";
+  if(empty&&matchAuditActive)empty.hidden=true;
+  if(toggle){
+    toggle.classList.toggle("active",matchAuditActive);
+    toggle.setAttribute("aria-pressed",matchAuditActive?"true":"false");
+    toggle.textContent=matchAuditActive?"Quay lại danh sách":"Ghép thử Sữa";
+  }
+  document.querySelectorAll(".view-switch .view-button").forEach(button=>{
+    button.disabled=matchAuditActive;
+  });
 }
 
 function setStatus(text){
@@ -1045,14 +1222,19 @@ function renderResultPager(){
 function syncViewMode(){
   const grid=$("#productGrid");
   const table=$("#tableView");
-  if(grid)grid.hidden=libraryView!=="grid";
-  if(table)table.hidden=libraryView!=="table";
+  if(grid)grid.hidden=matchAuditActive||libraryView!=="grid";
+  if(table)table.hidden=matchAuditActive||libraryView!=="table";
   document.querySelectorAll(".view-button").forEach(button=>{
     button.classList.toggle("active",button.dataset.view===libraryView);
   });
+  syncMatchAuditMode();
 }
 
 function renderLibraryProducts(){
+  if(matchAuditActive){
+    syncMatchAuditMode();
+    return;
+  }
   renderBrandTabs();
   renderPackTabs();
   syncStateControls();
@@ -1155,6 +1337,10 @@ async function refreshCatalog(selectUrl=""){
     loadLibraryGroups(),
     loadLibraryProducts(true)
   ]);
+  if(matchAuditLoaded){
+    matchAuditLoaded=false;
+    if(matchAuditActive)await loadMatchAudit(true);
+  }
 }
 
 
@@ -1268,6 +1454,18 @@ $("#librarySearch").addEventListener("input",e=>{
 
 
 
+
+$("#toggleMatchAudit").addEventListener("click",async()=>{
+  matchAuditActive=!matchAuditActive;
+  syncMatchAuditMode();
+  if(matchAuditActive){
+    $("#libraryTitle").textContent="Ghép thử Sữa · BHX ↔ WinMart";
+    $("#libraryCount").textContent="";
+    await loadMatchAudit(false);
+  }else{
+    renderLibraryProducts();
+  }
+});
 
 document.querySelector(".view-switch").addEventListener("click",e=>{
   const button=e.target.closest(".view-button");

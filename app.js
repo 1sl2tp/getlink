@@ -197,27 +197,16 @@ function searchKey(value){
 
 
 function productSearchKey(row){
-  const raw=[
-    row.source_name,row.name,
-    row.group_name,row.branch_name,row.brand_name,row.packaging,
-    row.pack_label_1,row.pack_qty_1,
-    row.pack_label_2,row.pack_qty_2,
-    row.pack_label_3,row.pack_qty_3,
-    row.size_value,row.size_unit
-  ].filter(Boolean);
-
-  // Do not let the same semantic value count twice (for example name + source_name)
-  // and do not index the URL, which repeats the product slug and created false hits
-  // such as "hao hao" matching a single "dầu hào".
-  const seen=new Set();
-  const fields=[];
-  for(const value of raw){
-    const key=searchKey(value);
-    if(!key||seen.has(key))continue;
-    seen.add(key);
-    fields.push(key);
-  }
-  return fields.join(" ");
+  // Main search is product-name search only.
+  // Category, brand, packaging and URL must not add extra tokens because that
+  // creates false positives (for example "Vĩnh Hảo" or "Hoàn Hảo" for "hao hao").
+  return searchKey(
+    row&&(
+      row.source_name||
+      row.name||
+      row.source_raw_name
+    )||""
+  );
 }
 
 function productSearchWords(row){

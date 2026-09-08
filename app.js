@@ -2044,7 +2044,7 @@ function openSourceManager(){
   panel.hidden=false;
   panel.setAttribute("aria-hidden","false");
   document.body.classList.add("source-manager-open");
-  loadSourceManager(false).catch(()=>{
+  loadSourceManager(true).catch(()=>{
     $("#sourceManagerRows").innerHTML=
       '<div class="source-manager-empty">Chưa đọc được dữ liệu quản lý nguồn.</div>';
   });

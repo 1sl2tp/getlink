@@ -429,4 +429,9 @@ assert.equal(money(0),"—");
   assert.match(app,/item\.rule_label\|\|""/);
 }
 
+
+{
+  assert.match(app,/function openSourceManager\(\)[\s\S]*?loadSourceManager\(true\)/);
+}
+
 console.log("money and hierarchy UI tests passed");

@@ -225,7 +225,7 @@ const BHX_XAPIKEY = clean(Deno.env.get("BHX_XAPIKEY") || "bhx-api-core-2022");
 const BHX_BEARER_TOKEN = clean(Deno.env.get("BHX_BEARER_TOKEN") || "");
 const BHX_DEVICE_ID = clean(Deno.env.get("BHX_DEVICE_ID") || "");
 const BHX_PAGE_SIZE = 10;
-const BHX_TRANSPORT_URL = clean(Deno.env.get("BHX_TRANSPORT_URL") || "https://getlink-bhx-proxy.taphoa-4ab8161d.workers.dev");
+const BHX_TRANSPORT_URL = clean(Deno.env.get("BHX_TRANSPORT_URL") || "https://getlink-bhx-relay.taphoa-4ab8161d.workers.dev");
 
 function bhxWebReferer(referer: string) {
   try {

@@ -40,7 +40,7 @@ async function readUiLibraryCache(){
     if(!db)return null;
     return await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readonly");
-      const req=tx.objectStore("cache").get("library-v13");
+      const req=tx.objectStore("cache").get("library-v14");
       req.onsuccess=()=>resolve(req.result||null);
       req.onerror=()=>reject(req.error);
     });
@@ -52,7 +52,7 @@ async function writeUiLibraryCache(rows){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v13");
+      tx.objectStore("cache").put({savedAt:Date.now(),rows},"library-v14");
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1300,12 +1300,11 @@ function rowPrimaryQc(row){
   return "—";
 }
 
-function rowCartonCardQc(row,packPrice){
+function rowCartonCardMeta(row,packPrice){
   const h=rowPackHierarchy(row);
-  if(h.label1!=="Thùng")return rowPrimaryQc(row);
+  if(h.label1!=="Thùng")return {pack:rowPrimaryQc(row),unitPrice:""};
 
-  // Prefer the direct child of the carton. If that level is only 1,
-  // fall through to the real repeated leaf unit.
+  // Prefer the actual repeated child of the carton.
   let qty=0,label="";
   if(h.label2&&Number(h.qty2)>1){
     qty=Number(h.qty2); label=String(h.label2);
@@ -1313,13 +1312,16 @@ function rowCartonCardQc(row,packPrice){
     qty=Number(h.qty3); label=String(h.label3);
   }
 
-  if(!qty||!label)return "Thùng";
+  if(!qty||!label)return {pack:"Thùng",unitPrice:""};
 
+  const unit=label.toLocaleLowerCase("vi-VN");
   const total=Number(packPrice||0);
-  const unitPrice=total>0?total/qty:0;
-  if(!unitPrice)return "Thùng · "+packHierarchyText(qty,label);
+  const each=total>0?total/qty:0;
 
-  return qty+" × "+money(unitPrice)+" / 1 "+label.toLocaleLowerCase("vi-VN");
+  return {
+    pack:qty+" "+unit,
+    unitPrice:each>0?money(each)+"/"+unit:""
+  };
 }
 
 function productHierarchyText(p){
@@ -1543,7 +1545,9 @@ function gridProductCard(row){
         ?(levels.promoMiddlePrice||levels.middlePrice)
         :(levels.promoLeafPrice||levels.leafPrice)));
   const image=String(row.image||"").trim();
-  const qc=rowIsCarton(row)?rowCartonCardQc(row,price):rowPrimaryQc(row);
+  const cartonMeta=rowIsCarton(row)?rowCartonCardMeta(row,price):null;
+  const qc=cartonMeta?cartonMeta.pack:rowPrimaryQc(row);
+  const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+
@@ -1564,7 +1568,10 @@ function gridProductCard(row){
       '<div class="grid-product-body">'+
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
-          '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<span class="grid-qc-group">'+
+            '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+            (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
+          '</span>'+
           '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
         '</div>'+
       '</div>'+

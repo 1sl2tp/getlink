@@ -7470,3 +7470,13 @@ body.source-manager-open{overflow:hidden!important}
     height:21px!important;
   }
 }
+
+
+/* Unclassified category reachability v1 */
+.workspace-nav .category-tabs{
+  padding-bottom:max(42px,env(safe-area-inset-bottom))!important;
+  scroll-padding-bottom:max(42px,env(safe-area-inset-bottom))!important;
+}
+.workspace-nav .category-tabs .category-chip[data-root="__unclassified__"]{
+  margin-bottom:4px!important;
+}

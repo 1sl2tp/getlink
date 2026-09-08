@@ -273,4 +273,15 @@ assert.equal(money(0),"—");
   assert.match(app,/winmart\.vn/);
 }
 
+
+{
+  assert.match(app,/const AUTO_UPDATE_CHECK_MS=30000/);
+  assert.match(app,/function checkUiVersion\(\)/);
+  assert.match(app,/cache:"no-store"/);
+  assert.match(app,/visibilitychange/);
+  assert.match(app,/location\.replace\(next\.toString\(\)\)/);
+  assert.match(app,/autoUpdateEditingActive\(\)/);
+  assert.match(app,/__getlink_v/);
+}
+
 console.log("money and hierarchy UI tests passed");

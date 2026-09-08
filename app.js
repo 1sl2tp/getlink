@@ -2789,6 +2789,143 @@ $("#get").addEventListener("click",async()=>{
   }
 });
 
+
+const AUTO_UPDATE_CHECK_MS=30000;
+const AUTO_UPDATE_ATTEMPT_KEY="getlink:auto-update-attempt";
+let autoUpdateBusy=false;
+let pendingAutoUpdateVersion="";
+
+function assetVersionFromUrl(raw){
+  try{
+    return new URL(String(raw||""),location.href).searchParams.get("v")||"";
+  }catch{
+    return "";
+  }
+}
+
+function currentUiAssetVersion(){
+  const appScript=[...document.scripts].find(x=>String(x.src||"").includes("app.js"));
+  const configScript=[...document.scripts].find(x=>String(x.src||"").includes("config.js"));
+  const styleLink=[...document.querySelectorAll('link[rel="stylesheet"]')]
+    .find(x=>String(x.href||"").includes("style.css"));
+
+  return [
+    assetVersionFromUrl(appScript&&appScript.src),
+    assetVersionFromUrl(styleLink&&styleLink.href),
+    assetVersionFromUrl(configScript&&configScript.src)
+  ].join("|");
+}
+
+function remoteUiAssetVersion(markup){
+  const html=String(markup||"");
+  const pick=re=>{
+    const m=html.match(re);
+    if(!m||!m[1])return "";
+    try{return decodeURIComponent(m[1]);}catch{return m[1];}
+  };
+  const appVersion=pick(/<script[^>]*\bsrc=["'][^"']*app\.js\?v=([^"'&]+)[^"']*["'][^>]*>/i);
+  const styleVersion=pick(/<link[^>]*\bhref=["'][^"']*style\.css\?v=([^"'&]+)[^"']*["'][^>]*>/i);
+  const configVersion=pick(/<script[^>]*\bsrc=["'][^"']*config\.js\?v=([^"'&]+)[^"']*["'][^>]*>/i);
+  if(!appVersion)return "";
+  return [appVersion,styleVersion,configVersion].join("|");
+}
+
+function autoUpdateEditingActive(){
+  const el=document.activeElement;
+  if(!el)return false;
+  return Boolean(
+    el.isContentEditable||
+    el.matches&&el.matches("input,textarea,select")
+  );
+}
+
+function clearAutoUpdateUrlMarker(){
+  try{
+    const u=new URL(location.href);
+    if(!u.searchParams.has("__getlink_v"))return;
+    u.searchParams.delete("__getlink_v");
+    history.replaceState(history.state,"",u.pathname+u.search+u.hash);
+  }catch{}
+}
+
+function applyAutoUpdate(remoteVersion){
+  if(!remoteVersion)return;
+  if(autoUpdateEditingActive()){
+    pendingAutoUpdateVersion=remoteVersion;
+    return;
+  }
+
+  try{
+    const now=Date.now();
+    const previous=JSON.parse(sessionStorage.getItem(AUTO_UPDATE_ATTEMPT_KEY)||"{}");
+    if(previous.version===remoteVersion&&now-Number(previous.at||0)<60000)return;
+    sessionStorage.setItem(
+      AUTO_UPDATE_ATTEMPT_KEY,
+      JSON.stringify({version:remoteVersion,at:now})
+    );
+  }catch{}
+
+  const next=new URL(location.href);
+  next.searchParams.delete("__getlink_version_check");
+  next.searchParams.set("__getlink_v",remoteVersion);
+  location.replace(next.toString());
+}
+
+function applyPendingAutoUpdate(){
+  if(!pendingAutoUpdateVersion||autoUpdateEditingActive())return;
+  const remoteVersion=pendingAutoUpdateVersion;
+  pendingAutoUpdateVersion="";
+  applyAutoUpdate(remoteVersion);
+}
+
+async function checkUiVersion(){
+  if(autoUpdateBusy||document.visibilityState==="hidden")return;
+  autoUpdateBusy=true;
+  try{
+    const checkUrl=new URL(location.href);
+    checkUrl.hash="";
+    checkUrl.searchParams.delete("__getlink_v");
+    checkUrl.searchParams.set("__getlink_version_check",String(Date.now()));
+
+    const response=await fetch(checkUrl.toString(),{cache:"no-store"});
+    if(!response.ok)return;
+
+    const remoteVersion=remoteUiAssetVersion(await response.text());
+    const currentVersion=currentUiAssetVersion();
+    if(!remoteVersion||!currentVersion)return;
+
+    if(remoteVersion===currentVersion){
+      pendingAutoUpdateVersion="";
+      try{sessionStorage.removeItem(AUTO_UPDATE_ATTEMPT_KEY);}catch{}
+      clearAutoUpdateUrlMarker();
+      return;
+    }
+
+    pendingAutoUpdateVersion=remoteVersion;
+    applyPendingAutoUpdate();
+  }catch{
+    // Network/version checks must never interrupt normal catalog use.
+  }finally{
+    autoUpdateBusy=false;
+  }
+}
+
+function startAutoUpdateChecks(){
+  setTimeout(checkUiVersion,2500);
+  setInterval(checkUiVersion,AUTO_UPDATE_CHECK_MS);
+
+  window.addEventListener("focus",checkUiVersion);
+  window.addEventListener("online",checkUiVersion);
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible")checkUiVersion();
+  });
+  document.addEventListener("focusout",()=>{
+    setTimeout(applyPendingAutoUpdate,0);
+  });
+}
+
+startAutoUpdateChecks();
+
 const saved=localStorage.getItem("getlink:last-url")||"";
 if(saved)$("#url").value=saved;
 requestId=localStorage.getItem("getlink:request-id")||"";

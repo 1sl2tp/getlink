@@ -88,6 +88,31 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn("newsArticleParagraphs",EDGE)
         self.assertIn("newsArticleImages",EDGE)
 
+    def test_news_storage_is_ephemeral_cache_only(self):
+        news_block=EDGE[EDGE.index('type NewsTopicKey='):EDGE.index('const UPDATE_ADMIN_PIN_SHA256=')]
+        self.assertNotIn('sb.',news_block)
+        self.assertNotIn('.from(',news_block)
+        self.assertIn('\"x-getlink-storage\":\"ephemeral-cache\"',EDGE)
+        self.assertIn('stale-while-revalidate=300',EDGE)
+        self.assertIn('stale-while-revalidate=900',EDGE)
+        self.assertIn('storage:\"memory-cache\"',EDGE)
+
+    def test_browser_reads_cached_news_before_background_refresh(self):
+        self.assertIn('NEWS_BROWSER_CACHE_KEY=\"getlink:news-cache:v2\"',APP)
+        self.assertIn('readNewsBrowserCache',APP)
+        self.assertIn('writeNewsBrowserCache',APP)
+        self.assertIn('cache:force?\"no-store\":\"default\"',APP)
+        self.assertIn('if(API&&!newsItems.length)ensureNewsLoaded(false)',APP)
+
+    def test_quick_reader_flows_images_through_article_and_swipes(self):
+        self.assertIn('news-quick-hero',APP)
+        self.assertIn('news-quick-inline',APP)
+        self.assertIn('function newsQuickMove(delta)',APP)
+        self.assertIn('card.addEventListener(\"touchstart\"',APP)
+        self.assertIn('card.addEventListener(\"touchend\"',APP)
+        self.assertIn('newsQuickMove(dx<0?1:-1)',APP)
+        self.assertIn('News reader v58',CSS)
+        self.assertIn('touch-action:pan-y',CSS)
     def test_news_ui_owns_its_scroll_and_mobile_rows(self):
         self.assertIn(".news-grid",CSS)
         self.assertIn(".news-quick-view",CSS)

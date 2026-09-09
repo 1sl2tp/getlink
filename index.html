@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
   <script>
+    (()=>{try{
+      const p=new URL(location.href).searchParams;
+      if(p.get("embed")==="1"||p.get("frame")==="1")document.documentElement.dataset.getlinkEmbed="1";
+    }catch{}})();
+  </script>
+  <script>
   (() => {
     const BUILD_PARAM="__build";
     const BUILD_STORAGE_KEY="getlink:last-web-build";
@@ -273,6 +279,13 @@
 
     <section class="card catalog workspace-list">
       <section id="userWorkHome" class="user-work-home" hidden aria-label="Công việc mua hàng">
+        <header class="getlink-work-frame-head" aria-label="GETLINK">
+          <div class="getlink-work-brand">
+            <span class="getlink-work-brand-mark" aria-hidden="true">GL</span>
+            <span class="getlink-work-brand-copy"><strong>GETLINK</strong><small>Bán hàng · Lướt giá siêu thị</small></span>
+          </div>
+          <span class="getlink-work-frame-note">Frame Công việc</span>
+        </header>
         <section id="mobileUserWork" class="mobile-user-work" aria-label="Tìm và mua hàng trên mobile">
           <div class="mobile-user-toolbar">
             <label class="mobile-user-search" for="mobileUserSearch">
@@ -332,16 +345,16 @@
             <input id="userWorkSearch" type="search" name="getlink-desktop-product-query" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" aria-autocomplete="none" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="searchbox" placeholder="Tìm sản phẩm, hãng, danh mục...">
           </div>
           <div class="user-work-jump" role="group" aria-label="Chọn khu vực công việc">
-            <button class="user-work-jump-button active" data-work-target="market" type="button">
-              <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 5h2l2.2 9.2a2 2 0 0 0 2 1.5h7.7a2 2 0 0 0 1.9-1.4L21 8H7"/><circle cx="10" cy="19" r="1.3"/><circle cx="18" cy="19" r="1.3"/></svg>
-              <span>Siêu thị</span>
-            </button>
-            <button class="user-work-jump-button" data-work-target="mine" type="button">
-              <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 8h16v12H4zM3 8l2-4h14l2 4"/><path d="M8 20v-6h8v6"/></svg>
+            <button class="user-work-jump-button active" data-work-target="mine" type="button">
               <span>Tạp hóa</span>
+            </button>
+            <button class="user-work-jump-button" data-work-target="market" type="button">
+              <span>Siêu thị</span>
             </button>
           </div>
         </div>
+
+        <div id="userWorkDesktopCategories" class="user-work-category-panel" aria-label="Danh mục sản phẩm"></div>
 
         <section id="userWorkMarket" class="user-work-section user-work-market">
           <div class="user-work-section-head">

@@ -15059,3 +15059,101 @@ body.news-quick-open{overflow:hidden!important}
     font-size:11.5px!important;
   }
 }
+
+
+/* =========================================================
+   News reader v58 — article flow + swipe, no image collage
+   ========================================================= */
+.news-quick-card{
+  touch-action:pan-y;
+}
+.news-quick-gallery{
+  display:block!important;
+  padding:0!important;
+  background:#fff!important;
+}
+.news-quick-hero{
+  margin:0;
+  width:100%;
+  background:#f2f5f3;
+}
+.news-quick-hero img{
+  display:block;
+  width:100%;
+  max-height:460px;
+  object-fit:cover;
+}
+.news-quick-content{
+  max-width:680px;
+  margin:0 auto;
+}
+.news-quick-content p{
+  margin:0 0 16px;
+  color:#26312b;
+  font-size:16px;
+  line-height:1.72;
+}
+.news-quick-inline{
+  margin:18px 0 20px;
+  width:100%;
+}
+.news-quick-inline img{
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:560px;
+  object-fit:contain;
+  background:#f5f7f6;
+}
+.news-quick-photo,
+.news-quick-photo.primary{
+  display:none!important;
+}
+.news-quick-copy{
+  padding:22px 28px 26px!important;
+}
+.news-quick-original{
+  display:flex;
+  width:max-content;
+  margin:20px auto 0;
+}
+@media(max-width:639px){
+  .news-quick-view{
+    align-items:stretch!important;
+    padding:0!important;
+    background:#fff!important;
+  }
+  .news-quick-card{
+    width:100%!important;
+    height:100dvh!important;
+    max-height:100dvh!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+  }
+  .news-quick-close{
+    position:fixed!important;
+    top:max(10px,env(safe-area-inset-top))!important;
+    right:10px!important;
+  }
+  .news-quick-hero img{
+    max-height:42dvh;
+  }
+  .news-quick-copy{
+    padding:18px 16px max(28px,env(safe-area-inset-bottom))!important;
+  }
+  .news-quick-content{
+    max-width:none;
+  }
+  .news-quick-content p{
+    margin-bottom:15px!important;
+    font-size:15px!important;
+    line-height:1.68!important;
+  }
+  .news-quick-inline{
+    margin:16px -4px 18px;
+    width:calc(100% + 8px);
+  }
+  .news-quick-inline img{
+    max-height:none;
+  }
+}

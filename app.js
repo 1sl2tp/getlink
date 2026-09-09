@@ -3670,6 +3670,7 @@ $("#productGrid").addEventListener("input",e=>{
 });
 
 $("#productGrid").addEventListener("keydown",e=>{
+  if(appRole==="user")return;
   if(e.key!=="Enter"&&e.key!==" ")return;
   if(isCompactBrowse())return;
   const card=e.target.closest(".grid-product");
@@ -3721,6 +3722,7 @@ $("#libraryProducts").addEventListener("click",async e=>{
     return;
   }
 
+  if(appRole==="user")return;
   if(!isCompactBrowse())openLibraryItem(card.dataset.url||"");
 });
 

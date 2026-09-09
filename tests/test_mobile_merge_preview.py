@@ -75,7 +75,8 @@ class MobileMergePreviewContractTest(unittest.TestCase):
     def test_preview_can_move_a_source_from_a_wrong_canonical_group_to_the_own_target(self):
         button=re.search(r"function\s+mobileMergeSelectButton\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(button)
-        self.assertNotIn("rowId!==targetId",button.group(1))
+        self.assertIn("data-mobile-merge-source",button.group(1))
+        self.assertNotIn("blocked=Boolean(rowId&&",button.group(1))
         apply=re.search(r"async function\s+applyMobileMergePreview\s*\(\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(apply)
         self.assertIn("target_url",apply.group(1))

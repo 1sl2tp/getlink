@@ -1,0 +1,5 @@
+.user-work-order-row.product-card{
+  min-width:0!important;
+  width:100%!important;
+  grid-template-columns:var(--work-order-columns)!important;
+}

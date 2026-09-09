@@ -3402,14 +3402,6 @@ function userWorkCategoryIcon(name){
   return '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24">'+body+'</svg>';
 }
 
-function workSourceBrandBadge(row,extraClass=""){
-  const key=rowSourceFilterKey(row);
-  const label=sourceDisplayLabel(row);
-  return '<span class="work-source-brand '+escapeAttr(key)+' '+escapeAttr(extraClass)+'" title="'+escapeAttr(label)+'">'+
-    sourceLogoMark(key)+
-    '<span class="work-source-brand-label">'+escapeHtml(label)+'</span>'+
-  '</span>';
-}
 
 function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
   if(!host)return;

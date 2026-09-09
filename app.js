@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v2";
+const UI_LIBRARY_CACHE_KEY="library-data-v3-supplier";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1764,13 +1764,39 @@ function rowManualGroupSort(row){
 }
 
 const UNCLASSIFIED_GROUP_KEY="__unclassified__";
+const SUPPLIER_GROUP_PREFIX="supplier:";
+const SUPPLIER_GROUP_ORDER=new Map([
+  ["hang-u",10],
+  ["thuoc-la",20],
+  ["sua",30],
+  ["hang-thuong",40]
+]);
+function supplierBrowseGroupKey(row){
+  const key=String(row&&row.supplier_source_key||"").trim();
+  return key?SUPPLIER_GROUP_PREFIX+key:"";
+}
+function supplierBrowseGroupName(row){
+  return String(row&&row.supplier_source_name||"").trim();
+}
+function supplierBrowseGroupSort(row){
+  return SUPPLIER_GROUP_ORDER.get(String(row&&row.supplier_source_key||"").trim())||999999;
+}
 function rowBrowseGroupKey(row){
+  if(activeSourceFilter==="mine"&&isMineRow(row)){
+    return supplierBrowseGroupKey(row)||UNCLASSIFIED_GROUP_KEY;
+  }
   return rowManualGroupKey(row)||UNCLASSIFIED_GROUP_KEY;
 }
 function rowBrowseGroupName(row){
+  if(activeSourceFilter==="mine"&&isMineRow(row)){
+    return supplierBrowseGroupName(row)||"Nguồn hàng";
+  }
   return rowManualGroupName(row)||"Chưa phân loại";
 }
 function rowBrowseGroupSort(row){
+  if(activeSourceFilter==="mine"&&isMineRow(row)){
+    return supplierBrowseGroupSort(row);
+  }
   return rowManualGroupKey(row)?rowManualGroupSort(row):9999999;
 }
 
@@ -2289,7 +2315,7 @@ function scheduleCategoryMenuRefresh(){
 }
 
 function rowsBeforeSearch(){
-  const key=["before",libraryState,activeRootGroup,activeGroupUrl,activeBrand].join("|");
+  const key=["before",libraryState,activeSourceFilter,activeRootGroup,activeGroupUrl,activeBrand].join("|");
   return memoBrowseRows(key,()=>{
     let products=libraryCache.slice();
 
@@ -2315,7 +2341,7 @@ function rowsBeforeSearch(){
 }
 
 function visibleRowsBeforePack(){
-  const key=["visible",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery].join("|");
+  const key=["visible",libraryState,activeSourceFilter,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery].join("|");
   return memoBrowseRows(key,()=>{
     let products=rowsBeforeSearch();
     if(libraryQuery){
@@ -2375,7 +2401,7 @@ function rowSourceFilterKey(row){
 }
 
 function rowsAfterPackBeforeSource(){
-  const key=["after-pack",libraryState,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery,activePackKind].join("|");
+  const key=["after-pack",libraryState,activeSourceFilter,activeRootGroup,activeGroupUrl,activeBrand,libraryQuery,activePackKind].join("|");
   return memoBrowseRows(key,()=>{
     let products=visibleRowsBeforePack();
     if(activePackKind==="Thùng"){
@@ -2391,7 +2417,7 @@ const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
-  if(source==="mine")return isMineRow(row)||rowHasOwnPrice(row);
+  if(source==="mine")return isMineRow(row);
   return rowSourceFilterKey(row)===source;
 }
 
@@ -2413,10 +2439,16 @@ function normalizeBrowseCategoryForSource(source){
 }
 
 function setActiveSourceFilter(nextSource,{scroll=true}={}){
+  const previousSource=activeSourceFilter;
   activeSourceFilter=TABLE_SOURCE_CYCLE.includes(nextSource)?nextSource:"";
   if(activeSourceFilter)localStorage.setItem("getlink:filter-source",activeSourceFilter);
   else localStorage.removeItem("getlink:filter-source");
 
+  if(previousSource!==activeSourceFilter&&(previousSource==="mine"||activeSourceFilter==="mine")){
+    activeRootGroup="";
+    activeBrand="";
+    activeGroupUrl="";
+  }
   normalizeBrowseCategoryForSource(activeSourceFilter);
   libraryPage=1;
   resetBrowseDetail();
@@ -2500,7 +2532,6 @@ function renderSourceTabs(){
   for(const row of base){
     const sourceKey=rowSourceFilterKey(row);
     counts[sourceKey]++;
-    if(sourceKey!=="mine"&&rowHasOwnPrice(row))counts.mine++;
   }
 
   if(!["","mine","bhx","wm","go"].includes(activeSourceFilter)){

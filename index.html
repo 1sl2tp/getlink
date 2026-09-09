@@ -273,7 +273,29 @@
 
     <section class="card catalog workspace-list">
       <section id="userWorkHome" class="user-work-home" hidden aria-label="Công việc mua hàng">
-        <div class="user-work-top">
+        <section id="mobileUserWork" class="mobile-user-work" aria-label="Tìm và mua hàng trên mobile">
+          <div class="mobile-user-toolbar">
+            <label class="mobile-user-search" for="mobileUserSearch">
+              <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <input id="mobileUserSearch" autocomplete="off" placeholder="Tìm hàng của mình và siêu thị...">
+            </label>
+            <div id="mobileUserSourceTabs" class="mobile-user-source-tabs" role="group" aria-label="Chọn nguồn tìm kiếm"></div>
+          </div>
+          <div id="mobileUserResults" class="mobile-user-results" aria-live="polite"></div>
+          <div id="mobileUserEmpty" class="mobile-user-empty" hidden>Không có sản phẩm phù hợp.</div>
+          <button id="mobileUserMore" class="mobile-user-more" type="button" hidden>Xem thêm</button>
+          <div class="mobile-user-order-bar">
+            <span id="mobileUserSelectedCount">Đã chọn 0 sản phẩm</span>
+            <button id="mobileUserSendOrder" class="mobile-user-send-order" type="button" disabled>
+              <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 11 18-8-8 18-2-8z"/><path d="M11 13 21 3"/></svg>
+              <span>Gửi đơn</span>
+            </button>
+          </div>
+          <div id="mobileUserOrderStatus" class="mobile-user-order-status" aria-live="polite"></div>
+        </section>
+
+        <div class="user-work-desktop">
+          <div class="user-work-top">
           <div class="user-work-search">
             <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
             <input id="userWorkSearch" autocomplete="off" placeholder="Tìm sản phẩm, hãng, danh mục...">
@@ -331,6 +353,7 @@
             <div id="userWorkOrderStatus" class="user-work-order-status" aria-live="polite"></div>
           </div>
         </section>
+        </div>
       </section>
       <div class="catalog-sticky-head">
         <div class="catalog-toolbar">

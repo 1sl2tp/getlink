@@ -13906,3 +13906,17 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     grid-column:3;
   }
 }
+
+
+/* Carton card emphasis v53 — subtle only */
+.user-work-market-card.market-pack-carton,
+.mobile-user-market-card.market-pack-carton{
+  border-color:#cfe6d8!important;
+  background:#f8fcf9!important;
+  box-shadow:inset 3px 0 0 rgba(10,143,77,.28);
+}
+.user-work-market-card.market-pack-carton:hover{
+  border-color:#b8dcc8!important;
+  background:#f5fbf7!important;
+  box-shadow:inset 3px 0 0 rgba(10,143,77,.38),0 3px 10px rgba(16,24,40,.04);
+}

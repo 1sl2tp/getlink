@@ -36,7 +36,7 @@
     function loadScript(path,build){
       return new Promise((resolve,reject)=>{
         const script=document.createElement("script");
-        script.src=assetUrl(path,build);
+        script.src=/^https?:/i.test(path)?path:assetUrl(path,build);
         script.async=false;
         script.dataset.getlinkBuild=build;
         script.onload=()=>resolve();
@@ -630,8 +630,10 @@ window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab
   const loadScript=runtime&&runtime.loadScript;
   if(!loadScript)return;
   try{
-    await loadScript("config.js",build);
-    await loadScript("app.js",build);
+    const configUrl=runtime.assetUrl("config.js",build);
+    const appUrl=runtime.assetUrl("app.js",build);
+    await loadScript(configUrl,build);
+    await loadScript(appUrl,build);
   }catch(error){
     console.error("GETLINK bootstrap failed",error);
   }

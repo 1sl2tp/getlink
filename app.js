@@ -225,6 +225,9 @@ let newsLoading=false;
 let newsError="";
 let newsRequestSeq=0;
 let newsQuickRequest=0;
+let newsQuickCurrentId="";
+let newsQuickTouchX=0;
+let newsQuickTouchY=0;
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
@@ -574,20 +577,50 @@ function newsRenderQuickGallery(images){
   const host=$("#newsQuickGallery");
   if(!host)return;
   const list=(Array.isArray(images)?images:[])
-    .filter((url,index,all)=>url&&all.indexOf(url)===index)
-    .slice(0,8);
-  host.hidden=!list.length;
-  host.innerHTML=list.map((url,index)=>
-    '<div class="news-quick-photo '+(index===0?"primary":"")+'"><img src="'+escapeAttr(url)+'" alt="" loading="'+(index?"lazy":"eager")+'" decoding="async"></div>'
-  ).join("");
+    .filter((url,index,all)=>url&&all.indexOf(url)===index);
+  const hero=list[0]||"";
+  host.hidden=!hero;
+  host.innerHTML=hero
+    ?'<figure class="news-quick-hero"><img src="'+escapeAttr(hero)+'" alt="" decoding="async"></figure>'
+    :"";
 }
-function newsRenderQuickContent(value,fallback=""){
+function newsRenderQuickContent(value,fallback="",images=[]){
   const host=$("#newsQuickContent");
   if(!host)return;
   const paragraphs=newsContentParagraphs(value||fallback);
-  host.innerHTML=paragraphs.length
-    ?paragraphs.map(text=>'<p>'+escapeHtml(text)+'</p>').join("")
-    :'<p class="news-quick-empty">Tin này chưa có đủ nội dung trong nguồn đọc nhanh.</p>';
+  const extra=(Array.isArray(images)?images:[])
+    .filter((url,index,all)=>url&&all.indexOf(url)===index)
+    .slice(1,7);
+  if(!paragraphs.length){
+    host.innerHTML='<p class="news-quick-empty">Tin này chưa có đủ nội dung trong nguồn đọc nhanh.</p>';
+    return;
+  }
+  const parts=[];
+  let imageIndex=0;
+  paragraphs.forEach((text,index)=>{
+    parts.push('<p>'+escapeHtml(text)+'</p>');
+    const shouldInsert=(index===1||((index-1)%3===0&&index>1));
+    if(shouldInsert&&imageIndex<extra.length){
+      parts.push('<figure class="news-quick-inline"><img src="'+escapeAttr(extra[imageIndex++])+'" alt="" loading="lazy" decoding="async"></figure>');
+    }
+  });
+  while(imageIndex<extra.length){
+    parts.push('<figure class="news-quick-inline"><img src="'+escapeAttr(extra[imageIndex++])+'" alt="" loading="lazy" decoding="async"></figure>');
+  }
+  host.innerHTML=parts.join("");
+}
+function newsQuickItems(){
+  return newsVisibleItems();
+}
+function newsQuickMove(delta){
+  const list=newsQuickItems();
+  if(!list.length)return false;
+  let index=list.findIndex(item=>String(item.id||"")===String(newsQuickCurrentId||""));
+  if(index<0)index=0;
+  const next=index+Number(delta||0);
+  if(next<0||next>=list.length)return false;
+  openNewsQuickView(list[next],{keepOpen:true});
+  return true;
 }
 async function loadNewsQuickDetail(item,request){
   if(!item||!item.url)return;
@@ -596,35 +629,39 @@ async function loadNewsQuickDetail(item,request){
     if(request!==newsQuickRequest)return;
     const images=[...(cached.images||[]),...(item.images||[])];
     newsRenderQuickGallery(images);
-    newsRenderQuickContent(cached.content,item.content||item.summary);
+    newsRenderQuickContent(cached.content,item.content||item.summary,images);
     return;
   }
   const loading=$("#newsQuickLoading");
   if(loading)loading.hidden=false;
   try{
-    const response=await apiFetch("/api/news-detail?url="+encodeURIComponent(item.url),{cache:"no-store"});
+    const response=await apiFetch("/api/news-detail?url="+encodeURIComponent(item.url),{cache:"default"});
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"news_detail_failed");
     newsDetailCache.set(item.url,data);
     if(request!==newsQuickRequest)return;
-    newsRenderQuickGallery([...(data.images||[]),...(item.images||[])]);
-    newsRenderQuickContent(data.content,item.content||item.summary);
+    const images=[...(data.images||[]),...(item.images||[])];
+    newsRenderQuickGallery(images);
+    newsRenderQuickContent(data.content,item.content||item.summary,images);
   }catch(error){
     console.debug("GETLINK news detail",error);
   }finally{
     if(request===newsQuickRequest&&loading)loading.hidden=true;
   }
 }
-function openNewsQuickView(item){
+function openNewsQuickView(item,options={}){
   const modal=$("#newsQuickView");
+  const card=modal?.querySelector(".news-quick-card");
   if(!modal||!item)return;
   const loading=$("#newsQuickLoading");
   const original=$("#newsQuickOriginal");
   const request=++newsQuickRequest;
+  newsQuickCurrentId=String(item.id||"");
 
   if(loading)loading.hidden=true;
-  newsRenderQuickGallery(item.images&&item.images.length?item.images:(item.image?[item.image]:[]));
-  newsRenderQuickContent(item.content,item.summary);
+  const images=item.images&&item.images.length?item.images:(item.image?[item.image]:[]);
+  newsRenderQuickGallery(images);
+  newsRenderQuickContent(item.content,item.summary,images);
   if(original){
     original.href=item.url||"#";
     original.hidden=!item.url;
@@ -633,16 +670,38 @@ function openNewsQuickView(item){
   modal.hidden=false;
   modal.setAttribute("aria-hidden","false");
   document.body.classList.add("news-quick-open");
+  if(card)card.scrollTop=0;
   loadNewsQuickDetail(item,request);
 }
 function closeNewsQuickView(){
   newsQuickRequest++;
+  newsQuickCurrentId="";
   const modal=$("#newsQuickView");
   if(!modal)return;
   modal.hidden=true;
   modal.setAttribute("aria-hidden","true");
   document.body.classList.remove("news-quick-open");
 }
+function bindNewsQuickSwipe(){
+  const card=$("#newsQuickView")?.querySelector(".news-quick-card");
+  if(!card||card.dataset.swipeBound==="1")return;
+  card.dataset.swipeBound="1";
+  card.addEventListener("touchstart",event=>{
+    const touch=event.touches&&event.touches[0];
+    if(!touch)return;
+    newsQuickTouchX=touch.clientX;
+    newsQuickTouchY=touch.clientY;
+  },{passive:true});
+  card.addEventListener("touchend",event=>{
+    const touch=event.changedTouches&&event.changedTouches[0];
+    if(!touch)return;
+    const dx=touch.clientX-newsQuickTouchX;
+    const dy=touch.clientY-newsQuickTouchY;
+    if(Math.abs(dx)<55||Math.abs(dx)<=Math.abs(dy)*1.2)return;
+    newsQuickMove(dx<0?1:-1);
+  },{passive:true});
+}
+queueMicrotask(bindNewsQuickSwipe);
 
 
 function stripLotPackPhrase(value){

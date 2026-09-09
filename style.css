@@ -10156,3 +10156,91 @@ body.source-manager-open{overflow:hidden!important}
 @container (max-width:420px){
   .xls-price-table.supplier-table-mode{min-width:1098px!important}
 }
+
+
+/* Supplier profit mode v22 — percent target + fixed applied profit */
+.xls-price-table.supplier-table-mode{
+  min-width:1540px!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(1),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(1){
+  width:250px!important;min-width:250px!important;max-width:250px!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(2),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(2){
+  width:105px!important;min-width:105px!important;max-width:105px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(3),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(3){
+  width:90px!important;min-width:90px!important;max-width:90px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(4),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(4){
+  width:95px!important;min-width:95px!important;max-width:95px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(5),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(5),
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(6),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(6){
+  width:100px!important;min-width:100px!important;max-width:100px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(7),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(7){
+  width:112px!important;min-width:112px!important;max-width:112px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(8),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(8),
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(9),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(9){
+  width:110px!important;min-width:110px!important;max-width:110px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(10),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(10){
+  width:80px!important;min-width:80px!important;max-width:80px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(11),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(11){
+  width:90px!important;min-width:90px!important;max-width:90px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(12),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(12){
+  width:105px!important;min-width:105px!important;max-width:105px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(13),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(13){
+  width:95px!important;min-width:95px!important;max-width:95px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(14),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(14){
+  width:105px!important;min-width:105px!important;max-width:105px!important;text-align:center!important;
+}
+
+.supplier-profit-mode{
+  text-align:center!important;
+}
+.supplier-profit-mode-badge{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:68px!important;
+  padding:2px 6px!important;
+  border-radius:4px!important;
+  font-size:8px!important;
+  font-weight:820!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+}
+.supplier-profit-mode-badge.is-expected{
+  color:#805500!important;
+  background:#fff6df!important;
+}
+.supplier-profit-mode-badge.is-applied{
+  color:#9a3412!important;
+  background:#fff1e8!important;
+}
+@container (max-width:720px){
+  .xls-price-table.supplier-table-mode{min-width:1410px!important}
+}
+@container (max-width:420px){
+  .xls-price-table.supplier-table-mode{min-width:1360px!important}
+}

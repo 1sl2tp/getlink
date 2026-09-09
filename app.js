@@ -1,6 +1,20 @@
 const $=s=>document.querySelector(s);
 const API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
 const API_KEY=String(window.GETLINK_API_KEY||"");
+const UPDATE_ADMIN_TOKEN_KEY="getlink:update-admin-session";
+let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";
+let appRole="user";
+const USER_CLIENT_ID_KEY="getlink:user-client-id";
+const userFeedbackTimers=new Map();
+
+function userClientId(){
+  let id=localStorage.getItem(USER_CLIENT_ID_KEY)||"";
+  if(!id){
+    id=(crypto&&crypto.randomUUID?crypto.randomUUID():String(Date.now())+"-"+Math.random().toString(36).slice(2));
+    localStorage.setItem(USER_CLIENT_ID_KEY,id);
+  }
+  return id;
+}
 
 // One-time clean break from the legacy D1 browser state.
 // Keep only the user's grid/table view preference; all GETLINK data/state
@@ -19,6 +33,7 @@ if(localStorage.getItem("getlink:backend-version")!==STORAGE_BACKEND_VERSION){
 function apiFetch(path,options={}){
   const headers=new Headers(options.headers||{});
   if(API_KEY)headers.set("apikey",API_KEY);
+  if(updateAdminToken)headers.set("x-getlink-admin",updateAdminToken);
   return fetch(API+path,{...options,headers});
 }
 
@@ -34,14 +49,16 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode";
+function uiLibraryCacheKey(){
+  return "library-data-v14-role-"+(appRole==="admin"?"admin":"user");
+}
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
   try{
     const db=await openUiCacheDb();
     if(!db)return null;
-    const keys=[UI_LIBRARY_CACHE_KEY,...UI_LIBRARY_CACHE_FALLBACK_KEYS];
+    const keys=[uiLibraryCacheKey(),...UI_LIBRARY_CACHE_FALLBACK_KEYS];
     for(const key of keys){
       const cached=await new Promise((resolve,reject)=>{
         const tx=db.transaction("cache","readonly");
@@ -50,7 +67,7 @@ async function readUiLibraryCache(){
         req.onerror=()=>reject(req.error);
       });
       if(cached&&Array.isArray(cached.rows)&&cached.rows.length){
-        if(key!==UI_LIBRARY_CACHE_KEY){
+        if(key!==uiLibraryCacheKey()){
           // UI releases must not invalidate thousands of already-loaded rows.
           // Migrate the last compatible cache once and preserve its age so
           // stale-while-revalidate still behaves correctly.
@@ -68,7 +85,7 @@ async function writeUiLibraryCache(rows,savedAt=Date.now()){
     if(!db)return;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction("cache","readwrite");
-      tx.objectStore("cache").put({savedAt,rows},UI_LIBRARY_CACHE_KEY);
+      tx.objectStore("cache").put({savedAt,rows},uiLibraryCacheKey());
       tx.oncomplete=()=>resolve();
       tx.onerror=()=>reject(tx.error);
     });
@@ -1203,6 +1220,55 @@ function writeOwnPrice(url,type,value){
   return n;
 }
 
+function ratingKey(url){
+  return "getlink:user-rating:"+canonical(url);
+}
+function readOwnRating(url){
+  return Math.max(0,Math.min(5,Number(localStorage.getItem(ratingKey(url))||0)||0));
+}
+function writeOwnRating(url,value){
+  const n=Math.max(0,Math.min(5,Math.round(Number(value)||0)));
+  if(n)localStorage.setItem(ratingKey(url),String(n));
+  else localStorage.removeItem(ratingKey(url));
+  return n;
+}
+function syncUserRatingRow(row,url,rating){
+  if(!row)return;
+  row.querySelectorAll(".user-rating-button").forEach(btn=>{
+    const active=Number(btn.dataset.rating||0)<=rating;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",Number(btn.dataset.rating||0)===rating?"true":"false");
+  });
+}
+async function saveUserFeedback(url){
+  if(appRole!=="user"||!API||!url)return;
+  const bargain=readOwnPrice(url,"bargain");
+  const rating=readOwnRating(url);
+  try{
+    await apiFetch("/api/user-feedback",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({
+        url,
+        client_id:userClientId(),
+        bargain_price_vnd:bargain||null,
+        rating:rating||null
+      })
+    });
+  }catch{}
+}
+function queueUserFeedback(url){
+  const key=canonical(url);
+  if(!key)return;
+  const old=userFeedbackTimers.get(key);
+  if(old)clearTimeout(old);
+  const timer=setTimeout(()=>{
+    userFeedbackTimers.delete(key);
+    saveUserFeedback(url);
+  },500);
+  userFeedbackTimers.set(key,timer);
+}
+
 function rowOwnPriceParts(row){
   const levels=rowPriceLevels(row);
   return {
@@ -1662,10 +1728,25 @@ function syncSupplierTableMode(){
   const table=document.querySelector(".xls-price-table");
   const standard=document.getElementById("standardTableHead");
   const supplier=document.getElementById("supplierTableHead");
+  const user=document.getElementById("userTableHead");
+  if(appRole==="user"){
+    if(table){
+      table.classList.remove("supplier-table-mode");
+      table.classList.add("user-table-mode");
+    }
+    if(standard)standard.hidden=true;
+    if(supplier)supplier.hidden=true;
+    if(user)user.hidden=false;
+    return;
+  }
   const mine=activeSourceFilter==="mine";
-  if(table)table.classList.toggle("supplier-table-mode",mine);
+  if(table){
+    table.classList.remove("user-table-mode");
+    table.classList.toggle("supplier-table-mode",mine);
+  }
   if(standard)standard.hidden=mine;
   if(supplier)supplier.hidden=!mine;
+  if(user)user.hidden=true;
 }
 
 function syncTableSourceSortHeader(){
@@ -1763,7 +1844,42 @@ function supplierTableRow(row){
     '</tr>';
 }
 
+function userTableRow(row){
+  const displayName=canonicalDisplayName(row);
+  const carton=Number(row&&row.supplier_carton_price_vnd||row&&row.web_carton_price||0);
+  const retail=Number(row&&row.supplier_retail_price_vnd||row&&row.web_leaf_price||0);
+  const units=Math.max(0,Number(row&&row.supplier_units_per_carton||0)||0);
+  const unit=String(row&&row.supplier_retail_unit||"").trim();
+  const primary=String(row&&row.supplier_primary_packaging||row&&row.packaging||"").trim();
+  const retailPack=String(row&&row.supplier_retail_packaging||"").trim();
+  const bargain=readOwnPrice(row.canonical_url,"bargain");
+  const rating=readOwnRating(row.canonical_url);
+  const stock=supplierAvailabilityText(row);
+  const prices=[];
+  if(!stock&&carton)prices.push('<span class="user-sale-level"><small>Thùng</small><strong>'+money(carton)+'</strong></span>');
+  if(!stock&&retail)prices.push('<span class="user-sale-level"><small>'+escapeHtml(unit||"Lẻ")+'</small><strong>'+money(retail)+'</strong></span>');
+  const priceHtml=stock
+    ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
+    :(prices.length?prices.join('<span class="user-sale-sep">·</span>'):'<span class="xls-empty">—</span>');
+  const packText=units>1&&unit
+    ?units+" "+unit+" / thùng"
+    :(primary||retailPack||unit||"—");
+  const stars=[1,2,3,4,5].map(n=>
+    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" '+
+      'data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" '+
+      'aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
+  ).join("");
+  return '<tr class="product-card xls-row user-table-row" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+escapeHtml(displayName)+'</td>'+
+    '<td class="user-col-sale">'+priceHtml+'</td>'+
+    '<td class="user-col-pack">'+escapeHtml(packText)+'</td>'+
+    '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
+    '<td class="user-col-rating"><span class="user-rating" role="group" aria-label="Đánh giá sản phẩm">'+stars+'</span></td>'+
+  '</tr>';
+}
+
 function productCard(row){
+  if(appRole==="user")return userTableRow(row);
   if(activeSourceFilter==="mine"&&isMineRow(row))return supplierTableRow(row);
   const levels=rowPriceLevels(row);
   const hierarchy=levels.hierarchy;
@@ -2342,6 +2458,7 @@ async function loadSourceManager(force=false){
 }
 
 function openSourceManager(){
+  if(appRole!=="admin"){openAdminLogin();return;}
   closeMobileCategoryNav();
   const panel=$("#sourceManagerPanel");
   panel.hidden=false;
@@ -2888,6 +3005,7 @@ function renderCategoryContext(visibleProducts){
 
 function productViewKey(products){
   return [
+    appRole,
     libraryRenderVersion,
     libraryState,
     activeRootGroup,
@@ -2913,7 +3031,8 @@ function batchSizeForView(view){
 function updateCatalogRenderMore(){
   const host=$("#catalogRenderMore");
   if(!host)return;
-  const state=viewRenderState[libraryView];
+  const view=appRole==="user"?"table":libraryView;
+  const state=viewRenderState[view];
   const total=state.products.length;
   if(!total||state.rendered>=total){
     host.hidden=true;
@@ -2954,7 +3073,7 @@ function appendLocalViewBatch(view){
 }
 
 function renderActiveProductView(products){
-  const view=libraryView;
+  const view=appRole==="user"?"table":libraryView;
   const viewProducts=view==="table"?sortTableProducts(products):products;
   const key=productViewKey(viewProducts)+(view==="table"?"|source-sort:"+tableSourceSort:"");
   const state=viewRenderState[view];
@@ -3018,10 +3137,11 @@ function renderResultPager(){
 function syncViewMode(){
   const grid=$("#productGrid");
   const table=$("#tableView");
-  if(grid)grid.hidden=matchAuditActive||libraryView!=="grid";
-  if(table)table.hidden=matchAuditActive||libraryView!=="table";
+  const view=appRole==="user"?"table":libraryView;
+  if(grid)grid.hidden=matchAuditActive||view!=="grid";
+  if(table)table.hidden=matchAuditActive||view!=="table";
   document.querySelectorAll(".view-button").forEach(button=>{
-    button.classList.toggle("active",button.dataset.view===libraryView);
+    button.classList.toggle("active",button.dataset.view===view);
   });
   syncMatchAuditMode();
 }
@@ -3074,7 +3194,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?14:12)+'">Đang đọc thư viện Supabase...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(appRole==="user"?5:(activeSourceFilter==="mine"?14:12))+'">Đang đọc thư viện Supabase...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{
@@ -3478,6 +3598,16 @@ $("#productGrid").addEventListener("keydown",e=>{
 });
 
 $("#libraryProducts").addEventListener("click",async e=>{
+  const ratingButton=e.target.closest(".user-rating-button");
+  if(ratingButton){
+    e.stopPropagation();
+    const url=ratingButton.dataset.url||"";
+    const rating=writeOwnRating(url,Number(ratingButton.dataset.rating||0));
+    syncUserRatingRow(ratingButton.closest(".user-table-row"),url,rating);
+    queueUserFeedback(url);
+    return;
+  }
+
   const detailButton=e.target.closest(".xls-open-detail");
   if(detailButton){
     e.stopPropagation();
@@ -3522,7 +3652,9 @@ $("#libraryProducts").addEventListener("input",e=>{
   if(!input)return;
 
   const type=carton?"carton":(middle?"middle":(retail?"retail":"bargain"));
-  writeOwnPrice(input.dataset.url||"",type,input.value);
+  const url=input.dataset.url||"";
+  writeOwnPrice(url,type,input.value);
+  if(bargain&&appRole==="user")queueUserFeedback(url);
   if(!bargain)updateSheetRow(input.closest(".product-card"));
 });
 
@@ -3596,8 +3728,130 @@ $("#sourceManagerRows").addEventListener("keydown",e=>{
   row.click();
 });
 
-const UPDATE_ADMIN_TOKEN_KEY="getlink:update-admin-session";
-let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";
+function applyAppRoleUi(){
+  document.body.dataset.appRole=appRole;
+  const badge=$("#roleBadge");
+  const button=$("#roleAdminButton");
+  const subtitle=document.querySelector(".site-brand-copy p");
+  if(badge)badge.textContent=appRole==="admin"?"Admin":"Khách";
+  if(button)button.textContent=appRole==="admin"?"Thoát Admin":"Admin";
+  if(subtitle)subtitle.textContent=appRole==="admin"
+    ?"Quản trị GETLINK · nguồn giá · cập nhật"
+    :"Bảng giá Tạp hóa · xem giá bán và gửi giá mặc cả";
+
+  if(appRole==="user"){
+    activeSourceFilter="mine";
+    libraryState="visible";
+    if($("#importCard"))$("#importCard").hidden=true;
+    if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
+    if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;
+    if($("#sourceManagerPanel"))$("#sourceManagerPanel").hidden=true;
+    stopPolling();
+  }
+  browseRowsMemo.clear();
+  for(const state of Object.values(viewRenderState)){
+    state.key="";
+    state.products=[];
+    state.rendered=0;
+  }
+  syncViewMode();
+  syncSupplierTableMode();
+}
+
+async function reloadCatalogForRole(){
+  libraryCache=[];
+  libraryLoaded=false;
+  libraryGroups=[];
+  libraryRenderVersion+=1;
+  rebuildLibraryIndex();
+  browseRowsMemo.clear();
+  for(const state of Object.values(viewRenderState)){
+    state.key="";
+    state.products=[];
+    state.rendered=0;
+  }
+  await fetchLibraryFromSupabase();
+  renderCategoryMenu();
+  renderLibraryProducts();
+}
+
+async function setAppRole(nextRole,reload=true){
+  appRole=nextRole==="admin"?"admin":"user";
+  if(appRole==="user"){
+    updateAdminToken="";
+    sessionStorage.removeItem(UPDATE_ADMIN_TOKEN_KEY);
+  }
+  applyAppRoleUi();
+  if(reload)await reloadCatalogForRole();
+}
+
+function closeAdminLogin(){
+  const panel=$("#adminLoginPanel");
+  if(panel)panel.hidden=true;
+  const status=$("#adminLoginStatus");
+  if(status)status.textContent="";
+  const input=$("#adminLoginPassword");
+  if(input)input.value="";
+}
+
+function openAdminLogin(){
+  const panel=$("#adminLoginPanel");
+  if(panel)panel.hidden=false;
+  const status=$("#adminLoginStatus");
+  if(status)status.textContent="";
+  setTimeout(()=>$("#adminLoginPassword")?.focus(),0);
+}
+
+async function unlockAdminRole(){
+  const input=$("#adminLoginPassword");
+  const status=$("#adminLoginStatus");
+  const password=String(input&&input.value||"");
+  if(status)status.textContent="Đang kiểm tra...";
+  try{
+    const res=await apiFetch("/api/update-settings/unlock",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({password})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){
+      if(status)status.textContent=res.status===429
+        ?"Đang khóa tạm. Thử lại sau ít phút."
+        :"Mật khẩu chưa đúng.";
+      if(input)input.value="";
+      return;
+    }
+    updateAdminToken=String(data.token||"");
+    sessionStorage.setItem(UPDATE_ADMIN_TOKEN_KEY,updateAdminToken);
+    appRole="admin";
+    closeAdminLogin();
+    applyAppRoleUi();
+    await reloadCatalogForRole();
+  }catch{
+    if(status)status.textContent="Chưa kết nối được.";
+  }
+}
+
+async function restoreAppRole(){
+  if(!updateAdminToken){
+    appRole="user";
+    applyAppRoleUi();
+    return;
+  }
+  try{
+    const res=await apiFetch("/api/update-settings",{cache:"no-store"});
+    if(res.ok){
+      appRole="admin";
+      applyAppRoleUi();
+      return;
+    }
+  }catch{}
+  updateAdminToken="";
+  sessionStorage.removeItem(UPDATE_ADMIN_TOKEN_KEY);
+  appRole="user";
+  applyAppRoleUi();
+}
+
 let updateSettingsMode="off";
 let updateSettingsScope="all";
 let updateSettingsPollTimer=0;
@@ -3811,6 +4065,23 @@ async function runProtectedUpdateNow(){
   }
 }
 
+$("#roleAdminButton")?.addEventListener("click",async()=>{
+  if(appRole==="admin"){
+    await setAppRole("user",true);
+    return;
+  }
+  openAdminLogin();
+});
+$("#adminLoginUnlock")?.addEventListener("click",unlockAdminRole);
+$("#adminLoginCancel")?.addEventListener("click",closeAdminLogin);
+$("#adminLoginPanel")?.addEventListener("click",e=>{
+  if(e.target===$("#adminLoginPanel"))closeAdminLogin();
+});
+$("#adminLoginPassword")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter")unlockAdminRole();
+  if(e.key==="Escape")closeAdminLogin();
+});
+
 $("#openUpdateSettings")?.addEventListener("click",openProtectedUpdateSettings);
 $("#unlockUpdateSettings")?.addEventListener("click",unlockProtectedUpdateSettings);
 $("#updateSettingsPassword")?.addEventListener("keydown",e=>{
@@ -3835,6 +4106,7 @@ $("#saveUpdateSettings")?.addEventListener("click",()=>saveProtectedUpdateSettin
 $("#runUpdateNow")?.addEventListener("click",runProtectedUpdateNow);
 
 $("#toggleImport").addEventListener("click",()=>{
+  if(appRole!=="admin"){openAdminLogin();return;}
   $("#importCard").hidden=false;
   $("#importCard").scrollIntoView({behavior:"smooth",block:"center"});
 });
@@ -3935,6 +4207,7 @@ function inputSourceName(raw){
 }
 
 $("#get").addEventListener("click",async()=>{
+  if(appRole!=="admin"){openAdminLogin();return;}
   const url=$("#url").value.trim();
 
   if(!supportedSourceUrl(url)){
@@ -4138,8 +4411,6 @@ if(saved)$("#url").value=saved;
 requestId=localStorage.getItem("getlink:request-id")||"";
 wantedUrl=saved;
 
-refreshCatalog();
-
 syncViewMode();
 initCatalogLocalObserver();
 
@@ -4152,13 +4423,17 @@ window.addEventListener("resize",()=>{
   if(libraryLoaded)renderLibraryProducts();
 });
 
-if(requestId&&API){
-  $("#importCard").hidden=false;
-  setGetBusy(true);
-  if(!jobStartedAt){
-    jobStartedAt=Date.now();
-    localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
+(async()=>{
+  await restoreAppRole();
+  await refreshCatalog();
+  if(requestId&&API&&appRole==="admin"){
+    $("#importCard").hidden=false;
+    setGetBusy(true);
+    if(!jobStartedAt){
+      jobStartedAt=Date.now();
+      localStorage.setItem("getlink:request-started-at",String(jobStartedAt));
+    }
+    setJobStage("queued","Đang tiếp tục yêu cầu cập nhật trước...");
+    startPolling();
   }
-  setJobStage("queued","Đang tiếp tục yêu cầu cập nhật trước...");
-  startPolling();
-}
+})();

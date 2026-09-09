@@ -13682,7 +13682,7 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
 }
 
 
-/* Frame polish v48 — visible labels, icons, and source brand marks */
+/* Frame polish v48 — category icons + source price colors */
 .getlink-work-brand-mark svg{
   width:21px;
   height:21px;
@@ -13711,80 +13711,15 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
   stroke-linecap:round;
   stroke-linejoin:round;
 }
-.work-source-brand{
-  flex:0 0 auto;
-  min-width:50px;
-  height:24px;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:4px;
-  padding:2px 6px;
-  overflow:hidden;
-  border:1px solid #e3e8e5;
-  border-radius:7px;
-  background:#f6f8f7;
-  color:#667085;
-  box-sizing:border-box;
-}
-.work-source-brand.bhx{
-  border-color:#cfe8d9;
-  background:#edf8f2;
-  color:#087a40;
-}
-.work-source-brand.wm{
-  border-color:#f3d1d1;
-  background:#fff3f4;
-  color:#c9302c;
-}
-.work-source-brand.go{
-  border-color:#f4dbc4;
-  background:#fff7ed;
-  color:#c55a11;
-}
-.work-source-brand .source-logo-mark{
-  width:28px!important;
-  height:17px!important;
-  min-width:28px!important;
-  display:grid!important;
-  place-items:center!important;
-  padding:0!important;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
-  box-shadow:none!important;
-}
-.work-source-brand .source-logo-image{
-  width:100%!important;
-  height:100%!important;
-  max-width:100%!important;
-  max-height:100%!important;
-  display:block!important;
-  object-fit:contain!important;
-  object-position:center!important;
-  transform:none!important;
-}
-.work-source-brand .source-logo-fallback{
-  display:none!important;
-}
-.work-source-brand-label{
-  font-size:8.5px;
-  line-height:1;
-  font-weight:750;
-  white-space:nowrap;
-}
-.user-work-desktop .work-source-brand{
-  min-width:58px;
-  height:22px;
-}
-.user-work-desktop .work-source-brand .source-logo-mark{
-  width:30px!important;
-  min-width:30px!important;
-  height:16px!important;
-}
-.user-work-desktop .work-source-brand-label{
-  font-size:8px;
-}
+
+/* No supermarket logos in the work frame.
+   Source identity is communicated only by price color. */
+.user-work-market-price.source-bhx,
+.mobile-user-product-price.source-bhx{color:#0a8f4d!important}
+.user-work-market-price.source-wm,
+.mobile-user-product-price.source-wm{color:#d92d20!important}
+.user-work-market-price.source-go,
+.mobile-user-product-price.source-go{color:#e85d04!important}
 
 @media(max-width:639px){
   .getlink-work-brand-mark svg{
@@ -13799,23 +13734,7 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     height:14px;
     flex-basis:14px;
   }
-  .work-source-brand.mobile{
-    min-width:48px;
-    height:22px;
-    gap:3px;
-    padding-left:5px;
-    padding-right:5px;
-  }
-  .work-source-brand.mobile .source-logo-mark{
-    width:26px!important;
-    min-width:26px!important;
-    height:15px!important;
-  }
-  .work-source-brand.mobile .work-source-brand-label{
-    display:none;
-  }
 }
-
 
 /* Scroll ownership v49 — controls stay fixed; only data regions scroll */
 @media(min-width:640px){

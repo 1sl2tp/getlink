@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis";
+const UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1685,9 +1685,14 @@ function supplierTableRow(row){
   const pref=String(row.preference_state||"normal");
   const stock=supplierAvailabilityText(row);
   const supplierCost=Number(row&&row.supplier_input_price_vnd||0);
-  const inputBasis=String(row&&row.supplier_input_price_basis||"carton")==="retail"?"Lẻ":"Thùng";
   const carton=Number(row&&row.supplier_carton_price_vnd||0);
   const retail=Number(row&&row.supplier_retail_price_vnd||0);
+  const rawInputBasis=String(row&&row.supplier_input_price_basis||"").trim();
+  const inferredRetailBasis=
+    rawInputBasis==="retail"||
+    (!rawInputBasis&&retail>0&&carton<=0)||
+    (String(row&&row.supplier_source_key||"")==="thuoc-la"&&retail>0&&carton<=0);
+  const inputBasis=inferredRetailBasis?"Lẻ":"Thùng";
   const unitsPerCarton=Number(row&&row.supplier_units_per_carton||0);
   const retailUnit=String(row&&row.supplier_retail_unit||"").trim();
   const actualProfit=Number(row&&row.supplier_actual_profit_vnd||0);

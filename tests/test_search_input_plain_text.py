@@ -14,18 +14,20 @@ class SearchInputPlainTextTest(unittest.TestCase):
     def test_mobile_search_disables_browser_text_assists(self):
         tag=self._tag("mobileUserSearch")
         for attr in (
-            'autocomplete="off"',
+            'autocomplete="new-password"',
             'autocorrect="off"',
             'autocapitalize="none"',
             'spellcheck="false"',
             'role="searchbox"',
+            'data-1p-ignore="true"',
+            'data-lpignore="true"',
         ):
             self.assertIn(attr, tag)
 
     def test_desktop_search_disables_browser_text_assists(self):
         tag=self._tag("userWorkSearch")
         for attr in (
-            'autocomplete="off"',
+            'autocomplete="new-password"',
             'autocorrect="off"',
             'autocapitalize="none"',
             'spellcheck="false"',
@@ -36,7 +38,7 @@ class SearchInputPlainTextTest(unittest.TestCase):
     def test_disabled_merge_password_cannot_trigger_password_manager(self):
         tag=self._tag("mobileMergePassword")
         self.assertIn('disabled', tag)
-        self.assertIn('autocomplete="off"', tag)
+        self.assertIn('autocomplete="new-password"', tag)
 
 if __name__=="__main__":
     unittest.main()

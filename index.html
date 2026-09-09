@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-two-column-root-categories-v11">
+  <link rel="stylesheet" href="style.css?v=20260909-auto-update-settings-v12">
 </head>
 <body>
 <main class="wrap">
@@ -25,7 +25,10 @@
     <div class="import-head">
       <div>
         <strong>Thêm / cập nhật link nguồn giá</strong>
-        <small>Link gần đây được đọc lại từ Supabase; dữ liệu nguồn chỉ lấy mới khi cần.</small>
+        <small>
+          Link gần đây được đọc lại từ Supabase; dữ liệu nguồn chỉ lấy mới khi cần.
+          <button id="openUpdateSettings" class="import-settings-link" type="button">Cài đặt cập nhật</button>
+        </small>
       </div>
       <button id="closeImport" class="icon-button" type="button" aria-label="Đóng"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
     </div>
@@ -41,6 +44,79 @@
       <div class="status-meta">
         <span id="statusElapsed" class="status-elapsed"></span>
         <div id="registryCount" class="registry-count"></div>
+      </div>
+    </div>
+
+    <div id="updateSettingsGate" class="update-settings-gate" hidden>
+      <div class="update-settings-gate-copy">
+        <strong>Mật khẩu cài đặt</strong>
+        <small>Cần mở khóa trước khi xem hoặc thay đổi lịch cập nhật.</small>
+      </div>
+      <div class="update-settings-gate-actions">
+        <input id="updateSettingsPassword" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="••••" aria-label="Mật khẩu cài đặt">
+        <button id="unlockUpdateSettings" type="button">Mở khóa</button>
+      </div>
+      <span id="updateSettingsGateStatus" class="update-settings-message"></span>
+    </div>
+
+    <div id="updateSettingsPanel" class="update-settings-panel" hidden>
+      <div class="update-settings-head">
+        <div>
+          <strong>Cập nhật giá tự động</strong>
+          <small>Chạy nền bằng Supabase · không cần mở trình duyệt.</small>
+        </div>
+        <button id="closeUpdateSettings" class="update-settings-close" type="button" aria-label="Đóng cài đặt">Đóng</button>
+      </div>
+
+      <div class="update-settings-grid">
+        <div class="update-setting-field">
+          <span class="update-setting-label">Lịch chạy</span>
+          <div id="updateModeTabs" class="update-setting-tabs" role="group" aria-label="Lịch cập nhật">
+            <button data-update-mode="off" type="button">Tắt</button>
+            <button data-update-mode="daily" type="button">Mỗi ngày</button>
+            <button data-update-mode="custom" type="button">Tùy chọn</button>
+          </div>
+        </div>
+
+        <label id="updateCustomDaysWrap" class="update-setting-field update-custom-days" hidden>
+          <span class="update-setting-label">Chu kỳ</span>
+          <span class="update-number-input">
+            <input id="updateIntervalDays" type="number" min="2" max="30" step="1" value="2">
+            <b>ngày</b>
+          </span>
+        </label>
+
+        <label class="update-setting-field">
+          <span class="update-setting-label">Giờ chạy</span>
+          <span class="update-number-input">
+            <input id="updateRunHour" type="number" min="0" max="23" step="1" value="3">
+            <b>:00</b>
+          </span>
+        </label>
+
+        <div class="update-setting-field update-scope-field">
+          <span class="update-setting-label">Sản phẩm</span>
+          <div id="updateScopeTabs" class="update-setting-tabs update-scope-tabs" role="group" aria-label="Phạm vi sản phẩm">
+            <button data-update-scope="all" type="button">
+              <span>Tất cả</span><small id="updateAllCount">—</small>
+            </button>
+            <button data-update-scope="classified_only" type="button">
+              <span>Bỏ qua Chưa phân loại</span><small id="updateClassifiedCount">—</small>
+            </button>
+          </div>
+          <small id="updateScopeNote" class="update-scope-note"></small>
+        </div>
+      </div>
+
+      <div class="update-settings-footer">
+        <div class="update-settings-status">
+          <strong id="updateScheduleStatus">Chưa tải cài đặt</strong>
+          <small id="updateRunStatus"></small>
+        </div>
+        <div class="update-settings-actions">
+          <button id="saveUpdateSettings" class="update-secondary" type="button">Lưu</button>
+          <button id="runUpdateNow" class="update-primary" type="button">Cập nhật ngay</button>
+        </div>
       </div>
     </div>
   </section>
@@ -326,6 +402,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-floating-browse-menu-v10"></script>
+<script src="app.js?v=20260909-auto-update-settings-v12"></script>
 </body>
 </html>

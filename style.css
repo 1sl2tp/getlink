@@ -13179,14 +13179,19 @@ body[data-app-role="user"] .workspace-detail{
   }
   .mobile-user-more{
     width:calc(100% - 16px);
-    height:34px;
+    min-height:30px;
+    display:grid;
+    place-items:center;
     margin:6px 8px 0;
-    border:1px solid #dfe4e8;
+    border:1px solid #e5e9ed;
     border-radius:8px;
     background:#fff;
-    color:#475467;
-    font-size:11px;
+    color:#667085;
+    font-size:10.5px;
     font-weight:700;
+    font-variant-numeric:tabular-nums;
+    pointer-events:none;
+    user-select:none;
   }
   .mobile-user-order-bar{
     position:sticky;

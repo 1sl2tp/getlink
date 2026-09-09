@@ -7488,34 +7488,13 @@ body.source-manager-open{overflow:hidden!important}
 }
 
 
-/* Unclassified category reachability v1 */
+/* Category bottom reachability without a fake scroll item. */
 .workspace-nav .category-tabs{
-  padding-bottom:max(42px,env(safe-area-inset-bottom))!important;
-  scroll-padding-bottom:max(42px,env(safe-area-inset-bottom))!important;
+  padding-bottom:max(10px,env(safe-area-inset-bottom))!important;
+  scroll-padding-bottom:max(10px,env(safe-area-inset-bottom))!important;
 }
 .workspace-nav .category-tabs .category-chip[data-root="__unclassified__"]{
   margin-bottom:4px!important;
-}
-
-
-/* Category end spacer v2
-   A real flex item extends scrollHeight; padding alone was not reliable in Safari/Chrome. */
-.workspace-nav .category-tabs{
-  padding-bottom:0!important;
-}
-.workspace-nav .category-scroll-end-spacer{
-  flex:0 0 54px!important;
-  width:100%!important;
-  height:54px!important;
-  min-height:54px!important;
-  pointer-events:none!important;
-}
-@media(max-width:1100px){
-  .workspace-nav .category-scroll-end-spacer{
-    flex-basis:64px!important;
-    height:64px!important;
-    min-height:64px!important;
-  }
 }
 
 
@@ -14415,4 +14394,31 @@ html[data-getlink-embed="1"] .site-chat-notice{
     height:12px;
     flex-basis:12px;
   }
+}
+
+
+/* Interaction selection + scroll ownership v55
+   Controls/rails do not create accidental text selection while swiping.
+   Product/content text and form fields remain selectable/editable. */
+.category-tabs,
+.brand-filter-rail,
+.catalog-pack-tabs,
+.source-tabs,
+.source-tabs-inline,
+.view-switch,
+.user-work-jump,
+.user-work-category-panel,
+.mobile-user-source-level,
+.quick-browse-dock{
+  -webkit-user-select:none;
+  user-select:none;
+}
+input,
+textarea,
+[contenteditable="true"],
+.mobile-user-results,
+.user-work-market-grid,
+.user-work-order-wrap{
+  -webkit-user-select:text;
+  user-select:text;
 }

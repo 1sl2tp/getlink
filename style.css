@@ -13815,3 +13815,114 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     display:none;
   }
 }
+
+
+/* Scroll ownership v49 — controls stay fixed; only data regions scroll */
+@media(min-width:640px){
+  .user-work-desktop .user-work-top{
+    flex:0 0 auto;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    white-space:nowrap;
+  }
+  .user-work-desktop .user-work-search{
+    min-width:0;
+  }
+  .user-work-desktop .user-work-jump{
+    flex:0 0 auto;
+    min-width:198px;
+    overflow:hidden;
+  }
+
+  .user-work-desktop .user-work-section{
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .user-work-desktop .user-work-section-head{
+    position:relative;
+    z-index:6;
+    flex:0 0 auto;
+    margin:0 0 6px;
+    padding:0;
+    background:#fff;
+  }
+
+  .user-work-desktop .user-work-market-grid{
+    flex:1 1 auto;
+    min-height:0;
+    align-content:start;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior-y:contain;
+    scrollbar-width:thin;
+  }
+
+  .user-work-desktop .user-work-order-wrap{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:auto;
+    overscroll-behavior:contain;
+  }
+  .user-work-desktop .user-work-order-head{
+    position:sticky;
+    top:0;
+    z-index:7;
+    background:#fbfcfd;
+    box-shadow:0 1px 0 #e7ebef;
+  }
+  .user-work-desktop .user-work-order-foot{
+    position:sticky;
+    bottom:0;
+    z-index:7;
+    background:#fbfcfd;
+    box-shadow:0 -1px 0 #e7ebef;
+  }
+}
+
+/* Mobile/compact: search + Tạp hóa/Siêu thị are permanently one row.
+   Header, categories and order bar are fixed; product results own vertical scroll. */
+@media(max-width:639px){
+  .mobile-user-toolbar{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    align-items:center!important;
+  }
+  .mobile-user-search{
+    grid-column:1!important;
+    grid-row:1!important;
+    min-width:0!important;
+  }
+  .mobile-user-source-level.parent{
+    grid-column:2!important;
+    grid-row:1!important;
+    flex-wrap:nowrap!important;
+    white-space:nowrap!important;
+  }
+  .mobile-user-source-level.child{
+    grid-column:1/-1!important;
+    grid-row:2!important;
+    flex-wrap:nowrap!important;
+  }
+  .mobile-user-results{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    scrollbar-width:none!important;
+  }
+  .mobile-user-results::-webkit-scrollbar{
+    display:none!important;
+    width:0!important;
+    height:0!important;
+  }
+}
+
+@media(max-width:340px){
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    min-width:50px!important;
+    padding-left:5px!important;
+    padding-right:5px!important;
+    font-size:10px!important;
+  }
+}

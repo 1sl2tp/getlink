@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-official-source-v42">
+  <link rel="stylesheet" href="style.css?v=20260909-embedded-shell-v43">
 </head>
 <body>
 <main class="wrap">
@@ -18,11 +18,6 @@
       <span id="roleBadge" class="role-badge">Khách</span>
       <button id="roleAdminButton" class="role-admin-button" type="button">Admin</button>
     </div>
-    <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
-      <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
-      <strong>Danh mục</strong>
-      <span id="mobileCategoryCurrent">Tất cả</span>
-    </button>
   </header>
 
   <section class="card import-card" id="importCard" hidden>
@@ -181,6 +176,19 @@
         </div>
 
         <div class="catalog-controls purchase-mode-row" aria-label="Bộ lọc sản phẩm">
+          <div class="mobile-filter-meta">
+            <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
+      <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      <strong>Danh mục</strong>
+      <span id="mobileCategoryCurrent">Tất cả</span>
+    </button>
+            <button id="mobileAdminShortcut" class="mobile-admin-shortcut" type="button" aria-label="Admin" title="Admin">
+              <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>
+                <path d="M4.9 9.5 3.5 8l2-3.5 2 .7a8.7 8.7 0 0 1 2.2-1.3L10 2h4l.3 1.9a8.7 8.7 0 0 1 2.2 1.3l2-.7 2 3.5-1.4 1.5c.1.5.2 1 .2 1.5s-.1 1-.2 1.5l1.4 1.5-2 3.5-2-.7a8.7 8.7 0 0 1-2.2 1.3L14 22h-4l-.3-1.9a8.7 8.7 0 0 1-2.2-1.3l-2 .7-2-3.5 1.4-1.5A7.4 7.4 0 0 1 4.7 12c0-.5.1-1 .2-1.5Z"/>
+              </svg>
+            </button>
+          </div>
           <div class="filter-block filter-block-pack">
             <span class="filter-label">Quy cách:</span>
             <div id="packTabs" class="pack-tabs catalog-pack-tabs" aria-label="Chọn giá thùng hoặc giá lẻ"></div>
@@ -195,6 +203,12 @@
           <div class="catalog-search">
             <input id="librarySearch" autocomplete="off" placeholder="Tìm sản phẩm, hãng, quy cách...">
           </div>
+          <button id="mobileFilterToggle" class="mobile-filter-toggle" type="button" aria-expanded="false" aria-controls="packTabs sourceTabsInline" title="Lọc">
+            <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h7M15 17h5"/>
+              <circle cx="16" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="13" cy="17" r="2"/>
+            </svg>
+          </button>
           <div class="view-switch" aria-label="Kiểu hiển thị">
             <button class="view-button active" data-view="grid" type="button" title="Xem ảnh"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/></svg><b>Ảnh</b></button>
             <button class="view-button" data-view="table" type="button" title="Xem bảng"><svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01"/></svg><b>Bảng</b></button>
@@ -447,6 +461,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-official-source-v42"></script>
+<script src="app.js?v=20260909-embedded-shell-v43"></script>
 </body>
 </html>

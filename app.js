@@ -862,7 +862,7 @@ function renderProduct(payload){
     source_name:p.source&&p.source.name,
     canonical_url:p.url||payload.input_url||""
   }).trim();
-  $("#result").classList.remove("source-bhx","source-winmart","source-go");
+  $("#result").classList.remove("source-bhx","source-winmart","source-go","source-mine");
   if(detailSourceClass)$("#result").classList.add(detailSourceClass);
   $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
   $("#group").textContent=displayCategoryLabel(p.group)||"—";
@@ -885,7 +885,8 @@ function renderProduct(payload){
   );
   $("#webPrice").dataset.value=String(currentBhx||"");
   $("#webPrice").dataset.unitValue=String(currentUnit||0);
-  $("#webPrice").textContent=money(currentBhx);
+  const mineOut=p.source&&p.source.key==="mine"&&String(p.promotion&&p.promotion.text||"")==="Đang hết";
+  $("#webPrice").textContent=mineOut?"Đang hết":money(currentBhx);
   $("#webPriceNote").textContent=detailPriceContext(p,cmp,currentBhx,currentUnit);
 
   // "Ưu đãi" is only an extra quantity condition for this exact pack.
@@ -997,6 +998,7 @@ function syncDetailCategoryLabel(url){
 }
 
 function sourceObjectFromRow(row){
+  if(isMineRow(row))return {key:"mine",name:"Tạp hóa",host:"get.taphoa.xyz"};
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
   return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
@@ -1040,6 +1042,7 @@ function payloadFromLibraryRow(row){
     breadcrumbs:[rowRootGroup(row),rowChildGroup(row),row.brand_name||row.branch_name||""].filter(Boolean),
     source_identity:{
       source_product_id:row.source_product_id||"",
+      supplier_source_name:row.supplier_source_name||"",
       source_code:row.source_code||"",
       barcode:row.barcode||"",
       sku:row.sku||"",
@@ -1206,7 +1209,9 @@ function rowOwnPriceParts(row){
     carton:levels.hasCarton?readOwnPrice(row.canonical_url,"carton"):0,
     middle:levels.hasMiddle?readOwnPrice(row.canonical_url,"middle"):0,
     retail:levels.hasLeaf?readOwnPrice(row.canonical_url,"retail"):0,
-    generic:Math.max(0,Number(row&&row.my_price||0))
+    generic:isMineRow(row)
+      ?Math.max(0,Number(row&&row.current_price||row&&row.regular_pack_price||0))
+      :Math.max(0,Number(row&&row.my_price||0))
   };
 }
 
@@ -1419,8 +1424,24 @@ function isGoRow(row){
   }
 }
 
+function isMineRow(row){
+  const raw=searchKey([
+    row&&row.source,
+    row&&row.supplier_source_name
+  ].filter(Boolean).join(" "));
+  if(raw.includes("tap hoa"))return true;
+  try{
+    const u=new URL(String(row&&row.canonical_url||""));
+    return u.hostname.toLowerCase().replace(/^www\./,"")==="get.taphoa.xyz" &&
+      u.pathname.startsWith("/nguon-hang/");
+  }catch{
+    return false;
+  }
+}
+
 function sourceDisplayLabel(row){
   const raw=String(row&&row.source||"").trim();
+  if(isMineRow(row))return "Tạp hóa";
   if(isWinmartRow(row))return "WM";
   if(isGoRow(row))return "GO";
   const key=searchKey(raw);
@@ -1429,6 +1450,7 @@ function sourceDisplayLabel(row){
 }
 
 function sourceDisplayClass(row){
+  if(isMineRow(row))return " source-mine";
   if(isWinmartRow(row))return " source-winmart";
   if(isGoRow(row))return " source-go";
   const key=searchKey(String(row&&row.source||""));
@@ -1533,8 +1555,16 @@ function tableCompactQc(levels){
   return "—";
 }
 
+function supplierAvailabilityText(row){
+  if(!isMineRow(row))return "";
+  if(String(row&&row.supplier_stock_status||"")==="out_of_stock")return "Đang hết";
+  return "";
+}
+
 function tablePrimarySourcePrice(levels,row){
   if(activeSourceFilter==="mine"){
+    const stock=supplierAvailabilityText(row);
+    if(stock)return '<span class="xls-out-of-stock">'+stock+'</span>';
     return xlsWebPrice(rowPrimaryOwnPrice(row),0);
   }
   if(activePackKind==="Lẻ"){
@@ -1629,7 +1659,7 @@ function productCard(row){
         '<span class="xls-compact-only xls-price-compact">'+tablePrimarySourcePrice(levels,row)+'</span>'+
       '</td>'+
       '<td class="xls-num">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
-      '<td class="xls-num">'+xlsWebPrice(levels.leafPrice,levels.promoLeafPrice)+'</td>'+
+      '<td class="xls-num">'+(supplierStock?'<span class="xls-out-of-stock">'+supplierStock+'</span>':xlsWebPrice(levels.leafPrice,levels.promoLeafPrice))+'</td>'+
       '<td>'+
         (levels.hasCarton
           ?'<input class="sheet-my-carton xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="—">'
@@ -1843,6 +1873,7 @@ function gridProductCard(row){
         ?(levels.promoMiddlePrice||levels.middlePrice)
         :(levels.promoLeafPrice||levels.leafPrice)));
   const price=activeSourceFilter==="mine"?rowPrimaryOwnPrice(row):sourcePrice;
+  const supplierStock=supplierAvailabilityText(row);
   const image=String(row.image||"").trim();
   const cartonMeta=rowIsCarton(row)?rowCartonCardMeta(row,price):null;
   const qc=cartonMeta?cartonMeta.pack:rowPrimaryQc(row);
@@ -1869,7 +1900,7 @@ function gridProductCard(row){
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
           '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+'">'+
-            '<strong class="grid-price'+(activeSourceFilter==="mine"?" source-price-mine":(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":"")))+'">'+money(price)+'</strong>'+
+            '<strong class="grid-price'+(activeSourceFilter==="mine"||isMineRow(row)?" source-price-mine":"")+(supplierStock?" is-out-of-stock":"")+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+(supplierStock?supplierStock:money(price))+'</strong>'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
           '</span>'+
         '</div>'+
@@ -2337,6 +2368,7 @@ function renderPackTabs(){
 }
 
 function rowSourceFilterKey(row){
+  if(isMineRow(row))return "mine";
   if(isWinmartRow(row))return "wm";
   if(isGoRow(row))return "go";
   return "bhx";
@@ -2359,7 +2391,7 @@ const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
-  if(source==="mine")return rowHasOwnPrice(row);
+  if(source==="mine")return isMineRow(row)||rowHasOwnPrice(row);
   return rowSourceFilterKey(row)===source;
 }
 
@@ -2466,8 +2498,9 @@ function renderSourceTabs(){
 
   const counts={mine:0,bhx:0,wm:0,go:0};
   for(const row of base){
-    counts[rowSourceFilterKey(row)]++;
-    if(rowHasOwnPrice(row))counts.mine++;
+    const sourceKey=rowSourceFilterKey(row);
+    counts[sourceKey]++;
+    if(sourceKey!=="mine"&&rowHasOwnPrice(row))counts.mine++;
   }
 
   if(!["","mine","bhx","wm","go"].includes(activeSourceFilter)){

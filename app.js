@@ -3990,13 +3990,13 @@ function setupMobileUserAutoLoad(){
     mobileUserAutoLoadObserver.disconnect();
     mobileUserAutoLoadObserver=null;
   }
-  const root=$("#mobileUserWork");
-  const sentinel=$("#mobileUserMore");
-  if(!root||!sentinel||sentinel.hidden||sentinel.dataset.hasMore!=="1")return;
+  const root=$("#mobileUserResults");
+  const target=root&&root.lastElementChild;
+  if(!root||!target||root.dataset.hasMore!=="1")return;
 
   mobileUserAutoLoadObserver=new IntersectionObserver(entries=>{
     const hit=entries.some(entry=>entry.isIntersecting);
-    if(!hit||mobileUserAutoLoadBusy||sentinel.dataset.hasMore!=="1")return;
+    if(!hit||mobileUserAutoLoadBusy||root.dataset.hasMore!=="1")return;
     mobileUserAutoLoadBusy=true;
     mobileUserLimit+=8;
     renderMobileUserWork();
@@ -4006,7 +4006,7 @@ function setupMobileUserAutoLoad(){
     rootMargin:"0px 0px 240px 0px",
     threshold:0.01
   });
-  mobileUserAutoLoadObserver.observe(sentinel);
+  mobileUserAutoLoadObserver.observe(target);
 }
 
 function renderMobileUserWork(){
@@ -4041,17 +4041,14 @@ function renderMobileUserWork(){
       }
       return mobileUserMarketCard(row);
     }).join("");
+    host.dataset.hasMore=hasMore?"1":"0";
+    host.hidden=rows.length===0;
   }
   renderMobileMergePanel();
   const empty=$("#mobileUserEmpty");
   if(empty)empty.hidden=rows.length!==0;
   const more=$("#mobileUserMore");
-  if(more){
-    more.hidden=!hasMore;
-    more.textContent="";
-    more.dataset.hasMore=hasMore?"1":"0";
-    more.removeAttribute("aria-label");
-  }
+  if(more)more.hidden=true;
   setupMobileUserAutoLoad();
   updateUserWorkOrderSummary();
 }

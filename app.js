@@ -3403,17 +3403,25 @@ function userWorkCategoryIcon(name){
 }
 
 
+function userWorkCategoryDisplayLabel(name,scope,compact=false){
+  const raw=String(name||"").trim();
+  if(!compact||scope!=="mine")return raw;
+  const short=raw.replace(/^Hàng\s+/iu,"").trim();
+  return short||raw;
+}
+
 function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
   if(!host)return;
   const categories=userWorkCategories(scope);
+  const compact=attribute==="data-mobile-category";
   host.innerHTML=[
     '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">'+
       '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>'+
       '<span>Tất cả</span></button>',
     ...categories.map(item=>
       '<button class="user-work-category-button '+(item.key===activeKey?"active":"")+'" '+
-      attribute+'="'+escapeAttr(item.key)+'" type="button" aria-pressed="'+(item.key===activeKey?"true":"false")+'">'+
-      userWorkCategoryIcon(item.name)+'<span>'+escapeHtml(item.name)+'</span></button>'
+      attribute+'="'+escapeAttr(item.key)+'" type="button" aria-pressed="'+(item.key===activeKey?"true":"false")+'" title="'+escapeAttr(item.name)+'">'+
+      userWorkCategoryIcon(item.name)+'<span>'+escapeHtml(userWorkCategoryDisplayLabel(item.name,scope,compact))+'</span></button>'
     )
   ].join("");
 }

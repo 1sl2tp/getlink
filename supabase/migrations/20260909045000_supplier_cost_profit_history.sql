@@ -79,6 +79,23 @@ declare
   unit_name text;
 begin
   supplier_cost := new.input_price_vnd;
+
+  -- Transitional compatibility:
+  -- while the legacy sheet still has column C, a changed non-null C updates
+  -- our expected profit. Once C disappears/nulls out, our saved value remains.
+  if tg_op='INSERT' then
+    if new.margin_thousand is not null then
+      new.expected_profit_vnd := round(new.margin_thousand * 1000)::bigint;
+    else
+      new.expected_profit_vnd := coalesce(new.expected_profit_vnd,0);
+    end if;
+  elsif new.margin_thousand is distinct from old.margin_thousand
+    and new.margin_thousand is not null then
+    new.expected_profit_vnd := round(new.margin_thousand * 1000)::bigint;
+  else
+    new.expected_profit_vnd := coalesce(new.expected_profit_vnd,old.expected_profit_vnd,0);
+  end if;
+
   expected_profit := coalesce(new.expected_profit_vnd,0);
   pack_qty := case
     when new.units_per_carton is not null and new.units_per_carton >= 1
@@ -197,7 +214,8 @@ drop trigger if exists getlink_supplier_price_levels_before_write
   on public.getlink_supplier_products;
 create trigger getlink_supplier_price_levels_before_write
 before insert or update of
-  source_key,input_price_vnd,expected_profit_vnd,units_per_carton,retail_unit,updated_at
+  source_key,input_price_vnd,margin_thousand,expected_profit_vnd,
+  units_per_carton,retail_unit,updated_at
 on public.getlink_supplier_products
 for each row
 execute function public.getlink_normalize_supplier_price_levels();

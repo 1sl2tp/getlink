@@ -37,7 +37,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
             r"@media\s*\(min-width\s*:\s*480px\)\s*and\s*\(max-width\s*:\s*639px\)"
             r"[\s\S]*?grid-template-columns\s*:\s*repeat\(2,minmax\(0,1fr\)\)"
         )
-        self.assertRegex(CSS,r"\.mobile-user-mine-card\s*\{[^}]*grid-column\s*:\s*1\s*/\s*-1")
+        self.assertRegex(CSS,r"\.mobile-user-mine-card\s*,\s*\n\s*\.mobile-user-merged-card\.has-own\s*\{[^}]*grid-column\s*:\s*1\s*/\s*-1")
 
     def test_taphoa_is_a_search_source_and_all_is_default(self):
         self.assertIn('const MOBILE_USER_SOURCES=["","mine","bhx","wm","go"]',APP)
@@ -60,17 +60,21 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIsNotNone(market)
         mine_body=mine.group(1)
         market_body=market.group(1)
-        for token in ["mobile-user-product-image","mobile-user-product-copy","mobile-user-product-name","mobile-user-product-qc","mobile-user-product-bottom","mobile-user-product-price","mobile-user-product-source"]:
+        for token in ["mobile-user-product-image","mobile-user-product-copy","mobile-user-product-name","mobile-user-product-qc","mobile-user-product-bottom","mobile-user-product-price"]:
             self.assertIn(token,mine_body)
             self.assertIn(token,market_body)
+        self.assertNotIn(">Tạp hóa<",mine_body)
+        self.assertIn("mobile-user-product-source",market_body)
         self.assertIn("data-work-qty",mine_body)
         self.assertNotIn("data-work-qty",market_body)
 
-    def test_mobile_mine_card_keeps_single_sale_price_label(self):
+    def test_mobile_mine_card_keeps_plain_unlabeled_price(self):
         block=re.search(r"function\s+mobileUserMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         body=block.group(1)
-        self.assertIn("Giá bán",body)
+        self.assertIn("mobile-user-product-price",body)
+        self.assertNotIn("Giá bán",body)
+        self.assertNotIn(">Tạp hóa<",body)
         self.assertNotIn("Giá thùng",body)
         self.assertNotIn("Giá lẻ",body)
 
@@ -93,7 +97,9 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         block=re.search(r"function\s+mobileUserMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         body=block.group(1)
-        self.assertIn("Giá bán",body)
+        self.assertIn("mobile-user-product-price",body)
+        self.assertNotIn("Giá bán",body)
+        self.assertNotIn(">Tạp hóa<",body)
         self.assertIn("data-work-qty",body)
         self.assertNotIn("Giá thùng",body)
         self.assertNotIn("Giá lẻ",body)

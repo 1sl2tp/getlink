@@ -157,6 +157,8 @@ let userWorkMarketLimit=8;
 let userWorkMineLimit=12;
 let userWorkDesktopScope="mine";
 let userWorkDesktopCategoryKey="";
+let userWorkDesktopAutoLoadObserver=null;
+let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["mine","market"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
@@ -4204,6 +4206,45 @@ function saveUserWorkOrderDraft(){
   return selected;
 }
 
+function userWorkDesktopScrollRoot(){
+  if(userWorkDesktopScope==="market")return $("#userWorkMarketGrid");
+  return $("#userWorkMine")?.querySelector(".user-work-order-wrap")||null;
+}
+
+function resetUserWorkDesktopScroll(){
+  const root=userWorkDesktopScrollRoot();
+  if(root)root.scrollTop=0;
+}
+
+function setupUserWorkDesktopAutoLoad(hasMore){
+  if(userWorkDesktopAutoLoadObserver){
+    userWorkDesktopAutoLoadObserver.disconnect();
+    userWorkDesktopAutoLoadObserver=null;
+  }
+  if(!hasMore)return;
+
+  const root=userWorkDesktopScrollRoot();
+  const target=userWorkDesktopScope==="market"
+    ?$("#userWorkMarketGrid")?.lastElementChild
+    :$("#userWorkMineRows")?.lastElementChild;
+  if(!root||!target)return;
+
+  userWorkDesktopAutoLoadObserver=new IntersectionObserver(entries=>{
+    const hit=entries.some(entry=>entry.isIntersecting);
+    if(!hit||userWorkDesktopAutoLoadBusy)return;
+    userWorkDesktopAutoLoadBusy=true;
+    if(userWorkDesktopScope==="market")userWorkMarketLimit+=8;
+    else userWorkMineLimit+=20;
+    renderUserWorkHome();
+    requestAnimationFrame(()=>{userWorkDesktopAutoLoadBusy=false;});
+  },{
+    root,
+    rootMargin:"0px 0px 220px 0px",
+    threshold:0.01
+  });
+  userWorkDesktopAutoLoadObserver.observe(target);
+}
+
 function renderUserWorkHome(){
   const home=$("#userWorkHome");
   if(!home)return;
@@ -4242,24 +4283,20 @@ function renderUserWorkHome(){
   if(marketSection)marketSection.hidden=userWorkDesktopScope!=="market";
   if(mineSection)mineSection.hidden=userWorkDesktopScope!=="mine";
 
+  let hasMore=false;
   if(userWorkDesktopScope==="market"){
-    if(marketHost)marketHost.innerHTML=scoped.slice(0,userWorkMarketLimit).map(userWorkMarketCard).join("");
+    const visible=scoped.slice(0,userWorkMarketLimit);
+    if(marketHost)marketHost.innerHTML=visible.map(userWorkMarketCard).join("");
     if(marketEmpty)marketEmpty.hidden=scoped.length!==0;
-    const marketMore=$("#userWorkMarketMore");
-    if(marketMore){
-      marketMore.hidden=scoped.length<=userWorkMarketLimit;
-      marketMore.textContent=scoped.length>userWorkMarketLimit?"Xem thêm →":"";
-    }
+    hasMore=scoped.length>visible.length;
   }else{
-    if(mineHost)mineHost.innerHTML=scoped.slice(0,userWorkMineLimit).map(userWorkMineRow).join("");
+    const visible=scoped.slice(0,userWorkMineLimit);
+    if(mineHost)mineHost.innerHTML=visible.map(userWorkMineRow).join("");
     if(mineEmpty)mineEmpty.hidden=scoped.length!==0;
-    const mineMore=$("#userWorkMineMore");
-    if(mineMore){
-      mineMore.hidden=scoped.length<=userWorkMineLimit;
-      mineMore.textContent=scoped.length>userWorkMineLimit?"Xem thêm →":"";
-    }
+    hasMore=scoped.length>visible.length;
   }
 
+  setupUserWorkDesktopAutoLoad(hasMore);
   updateUserWorkOrderSummary();
 }
 
@@ -4636,12 +4673,14 @@ if(userWorkSearch){
     userWorkMarketLimit=8;
     userWorkMineLimit=12;
     renderUserWorkHome();
+    resetUserWorkDesktopScroll();
   });
   userWorkSearch.addEventListener("compositionend",e=>{
     libraryQuery=String(e.target.value||"").trim();
     userWorkMarketLimit=8;
     userWorkMineLimit=12;
     renderUserWorkHome();
+    resetUserWorkDesktopScroll();
   });
 }
 
@@ -5472,6 +5511,7 @@ if(userWorkHome){
       userWorkMarketLimit=8;
       userWorkMineLimit=12;
       renderUserWorkHome();
+      resetUserWorkDesktopScroll();
       return;
     }
 
@@ -5481,19 +5521,7 @@ if(userWorkHome){
       userWorkMarketLimit=8;
       userWorkMineLimit=12;
       renderUserWorkHome();
-      const scroller=userWorkDesktopScope==="market"?$("#userWorkMarketGrid"):$("#userWorkMineRows");
-      if(scroller)scroller.scrollTop=0;
-      return;
-    }
-
-    if(e.target.closest("#userWorkMarketMore")){
-      userWorkMarketLimit+=8;
-      renderUserWorkHome();
-      return;
-    }
-    if(e.target.closest("#userWorkMineMore")){
-      userWorkMineLimit+=20;
-      renderUserWorkHome();
+      resetUserWorkDesktopScroll();
       return;
     }
 

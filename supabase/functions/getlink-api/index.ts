@@ -2779,110 +2779,166 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
   let syncRunId:number|null=null;
   try{
     const {data:run,error:runError}=await sb.from("getlink_supplier_sync_runs")
-      .insert({
-        source_key:sourceKey,
-        source_name:sourceName,
-        status:"running",
-        started_at:startedAt
-      })
-      .select("id")
-      .single();
+      .insert({source_key:sourceKey,source_name:sourceName,status:"running",started_at:startedAt})
+      .select("id").single();
     if(runError)throw runError;
     syncRunId=Number(run?.id||0)||null;
 
     const csv=await fetchSupplierSheetCsv(source);
     const rows=parseCsvRows(csv);
-    if(rows.length<2)throw new Error("management_sheet_empty");
-
+    if(rows.length<2)throw new Error("supplier_sheet_empty");
     const header=supplierSheetHeaderIndex(rows[0]);
-    for(const required of [
-      "Tên sản phẩm",
-      "Giá nhập NCC",
-      "Trạng thái",
-      "Giá nhập theo",
-      "Lãi áp dụng",
-      "QC / thùng",
-      "Đơn vị lẻ",
-      "Mã SP"
-    ]){
-      if(!header.has(plain(required))){
-        throw new Error("management_sheet_missing_column:"+required);
-      }
+
+    if(!header.has(plain("Tên sản phẩm"))||!header.has(plain("Giá nhập NCC"))){
+      throw new Error("supplier_sheet_missing_name_or_price");
     }
 
-    const existing=await fetchAll(
-      "getlink_supplier_products",
-      "*",
-      (q:any)=>q.eq("source_key",sourceKey)
-    );
-    const existingByCode=new Map(
-      existing.map((x:any)=>[clean(x.product_code).toUpperCase(),x])
-    );
+    const isManagement=
+      header.has(plain("Mã SP"))&&
+      header.has(plain("Trạng thái"))&&
+      header.has(plain("Giá nhập theo"))&&
+      header.has(plain("Lãi áp dụng"));
+
+    const existing=await fetchAll("getlink_supplier_products","*",(q:any)=>q.eq("source_key",sourceKey));
+    const existingByCode=new Map(existing.map((x:any)=>[clean(x.product_code).toUpperCase(),x]));
+    const existingByName=new Map<string,any[]>();
+    const existingByRow=new Map<number,any>();
+    for(const x of existing){
+      const key=supplierIdentityName(x.product_name);
+      if(key){
+        if(!existingByName.has(key))existingByName.set(key,[]);
+        existingByName.get(key)!.push(x);
+      }
+      existingByRow.set(Number(x.source_row)||0,x);
+    }
 
     const prefix=supplierCodePrefix(sourceKey);
+    let maxCode=existing.reduce(
+      (m:number,x:any)=>Math.max(m,supplierCodeNumber(x.product_code,prefix)),0
+    );
+    const codeIndex=header.get(plain("Mã SP"));
     const seen=new Set<string>();
     const incoming:any[]=[];
     let changedRows=0;
     let insertedRows=0;
 
+    const incomingNames=new Set<string>();
+    if(!isManagement){
+      for(let i=1;i<rows.length;i++){
+        const name=titleCaseFirst(supplierCell(rows[i],header,"Tên sản phẩm"));
+        const key=supplierIdentityName(name);
+        if(key)incomingNames.add(key);
+      }
+    }
+
     for(let i=1;i<rows.length;i++){
       const row=rows[i];
       const sourceRow=i+1;
-
-      const code=supplierCell(row,header,"Mã SP").toUpperCase();
       const name=titleCaseFirst(supplierCell(row,header,"Tên sản phẩm"));
-
-      // Dòng dự trữ chỉ có Mã SP nhưng chưa có Tên: bỏ qua, không tạo sản phẩm.
       if(!name)continue;
-      if(!code)throw new Error("management_sheet_missing_product_code_row_"+sourceRow);
-      if(!code.startsWith(prefix)){
-        throw new Error("management_sheet_bad_product_code_row_"+sourceRow+":"+code);
+
+      const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
+      let old:any=null;
+      let code="";
+
+      if(isManagement){
+        code=supplierCell(row,header,"Mã SP").toUpperCase();
+        if(!code)throw new Error("management_sheet_missing_product_code_row_"+sourceRow);
+        if(!code.startsWith(prefix))throw new Error("management_sheet_bad_product_code_row_"+sourceRow+":"+code);
+        if(seen.has(code))throw new Error("management_sheet_duplicate_product_code:"+code);
+        old=existingByCode.get(code)||null;
+      }else{
+        if(codeIndex!==undefined){
+          const hinted=clean(row[codeIndex]).toUpperCase();
+          if(hinted&&hinted.startsWith(prefix)&&!seen.has(hinted)){
+            old=existingByCode.get(hinted)||null;
+            code=hinted;
+          }
+        }
+
+        const nameKey=supplierIdentityName(name);
+        if(!old&&nameKey){
+          old=(existingByName.get(nameKey)||[])
+            .find((x:any)=>!seen.has(clean(x.product_code).toUpperCase()))||null;
+          if(old)code=clean(old.product_code).toUpperCase();
+        }
+
+        if(!old){
+          const rowOld=existingByRow.get(sourceRow);
+          const rowOldCode=clean(rowOld?.product_code).toUpperCase();
+          const rowOldName=supplierIdentityName(rowOld?.product_name);
+          if(rowOld&&rowOldCode&&!seen.has(rowOldCode)&&rowOldName&&!incomingNames.has(rowOldName)){
+            old=rowOld;
+            code=rowOldCode;
+          }
+        }
+
+        if(!code){
+          do{
+            maxCode++;
+            code=prefix+String(maxCode).padStart(6,"0");
+          }while(existingByCode.has(code)||seen.has(code));
+          insertedRows++;
+        }
       }
-      if(seen.has(code))throw new Error("management_sheet_duplicate_product_code:"+code);
+
       seen.add(code);
 
-      const old=existingByCode.get(code);
-      const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
-      const rawStatus=supplierCell(row,header,"Trạng thái");
-      const rawBasis=supplierCell(row,header,"Giá nhập theo");
-      const appliedProfit=sheetNumber(supplierCell(row,header,"Lãi áp dụng"));
-      const appliedPercent=sheetPercent(supplierCell(row,header,"% lãi áp dụng"));
-      const units=sheetNumber(supplierCell(row,header,"QC / thùng"));
-      const rawRetailUnit=supplierCell(row,header,"Đơn vị lẻ");
-
-      const basis=plain(rawBasis)==="le"?"retail":"carton";
-      const inputVnd=input===null?null:Math.round(input*1000);
-      const appliedProfitVnd=appliedProfit===null
-        ?0
-        :Math.round(appliedProfit*1000);
-
-      const statusPlain=plain(rawStatus);
-      const isActive=statusPlain!=="ngung dung";
-
+      let basis="carton";
+      let appliedPercent:any=null;
+      let appliedProfitVnd=0;
+      let units:any=null;
+      let retailUnit="";
       let stockStatus="available";
       let stockLabel="";
-      if(statusPlain==="dang het"){
-        stockStatus="out_of_stock";
-        stockLabel="Đang hết";
-      }else if(
-        statusPlain==="chua co gia"||
-        statusPlain==="loi du lieu"||
-        inputVnd===null
-      ){
-        stockStatus="no_price";
-        stockLabel=statusPlain==="loi du lieu"?"Lỗi dữ liệu":"Chưa có giá";
-      }
-      if(!isActive){
-        stockStatus="no_price";
-        stockLabel="Ngừng dùng";
+      let isActive=true;
+
+      if(isManagement){
+        const rawStatus=supplierCell(row,header,"Trạng thái");
+        const rawBasis=supplierCell(row,header,"Giá nhập theo");
+        const appliedProfit=sheetNumber(supplierCell(row,header,"Lãi áp dụng"));
+        appliedPercent=sheetPercent(supplierCell(row,header,"% lãi áp dụng"));
+        units=sheetNumber(supplierCell(row,header,"QC / thùng"));
+        const rawRetailUnit=supplierCell(row,header,"Đơn vị lẻ");
+
+        basis=plain(rawBasis)==="le"?"retail":"carton";
+        appliedProfitVnd=appliedProfit===null?0:Math.round(appliedProfit*1000);
+        retailUnit=clean(rawRetailUnit||old?.retail_unit||(sourceKey==="thuoc-la"?"cây":""));
+
+        const statusPlain=plain(rawStatus);
+        isActive=statusPlain!=="ngung dung";
+        if(statusPlain==="dang het"){
+          stockStatus="out_of_stock";
+          stockLabel="Đang hết";
+        }else if(statusPlain==="chua co gia"||statusPlain==="loi du lieu"||input===null){
+          stockStatus="no_price";
+          stockLabel=statusPlain==="loi du lieu"?"Lỗi dữ liệu":"Chưa có giá";
+        }
+        if(!isActive){
+          stockStatus="no_price";
+          stockLabel="Ngừng dùng";
+        }
+      }else{
+        basis=clean(old?.input_price_basis)==="retail"?"retail":
+          (clean(old?.input_price_basis)==="carton"?"carton":supplierDefaultBasis(sourceKey));
+        appliedPercent=old?.expected_profit_percent===undefined?null:old?.expected_profit_percent;
+        appliedProfitVnd=old?.applied_profit_vnd===null||old?.applied_profit_vnd===undefined
+          ?0:Number(old.applied_profit_vnd)||0;
+        units=old?.units_per_carton===null||old?.units_per_carton===undefined
+          ?null:Number(old.units_per_carton);
+        retailUnit=clean(old?.retail_unit||(sourceKey==="thuoc-la"?"cây":""));
+        if(input===null){
+          if(clean(old?.stock_status)==="out_of_stock"){
+            stockStatus="out_of_stock";
+            stockLabel="Đang hết";
+          }else{
+            stockStatus="no_price";
+            stockLabel="Chưa có giá";
+          }
+        }
       }
 
-      const retailUnit=clean(
-        rawRetailUnit||
-        old?.retail_unit||
-        (sourceKey==="thuoc-la"?"cây":"")
-      );
-
+      const inputVnd=input===null?null:Math.round(input*1000);
       const canonicalUrl="https://get.taphoa.xyz/nguon-hang/"+sourceKey+"/"+code;
       const rowPayload={
         product_code:code,
@@ -2905,26 +2961,14 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         updated_at:new Date().toISOString()
       };
 
-      if(!old){
-        insertedRows++;
-      }else{
+      if(!old&&isManagement)insertedRows++;
+      if(old){
         const comparable=[
-          "source_row",
-          "product_name",
-          "input_price_vnd",
-          "input_price_basis",
-          "expected_profit_percent",
-          "applied_profit_vnd",
-          "pricing_profit_mode",
-          "units_per_carton",
-          "retail_unit",
-          "stock_status",
-          "stock_label",
-          "is_active"
+          "source_row","product_name","input_price_vnd","input_price_basis",
+          "expected_profit_percent","applied_profit_vnd","pricing_profit_mode",
+          "units_per_carton","retail_unit","stock_status","stock_label","is_active"
         ];
-        if(comparable.some(key=>
-          String(old?.[key]??"")!==String((rowPayload as any)[key]??"")
-        )){
+        if(comparable.some(key=>String(old?.[key]??"")!==String((rowPayload as any)[key]??""))){
           changedRows++;
         }
       }
@@ -2934,7 +2978,7 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
 
     const activeExisting=existing.filter((x:any)=>Boolean(x.is_active));
     if(activeExisting.length>=20&&incoming.length<Math.floor(activeExisting.length*0.5)){
-      throw new Error("management_sheet_row_count_guard:"+incoming.length+"/"+activeExisting.length);
+      throw new Error("supplier_sheet_row_count_guard:"+incoming.length+"/"+activeExisting.length);
     }
 
     for(let i=0;i<incoming.length;i+=100){
@@ -2943,7 +2987,7 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       if(error)throw error;
     }
 
-    const incomingCodes=new Set(incoming.map(x=>x.product_code));
+    const incomingCodes=new Set(incoming.map(x=>clean(x.product_code).toUpperCase()));
     const missingActive=activeExisting
       .map((x:any)=>clean(x.product_code).toUpperCase())
       .filter(code=>code&&!incomingCodes.has(code));
@@ -2957,8 +3001,7 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
           stock_status:"no_price",
           stock_label:"Ngừng dùng",
           updated_at:new Date().toISOString()
-        })
-        .in("product_code",batch);
+        }).in("product_code",batch);
       if(error)throw error;
     }
 
@@ -2976,34 +3019,22 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
     }
 
     return {
-      source_key:sourceKey,
-      source_name:sourceName,
-      status:"success",
+      source_key:sourceKey,source_name:sourceName,status:"success",
       fetched_rows:Math.max(0,rows.length-1),
       active_rows:incoming.filter(x=>x.is_active).length,
-      inserted_rows:insertedRows,
-      changed_rows:changedRows,
+      inserted_rows:insertedRows,changed_rows:changedRows,
       inactive_rows:missingActive.length+incoming.filter(x=>!x.is_active).length
     };
   }catch(e){
     const detail=errorText(e).slice(0,1200);
     if(syncRunId){
       await sb.from("getlink_supplier_sync_runs").update({
-        status:"error",
-        error:detail,
-        finished_at:new Date().toISOString()
+        status:"error",error:detail,finished_at:new Date().toISOString()
       }).eq("id",syncRunId);
     }
     return {
-      source_key:sourceKey,
-      source_name:sourceName,
-      status:"error",
-      fetched_rows:0,
-      active_rows:0,
-      inserted_rows:0,
-      changed_rows:0,
-      inactive_rows:0,
-      error:detail
+      source_key:sourceKey,source_name:sourceName,status:"error",
+      fetched_rows:0,active_rows:0,inserted_rows:0,changed_rows:0,inactive_rows:0,error:detail
     };
   }
 }

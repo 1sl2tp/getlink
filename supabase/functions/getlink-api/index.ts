@@ -2005,12 +2005,8 @@ async function libraryRows(includeHidden=true){
     const appliedProfit=s.applied_profit_vnd===null||s.applied_profit_vnd===undefined
       ?null
       :Number(s.applied_profit_vnd);
-    const pricingProfitMode=clean(s.pricing_profit_mode)==="applied"&&appliedProfit!==null
-      ?"applied"
-      :"expected";
-    const selectedProfit=pricingProfitMode==="applied"
-      ?Number(appliedProfit||0)
-      :expectedProfit;
+    const pricingProfitMode="applied";
+    const selectedProfit=Number(appliedProfit||0);
     const sellPrice=Number(s.display_price_vnd||0)||
       (supplierCost?Math.round(supplierCost+selectedProfit):null);
     const unitsPerCarton=Math.max(0,Number(s.units_per_carton||0)||0);
@@ -2721,6 +2717,7 @@ function supplierCodePrefix(sourceKey:string):string{
   return clean(sourceKey).toUpperCase().replace(/[^A-Z0-9]/g,"")+"-";
 }
 
+
 async function fetchSupplierSheetCsv(source:any):Promise<string>{
   const spreadsheetId=clean(source.spreadsheet_id);
   const sheetName=clean(source.sheet_name||"1");
@@ -2740,31 +2737,39 @@ async function fetchSupplierSheetCsv(source:any):Promise<string>{
       const res=await fetch(target,{
         method:"GET",
         redirect:"follow",
-        headers:{"user-agent":"GETLINK-Supplier-Sync/1.0"}
+        headers:{"user-agent":"GETLINK-Supplier-Sync/2.0"}
       });
       const body=await res.text();
-      if(!res.ok){
-        lastError="http_"+res.status;
-        continue;
-      }
+      if(!res.ok){ lastError="http_"+res.status; continue; }
       const head=plain(body.slice(0,500));
       if(head.includes("<!doctype html")||head.includes("sign in")){
-        lastError="sheet_not_public";
-        continue;
+        lastError="sheet_not_public"; continue;
       }
       const preview=parseCsvRows(body);
       const first=Array.isArray(preview[0])?preview[0]:[];
       const header=supplierSheetHeaderIndex(first);
-      if(!header.has("ten san pham")||!header.has("ma sp")){
-        lastError="sheet_header_missing";
-        continue;
+      if(!header.has("ten san pham")||!header.has("gia nhap ncc")){
+        lastError="sheet_header_missing_name_or_price"; continue;
       }
       return body;
-    }catch(e){
-      lastError=errorText(e);
-    }
+    }catch(e){ lastError=errorText(e); }
   }
   throw new Error("supplier_sheet_fetch_failed:"+lastError);
+}
+
+function supplierIdentityName(value:unknown):string{
+  return plain(value).replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+}
+
+function supplierCodeNumber(code:unknown,prefix:string):number{
+  const s=clean(code).toUpperCase();
+  if(!s.startsWith(prefix))return 0;
+  const tail=s.slice(prefix.length);
+  return /^\d+$/.test(tail)?Number(tail)||0:0;
+}
+
+function supplierDefaultBasis(sourceKey:string):"retail"|"carton"{
+  return sourceKey==="thuoc-la"?"retail":"carton";
 }
 
 async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary>{
@@ -2787,13 +2792,22 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
 
     const csv=await fetchSupplierSheetCsv(source);
     const rows=parseCsvRows(csv);
-    if(rows.length<2)throw new Error("supplier_sheet_empty");
+    if(rows.length<2)throw new Error("management_sheet_empty");
+
     const header=supplierSheetHeaderIndex(rows[0]);
     for(const required of [
-      "Tên sản phẩm","Giá nhập NCC","Trạng thái","Giá nhập theo",
-      "% lãi kỳ vọng","Lãi áp dụng","Tính giá theo","Mã SP"
+      "Tên sản phẩm",
+      "Giá nhập NCC",
+      "Trạng thái",
+      "Giá nhập theo",
+      "Lãi áp dụng",
+      "QC / thùng",
+      "Đơn vị lẻ",
+      "Mã SP"
     ]){
-      if(!header.has(plain(required)))throw new Error("supplier_sheet_missing_column:"+required);
+      if(!header.has(plain(required))){
+        throw new Error("management_sheet_missing_column:"+required);
+      }
     }
 
     const existing=await fetchAll(
@@ -2801,7 +2815,10 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       "*",
       (q:any)=>q.eq("source_key",sourceKey)
     );
-    const existingByCode=new Map(existing.map((x:any)=>[clean(x.product_code),x]));
+    const existingByCode=new Map(
+      existing.map((x:any)=>[clean(x.product_code).toUpperCase(),x])
+    );
+
     const prefix=supplierCodePrefix(sourceKey);
     const seen=new Set<string>();
     const incoming:any[]=[];
@@ -2811,45 +2828,47 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
     for(let i=1;i<rows.length;i++){
       const row=rows[i];
       const sourceRow=i+1;
+
       const code=supplierCell(row,header,"Mã SP").toUpperCase();
       const name=titleCaseFirst(supplierCell(row,header,"Tên sản phẩm"));
-      if(!code&&!name)continue;
-      if(!code)throw new Error("supplier_sheet_missing_product_code_row_"+sourceRow);
-      if(!code.startsWith(prefix))throw new Error("supplier_sheet_bad_product_code_row_"+sourceRow+":"+code);
-      if(seen.has(code))throw new Error("supplier_sheet_duplicate_product_code:"+code);
-      seen.add(code);
-      if(!name)continue; // reserved code, not a product yet
 
+      // Dòng dự trữ chỉ có Mã SP nhưng chưa có Tên: bỏ qua, không tạo sản phẩm.
+      if(!name)continue;
+      if(!code)throw new Error("management_sheet_missing_product_code_row_"+sourceRow);
+      if(!code.startsWith(prefix)){
+        throw new Error("management_sheet_bad_product_code_row_"+sourceRow+":"+code);
+      }
+      if(seen.has(code))throw new Error("management_sheet_duplicate_product_code:"+code);
+      seen.add(code);
+
+      const old=existingByCode.get(code);
+      const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
       const rawStatus=supplierCell(row,header,"Trạng thái");
       const rawBasis=supplierCell(row,header,"Giá nhập theo");
-      const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
-      const expectedPercent=sheetPercent(supplierCell(row,header,"% lãi kỳ vọng"));
       const appliedProfit=sheetNumber(supplierCell(row,header,"Lãi áp dụng"));
-      const rawProfitMode=supplierCell(row,header,"Tính giá theo");
+      const appliedPercent=sheetPercent(supplierCell(row,header,"% lãi áp dụng"));
       const units=sheetNumber(supplierCell(row,header,"QC / thùng"));
       const rawRetailUnit=supplierCell(row,header,"Đơn vị lẻ");
+
       const basis=plain(rawBasis)==="le"?"retail":"carton";
-      const profitMode=(plain(rawProfitMode)==="lai ap dung"&&appliedProfit!==null)
-        ?"applied"
-        :"expected";
-      const expectedProfitRaw=(input!==null&&expectedPercent!==null)
-        ?input*expectedPercent/100
-        :0;
-      const expectedProfit=Math.round(expectedProfitRaw);
-      const selectedProfit=profitMode==="applied"
-        ?Number(appliedProfit||0)
-        :expectedProfit;
-      const retailUnit=(sourceKey==="thuoc-la"&&basis==="retail"&&!rawRetailUnit)
-        ?"cây"
-        :rawRetailUnit;
+      const inputVnd=input===null?null:Math.round(input*1000);
+      const appliedProfitVnd=appliedProfit===null
+        ?0
+        :Math.round(appliedProfit*1000);
+
       const statusPlain=plain(rawStatus);
       const isActive=statusPlain!=="ngung dung";
+
       let stockStatus="available";
       let stockLabel="";
       if(statusPlain==="dang het"){
         stockStatus="out_of_stock";
         stockLabel="Đang hết";
-      }else if(statusPlain==="chua co gia"||statusPlain==="loi du lieu"||!input){
+      }else if(
+        statusPlain==="chua co gia"||
+        statusPlain==="loi du lieu"||
+        inputVnd===null
+      ){
         stockStatus="no_price";
         stockLabel=statusPlain==="loi du lieu"?"Lỗi dữ liệu":"Chưa có giá";
       }
@@ -2858,10 +2877,11 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         stockLabel="Ngừng dùng";
       }
 
-      const old=existingByCode.get(code);
-      const displayPrice=input===null
-        ?null
-        :Math.round((input+selectedProfit)*1000);
+      const retailUnit=clean(
+        rawRetailUnit||
+        old?.retail_unit||
+        (sourceKey==="thuoc-la"?"cây":"")
+      );
 
       const canonicalUrl="https://get.taphoa.xyz/nguon-hang/"+sourceKey+"/"+code;
       const rowPayload={
@@ -2869,14 +2889,11 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         source_key:sourceKey,
         source_row:sourceRow,
         product_name:name,
-        input_price_vnd:input===null?null:Math.round(input*1000),
+        input_price_vnd:inputVnd,
         input_price_basis:basis,
-        expected_profit_percent:expectedPercent,
-        expected_profit_vnd:Math.round(expectedProfit*1000),
-        applied_profit_vnd:appliedProfit===null?null:Math.round(appliedProfit*1000),
-        pricing_profit_mode:profitMode,
-        margin_thousand:expectedProfit,
-        display_price_vnd:displayPrice,
+        expected_profit_percent:appliedPercent,
+        applied_profit_vnd:appliedProfitVnd,
+        pricing_profit_mode:"applied",
         units_per_carton:units&&units>=1?units:null,
         retail_unit:retailUnit,
         stock_status:stockStatus,
@@ -2888,24 +2905,36 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         updated_at:new Date().toISOString()
       };
 
-      if(!old)insertedRows++;
-      else{
+      if(!old){
+        insertedRows++;
+      }else{
         const comparable=[
-          "source_row","product_name","input_price_vnd","input_price_basis",
-          "expected_profit_percent","expected_profit_vnd","applied_profit_vnd",
-          "pricing_profit_mode","display_price_vnd","units_per_carton",
-          "retail_unit","stock_status","stock_label","is_active"
+          "source_row",
+          "product_name",
+          "input_price_vnd",
+          "input_price_basis",
+          "expected_profit_percent",
+          "applied_profit_vnd",
+          "pricing_profit_mode",
+          "units_per_carton",
+          "retail_unit",
+          "stock_status",
+          "stock_label",
+          "is_active"
         ];
-        if(comparable.some(key=>String(old?.[key]??"")!==String((rowPayload as any)[key]??""))){
+        if(comparable.some(key=>
+          String(old?.[key]??"")!==String((rowPayload as any)[key]??"")
+        )){
           changedRows++;
         }
       }
+
       incoming.push(rowPayload);
     }
 
     const activeExisting=existing.filter((x:any)=>Boolean(x.is_active));
     if(activeExisting.length>=20&&incoming.length<Math.floor(activeExisting.length*0.5)){
-      throw new Error("supplier_sheet_row_count_guard:"+incoming.length+"/"+activeExisting.length);
+      throw new Error("management_sheet_row_count_guard:"+incoming.length+"/"+activeExisting.length);
     }
 
     for(let i=0;i<incoming.length;i+=100){
@@ -2916,8 +2945,9 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
 
     const incomingCodes=new Set(incoming.map(x=>x.product_code));
     const missingActive=activeExisting
-      .map((x:any)=>clean(x.product_code))
+      .map((x:any)=>clean(x.product_code).toUpperCase())
       .filter(code=>code&&!incomingCodes.has(code));
+
     for(let i=0;i<missingActive.length;i+=100){
       const batch=missingActive.slice(i,i+100);
       const {error}=await sb.from("getlink_supplier_products")
@@ -2936,7 +2966,7 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
     if(syncRunId){
       await sb.from("getlink_supplier_sync_runs").update({
         status:"success",
-        fetched_rows:rows.length-1,
+        fetched_rows:Math.max(0,rows.length-1),
         active_rows:incoming.filter(x=>x.is_active).length,
         inserted_rows:insertedRows,
         changed_rows:changedRows,
@@ -2944,11 +2974,12 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         finished_at:finishedAt
       }).eq("id",syncRunId);
     }
+
     return {
       source_key:sourceKey,
       source_name:sourceName,
       status:"success",
-      fetched_rows:rows.length-1,
+      fetched_rows:Math.max(0,rows.length-1),
       active_rows:incoming.filter(x=>x.is_active).length,
       inserted_rows:insertedRows,
       changed_rows:changedRows,

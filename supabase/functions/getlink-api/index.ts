@@ -1956,10 +1956,10 @@ async function libraryRows(includeHidden=true){
     manualMemberByUrl=new Map(manualMembers.map((x:any)=>[x.link_url,x])),
     manualGroupByKey=new Map(manualGroups.map((x:any)=>[x.group_key,x])),
     canonicalProductById=new Map(canonicalProducts.map((x:any)=>[x.id,x])),
-    canonicalMemberByUrl=new Map(canonicalMembers.map((x:any)=>[x.source_url,x]));
+    canonicalMemberByUrl=new Map(canonicalMembers.map((x:any)=>[canonical(clean(x.source_url)),x]));
 
   const canonicalFields=(sourceUrl:string)=>{
-    const member=canonicalMemberByUrl.get(sourceUrl);
+    const member=canonicalMemberByUrl.get(canonical(clean(sourceUrl)));
     const product=member?canonicalProductById.get(member.canonical_product_id):null;
     if(!member||!product)return {
       canonical_product_id:"",

@@ -448,4 +448,16 @@ assert.equal(money(0),"—");
   assert.match(app,/current\.textContent=activeManualGroupName\(\)\|\|"Tất cả"/);
 }
 
+{
+  assert.match(html,/id="openUpdateSettings"/);
+  assert.match(html,/id="updateSettingsGate"/);
+  assert.match(html,/id="updateSettingsPanel"/);
+  assert.match(html,/data-update-scope="all"/);
+  assert.match(html,/data-update-scope="classified_only"/);
+  assert.match(app,/\/api\/update-settings\/unlock/);
+  assert.match(app,/\/api\/update-settings\/run-now/);
+  assert.match(app,/UPDATE_ADMIN_TOKEN_KEY/);
+  assert.match(css,/Protected automatic update settings v12/);
+}
+
 console.log("money and hierarchy UI tests passed");

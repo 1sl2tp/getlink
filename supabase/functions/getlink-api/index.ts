@@ -2503,6 +2503,339 @@ async function processAutoUpdateBatch(allowScheduledCreate=true){
   };
 }
 
+
+type SupplierSheetSyncSummary={
+  source_key:string;
+  source_name:string;
+  status:"success"|"error";
+  fetched_rows:number;
+  active_rows:number;
+  inserted_rows:number;
+  changed_rows:number;
+  inactive_rows:number;
+  error?:string;
+};
+
+function parseCsvRows(text:string):string[][]{
+  const rows:string[][]=[];
+  let row:string[]=[];
+  let cell="";
+  let quoted=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(quoted){
+      if(ch==='"'){
+        if(text[i+1]==='"'){cell+='"';i++;}
+        else quoted=false;
+      }else cell+=ch;
+      continue;
+    }
+    if(ch==='"'){quoted=true;continue;}
+    if(ch===","){row.push(cell);cell="";continue;}
+    if(ch==="\n"){
+      row.push(cell);cell="";
+      if(row.some(x=>clean(x)!==""))rows.push(row);
+      row=[];
+      continue;
+    }
+    if(ch!=="\r")cell+=ch;
+  }
+  row.push(cell);
+  if(row.some(x=>clean(x)!==""))rows.push(row);
+  return rows;
+}
+
+function sheetNumber(value:unknown):number|null{
+  let s=clean(value);
+  if(!s)return null;
+  s=s.replace(/\s+/g,"");
+  if(!/^-?[\d.,]+$/.test(s))return null;
+  if(s.includes(",")){
+    s=s.replace(/\./g,"").replace(",",".");
+  }else if(/^-?\d{1,3}(?:\.\d{3})+$/.test(s)){
+    s=s.replace(/\./g,"");
+  }
+  const n=Number(s);
+  return Number.isFinite(n)?n:null;
+}
+
+function titleCaseFirst(value:unknown):string{
+  const s=clean(value);
+  if(!s)return "";
+  return s.charAt(0).toLocaleUpperCase("vi-VN")+s.slice(1);
+}
+
+function supplierSheetHeaderIndex(header:string[]):Map<string,number>{
+  const map=new Map<string,number>();
+  header.forEach((value,index)=>map.set(plain(value),index));
+  return map;
+}
+
+function supplierCell(row:string[],index:Map<string,number>,name:string):string{
+  const at=index.get(plain(name));
+  return at===undefined?"":clean(row[at]);
+}
+
+function supplierCodePrefix(sourceKey:string):string{
+  if(sourceKey==="hang-u")return "HU-";
+  if(sourceKey==="thuoc-la")return "TL-";
+  if(sourceKey==="sua")return "SUA-";
+  if(sourceKey==="hang-thuong")return "HT-";
+  if(sourceKey==="masan")return "MAS-";
+  return clean(sourceKey).toUpperCase().replace(/[^A-Z0-9]/g,"")+"-";
+}
+
+async function fetchSupplierSheetCsv(source:any):Promise<string>{
+  const spreadsheetId=clean(source.spreadsheet_id);
+  const sheetName=clean(source.sheet_name||"1");
+  const gid=Number(source.sheet_gid||0);
+  if(!spreadsheetId)throw new Error("supplier_sheet_missing_spreadsheet_id");
+  const candidates=[
+    "https://docs.google.com/spreadsheets/d/"+encodeURIComponent(spreadsheetId)+
+      "/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(sheetName),
+    "https://docs.google.com/spreadsheets/d/"+encodeURIComponent(spreadsheetId)+
+      "/export?format=csv&gid="+encodeURIComponent(String(gid))
+  ];
+  let lastError="";
+  for(const target of candidates){
+    try{
+      const res=await fetch(target,{
+        method:"GET",
+        redirect:"follow",
+        headers:{"user-agent":"GETLINK-Supplier-Sync/1.0"}
+      });
+      const body=await res.text();
+      if(!res.ok){
+        lastError="http_"+res.status;
+        continue;
+      }
+      const head=plain(body.slice(0,500));
+      if(head.includes("<!doctype html")||head.includes("sign in")){
+        lastError="sheet_not_public";
+        continue;
+      }
+      if(!head.includes("ten san pham")||!head.includes("ma sp")){
+        lastError="sheet_header_missing";
+        continue;
+      }
+      return body;
+    }catch(e){
+      lastError=errorText(e);
+    }
+  }
+  throw new Error("supplier_sheet_fetch_failed:"+lastError);
+}
+
+async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary>{
+  const sourceKey=clean(source.source_key);
+  const sourceName=clean(source.source_name||sourceKey);
+  const startedAt=new Date().toISOString();
+  let syncRunId:number|null=null;
+  try{
+    const {data:run,error:runError}=await sb.from("getlink_supplier_sync_runs")
+      .insert({
+        source_key:sourceKey,
+        source_name:sourceName,
+        status:"running",
+        started_at:startedAt
+      })
+      .select("id")
+      .single();
+    if(runError)throw runError;
+    syncRunId=Number(run?.id||0)||null;
+
+    const csv=await fetchSupplierSheetCsv(source);
+    const rows=parseCsvRows(csv);
+    if(rows.length<2)throw new Error("supplier_sheet_empty");
+    const header=supplierSheetHeaderIndex(rows[0]);
+    for(const required of ["Tên sản phẩm","Giá nhập NCC","Trạng thái","Giá nhập theo","Mã SP"]){
+      if(!header.has(plain(required)))throw new Error("supplier_sheet_missing_column:"+required);
+    }
+
+    const existing=await fetchAll(
+      "getlink_supplier_products",
+      "*",
+      (q:any)=>q.eq("source_key",sourceKey)
+    );
+    const existingByCode=new Map(existing.map((x:any)=>[clean(x.product_code),x]));
+    const prefix=supplierCodePrefix(sourceKey);
+    const seen=new Set<string>();
+    const incoming:any[]=[];
+    let changedRows=0;
+    let insertedRows=0;
+
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const sourceRow=i+1;
+      const code=supplierCell(row,header,"Mã SP").toUpperCase();
+      const name=titleCaseFirst(supplierCell(row,header,"Tên sản phẩm"));
+      if(!code&&!name)continue;
+      if(!code)throw new Error("supplier_sheet_missing_product_code_row_"+sourceRow);
+      if(!code.startsWith(prefix))throw new Error("supplier_sheet_bad_product_code_row_"+sourceRow+":"+code);
+      if(seen.has(code))throw new Error("supplier_sheet_duplicate_product_code:"+code);
+      seen.add(code);
+      if(!name)continue; // reserved code, not a product yet
+
+      const rawStatus=supplierCell(row,header,"Trạng thái");
+      const rawBasis=supplierCell(row,header,"Giá nhập theo");
+      const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
+      const expected=sheetNumber(supplierCell(row,header,"Lãi kỳ vọng"));
+      const saleCarton=sheetNumber(supplierCell(row,header,"Giá bán thùng"));
+      const saleRetail=sheetNumber(supplierCell(row,header,"Giá bán lẻ"));
+      const units=sheetNumber(supplierCell(row,header,"QC / thùng"));
+      const retailUnit=supplierCell(row,header,"Đơn vị lẻ");
+      const basis=plain(rawBasis)==="le"?"retail":"carton";
+      const statusPlain=plain(rawStatus);
+      const isActive=statusPlain!=="ngung dung";
+      let stockStatus="available";
+      let stockLabel="";
+      if(statusPlain==="dang het"){
+        stockStatus="out_of_stock";
+        stockLabel="Đang hết";
+      }else if(statusPlain==="chua co gia"||statusPlain==="loi du lieu"||!input){
+        stockStatus="no_price";
+        stockLabel=statusPlain==="loi du lieu"?"Lỗi dữ liệu":"Chưa có giá";
+      }
+      if(!isActive){
+        stockStatus="no_price";
+        stockLabel="Ngừng dùng";
+      }
+
+      const old=existingByCode.get(code);
+      let displayPrice:number|null=null;
+      if(basis==="retail"&&saleRetail!==null)displayPrice=Math.round(saleRetail*1000);
+      if(basis==="carton"&&saleCarton!==null)displayPrice=Math.round(saleCarton*1000);
+      if(displayPrice===null&&input!==null&&expected!==null){
+        displayPrice=Math.round((input+expected)*1000);
+      }
+
+      const canonicalUrl="https://get.taphoa.xyz/nguon-hang/"+sourceKey+"/"+code;
+      const rowPayload={
+        product_code:code,
+        source_key:sourceKey,
+        source_row:sourceRow,
+        product_name:name,
+        input_price_vnd:input===null?null:Math.round(input*1000),
+        input_price_basis:basis,
+        expected_profit_vnd:expected===null?0:Math.round(expected*1000),
+        margin_thousand:expected,
+        display_price_vnd:displayPrice,
+        units_per_carton:units&&units>=1?units:null,
+        retail_unit:retailUnit,
+        stock_status:stockStatus,
+        stock_label:stockLabel,
+        canonical_url:canonicalUrl,
+        raw_row:row,
+        is_active:isActive,
+        deleted_at:isActive?null:new Date().toISOString(),
+        updated_at:new Date().toISOString()
+      };
+
+      if(!old)insertedRows++;
+      else{
+        const comparable=[
+          "source_row","product_name","input_price_vnd","input_price_basis",
+          "expected_profit_vnd","display_price_vnd","units_per_carton",
+          "retail_unit","stock_status","stock_label","is_active"
+        ];
+        if(comparable.some(key=>String(old?.[key]??"")!==String((rowPayload as any)[key]??""))){
+          changedRows++;
+        }
+      }
+      incoming.push(rowPayload);
+    }
+
+    const activeExisting=existing.filter((x:any)=>Boolean(x.is_active));
+    if(activeExisting.length>=20&&incoming.length<Math.floor(activeExisting.length*0.5)){
+      throw new Error("supplier_sheet_row_count_guard:"+incoming.length+"/"+activeExisting.length);
+    }
+
+    for(let i=0;i<incoming.length;i+=100){
+      const {error}=await sb.from("getlink_supplier_products")
+        .upsert(incoming.slice(i,i+100),{onConflict:"product_code"});
+      if(error)throw error;
+    }
+
+    const incomingCodes=new Set(incoming.map(x=>x.product_code));
+    const missingActive=activeExisting
+      .map((x:any)=>clean(x.product_code))
+      .filter(code=>code&&!incomingCodes.has(code));
+    for(let i=0;i<missingActive.length;i+=100){
+      const batch=missingActive.slice(i,i+100);
+      const {error}=await sb.from("getlink_supplier_products")
+        .update({
+          is_active:false,
+          deleted_at:new Date().toISOString(),
+          stock_status:"no_price",
+          stock_label:"Ngừng dùng",
+          updated_at:new Date().toISOString()
+        })
+        .in("product_code",batch);
+      if(error)throw error;
+    }
+
+    const finishedAt=new Date().toISOString();
+    if(syncRunId){
+      await sb.from("getlink_supplier_sync_runs").update({
+        status:"success",
+        fetched_rows:rows.length-1,
+        active_rows:incoming.filter(x=>x.is_active).length,
+        inserted_rows:insertedRows,
+        changed_rows:changedRows,
+        inactive_rows:missingActive.length+incoming.filter(x=>!x.is_active).length,
+        finished_at:finishedAt
+      }).eq("id",syncRunId);
+    }
+    return {
+      source_key:sourceKey,
+      source_name:sourceName,
+      status:"success",
+      fetched_rows:rows.length-1,
+      active_rows:incoming.filter(x=>x.is_active).length,
+      inserted_rows:insertedRows,
+      changed_rows:changedRows,
+      inactive_rows:missingActive.length+incoming.filter(x=>!x.is_active).length
+    };
+  }catch(e){
+    const detail=errorText(e).slice(0,1200);
+    if(syncRunId){
+      await sb.from("getlink_supplier_sync_runs").update({
+        status:"error",
+        error:detail,
+        finished_at:new Date().toISOString()
+      }).eq("id",syncRunId);
+    }
+    return {
+      source_key:sourceKey,
+      source_name:sourceName,
+      status:"error",
+      fetched_rows:0,
+      active_rows:0,
+      inserted_rows:0,
+      changed_rows:0,
+      inactive_rows:0,
+      error:detail
+    };
+  }
+}
+
+async function syncSupplierSheets(){
+  const sources=await fetchAll(
+    "getlink_supplier_sources",
+    "*",
+    (q:any)=>q.eq("enabled",true).order("source_key",{ascending:true})
+  );
+  const results:SupplierSheetSyncSummary[]=[];
+  for(const source of sources){
+    results.push(await syncOneSupplierSheet(source));
+  }
+  return {
+    ok:results.every(x=>x.status==="success"),
+    synced_at:new Date().toISOString(),
+    results
+  };
+}
+
 async function cronRequestAuthorized(req:Request):Promise<boolean>{
   const supplied=clean(req.headers.get("x-getlink-cron"));
   if(!supplied)return false;
@@ -2530,6 +2863,15 @@ async function expireStaleJobs():Promise<number>{
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   const url=new URL(req.url), route=routePath(req);
+
+  if(req.method==="POST"&&route==="/api/supplier-sync/worker"){
+    try{
+      if(!(await cronRequestAuthorized(req)))return response(req,{error:"cron_unauthorized"},401);
+      return response(req,await syncSupplierSheets());
+    }catch(e){
+      return response(req,{error:"supplier_sync_worker_failed",detail:errorText(e).slice(0,1500)},500);
+    }
+  }
 
   if(req.method==="POST"&&route==="/api/auto-update/worker"){
     try{

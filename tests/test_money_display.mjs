@@ -262,16 +262,20 @@ assert.equal(money(0),"—");
 }
 
 {
-  assert.match(html,/xls-desktop-only">Thùng<\/span>/);
-  assert.match(html,/<th>Giữa<\/th>/);
-  assert.match(html,/<th>Lẻ<\/th>/);
-  assert.match(html,/Giá nguồn \/ Thùng/);
-  assert.match(html,/Giá nguồn \/ Giữa/);
-  assert.match(html,/Giá nguồn \/ Lẻ/);
-  assert.match(html,/Giá mình \/ Giữa/);
+  assert.match(html,/>Tên sản phẩm<\/th>/);
+  assert.match(html,/>QC thùng<\/th>/);
+  assert.match(html,/>QC giữa<\/th>/);
+  assert.match(html,/>QC lẻ<\/th>/);
+  assert.match(html,/>Giá nguồn thùng<\/th>/);
+  assert.match(html,/>Giá nguồn giữa<\/th>/);
+  assert.match(html,/>Giá nguồn lẻ<\/th>/);
+  assert.match(html,/>Giá bán thùng<\/th>/);
+  assert.match(html,/>Giá bán giữa<\/th>/);
+  assert.match(html,/>Giá bán lẻ<\/th>/);
   assert.match(app,/sheet-my-middle/);
   assert.match(html,/id="tableSourceSort"/);
   assert.match(html,/>Nguồn<\/span>/);
+  assert.match(css,/All spreadsheets v20/);
   assert.match(app,/winmart\.vn/);
 }
 
@@ -487,7 +491,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v7-supplier-spreadsheet-layout"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout"/);
 }
 
 {
@@ -517,7 +521,7 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_retail_packaging/);
   assert.match(app,/function syncSupplierTableMode\(\)/);
   assert.match(css,/Supplier spreadsheet v19/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v7-supplier-spreadsheet-layout"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout"/);
 }
 
 console.log("money and hierarchy UI tests passed");

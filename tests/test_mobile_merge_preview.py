@@ -72,6 +72,18 @@ class MobileMergePreviewContractTest(unittest.TestCase):
         self.assertRegex(EDGE,r'\.delete\(\)\.eq\("canonical_product_id",targetCanonicalId\)')
         self.assertRegex(EDGE,r'\.in\("source_url",removedMemberUrls\)')
 
+    def test_preview_can_move_a_source_from_a_wrong_canonical_group_to_the_own_target(self):
+        button=re.search(r"function\s+mobileMergeSelectButton\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(button)
+        self.assertNotIn("rowId!==targetId",button.group(1))
+        apply=re.search(r"async function\s+applyMobileMergePreview\s*\(\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(apply)
+        self.assertIn("target_url",apply.group(1))
+        self.assertIn("target_url",EDGE)
+        self.assertIn("previousCanonicalIds",EDGE)
+        self.assertIn("orphanCanonicalIds",EDGE)
+        self.assertRegex(EDGE,r'\.delete\(\)\.in\("id",orphanCanonicalIds\)')
+
     def test_supermarket_source_card_stays_original(self):
         block=re.search(r"function\s+mobileUserMarketCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)

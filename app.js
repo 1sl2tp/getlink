@@ -3734,34 +3734,36 @@ function renderMobileUserWork(){
 
   renderMobileUserSourceTabs();
   const rows=mobileUserRows();
-  const groups=mobileUserResultGroups(rows);
   let visible=[];
   let hasMore=false;
 
   if(!mobileUserSource){
-    const mine=groups.filter(group=>group.rows.some(isMineRow));
-    const market=groups.filter(group=>!group.rows.some(isMineRow));
+    const mine=rows.filter(isMineRow);
+    const market=rows.filter(row=>!isMineRow(row));
     visible=[
       ...mine.slice(0,mobileUserLimit),
       ...market.slice(0,mobileUserLimit)
     ];
     hasMore=mine.length>mobileUserLimit||market.length>mobileUserLimit;
   }else{
-    visible=groups.slice(0,mobileUserLimit*2);
-    hasMore=groups.length>visible.length;
+    visible=rows.slice(0,mobileUserLimit*2);
+    hasMore=rows.length>visible.length;
   }
 
   const host=$("#mobileUserResults");
   if(host){
-    host.innerHTML=visible.map(group=>{
-      if(group.canonical)return mobileUserMergedCard(group);
-      const row=group.rows[0];
-      return isMineRow(row)?mobileUserMineCard(row):mobileUserMarketCard(row);
+    host.innerHTML=visible.map(row=>{
+      if(isMineRow(row)){
+        return String(row.canonical_product_id||"").trim()
+          ?mobileUserCanonicalMineCard(row)
+          :mobileUserMineCard(row);
+      }
+      return mobileUserMarketCard(row);
     }).join("");
   }
   renderMobileMergePanel();
   const empty=$("#mobileUserEmpty");
-  if(empty)empty.hidden=groups.length!==0;
+  if(empty)empty.hidden=rows.length!==0;
   const more=$("#mobileUserMore");
   if(more)more.hidden=!hasMore;
   updateUserWorkOrderSummary();

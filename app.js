@@ -4015,8 +4015,7 @@ function mobileUserMarketCard(row){
       '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
       (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
       '<div class="mobile-user-product-bottom">'+
-        (price?'<b class="mobile-user-product-price">'+money(price)+'</b>':'')+
-        workSourceBrandBadge(row,"mobile")+
+        (price?'<b class="mobile-user-product-price source-'+escapeAttr(sourceKey)+'">'+money(price)+'</b>':'')+
       '</div>'+
     '</div>'+
   '</article>';
@@ -4133,8 +4132,7 @@ function userWorkMarketCard(row){
       '<strong class="user-work-market-name">'+escapeHtml(name)+'</strong>'+
       (pack?'<small class="user-work-market-pack">'+escapeHtml(pack)+'</small>':'')+
       '<div class="user-work-market-bottom">'+
-        (price?'<b class="user-work-market-price">'+money(price)+'</b>':'')+
-        workSourceBrandBadge(row,"desktop")+
+        (price?'<b class="user-work-market-price source-'+escapeAttr(sourceClass)+'">'+money(price)+'</b>':'')+
       '</div>'+
     '</div>'+
   '</article>';

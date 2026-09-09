@@ -13524,6 +13524,7 @@ html[data-getlink-embed="1"] body{
   background:transparent!important;
 }
 html[data-getlink-embed="1"] .site-head,
+html[data-getlink-embed="1"] .getlink-work-frame-head,
 html[data-getlink-embed="1"] .quick-browse-dock,
 html[data-getlink-embed="1"] #importCard{
   display:none!important;

@@ -213,6 +213,8 @@ const NEWS_SOURCE_LABELS={
   laodong:"Lao Động"
 };
 const NEWS_CACHE_TTL=3*60*1000;
+const NEWS_BROWSER_CACHE_TTL=20*60*1000;
+const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v2";
 const newsCache=new Map();
 const newsDetailCache=new Map();
 let newsTopic="latest";
@@ -378,6 +380,41 @@ function newsSourceButtons(){
 function newsSourceName(key){
   return NEWS_SOURCE_LABELS[key]||key||"Nguồn tin";
 }
+function readNewsBrowserCache(topic){
+  try{
+    const box=JSON.parse(localStorage.getItem(NEWS_BROWSER_CACHE_KEY)||"{}");
+    const row=box&&box[topic];
+    if(!row||!Array.isArray(row.items))return null;
+    const age=Date.now()-Number(row.at||0);
+    if(age<0||age>NEWS_BROWSER_CACHE_TTL)return null;
+    return {at:Number(row.at||0),items:row.items};
+  }catch{return null;}
+}
+function writeNewsBrowserCache(topic,items){
+  try{
+    const box=JSON.parse(localStorage.getItem(NEWS_BROWSER_CACHE_KEY)||"{}")||{};
+    const compact=(Array.isArray(items)?items:[]).slice(0,50).map(item=>({
+      id:item.id||"",
+      title:item.title||"",
+      summary:String(item.summary||"").slice(0,420),
+      content:"",
+      url:item.url||"",
+      image:item.image||"",
+      images:(item.images||[]).slice(0,3),
+      published_at:item.published_at||"",
+      source_key:item.source_key||"",
+      source_name:item.source_name||"",
+      topic:item.topic||topic,
+      duplicate_count:Number(item.duplicate_count||1),
+      also_sources:[]
+    }));
+    box[topic]={at:Date.now(),items:compact};
+    const keys=Object.keys(box).sort((x,y)=>Number(box[y]?.at||0)-Number(box[x]?.at||0));
+    for(const key of keys.slice(3))delete box[key];
+    localStorage.setItem(NEWS_BROWSER_CACHE_KEY,JSON.stringify(box));
+  }catch{}
+}
+
 function newsVisibleItems(){
   const q=searchKey(newsQuery);
   return newsItems.filter(item=>{
@@ -463,30 +500,43 @@ function applyNewsPayload(data){
 function ensureNewsLoaded(force=false){
   if(!API)return;
   const key=newsTopic;
-  const cached=newsCache.get(key);
-  if(!force&&cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL){
-    const changed=newsItems!==cached.items;
-    newsItems=cached.items||[];
-    if(changed)queueMicrotask(refreshNewsViews);
+  const memory=newsCache.get(key);
+  if(!force&&memory&&Date.now()-Number(memory.at||0)<NEWS_CACHE_TTL){
+    if(newsItems!==memory.items){
+      newsItems=memory.items||[];
+      queueMicrotask(refreshNewsViews);
+    }
     return;
   }
+
+  if(!force&&!newsItems.length){
+    const browser=readNewsBrowserCache(key);
+    if(browser){
+      newsItems=browser.items||[];
+      newsCache.set(key,{at:browser.at,items:newsItems});
+      queueMicrotask(refreshNewsViews);
+      if(Date.now()-browser.at<NEWS_CACHE_TTL)return;
+    }
+  }
+
   if(newsLoading)return;
   newsLoading=true;
   newsError="";
   const seq=++newsRequestSeq;
   refreshNewsViews();
-  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80",{cache:"no-store"})
+  const suffix=force?"&refresh=1":"";
+  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80"+suffix,{cache:force?"no-store":"default"})
     .then(async response=>{
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Không đọc được tin");
       if(seq!==newsRequestSeq||key!==newsTopic)return;
       applyNewsPayload(data);
       newsCache.set(key,{at:Date.now(),items:newsItems});
+      writeNewsBrowserCache(key,newsItems);
     })
     .catch(error=>{
       if(seq!==newsRequestSeq)return;
-      newsItems=[];
-      newsError="Chưa đọc được tin. Thử làm mới.";
+      if(!newsItems.length)newsError="Chưa đọc được tin. Thử làm mới.";
       console.debug("GETLINK news",error);
     })
     .finally(()=>{
@@ -6178,6 +6228,9 @@ window.addEventListener("resize",()=>{
 (async()=>{
   await restoreAppRole();
   await refreshCatalog();
+  setTimeout(()=>{
+    if(API&&!newsItems.length)ensureNewsLoaded(false);
+  },800);
   if(requestId&&API&&appRole==="admin"){
     $("#importCard").hidden=false;
     setGetBusy(true);

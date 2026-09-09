@@ -10367,8 +10367,6 @@ body[data-app-role="admin"] .role-badge{
 /* Customer mode: only public catalog controls and public columns. */
 body[data-app-role="user"] #toggleImport,
 body[data-app-role="user"] #importCard,
-body[data-app-role="user"] .filter-block-source,
-body[data-app-role="user"] .view-switch,
 body[data-app-role="user"] #quickBrowseButton,
 body[data-app-role="user"] #quickBrowseMenu,
 body[data-app-role="user"] .workspace-detail,
@@ -10389,77 +10387,105 @@ body[data-app-role="user"] .catalog-search{
 }
 
 .xls-price-table.user-table-mode{
-  min-width:760px!important;
+  min-width:720px!important;
   table-layout:fixed!important;
 }
 .xls-price-table.user-table-mode #userTableHead th:nth-child(1),
 .xls-price-table.user-table-mode .user-table-row td:nth-child(1){
-  width:34%!important;
-  min-width:240px!important;
+  width:auto!important;
+  min-width:260px!important;
 }
 .xls-price-table.user-table-mode #userTableHead th:nth-child(2),
-.xls-price-table.user-table-mode .user-table-row td:nth-child(2){
-  width:22%!important;
-  min-width:160px!important;
-}
+.xls-price-table.user-table-mode .user-table-row td:nth-child(2),
 .xls-price-table.user-table-mode #userTableHead th:nth-child(3),
 .xls-price-table.user-table-mode .user-table-row td:nth-child(3){
-  width:19%!important;
-  min-width:135px!important;
+  width:118px!important;
+  min-width:118px!important;
+  max-width:118px!important;
+  text-align:right!important;
 }
 .xls-price-table.user-table-mode #userTableHead th:nth-child(4),
 .xls-price-table.user-table-mode .user-table-row td:nth-child(4){
-  width:15%!important;
-  min-width:120px!important;
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  text-align:right!important;
 }
 .xls-price-table.user-table-mode #userTableHead th:nth-child(5),
 .xls-price-table.user-table-mode .user-table-row td:nth-child(5){
-  width:10%!important;
-  min-width:105px!important;
+  width:108px!important;
+  min-width:108px!important;
+  max-width:108px!important;
+  text-align:center!important;
 }
-.user-table-row .user-col-product{
-  font-weight:720;
+.user-col-product{
+  position:relative;
+  padding-right:66px!important;
+}
+.user-product-name{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:760;
   color:#101828;
 }
-.user-col-sale{
-  text-align:right!important;
-}
-.user-sale-level{
-  display:inline-flex;
-  align-items:baseline;
-  gap:5px;
+.user-product-source{
+  position:absolute;
+  right:8px;
+  top:50%;
+  transform:translateY(-50%);
+  max-width:56px;
+  overflow:hidden;
+  text-overflow:ellipsis;
   white-space:nowrap;
-}
-.user-sale-level small{
   color:#667085;
   font-size:8px;
-  font-weight:750;
+  font-weight:800;
 }
-.user-sale-level strong{
+.user-product-source.mine{color:#087a42}
+.user-product-source.bhx{color:#4f7c00}
+.user-product-source.wm{color:#d92d20}
+.user-product-source.go{color:#ea580c}
+
+.user-col-carton-price,
+.user-col-retail-price{
+  line-height:1.05;
+}
+.user-price-main{
+  display:block;
   color:#176b45;
   font-size:10px;
-  font-weight:850;
+  font-weight:880;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
 }
-.user-sale-sep{
-  display:inline-block;
-  margin:0 5px;
-  color:#98a2b3;
-}
-.user-col-pack{
-  color:#475467;
-  font-size:9px;
+.user-price-unit{
+  display:block;
+  margin-top:2px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:#667085;
+  font-size:8px;
+  font-weight:650;
+  white-space:nowrap;
 }
 .user-col-bargain .xls-input{
-  width:100%!important;
-  min-width:0!important;
+  width:78px!important;
+  min-width:78px!important;
+  max-width:78px!important;
+  height:26px!important;
+  padding:0 6px!important;
+  box-sizing:border-box!important;
   text-align:right!important;
+  font-variant-numeric:tabular-nums;
 }
 .user-col-rating{
   text-align:center!important;
 }
 .user-rating{
   display:inline-flex;
-  gap:1px;
+  gap:0;
   white-space:nowrap;
 }
 .user-rating-button{
@@ -10468,7 +10494,7 @@ body[data-app-role="user"] .catalog-search{
   padding:1px;
   background:transparent;
   color:#d0d5dd;
-  font-size:15px;
+  font-size:14px;
   line-height:1;
   cursor:pointer;
 }
@@ -10477,6 +10503,96 @@ body[data-app-role="user"] .catalog-search{
   outline:2px solid #98a2b3;
   outline-offset:1px;
   border-radius:3px;
+}
+
+body[data-app-role="user"] .filter-block-source{
+  display:flex!important;
+}
+body[data-app-role="user"] .view-switch{
+  display:flex!important;
+}
+
+/* Customer image cards keep the same 5 public fields. */
+body[data-app-role="user"] .product-grid{
+  grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important;
+}
+.user-grid-product{
+  cursor:default!important;
+}
+.user-grid-source{
+  margin-bottom:3px;
+  color:#667085;
+  font-size:8px;
+  font-weight:850;
+  text-transform:uppercase;
+  letter-spacing:.02em;
+}
+.user-grid-name{
+  display:-webkit-box!important;
+  min-height:32px;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  font-size:11px!important;
+  font-weight:800!important;
+}
+.user-grid-prices{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  margin-top:7px;
+}
+.user-grid-price-line{
+  min-width:0;
+  padding:6px 7px;
+  border:1px solid #e4e7ec;
+  border-radius:7px;
+  background:#fbfcfd;
+}
+.user-grid-price-line small,
+.user-grid-price-line strong,
+.user-grid-price-line em{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.user-grid-price-line small{
+  color:#667085;
+  font-size:8px;
+  font-weight:750;
+}
+.user-grid-price-line strong{
+  margin-top:1px;
+  color:#176b45;
+  font-size:11px;
+  font-style:normal;
+  font-weight:880;
+  font-variant-numeric:tabular-nums;
+}
+.user-grid-price-line em{
+  margin-top:1px;
+  color:#98a2b3;
+  font-size:7px;
+  font-style:normal;
+}
+.user-grid-actions{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:6px;
+  margin-top:7px;
+}
+.user-grid-bargain{
+  width:76px!important;
+  min-width:76px!important;
+  max-width:76px!important;
+  height:26px!important;
+  padding:0 6px!important;
+  text-align:right!important;
+}
+.user-grid-actions .user-rating-button{
+  font-size:12px;
 }
 
 @media (max-width:760px){
@@ -10490,6 +10606,6 @@ body[data-app-role="user"] .catalog-search{
     display:inline-flex!important;
   }
   .xls-price-table.user-table-mode{
-    min-width:690px!important;
+    min-width:660px!important;
   }
 }

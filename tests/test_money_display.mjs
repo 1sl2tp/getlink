@@ -355,7 +355,7 @@ assert.equal(money(0),"—");
   assert.match(html,/xls-compact-only">Quy cách/);
   assert.match(html,/xls-compact-only">Giá/);
   assert.match(app,/function tableCompactQc\(levels\)/);
-  assert.match(app,/function tablePrimarySourcePrice\(levels\)/);
+  assert.match(app,/function tablePrimarySourcePrice\(levels,row\)/);
   assert.match(app,/function sortTableProducts\(products\)/);
   assert.match(app,/function nextTableSourceFilter\(\)/);
   assert.match(css,/Compact table v2/);

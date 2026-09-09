@@ -465,7 +465,7 @@ assert.equal(money(0),"—");
   assert.match(app,/mine:\{full:"Tạp hóa",short:"Tạp hóa"/);
   assert.match(app,/function rowHasOwnPrice\(row\)/);
   assert.match(app,/function rowMatchesSourceFilter\(row,source\)/);
-  assert.match(app,/if\(source==="mine"\)return rowHasOwnPrice\(row\)/);
+  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)\|\|rowHasOwnPrice\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"\?rowPrimaryOwnPrice\(row\):sourcePrice/);
   assert.match(css,/Tạp hóa own-price source v13/);
   assert.match(css,/repeat\(3,minmax\(44px,1fr\)\)/);

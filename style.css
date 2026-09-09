@@ -9801,3 +9801,279 @@ body.source-manager-open{overflow:hidden!important}
     max-width:180px!important;
   }
 }
+
+
+/* =========================================================
+   All spreadsheets v20 — one Excel-like visual system
+   Standard source tables use the same geometry as supplier tables.
+   Keep every column available at every width; narrow screens scroll.
+   ========================================================= */
+.xls-table-wrap{
+  overflow-x:auto!important;
+  overflow-y:auto!important;
+  overscroll-behavior:contain!important;
+  scrollbar-gutter:stable;
+}
+.xls-price-table:not(.supplier-table-mode){
+  width:100%!important;
+  min-width:1345px!important;
+  max-width:none!important;
+  table-layout:fixed!important;
+  border-collapse:separate!important;
+  border-spacing:0!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead{
+  display:table-row!important;
+}
+.xls-price-table:not(.supplier-table-mode) #supplierTableHead{
+  display:none!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th,
+.xls-price-table:not(.supplier-table-mode) .xls-row td{
+  display:table-cell!important;
+  height:40px!important;
+  padding:7px 9px!important;
+  overflow:hidden!important;
+  border-right:1px solid #e5e9ed!important;
+  border-bottom:1px solid #e9edf0!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th{
+  position:sticky!important;
+  top:0!important;
+  z-index:14!important;
+  height:42px!important;
+  color:#344054!important;
+  font-size:9px!important;
+  font-weight:800!important;
+  line-height:1.15!important;
+  letter-spacing:.01em!important;
+  text-transform:none!important;
+  white-space:nowrap!important;
+  box-shadow:0 1px 0 #dfe3e8!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:first-child,
+.xls-price-table:not(.supplier-table-mode) .xls-row td:first-child{
+  position:sticky!important;
+  left:0!important;
+  width:270px!important;
+  min-width:270px!important;
+  max-width:270px!important;
+  text-align:left!important;
+  border-left:1px solid #e1e6ea!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:first-child{
+  z-index:18!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-row td:first-child{
+  z-index:5!important;
+  background:#fff!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(2),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(2){
+  width:80px!important;min-width:80px!important;max-width:80px!important;
+  text-align:center!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(3),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(3),
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(4),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(4),
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(5),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(5){
+  width:90px!important;min-width:90px!important;max-width:90px!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(n+6):nth-child(-n+11),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(n+6):nth-child(-n+11){
+  width:105px!important;min-width:105px!important;max-width:105px!important;
+  text-align:right!important;
+}
+.xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(12),
+.xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(12){
+  width:95px!important;min-width:95px!important;max-width:95px!important;
+  text-align:right!important;
+}
+
+/* Header groups */
+.xls-price-table:not(.supplier-table-mode) .standard-head-product{
+  background:#f8fafb!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-head-source{
+  background:#eef5ff!important;
+  color:#315a86!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-head-pack{
+  background:#f5f3ff!important;
+  color:#564895!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-head-source-price{
+  background:#eef5ff!important;
+  color:#315a86!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-head-sale{
+  background:#eef9f2!important;
+  color:#21643c!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-head-bargain{
+  background:#fff7e8!important;
+  color:#805500!important;
+}
+
+/* Body groups */
+.xls-price-table:not(.supplier-table-mode) .standard-col-source,
+.xls-price-table:not(.supplier-table-mode) .standard-col-source-price{
+  background:#f8fbff!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-pack{
+  background:#fbfaff!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-sale{
+  background:#f8fcf9!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-bargain{
+  background:#fffdf8!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-pack{
+  color:#59656f!important;
+  font-weight:700!important;
+  text-align:center!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-source-price .xls-price-main{
+  color:#315a86!important;
+  font-weight:800!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-sale .xls-input{
+  color:#21643c!important;
+  font-weight:800!important;
+}
+.xls-price-table:not(.supplier-table-mode) .standard-col-bargain .xls-input{
+  color:#805500!important;
+  font-weight:800!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-num,
+.xls-price-table:not(.supplier-table-mode) .xls-input{
+  font-variant-numeric:tabular-nums!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-sort-button{
+  justify-content:center!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-desktop-only{
+  display:inline!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-compact-only{
+  display:none!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-open-detail{
+  display:block!important;
+  width:100%!important;
+  overflow:hidden!important;
+  font-size:10px!important;
+  font-weight:700!important;
+  line-height:1.25!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+  -webkit-line-clamp:unset!important;
+}
+.xls-price-table:not(.supplier-table-mode) .xls-source{
+  display:table-cell!important;
+  font-size:9px!important;
+  font-weight:800!important;
+  text-align:center!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.xls-price-table:not(.supplier-table-mode) .product-card:hover td{
+  box-shadow:inset 0 0 0 9999px rgba(16,24,40,.018)!important;
+}
+.xls-price-table:not(.supplier-table-mode) .product-card:hover td:first-child{
+  background:#fafcfd!important;
+}
+.xls-price-table:not(.supplier-table-mode) .product-card.selected td{
+  box-shadow:inset 0 0 0 9999px rgba(18,133,80,.055)!important;
+}
+
+/* At narrow widths keep all columns and scroll horizontally.
+   Do not switch back to the old 4-column compact spreadsheet. */
+@media(max-width:900px){
+  .xls-table-wrap{
+    overflow-x:auto!important;
+    overflow-y:auto!important;
+  }
+  .xls-price-table:not(.supplier-table-mode){
+    width:100%!important;
+    min-width:1240px!important;
+    max-width:none!important;
+    table-layout:fixed!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th,
+  .xls-price-table:not(.supplier-table-mode) .xls-row td{
+    display:table-cell!important;
+    height:38px!important;
+    padding:6px 7px!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:first-child,
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:first-child{
+    position:sticky!important;
+    left:0!important;
+    width:220px!important;
+    min-width:220px!important;
+    max-width:220px!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) .xls-desktop-only{
+    display:inline!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) .xls-compact-only{
+    display:none!important;
+  }
+}
+@container (max-width:980px){
+  .xls-price-table:not(.supplier-table-mode){
+    width:100%!important;
+    min-width:1240px!important;
+    max-width:none!important;
+    table-layout:fixed!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(4),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(4),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(5),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(5),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(7),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(7),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(8),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(8),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(9),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(9),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(10),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(10),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(11),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(11),
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:nth-child(12),
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:nth-child(12){
+    display:table-cell!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:first-child,
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:first-child{
+    position:sticky!important;
+    left:0!important;
+    width:220px!important;
+    min-width:220px!important;
+    max-width:220px!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) .xls-desktop-only{display:inline!important}
+  .xls-price-table:not(.supplier-table-mode) .xls-compact-only{display:none!important}
+}
+@container (max-width:520px){
+  .xls-price-table:not(.supplier-table-mode){
+    min-width:1190px!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th:first-child,
+  .xls-price-table:not(.supplier-table-mode) .xls-row td:first-child{
+    width:190px!important;
+    min-width:190px!important;
+    max-width:190px!important;
+  }
+  .xls-price-table:not(.supplier-table-mode) #standardTableHead th,
+  .xls-price-table:not(.supplier-table-mode) .xls-row td{
+    padding:6px!important;
+  }
+}

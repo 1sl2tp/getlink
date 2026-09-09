@@ -12764,7 +12764,7 @@ body[data-app-role="user"] .workspace-detail{
   }
   .mobile-merge-panel>label{
     display:grid;
-    grid-template-columns:82px minmax(0,1fr);
+    grid-template-columns:112px minmax(0,1fr);
     gap:7px;
     align-items:center;
     margin-top:5px;
@@ -12849,10 +12849,8 @@ body[data-app-role="user"] .workspace-detail{
     background:#0a8f4d;
     color:#fff;
   }
-  .mobile-merge-select.grouped{
-    border-color:#b9ddca;
-    background:#edf8f2;
-    color:#087a40;
+  .mobile-merge-select.blocked{
+    opacity:.32;
   }
   .mobile-user-mine-card{
     display:grid;
@@ -12988,6 +12986,22 @@ body[data-app-role="user"] .workspace-detail{
     border-color:#cfe6d9;
     background:#fbfefc;
   }
+  .mobile-user-own-price{
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    margin-top:4px;
+  }
+  .mobile-user-own-price>b{
+    color:#d92d20;
+    font-size:14px;
+    font-variant-numeric:tabular-nums;
+  }
+  .mobile-user-own-price>small{
+    color:#667085;
+    font-size:8.5px;
+    white-space:nowrap;
+  }
   .mobile-user-source-prices{
     display:flex;
     flex-wrap:wrap;
@@ -13084,7 +13098,8 @@ body[data-app-role="user"] .workspace-detail{
   .mobile-user-results{
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
-  .mobile-user-mine-card{
+  .mobile-user-mine-card,
+  .mobile-user-merged-card.has-own{
     grid-column:1/-1;
   }
   .mobile-user-market-card{

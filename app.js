@@ -162,6 +162,8 @@ const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
 let mobileUserScope="";
 let mobileUserChildSource="";
 let mobileUserLimit=8;
+let mobileUserAutoLoadObserver=null;
+let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
 let mobileMergeMode=false;
 const mobileMergeSelected=new Set();
@@ -3983,6 +3985,30 @@ function renderMobileUserSourceTabs(){
   host.innerHTML=parent+child;
 }
 
+function setupMobileUserAutoLoad(){
+  if(mobileUserAutoLoadObserver){
+    mobileUserAutoLoadObserver.disconnect();
+    mobileUserAutoLoadObserver=null;
+  }
+  const root=$("#mobileUserWork");
+  const sentinel=$("#mobileUserMore");
+  if(!root||!sentinel||sentinel.hidden||sentinel.dataset.hasMore!=="1")return;
+
+  mobileUserAutoLoadObserver=new IntersectionObserver(entries=>{
+    const hit=entries.some(entry=>entry.isIntersecting);
+    if(!hit||mobileUserAutoLoadBusy||sentinel.dataset.hasMore!=="1")return;
+    mobileUserAutoLoadBusy=true;
+    mobileUserLimit+=8;
+    renderMobileUserWork();
+    requestAnimationFrame(()=>{mobileUserAutoLoadBusy=false;});
+  },{
+    root,
+    rootMargin:"0px 0px 240px 0px",
+    threshold:0.01
+  });
+  mobileUserAutoLoadObserver.observe(sentinel);
+}
+
 function renderMobileUserWork(){
   const search=$("#mobileUserSearch");
   if(search&&document.activeElement!==search)search.value=libraryQuery;
@@ -4020,7 +4046,13 @@ function renderMobileUserWork(){
   const empty=$("#mobileUserEmpty");
   if(empty)empty.hidden=rows.length!==0;
   const more=$("#mobileUserMore");
-  if(more)more.hidden=!hasMore;
+  if(more){
+    more.hidden=rows.length===0;
+    more.textContent=visible.length+"/"+rows.length;
+    more.dataset.hasMore=hasMore?"1":"0";
+    more.setAttribute("aria-label","Đã hiển thị "+visible.length+" trên "+rows.length+" sản phẩm");
+  }
+  setupMobileUserAutoLoad();
   updateUserWorkOrderSummary();
 }
 
@@ -5439,12 +5471,6 @@ if(userWorkHome){
         ?(mobileUserChildSource===next?"":next)
         :"";
       mobileUserLimit=8;
-      renderUserWorkHome();
-      return;
-    }
-
-    if(e.target.closest("#mobileUserMore")){
-      mobileUserLimit+=8;
       renderUserWorkHome();
       return;
     }

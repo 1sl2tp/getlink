@@ -11361,3 +11361,308 @@ body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
     font-size:11.5px!important;
   }
 }
+
+
+/* =========================================================
+   Mobile compact browse v38 — chat-like, controls only
+   ========================================================= */
+@media(max-width:720px){
+  /* Header behaves like the chat screen: one compact bar, no second menu row. */
+  .site-head{
+    display:flex!important;
+    align-items:center!important;
+    gap:7px!important;
+    min-height:52px!important;
+    margin:0 0 5px!important;
+    padding:7px 8px!important;
+    border-bottom:1px solid #eef1f3!important;
+    background:#fff!important;
+    backdrop-filter:none!important;
+  }
+  .mobile-category-button{
+    order:-3!important;
+    flex:0 0 auto!important;
+    width:auto!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:34px!important;
+    margin:0!important;
+    padding:0 7px!important;
+    display:flex!important;
+    align-items:center!important;
+    gap:4px!important;
+    border:0!important;
+    border-radius:9px!important;
+    background:transparent!important;
+    box-shadow:none!important;
+    color:#202124!important;
+  }
+  .mobile-category-button .ui-icon{
+    width:18px!important;
+    height:18px!important;
+  }
+  .mobile-category-button strong{display:none!important}
+  #mobileCategoryCurrent{
+    display:block!important;
+    max-width:66px!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+    color:#5f6368!important;
+    font-size:10px!important;
+    font-weight:600!important;
+  }
+  .site-head .logo{
+    order:-2!important;
+    width:34px!important;
+    height:34px!important;
+    border-radius:10px!important;
+    font-size:14px!important;
+    box-shadow:none!important;
+  }
+  .site-brand-copy{
+    order:-1!important;
+    flex:1 1 auto!important;
+    min-width:0!important;
+  }
+  .site-brand-copy h1{
+    margin:0!important;
+    font-size:19px!important;
+    line-height:1!important;
+    letter-spacing:-.02em!important;
+  }
+  .site-brand-copy p{display:none!important}
+  .role-switch{
+    flex:0 0 auto!important;
+    margin-left:auto!important;
+  }
+  .role-admin-button{
+    min-height:34px!important;
+    height:34px!important;
+    padding:0 10px!important;
+    border-radius:9px!important;
+    font-size:10.5px!important;
+  }
+
+  /* Remove the two large tinted panels. */
+  .workspace-list .catalog-sticky-head{
+    padding:0!important;
+    background:#fff!important;
+  }
+  .workspace-list .catalog-toolbar{display:none!important}
+  .purchase-mode-row{
+    display:flex!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:6px!important;
+    margin:0!important;
+    padding:7px 8px 5px!important;
+    background:#fff!important;
+    overflow:visible!important;
+  }
+  .purchase-mode-row .filter-block{
+    width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:0!important;
+    display:block!important;
+    border:0!important;
+    border-radius:0!important;
+    background:transparent!important;
+    box-shadow:none!important;
+  }
+  .purchase-mode-row .filter-label{display:none!important}
+
+  /* Quy cách = one calm segmented control, like Trò chuyện / Công việc. */
+  .purchase-mode-row .catalog-pack-tabs{
+    width:min(100%,300px)!important;
+    margin:0 auto!important;
+    padding:3px!important;
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:2px!important;
+    border:0!important;
+    border-radius:999px!important;
+    background:#f2f3f4!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs .pack-chip{
+    width:100%!important;
+    min-width:0!important;
+    height:32px!important;
+    min-height:32px!important;
+    margin:0!important;
+    padding:0 8px!important;
+    border:0!important;
+    border-radius:999px!important;
+    background:transparent!important;
+    color:#5f6368!important;
+    box-shadow:none!important;
+    font-size:11px!important;
+    font-weight:600!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs .pack-chip small{display:none!important}
+  .purchase-mode-row .catalog-pack-tabs .pack-chip.active{
+    background:#fff!important;
+    color:#087a40!important;
+    box-shadow:0 1px 4px rgba(32,33,36,.12)!important;
+  }
+
+  /* Nguồn = one segmented logo rail, no label/panel. */
+  .purchase-mode-row .source-tabs-inline{
+    width:100%!important;
+    min-width:0!important;
+    margin:0!important;
+    padding:3px!important;
+    display:grid!important;
+    grid-template-columns:44px repeat(4,minmax(0,1fr))!important;
+    gap:2px!important;
+    align-items:center!important;
+    border:0!important;
+    border-radius:999px!important;
+    background:#f2f3f4!important;
+    box-sizing:border-box!important;
+    overflow:hidden!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    height:34px!important;
+    min-height:34px!important;
+    margin:0!important;
+    padding:2px 4px!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    border:0!important;
+    border-radius:999px!important;
+    background:transparent!important;
+    color:#5f6368!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+    font-size:9px!important;
+    font-weight:600!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip.active{
+    background:#fff!important;
+    color:#087a40!important;
+    box-shadow:0 1px 4px rgba(32,33,36,.12)!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-chip-main{
+    width:100%!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-logo-all{
+    display:none!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-chip-label{
+    display:block!important;
+    overflow:visible!important;
+    font-size:9.5px!important;
+    font-weight:600!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-mark{
+    width:100%!important;
+    height:100%!important;
+    max-width:100%!important;
+    max-height:100%!important;
+    padding:0!important;
+    margin:0!important;
+    border:0!important;
+    background:transparent!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-image{
+    display:block!important;
+    width:100%!important;
+    height:100%!important;
+    max-width:98%!important;
+    max-height:92%!important;
+    margin:auto!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    background:transparent!important;
+  }
+
+  /* Search and view switch are the final compact action row. */
+  .catalog-search-row{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:center!important;
+    gap:5px!important;
+    margin:0!important;
+    padding:2px 8px 6px!important;
+    background:#fff!important;
+  }
+  .catalog-search-row .catalog-search{padding:0!important;margin:0!important}
+  .catalog-search-row .catalog-search input{
+    height:36px!important;
+    min-height:36px!important;
+    padding:0 11px!important;
+    border-radius:10px!important;
+    background:#f7f8f9!important;
+    font-size:11px!important;
+  }
+  .view-switch{
+    height:36px!important;
+    padding:2px!important;
+    border:0!important;
+    border-radius:10px!important;
+    background:#f2f3f4!important;
+  }
+  .view-button{
+    min-width:34px!important;
+    width:34px!important;
+    height:32px!important;
+    padding:0!important;
+    border-radius:8px!important;
+  }
+  .view-button b{display:none!important}
+
+  /* Let product content begin immediately after controls. */
+  .workspace-list{
+    border-radius:12px!important;
+  }
+}
+
+@media(max-width:390px){
+  .site-head{
+    gap:5px!important;
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  #mobileCategoryCurrent{display:none!important}
+  .mobile-category-button{
+    width:32px!important;
+    height:32px!important;
+    padding:0!important;
+    justify-content:center!important;
+  }
+  .site-head .logo{
+    width:32px!important;
+    height:32px!important;
+  }
+  .site-brand-copy h1{font-size:18px!important}
+  .role-admin-button{
+    min-height:32px!important;
+    height:32px!important;
+    padding:0 8px!important;
+  }
+  .purchase-mode-row{
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  .purchase-mode-row .source-tabs-inline{
+    grid-template-columns:38px repeat(4,minmax(0,1fr))!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-chip-label{
+    font-size:8.7px!important;
+  }
+  .catalog-search-row{
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+}

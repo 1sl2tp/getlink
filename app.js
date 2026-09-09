@@ -3317,6 +3317,244 @@ $("#sourceManagerRows").addEventListener("keydown",e=>{
   row.click();
 });
 
+const UPDATE_ADMIN_TOKEN_KEY="getlink:update-admin-session";
+let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";
+let updateSettingsMode="off";
+let updateSettingsScope="all";
+let updateSettingsPollTimer=0;
+
+function updateAdminHeaders(extra={}){
+  const headers=new Headers(extra||{});
+  if(updateAdminToken)headers.set("x-getlink-admin",updateAdminToken);
+  return headers;
+}
+async function updateAdminFetch(path,options={}){
+  const headers=updateAdminHeaders(options.headers||{});
+  const res=await apiFetch(path,{...options,headers});
+  if(res.status===401&&path!=="/api/update-settings/unlock"){
+    updateAdminToken="";
+    sessionStorage.removeItem(UPDATE_ADMIN_TOKEN_KEY);
+  }
+  return res;
+}
+function formatUpdateDate(value){
+  if(!value)return "—";
+  try{
+    return new Intl.DateTimeFormat("vi-VN",{
+      timeZone:"Asia/Ho_Chi_Minh",
+      day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"
+    }).format(new Date(value));
+  }catch{return "—";}
+}
+function setUpdateMode(mode){
+  updateSettingsMode=["off","daily","custom"].includes(mode)?mode:"off";
+  document.querySelectorAll("#updateModeTabs [data-update-mode]").forEach(btn=>{
+    const active=btn.dataset.updateMode===updateSettingsMode;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+  const custom=$("#updateCustomDaysWrap");
+  if(custom)custom.hidden=updateSettingsMode!=="custom";
+}
+function setUpdateScope(scope){
+  updateSettingsScope=scope==="classified_only"?"classified_only":"all";
+  document.querySelectorAll("#updateScopeTabs [data-update-scope]").forEach(btn=>{
+    const active=btn.dataset.updateScope===updateSettingsScope;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
+}
+function updateSettingsPayload(){
+  const custom=Math.max(2,Math.min(30,Number($("#updateIntervalDays")?.value)||2));
+  const hour=Math.max(0,Math.min(23,Number($("#updateRunHour")?.value)||0));
+  return {
+    enabled:updateSettingsMode!=="off",
+    interval_days:updateSettingsMode==="custom"?custom:1,
+    run_hour:hour,
+    scope:updateSettingsScope
+  };
+}
+function renderUpdateSettings(data){
+  const settings=data?.settings||{};
+  const counts=data?.counts||{};
+  const active=data?.active_run||null;
+  const last=data?.last_run||null;
+
+  if(settings.enabled){
+    setUpdateMode(Number(settings.interval_days)>1?"custom":"daily");
+  }else{
+    setUpdateMode("off");
+  }
+  if($("#updateIntervalDays"))$("#updateIntervalDays").value=String(Math.max(2,Number(settings.interval_days)||2));
+  if($("#updateRunHour"))$("#updateRunHour").value=String(Math.max(0,Math.min(23,Number(settings.run_hour)||0)));
+  setUpdateScope(settings.scope);
+  if($("#updateAllCount"))$("#updateAllCount").textContent=String(Number(counts.total_products||0).toLocaleString("vi-VN"));
+  if($("#updateClassifiedCount"))$("#updateClassifiedCount").textContent=String(Number(counts.classified_products||0).toLocaleString("vi-VN"));
+  if($("#updateScopeNote")){
+    $("#updateScopeNote").textContent=
+      "Chưa phân loại: "+String(Number(counts.unclassified_products||0).toLocaleString("vi-VN"))+
+      " sản phẩm"+(settings.scope==="classified_only"?" · sẽ bỏ qua":"");
+  }
+
+  const schedule=$("#updateScheduleStatus");
+  if(schedule){
+    schedule.textContent=settings.enabled
+      ?("Tự động: "+(Number(settings.interval_days)>1?("mỗi "+settings.interval_days+" ngày"):"mỗi ngày")+
+        " · "+String(Number(settings.run_hour)||0).padStart(2,"0")+":00"+
+        " · lần tới "+formatUpdateDate(settings.next_due_at))
+      :"Tự động đang tắt";
+  }
+
+  const runStatus=$("#updateRunStatus");
+  if(runStatus){
+    const run=active||last;
+    if(active){
+      runStatus.textContent=
+        "Đang cập nhật: "+Number(active.done_categories||0)+"/"+Number(active.total_categories||0)+
+        " danh mục · "+Number(active.updated_products||0).toLocaleString("vi-VN")+" sản phẩm";
+    }else if(run){
+      runStatus.textContent=
+        "Lần gần nhất: "+formatUpdateDate(run.finished_at||run.started_at||run.created_at)+
+        " · "+(run.status==="complete"?"xong":(run.status==="complete_with_errors"?"xong, có lỗi":run.status))+
+        " · "+Number(run.updated_products||0).toLocaleString("vi-VN")+" sản phẩm";
+    }else{
+      runStatus.textContent="Chưa có lần cập nhật tự động.";
+    }
+  }
+
+  if(active)startUpdateSettingsPolling();
+  else stopUpdateSettingsPolling();
+}
+function stopUpdateSettingsPolling(){
+  if(updateSettingsPollTimer){
+    clearTimeout(updateSettingsPollTimer);
+    updateSettingsPollTimer=0;
+  }
+}
+function startUpdateSettingsPolling(){
+  stopUpdateSettingsPolling();
+  updateSettingsPollTimer=setTimeout(async()=>{
+    if($("#updateSettingsPanel")?.hidden)return;
+    await loadUpdateSettings().catch(()=>{});
+  },10000);
+}
+async function loadUpdateSettings(){
+  if(!updateAdminToken)return false;
+  const res=await updateAdminFetch("/api/update-settings");
+  if(!res.ok){
+    if(res.status===401){
+      $("#updateSettingsPanel").hidden=true;
+      $("#updateSettingsGate").hidden=false;
+    }
+    return false;
+  }
+  const data=await res.json();
+  renderUpdateSettings(data);
+  return true;
+}
+async function openProtectedUpdateSettings(){
+  $("#updateSettingsGateStatus").textContent="";
+  if(updateAdminToken&&await loadUpdateSettings()){
+    $("#updateSettingsGate").hidden=true;
+    $("#updateSettingsPanel").hidden=false;
+    return;
+  }
+  $("#updateSettingsPanel").hidden=true;
+  $("#updateSettingsGate").hidden=false;
+  setTimeout(()=>$("#updateSettingsPassword")?.focus(),0);
+}
+async function unlockProtectedUpdateSettings(){
+  const password=String($("#updateSettingsPassword")?.value||"");
+  const status=$("#updateSettingsGateStatus");
+  if(status)status.textContent="Đang kiểm tra...";
+  const res=await apiFetch("/api/update-settings/unlock",{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({password})
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok){
+    if(status){
+      status.textContent=res.status===429
+        ?"Đang khóa tạm. Thử lại sau ít phút."
+        :"Mật khẩu chưa đúng"+(Number.isFinite(Number(data.remaining))?" · còn "+data.remaining+" lần":"")+".";
+    }
+    if($("#updateSettingsPassword"))$("#updateSettingsPassword").value="";
+    return;
+  }
+  updateAdminToken=String(data.token||"");
+  sessionStorage.setItem(UPDATE_ADMIN_TOKEN_KEY,updateAdminToken);
+  if($("#updateSettingsPassword"))$("#updateSettingsPassword").value="";
+  $("#updateSettingsGate").hidden=true;
+  $("#updateSettingsPanel").hidden=false;
+  renderUpdateSettings(data);
+}
+async function saveProtectedUpdateSettings(showMessage=true){
+  const save=$("#saveUpdateSettings");
+  if(save)save.disabled=true;
+  try{
+    const res=await updateAdminFetch("/api/update-settings",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify(updateSettingsPayload())
+    });
+    if(!res.ok)throw new Error("save_failed");
+    const data=await res.json();
+    renderUpdateSettings(data);
+    if(showMessage&&$("#updateRunStatus"))$("#updateRunStatus").textContent="Đã lưu cài đặt.";
+    return true;
+  }finally{
+    if(save)save.disabled=false;
+  }
+}
+async function runProtectedUpdateNow(){
+  const run=$("#runUpdateNow");
+  const save=$("#saveUpdateSettings");
+  if(run)run.disabled=true;
+  if(save)save.disabled=true;
+  try{
+    await saveProtectedUpdateSettings(false);
+    if($("#updateRunStatus"))$("#updateRunStatus").textContent="Đang khởi động cập nhật...";
+    const res=await updateAdminFetch("/api/update-settings/run-now",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({scope:updateSettingsScope})
+    });
+    if(!res.ok)throw new Error("run_failed");
+    const data=await res.json();
+    renderUpdateSettings(data?.batch?.snapshot||{});
+    startUpdateSettingsPolling();
+  }catch{
+    if($("#updateRunStatus"))$("#updateRunStatus").textContent="Chưa khởi động được cập nhật. Thử lại.";
+  }finally{
+    if(run)run.disabled=false;
+    if(save)save.disabled=false;
+  }
+}
+
+$("#openUpdateSettings")?.addEventListener("click",openProtectedUpdateSettings);
+$("#unlockUpdateSettings")?.addEventListener("click",unlockProtectedUpdateSettings);
+$("#updateSettingsPassword")?.addEventListener("keydown",e=>{
+  if(e.key==="Enter")unlockProtectedUpdateSettings();
+});
+$("#closeUpdateSettings")?.addEventListener("click",()=>{
+  $("#updateSettingsPanel").hidden=true;
+  $("#updateSettingsGate").hidden=true;
+  stopUpdateSettingsPolling();
+});
+$("#updateModeTabs")?.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-update-mode]");
+  if(btn)setUpdateMode(btn.dataset.updateMode||"off");
+});
+$("#updateScopeTabs")?.addEventListener("click",e=>{
+  const btn=e.target.closest("[data-update-scope]");
+  if(btn)setUpdateScope(btn.dataset.updateScope||"all");
+});
+$("#saveUpdateSettings")?.addEventListener("click",()=>saveProtectedUpdateSettings(true).catch(()=>{
+  if($("#updateRunStatus"))$("#updateRunStatus").textContent="Chưa lưu được cài đặt.";
+}));
+$("#runUpdateNow")?.addEventListener("click",runProtectedUpdateNow);
+
 $("#toggleImport").addEventListener("click",()=>{
   $("#importCard").hidden=false;
   $("#importCard").scrollIntoView({behavior:"smooth",block:"center"});
@@ -3324,6 +3562,9 @@ $("#toggleImport").addEventListener("click",()=>{
 
 $("#closeImport").addEventListener("click",()=>{
   $("#importCard").hidden=true;
+  $("#updateSettingsPanel").hidden=true;
+  $("#updateSettingsGate").hidden=true;
+  stopUpdateSettingsPolling();
 });
 
 async function pollOnce(){

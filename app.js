@@ -159,6 +159,7 @@ const MOBILE_USER_SOURCES=["","mine","bhx","wm","go"];
 const MOBILE_USER_SOURCE_LABELS={"":"Tất cả",mine:"Tạp hóa",bhx:"BHX",wm:"WinMart",go:"GO!"};
 let mobileUserSource="";
 let mobileUserLimit=8;
+const MOBILE_MERGE_ENABLED=false;
 let mobileMergeMode=false;
 const mobileMergeSelected=new Set();
 let mobileMergeTargetUrl="";
@@ -3549,7 +3550,7 @@ function toggleMobileMergeSource(row){
 }
 
 function mobileMergeSelectButton(row){
-  if(!mobileMergeMode)return "";
+  if(!MOBILE_MERGE_ENABLED||!mobileMergeMode)return "";
   const url=canonical(row&&row.canonical_url||"");
   const target=mobileMergeTargetRow();
   const targetId=mobileMergeTargetCanonicalId();
@@ -3733,9 +3734,17 @@ function mobileUserCanonicalMineCard(row){
 
 function renderMobileMergePanel(){
   const panel=$("#mobileMergePanel");
+  const toggle=$("#mobileMergeToggle");
+  if(!MOBILE_MERGE_ENABLED){
+    mobileMergeMode=false;
+    mobileMergeTargetUrl="";
+    mobileMergeSelected.clear();
+    if(panel)panel.hidden=true;
+    if(toggle)toggle.hidden=true;
+    return;
+  }
   if(!panel)return;
   panel.hidden=!mobileMergeMode;
-  const toggle=$("#mobileMergeToggle");
   if(toggle){
     toggle.classList.toggle("active",mobileMergeMode);
     toggle.setAttribute("aria-pressed",mobileMergeMode?"true":"false");
@@ -3778,6 +3787,7 @@ async function ensureMobileMergeAdmin(){
 }
 
 async function applyMobileMergePreview(){
+  if(!MOBILE_MERGE_ENABLED)return;
   if(mobileMergeBusy)return;
   const preview=buildMobileMergePreview();
   if(!preview)return;

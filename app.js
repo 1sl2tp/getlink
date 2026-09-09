@@ -5287,6 +5287,13 @@ if(userWorkHome){
       return;
     }
 
+    const mergeGroup=e.target.closest("[data-mobile-merge-group]");
+    if(mergeGroup&&!mergeGroup.disabled){
+      toggleMobileMergeGroup(mergeGroup.dataset.mobileMergeGroup||"");
+      renderUserWorkHome();
+      return;
+    }
+
     const mergeSelect=e.target.closest("[data-mobile-merge-select]");
     if(mergeSelect&&!mergeSelect.disabled){
       const url=canonical(mergeSelect.dataset.mobileMergeSelect||"");
@@ -5331,6 +5338,13 @@ if(userWorkHome){
     const send=e.target.closest("#userWorkSendOrder,#mobileUserSendOrder");
     if(send&&!send.disabled){
       saveUserWorkOrderDraft();
+      return;
+    }
+
+    const mergedCard=e.target.closest(".mobile-user-merged-card[data-canonical-id]");
+    if(mobileMergeMode&&mergedCard&&!e.target.closest("[data-work-qty]")){
+      toggleMobileMergeGroup(mergedCard.dataset.canonicalId||"");
+      renderUserWorkHome();
       return;
     }
 

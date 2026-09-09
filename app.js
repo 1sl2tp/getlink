@@ -4085,8 +4085,9 @@ function mobileUserMarketCard(row){
   const qc=qcRaw==="—"?"":String(qcRaw||"").trim();
   const source=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
+  const packClass=userWorkMarketPackGroup(row)==="carton"?" market-pack-carton":" market-pack-retail";
   const linked=Boolean(mobileMergeTargetCanonicalId()&&String(row.canonical_product_id||"").trim()===mobileMergeTargetCanonicalId());
-  return '<article class="mobile-user-market-card mobile-user-product-card '+(linked?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="mobile-user-market-card mobile-user-product-card'+packClass+' '+(linked?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+

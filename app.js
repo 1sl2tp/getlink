@@ -3674,7 +3674,8 @@ function mobileUserMineCard(row){
   const price=mobileUserSalePrice(row);
   const qc=rowPrimaryQc(row);
   const qty=userWorkQty(row.canonical_url);
-  return '<article class="mobile-user-mine-card mobile-user-product-card '+(mobileMergeSelected.has(canonical(row.canonical_url))?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  const selected=mobileMergeTargetUrl===canonical(row.canonical_url);
+  return '<article class="mobile-user-mine-card mobile-user-product-card '+(selected?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
@@ -3701,7 +3702,8 @@ function mobileUserMarketCard(row){
   const qc=rowPrimaryQc(row);
   const source=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
-  return '<article class="mobile-user-market-card mobile-user-product-card '+(mobileMergeSelected.has(canonical(row.canonical_url))?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  const linked=Boolean(mobileMergeTargetCanonicalId()&&String(row.canonical_product_id||"").trim()===mobileMergeTargetCanonicalId());
+  return '<article class="mobile-user-market-card mobile-user-product-card '+(linked?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+

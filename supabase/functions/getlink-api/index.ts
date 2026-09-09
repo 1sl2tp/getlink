@@ -2592,9 +2592,11 @@ async function fetchSupplierSheetCsv(source:any):Promise<string>{
   if(!spreadsheetId)throw new Error("supplier_sheet_missing_spreadsheet_id");
   const candidates=[
     "https://docs.google.com/spreadsheets/d/"+encodeURIComponent(spreadsheetId)+
-      "/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(sheetName),
+      "/export?format=csv&gid="+encodeURIComponent(String(gid)),
     "https://docs.google.com/spreadsheets/d/"+encodeURIComponent(spreadsheetId)+
-      "/export?format=csv&gid="+encodeURIComponent(String(gid))
+      "/gviz/tq?tqx=out:csv&gid="+encodeURIComponent(String(gid)),
+    "https://docs.google.com/spreadsheets/d/"+encodeURIComponent(spreadsheetId)+
+      "/gviz/tq?tqx=out:csv&sheet="+encodeURIComponent(sheetName)
   ];
   let lastError="";
   for(const target of candidates){
@@ -2614,7 +2616,10 @@ async function fetchSupplierSheetCsv(source:any):Promise<string>{
         lastError="sheet_not_public";
         continue;
       }
-      if(!head.includes("ten san pham")||!head.includes("ma sp")){
+      const preview=parseCsvRows(body);
+      const first=Array.isArray(preview[0])?preview[0]:[];
+      const header=supplierSheetHeaderIndex(first);
+      if(!header.has("ten san pham")||!header.has("ma sp")){
         lastError="sheet_header_missing";
         continue;
       }

@@ -155,9 +155,12 @@ let classificationRefreshBusy=false;
 
 let userWorkMarketLimit=8;
 let userWorkMineLimit=12;
-const MOBILE_USER_SOURCES=["","mine","bhx","wm","go"];
-const MOBILE_USER_SOURCE_LABELS={"":"Tất cả",mine:"Tạp hóa",bhx:"BHX",wm:"WinMart",go:"GO!"};
-let mobileUserSource="";
+const MOBILE_USER_SCOPES=["mine","market"];
+const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị"};
+const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
+let mobileUserScope="";
+let mobileUserChildSource="";
 let mobileUserLimit=8;
 const MOBILE_MERGE_ENABLED=false;
 let mobileMergeMode=false;
@@ -3411,15 +3414,71 @@ function mobileCanonicalSuggestionRank(row,profiles){
   return best;
 }
 
+function mobileSupplierSourceKey(row){
+  return String(row&&row.supplier_source_key||"").trim();
+}
+
+function mobileSupplierSourceLabel(key){
+  const row=libraryCache.find(item=>
+    isMineRow(item)&&mobileSupplierSourceKey(item)===key
+  );
+  const label=String(row&&row.supplier_source_name||"").trim();
+  if(label)return label;
+  const fallbacks={
+    "hang-u":"Hàng U",
+    "thuoc-la":"Thuốc lá",
+    "sua":"Sữa",
+    "masan":"Masan",
+    "hang-thuong":"Hàng thường"
+  };
+  return fallbacks[key]||String(key||"Nguồn hàng")
+    .split("-").filter(Boolean)
+    .map(part=>part.charAt(0).toLocaleUpperCase("vi-VN")+part.slice(1))
+    .join(" ");
+}
+
+function mobileSupplierSources(){
+  const seen=new Set();
+  const rows=[];
+  for(const row of libraryCache){
+    if(!isMineRow(row))continue;
+    const key=mobileSupplierSourceKey(row);
+    if(!key||seen.has(key))continue;
+    seen.add(key);
+    rows.push({
+      key,
+      label:mobileSupplierSourceLabel(key),
+      sort:SUPPLIER_GROUP_ORDER.get(key)||999999
+    });
+  }
+  return rows.sort((a,b)=>a.sort-b.sort||a.label.localeCompare(b.label,"vi"));
+}
+
 function mobileUserRows(){
   const baseRows=userWorkRows();
   const profiles=mobileCanonicalProfiles(baseRows);
   let rows=baseRows.map((row,index)=>({row,index}));
-  if(mobileUserSource){
-    rows=rows.filter(({row})=>rowMatchesSourceFilter(row,mobileUserSource));
+
+  if(mobileUserScope==="mine"){
+    rows=rows.filter(({row})=>isMineRow(row));
+  }else if(mobileUserScope==="market"){
+    rows=rows.filter(({row})=>!isMineRow(row));
   }
+
+  if(mobileUserChildSource){
+    rows=rows.filter(({row})=>{
+      if(mobileUserScope==="mine"){
+        return mobileSupplierSourceKey(row)===mobileUserChildSource;
+      }
+      if(mobileUserScope==="market"){
+        return rowSourceFilterKey(row)===mobileUserChildSource;
+      }
+      return true;
+    });
+  }
+
   rows.sort((a,b)=>{
-    if(!mobileUserSource){
+    if(!mobileUserScope){
       const ap=isMineRow(a.row)?0:1;
       const bp=isMineRow(b.row)?0:1;
       if(ap!==bp)return ap-bp;
@@ -3886,12 +3945,36 @@ function mobileUserMarketCard(row){
 function renderMobileUserSourceTabs(){
   const host=$("#mobileUserSourceTabs");
   if(!host)return;
-  host.innerHTML=MOBILE_USER_SOURCES.map(key=>
-    '<button class="mobile-user-source-chip '+(key===mobileUserSource?"active":"")+'" '+
-      'data-mobile-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserSource?"true":"false")+'">'+
-      escapeHtml(MOBILE_USER_SOURCE_LABELS[key]||key)+
-    '</button>'
-  ).join("");
+
+  const parent=
+    '<div class="mobile-user-source-level parent">'+
+      MOBILE_USER_SCOPES.map(key=>
+        '<button class="mobile-user-source-chip '+(key===mobileUserScope?"active":"")+'" '+
+          'data-mobile-scope="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserScope?"true":"false")+'">'+
+          escapeHtml(MOBILE_USER_SCOPE_LABELS[key]||key)+
+        '</button>'
+      ).join("")+
+    '</div>';
+
+  let children=[];
+  if(mobileUserScope==="mine"){
+    children=mobileSupplierSources().map(item=>[item.key,item.label]);
+  }else if(mobileUserScope==="market"){
+    children=MOBILE_MARKET_SOURCES.map(key=>[key,MOBILE_MARKET_SOURCE_LABELS[key]||key]);
+  }
+
+  const child=children.length
+    ?'<div class="mobile-user-source-level child">'+
+      children.map(([key,label])=>
+        '<button class="mobile-user-source-chip '+(key===mobileUserChildSource?"active":"")+'" '+
+          'data-mobile-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserChildSource?"true":"false")+'">'+
+          escapeHtml(label)+
+        '</button>'
+      ).join("")+
+    '</div>'
+    :"";
+
+  host.innerHTML=parent+child;
 }
 
 function renderMobileUserWork(){
@@ -3903,7 +3986,7 @@ function renderMobileUserWork(){
   let visible=[];
   let hasMore=false;
 
-  if(!mobileUserSource){
+  if(!mobileUserScope){
     const mine=rows.filter(isMineRow);
     const market=rows.filter(row=>!isMineRow(row));
     visible=[
@@ -5327,10 +5410,26 @@ if(userWorkHome){
       return;
     }
 
+    const mobileScope=e.target.closest("[data-mobile-scope]");
+    if(mobileScope){
+      const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)
+        ?mobileScope.dataset.mobileScope
+        :"";
+      mobileUserScope=mobileUserScope===next?"":next;
+      mobileUserChildSource="";
+      mobileUserLimit=8;
+      renderUserWorkHome();
+      return;
+    }
+
     const mobileSource=e.target.closest("[data-mobile-source]");
     if(mobileSource){
-      mobileUserSource=MOBILE_USER_SOURCES.includes(mobileSource.dataset.mobileSource)
-        ?mobileSource.dataset.mobileSource
+      const next=String(mobileSource.dataset.mobileSource||"");
+      const allowed=mobileUserScope==="mine"
+        ?mobileSupplierSources().some(item=>item.key===next)
+        :MOBILE_MARKET_SOURCES.includes(next);
+      mobileUserChildSource=allowed
+        ?(mobileUserChildSource===next?"":next)
         :"";
       mobileUserLimit=8;
       renderUserWorkHome();

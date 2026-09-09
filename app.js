@@ -2169,15 +2169,24 @@ function rowChildGroup(row){
   return searchKey(child)===searchKey(root)?"":child;
 }
 
+function rowIsPersonalCareManualGroup(row){
+  return searchKey(String(row&&row.manual_group_name||"").trim())==="cham soc ca nhan";
+}
+
 function rowManualGroupKey(row){
+  // "Chăm sóc cá nhân" is intentionally folded into Chưa phân loại.
+  // Keep the source/manual data untouched; only browsing classification changes.
+  if(rowIsPersonalCareManualGroup(row))return "";
   return String(row&&row.manual_group_key||"").trim();
 }
 
 function rowManualGroupName(row){
+  if(rowIsPersonalCareManualGroup(row))return "";
   return String(row&&row.manual_group_name||"").trim();
 }
 
 function rowManualGroupSort(row){
+  if(rowIsPersonalCareManualGroup(row))return 9999999;
   return Number(row&&row.manual_group_sort_order||999999);
 }
 

@@ -11144,3 +11144,87 @@ body{
   font-weight:700!important;
   font-variant-numeric:tabular-nums;
 }
+
+
+/* Source brand logos v35 — original proportions + near-full chip fit */
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only,
+.quick-source-tabs .source-chip-logo-only{
+  box-sizing:border-box!important;
+  width:104px!important;
+  min-width:104px!important;
+  max-width:104px!important;
+  height:34px!important;
+  min-height:34px!important;
+  padding:2px 5px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  overflow:hidden!important;
+  border:1px solid #dce3e8!important;
+  border-radius:8px!important;
+  background:#fff!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-mark,
+.quick-source-tabs .source-chip-logo-only .source-logo-mark{
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  height:100%!important;
+  min-height:0!important;
+  max-height:100%!important;
+  padding:0!important;
+  margin:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  overflow:hidden!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-image,
+.quick-source-tabs .source-chip-logo-only .source-logo-image{
+  display:block!important;
+  width:100%!important;
+  height:100%!important;
+  max-width:96%!important;
+  max-height:88%!important;
+  margin:auto!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  background:transparent!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-mine .source-logo-image,
+.quick-source-tabs .source-chip-logo-only.source-mine .source-logo-image{
+  max-width:92%!important;
+  max-height:80%!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-bhx .source-logo-image,
+.quick-source-tabs .source-chip-logo-only.source-bhx .source-logo-image{
+  max-width:98%!important;
+  max-height:90%!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-wm .source-logo-image,
+.quick-source-tabs .source-chip-logo-only.source-wm .source-logo-image{
+  max-width:96%!important;
+  max-height:82%!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-go .source-logo-image,
+.quick-source-tabs .source-chip-logo-only.source-go .source-logo-image{
+  max-width:88%!important;
+  max-height:90%!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.active,
+.quick-source-tabs .source-chip-logo-only.active{
+  border-color:#0b9855!important;
+  background:#fff!important;
+  box-shadow:inset 0 0 0 1px #0b9855!important;
+}
+@media(max-width:720px){
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only,
+  .quick-source-tabs .source-chip-logo-only{
+    width:82px!important;
+    min-width:82px!important;
+    max-width:82px!important;
+    height:32px!important;
+    min-height:32px!important;
+    padding:2px 4px!important;
+  }
+}

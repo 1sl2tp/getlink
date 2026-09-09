@@ -1683,7 +1683,7 @@ function syncTableSourceSortHeader(){
 function supplierPercentText(value){
   const n=Number(value);
   if(!Number.isFinite(n))return "—";
-  return n.toLocaleString("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:3})+"%";
+  return n.toLocaleString("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:1})+"%";
 }
 
 function supplierTableRow(row){

@@ -279,8 +279,31 @@
               <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
               <input id="mobileUserSearch" autocomplete="off" placeholder="Tìm hàng của mình và siêu thị...">
             </label>
-            <div id="mobileUserSourceTabs" class="mobile-user-source-tabs" role="group" aria-label="Chọn nguồn tìm kiếm"></div>
+            <div class="mobile-user-source-row">
+              <div id="mobileUserSourceTabs" class="mobile-user-source-tabs" role="group" aria-label="Chọn nguồn tìm kiếm"></div>
+              <button id="mobileMergeToggle" class="mobile-merge-toggle" type="button" aria-pressed="false">Hợp nhất</button>
+            </div>
           </div>
+          <section id="mobileMergePanel" class="mobile-merge-panel" hidden aria-label="Xác nhận sản phẩm chuẩn">
+            <div class="mobile-merge-summary">
+              <strong id="mobileMergeCount">Đã chọn 0 nguồn</strong>
+              <button id="mobileMergeCancel" type="button">Hủy</button>
+            </div>
+            <label>Tên chuẩn
+              <select id="mobileMergeNameSource"></select>
+            </label>
+            <label>Quy cách chuẩn
+              <select id="mobileMergePackSource"></select>
+            </label>
+            <label>Ảnh chuẩn
+              <select id="mobileMergeImageSource"></select>
+            </label>
+            <label id="mobileMergePasswordWrap" class="mobile-merge-password">Mật khẩu quản trị
+              <input id="mobileMergePassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Nhập mật khẩu">
+            </label>
+            <div id="mobileMergeStatus" class="mobile-merge-status" aria-live="polite"></div>
+            <button id="mobileMergeConfirm" class="mobile-merge-confirm" type="button" disabled>Xác nhận hợp nhất</button>
+          </section>
           <div id="mobileUserResults" class="mobile-user-results" aria-live="polite"></div>
           <div id="mobileUserEmpty" class="mobile-user-empty" hidden>Không có sản phẩm phù hợp.</div>
           <button id="mobileUserMore" class="mobile-user-more" type="button" hidden>Xem thêm</button>

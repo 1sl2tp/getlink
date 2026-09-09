@@ -13655,6 +13655,17 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
   }
 }
 
+@media(min-width:640px){
+  body[data-app-role="user"] .user-work-home{
+    height:calc(100dvh - 112px);
+    min-height:520px;
+  }
+  html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
+    height:100%!important;
+    min-height:0!important;
+  }
+}
+
 @media(min-width:640px) and (max-width:900px){
   .user-work-desktop{
     grid-template-columns:minmax(210px,260px) minmax(0,1fr);

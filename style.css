@@ -13823,3 +13823,31 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     font-size:10px!important;
   }
 }
+
+
+/* Mobile category rail v50 — swipe horizontally, never wrap */
+@media(max-width:639px){
+  .mobile-user-source-level.child{
+    display:flex!important;
+    flex-wrap:nowrap!important;
+    align-items:center!important;
+    min-width:0!important;
+    overflow-x:auto!important;
+    overflow-y:hidden!important;
+    overscroll-behavior-x:contain!important;
+    -webkit-overflow-scrolling:touch!important;
+    scrollbar-width:none!important;
+    touch-action:pan-x!important;
+  }
+  .mobile-user-source-level.child::-webkit-scrollbar{
+    display:none!important;
+    width:0!important;
+    height:0!important;
+  }
+  .mobile-user-source-level.child .user-work-category-button{
+    flex:0 0 auto!important;
+    width:auto!important;
+    max-width:none!important;
+    white-space:nowrap!important;
+  }
+}

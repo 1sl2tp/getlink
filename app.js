@@ -3715,8 +3715,10 @@ function buildMobileMergePreview(){
 }
 
 function mobileMergePreviewValue(value,row){
+  const text=String(value||"").trim();
+  if(!text)return "";
   const source=row?sourceDisplayLabel(row):"";
-  return '<span>'+escapeHtml(value||"—")+'</span>'+
+  return '<span>'+escapeHtml(text)+'</span>'+
     (source?'<small>Nguồn: '+escapeHtml(source)+'</small>':'');
 }
 
@@ -3765,11 +3767,18 @@ function renderMobileMergePreview(){
 function mobileUserCanonicalMineCard(row){
   const image=String(row&&row.canonical_product_image||row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
-  const qc=canonicalProductQc(row)||rowPrimaryQc(row);
+  const qcRaw=canonicalProductQc(row)||rowPrimaryQc(row);
+  const qc=qcRaw==="—"?"":String(qcRaw||"").trim();
   const price=mobileUserSalePrice(row);
   const retail=mobileUserOwnRetail(row);
   const leafUnit=canonicalLeafUnit(row);
   const qty=userWorkQty(row.canonical_url);
+  const priceHtml=(price||retail)
+    ?'<div class="mobile-user-own-price">'+
+        (price?'<b>'+money(price)+'</b>':'')+
+        (retail?'<small>Lẻ '+money(retail)+(leafUnit?'/'+escapeHtml(leafUnit.toLowerCase()):"")+'</small>':'')+
+      '</div>'
+    :"";
   return '<article class="mobile-user-mine-card mobile-user-product-card '+(mobileMergeTargetUrl===canonical(row.canonical_url)?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
@@ -3777,11 +3786,8 @@ function mobileUserCanonicalMineCard(row){
     '</div>'+
     '<div class="mobile-user-product-copy">'+
       '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
-      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
-      '<div class="mobile-user-own-price">'+
-        '<b>'+(price?money(price):"—")+'</b>'+
-        (retail?'<small>Lẻ '+money(retail)+(leafUnit?'/'+escapeHtml(leafUnit.toLowerCase()):"")+'</small>':'')+
-      '</div>'+
+      (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
+      priceHtml+
     '</div>'+
     '<div class="mobile-user-qty" data-work-url="'+escapeAttr(row.canonical_url)+'">'+
       '<button type="button" data-work-qty="-1" aria-label="Giảm số lượng">−</button>'+
@@ -3895,7 +3901,8 @@ function mobileUserMineCard(row){
   const image=String(row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
   const price=mobileUserSalePrice(row);
-  const qc=rowPrimaryQc(row);
+  const qcRaw=rowPrimaryQc(row);
+  const qc=qcRaw==="—"?"":String(qcRaw||"").trim();
   const qty=userWorkQty(row.canonical_url);
   const selected=mobileMergeTargetUrl===canonical(row.canonical_url);
   return '<article class="mobile-user-mine-card mobile-user-product-card '+(selected?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -3905,10 +3912,8 @@ function mobileUserMineCard(row){
     '</div>'+
     '<div class="mobile-user-product-copy">'+
       '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
-      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
-      '<div class="mobile-user-product-bottom">'+
-        '<b class="mobile-user-product-price">'+(price?money(price):"—")+'</b>'+
-      '</div>'+
+      (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
+      (price?'<div class="mobile-user-product-bottom"><b class="mobile-user-product-price">'+money(price)+'</b></div>':'')+
     '</div>'+
     '<div class="mobile-user-qty" data-work-url="'+escapeAttr(row.canonical_url)+'">'+
       '<button type="button" data-work-qty="-1" aria-label="Giảm số lượng">−</button>'+
@@ -3922,7 +3927,8 @@ function mobileUserMarketCard(row){
   const image=String(row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
   const price=userWorkPrimaryMarketPrice(row);
-  const qc=rowPrimaryQc(row);
+  const qcRaw=rowPrimaryQc(row);
+  const qc=qcRaw==="—"?"":String(qcRaw||"").trim();
   const source=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
   const linked=Boolean(mobileMergeTargetCanonicalId()&&String(row.canonical_product_id||"").trim()===mobileMergeTargetCanonicalId());
@@ -3933,9 +3939,9 @@ function mobileUserMarketCard(row){
     '</div>'+
     '<div class="mobile-user-product-copy">'+
       '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
-      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
+      (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
       '<div class="mobile-user-product-bottom">'+
-        '<b class="mobile-user-product-price">'+(price?money(price):"—")+'</b>'+
+        (price?'<b class="mobile-user-product-price">'+money(price)+'</b>':'')+
         '<span class="mobile-user-product-source '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</span>'+
       '</div>'+
     '</div>'+
@@ -4024,16 +4030,17 @@ function userWorkMarketCard(row){
   const price=userWorkPrimaryMarketPrice(row);
   const source=sourceDisplayLabel(row);
   const sourceClass=rowSourceFilterKey(row);
-  const pack=rowPrimaryQc(row);
+  const packRaw=rowPrimaryQc(row);
+  const pack=packRaw==="—"?"":String(packRaw||"").trim();
   return '<article class="user-work-market-card product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="user-work-market-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
     '<div class="user-work-market-copy">'+
       '<strong class="user-work-market-name">'+escapeHtml(name)+'</strong>'+
-      '<small class="user-work-market-pack">'+escapeHtml(pack==="—"?"":pack)+'</small>'+
+      (pack?'<small class="user-work-market-pack">'+escapeHtml(pack)+'</small>':'')+
       '<div class="user-work-market-bottom">'+
-        '<b class="user-work-market-price">'+(price?money(price):"—")+'</b>'+
+        (price?'<b class="user-work-market-price">'+money(price)+'</b>':'')+
         '<span class="user-work-source-tag '+escapeAttr(sourceClass)+'">'+escapeHtml(source)+'</span>'+
       '</div>'+
     '</div>'+

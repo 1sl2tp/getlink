@@ -2258,9 +2258,9 @@ function publicCatalogRows(rows:any[]){
 
 async function saveCanonicalProductMerge(body:any){
   const requested=Array.isArray(body?.member_urls)?body.member_urls:[];
-  const memberUrls=[...new Set(requested.map((x:any)=>{
+  const memberUrls:string[]=[...new Set<string>(requested.map((x:any):string=>{
     try{return canonical(clean(x));}catch{return "";}
-  }).filter(Boolean))];
+  }).filter((x:string)=>Boolean(x)))];
   if(memberUrls.length<2||memberUrls.length>12)throw new Error("merge_member_count");
 
   const rows=await libraryRows(true);

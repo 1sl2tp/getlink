@@ -23,12 +23,11 @@ class CanonicalProductMergeContractTest(unittest.TestCase):
 
     def test_merge_write_is_admin_protected_and_persists_members(self):
         self.assertIn('route==="/api/product-merge"',EDGE)
-        block=re.search(
-            r'if\(req\.method==="POST"&&route==="/api/product-merge"\)([\s\S]*?)\n\s*if\(',
+        self.assertRegex(
             EDGE,
+            r'if\(req\.method==="POST"&&route==="/api/product-merge"\)\{\s*'
+            r'if\(!\(await adminSessionAuthorized\(req\)\)\)'
         )
-        self.assertIsNotNone(block)
-        self.assertIn("adminSessionAuthorized(req)",block.group(1))
         self.assertIn("saveCanonicalProductMerge",EDGE)
         self.assertIn("member_urls",EDGE)
         self.assertIn("canonical_name",EDGE)

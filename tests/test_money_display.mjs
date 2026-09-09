@@ -487,7 +487,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v4-supplier-pack"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v5-supplier-price-basis"/);
 }
 
 {
@@ -509,7 +509,7 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_retail_packaging/);
   assert.match(app,/function syncSupplierTableMode\(\)/);
   assert.match(css,/Supplier priority table v18/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v4-supplier-pack"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v5-supplier-price-basis"/);
 }
 
 console.log("money and hierarchy UI tests passed");

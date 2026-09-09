@@ -10244,3 +10244,255 @@ body.source-manager-open{overflow:hidden!important}
 @container (max-width:420px){
   .xls-price-table.supplier-table-mode{min-width:1360px!important}
 }
+
+
+/* Admin / customer roles v23 */
+.role-switch{
+  margin-left:auto;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  flex:0 0 auto;
+}
+.role-badge{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  padding:0 9px;
+  border-radius:999px;
+  background:#f2f4f7;
+  color:#667085;
+  font-size:11px;
+  font-weight:800;
+  white-space:nowrap;
+}
+body[data-app-role="admin"] .role-badge{
+  background:#eaf2ff;
+  color:#315a86;
+}
+.role-admin-button{
+  min-height:30px;
+  padding:0 11px;
+  border:1px solid #d0d5dd;
+  border-radius:8px;
+  background:#fff;
+  color:#344054;
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+.role-admin-button:hover{background:#f8fafc}
+
+.admin-login-overlay{
+  position:fixed;
+  inset:0;
+  z-index:1200;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  background:rgba(15,23,42,.26);
+  backdrop-filter:blur(2px);
+}
+.admin-login-overlay[hidden]{display:none!important}
+.admin-login-card{
+  width:min(360px,calc(100vw - 32px));
+  padding:18px;
+  border:1px solid #e4e7ec;
+  border-radius:14px;
+  background:#fff;
+  box-shadow:0 20px 48px rgba(15,23,42,.18);
+}
+.admin-login-copy{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin-bottom:12px;
+}
+.admin-login-copy strong{
+  font-size:15px;
+  color:#101828;
+}
+.admin-login-copy small{
+  font-size:11px;
+  line-height:1.45;
+  color:#667085;
+}
+#adminLoginPassword{
+  width:100%;
+  height:42px;
+  box-sizing:border-box;
+  border:1px solid #d0d5dd;
+  border-radius:9px;
+  padding:0 12px;
+  font-size:18px;
+  letter-spacing:.22em;
+  text-align:center;
+  outline:none;
+}
+#adminLoginPassword:focus{
+  border-color:#98a2b3;
+  box-shadow:0 0 0 3px rgba(152,162,179,.12);
+}
+.admin-login-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:12px;
+}
+.admin-login-actions button{
+  min-height:34px;
+  padding:0 12px;
+  border:1px solid #d0d5dd;
+  border-radius:8px;
+  background:#fff;
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+#adminLoginUnlock{
+  border-color:#315a86;
+  background:#315a86;
+  color:#fff;
+}
+.admin-login-status{
+  display:block;
+  min-height:16px;
+  margin-top:8px;
+  color:#b42318;
+  font-size:10px;
+  text-align:right;
+}
+
+/* Customer mode: only public catalog controls and public columns. */
+body[data-app-role="user"] #toggleImport,
+body[data-app-role="user"] #importCard,
+body[data-app-role="user"] .filter-block-source,
+body[data-app-role="user"] .view-switch,
+body[data-app-role="user"] #quickBrowseButton,
+body[data-app-role="user"] #quickBrowseMenu,
+body[data-app-role="user"] .workspace-detail,
+body[data-app-role="user"] .legacy-catalog-actions{
+  display:none!important;
+}
+body[data-app-role="user"] .workspace{
+  grid-template-columns:minmax(170px,230px) minmax(0,1fr)!important;
+}
+body[data-app-role="user"] .workspace-list{
+  grid-column:auto!important;
+}
+body[data-app-role="user"] .catalog-search-row{
+  grid-template-columns:minmax(0,1fr)!important;
+}
+body[data-app-role="user"] .catalog-search{
+  max-width:none!important;
+}
+
+.xls-price-table.user-table-mode{
+  min-width:760px!important;
+  table-layout:fixed!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(1),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+  width:34%!important;
+  min-width:240px!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(2),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(2){
+  width:22%!important;
+  min-width:160px!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(3),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(3){
+  width:19%!important;
+  min-width:135px!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(4),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(4){
+  width:15%!important;
+  min-width:120px!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(5),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(5){
+  width:10%!important;
+  min-width:105px!important;
+}
+.user-table-row .user-col-product{
+  font-weight:720;
+  color:#101828;
+}
+.user-col-sale{
+  text-align:right!important;
+}
+.user-sale-level{
+  display:inline-flex;
+  align-items:baseline;
+  gap:5px;
+  white-space:nowrap;
+}
+.user-sale-level small{
+  color:#667085;
+  font-size:8px;
+  font-weight:750;
+}
+.user-sale-level strong{
+  color:#176b45;
+  font-size:10px;
+  font-weight:850;
+}
+.user-sale-sep{
+  display:inline-block;
+  margin:0 5px;
+  color:#98a2b3;
+}
+.user-col-pack{
+  color:#475467;
+  font-size:9px;
+}
+.user-col-bargain .xls-input{
+  width:100%!important;
+  min-width:0!important;
+  text-align:right!important;
+}
+.user-col-rating{
+  text-align:center!important;
+}
+.user-rating{
+  display:inline-flex;
+  gap:1px;
+  white-space:nowrap;
+}
+.user-rating-button{
+  appearance:none;
+  border:0;
+  padding:1px;
+  background:transparent;
+  color:#d0d5dd;
+  font-size:15px;
+  line-height:1;
+  cursor:pointer;
+}
+.user-rating-button.active{color:#f59e0b}
+.user-rating-button:focus-visible{
+  outline:2px solid #98a2b3;
+  outline-offset:1px;
+  border-radius:3px;
+}
+
+@media (max-width:760px){
+  .role-switch{gap:4px}
+  .role-badge{display:none}
+  .role-admin-button{min-height:28px;padding:0 8px}
+  body[data-app-role="user"] .workspace{
+    grid-template-columns:minmax(0,1fr)!important;
+  }
+  body[data-app-role="user"] #workspaceNav{
+    display:none!important;
+  }
+  body[data-app-role="user"] .mobile-category-button{
+    display:inline-flex!important;
+  }
+  .xls-price-table.user-table-mode{
+    min-width:690px!important;
+  }
+}

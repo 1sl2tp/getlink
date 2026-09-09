@@ -9470,3 +9470,28 @@ body.source-manager-open{overflow:hidden!important}
     font-size:5.6px!important;
   }
 }
+
+
+/* Supplier stock status v14 */
+.xls-out-of-stock,
+.grid-price.source-price-mine{
+  color:#a33a28!important;
+}
+.xls-out-of-stock{
+  display:inline-block;
+  font-size:9px!important;
+  font-weight:800!important;
+  line-height:1.15!important;
+  white-space:nowrap!important;
+}
+.grid-price.source-price-mine{
+  font-weight:800!important;
+}
+.grid-product.source-mine .grid-price.source-price-mine{
+  color:#087a40!important;
+}
+.grid-product.source-mine .grid-price.source-price-mine:is(:not(:empty)){
+  text-align:right!important;
+}
+
+.grid-price.is-out-of-stock{color:#a33a28!important;font-size:9px!important}

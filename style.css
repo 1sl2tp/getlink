@@ -12642,7 +12642,9 @@ body[data-app-role="user"] .workspace-detail{
 @media(max-width:639px){
   body[data-app-role="user"] .user-work-home{
     padding:0;
+    height:100%;
     min-height:0;
+    overflow:hidden;
   }
   body[data-app-role="user"] .workspace-list{
     overflow:hidden!important;

@@ -45,6 +45,35 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('"Tạp hóa"',APP)
         self.assertRegex(APP,r"rowMatchesSourceFilter\(row,mobileUserSource\)")
 
+    def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
+        block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(block)
+        body=block.group(1)
+        self.assertIn("rowPackHierarchy(row)",body)
+        self.assertRegex(body,r'h\.label1\s*===\s*"Thùng"')
+        self.assertNotIn("rowIsCarton(row)",body)
+
+    def test_mobile_mine_and_market_cards_share_information_geometry(self):
+        mine=re.search(r"function\s+mobileUserMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        market=re.search(r"function\s+mobileUserMarketCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(mine)
+        self.assertIsNotNone(market)
+        mine_body=mine.group(1)
+        market_body=market.group(1)
+        for token in ["mobile-user-product-image","mobile-user-product-copy","mobile-user-product-name","mobile-user-product-qc","mobile-user-product-bottom","mobile-user-product-price","mobile-user-product-source"]:
+            self.assertIn(token,mine_body)
+            self.assertIn(token,market_body)
+        self.assertIn("data-work-qty",mine_body)
+        self.assertNotIn("data-work-qty",market_body)
+
+    def test_mobile_mine_card_keeps_single_sale_price_label(self):
+        block=re.search(r"function\s+mobileUserMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(block)
+        body=block.group(1)
+        self.assertIn("Giá bán",body)
+        self.assertNotIn("Giá thùng",body)
+        self.assertNotIn("Giá lẻ",body)
+
     def test_all_results_prioritize_mine_then_supermarket_carton_middle_retail(self):
         self.assertRegex(APP,r"function\s+mobileUserPackRank\s*\(")
         self.assertRegex(APP,r"if\(rowIsCarton\(row\)\)return 0")

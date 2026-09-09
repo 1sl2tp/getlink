@@ -12783,6 +12783,99 @@ body[data-app-role="user"] .workspace-detail{
     padding:0 7px;
     font-size:10px;
   }
+  .mobile-merge-preview{
+    margin-top:7px;
+    padding:7px;
+    border:1px solid #d9e7df;
+    border-radius:9px;
+    background:#fff;
+  }
+  .mobile-merge-preview[hidden]{display:none!important}
+  .mobile-merge-preview-head{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .mobile-merge-preview-head strong{
+    color:#202124;
+    font-size:10.5px;
+  }
+  .mobile-merge-preview-head small{
+    color:#667085;
+    font-size:8.5px;
+  }
+  .mobile-merge-preview-body{
+    display:grid;
+    grid-template-columns:58px minmax(0,1fr);
+    gap:8px;
+    align-items:start;
+  }
+  .mobile-merge-preview-image{
+    width:58px;
+    height:58px;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+    border:1px solid #eef1f3;
+    border-radius:8px;
+    background:#fff;
+    color:#0a8f4d;
+    font-size:10px;
+    font-weight:800;
+  }
+  .mobile-merge-preview-image img{
+    width:100%;
+    height:100%;
+    object-fit:contain;
+  }
+  .mobile-merge-preview-fields{
+    min-width:0;
+    margin:0;
+  }
+  .mobile-merge-preview-fields>div{
+    display:grid;
+    grid-template-columns:68px minmax(0,1fr);
+    gap:5px;
+    align-items:start;
+    padding:2px 0;
+  }
+  .mobile-merge-preview-fields dt{
+    color:#7a8491;
+    font-size:8.5px;
+  }
+  .mobile-merge-preview-fields dd{
+    min-width:0;
+    margin:0;
+    color:#202124;
+    font-size:9px;
+    line-height:1.25;
+  }
+  .mobile-merge-preview-fields dd span{
+    display:block;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .mobile-merge-preview-fields dd small{
+    display:block;
+    margin-top:1px;
+    color:#98a2b3;
+    font-size:7.5px;
+  }
+  .mobile-merge-apply{
+    width:100%;
+    height:32px;
+    margin-top:7px;
+    border:0;
+    border-radius:8px;
+    background:#0a8f4d;
+    color:#fff;
+    font-size:10.5px;
+    font-weight:800;
+  }
+  .mobile-merge-apply:disabled{opacity:.42}
   .mobile-merge-password[hidden]{display:none!important}
   .mobile-merge-status{
     min-height:14px;

@@ -163,6 +163,30 @@ const MOBILE_USER_SCOPES=["mine","market"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
 const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
+const WORK_ICON_PATHS={
+  // Small inline subset from the Tabler Icons visual system (24x24 outline).
+  "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
+  "shopping-cart":'<path d="M4 4h2l2 10h9l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  "package-export":'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/><path d="M8 5.25 16 9.75"/><path d="M16 16h5M19 13l3 3-3 3"/>',
+  "category":'<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
+  "beer":'<path d="M6 7h9v12H6z"/><path d="M15 9h2a3 3 0 0 1 0 6h-2"/><path d="M8 4h5v3H8z"/>',
+  "bottle":'<path d="M9 3h6l-1 5 2 3v8a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-8l2-3z"/>',
+  "bowl":'<path d="M4 11h16"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M8 7c1-2 2-2 3-4M13 7c1-2 2-2 3-4"/>',
+  "milk":'<path d="M8 3h8l2 5v12H6V8z"/><path d="M8 3v5h10"/>',
+  "cigarette":'<path d="M4 14h14v4H4z"/><path d="M18 14h2v4h-2z"/><path d="M5 10c2-2 4 1 6-1s4 1 6-1"/>',
+  "candy":'<path d="m5 9-3 3 3 3 3-2h8l3 2 3-3-3-3-3 2H8z"/>',
+  "spice":'<path d="M9 4h6l1 4H8z"/><path d="M7 8h10l-1 12H8z"/><path d="M10 12h4"/>',
+  "package":'<path d="m4 8 8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>'
+};
+function workIconSvg(name,className="ui-icon"){
+  const body=WORK_ICON_PATHS[name]||WORK_ICON_PATHS.package;
+  return '<svg class="'+escapeAttr(className)+' work-icon work-icon-'+escapeAttr(name)+'" aria-hidden="true" viewBox="0 0 24 24">'+body+'</svg>';
+}
+function displayUpperFirst(value){
+  const s=String(value||"").trim();
+  return s?s.charAt(0).toLocaleUpperCase("vi-VN")+s.slice(1):"";
+}
+
 let mobileUserScope="mine";
 let mobileUserCategoryKey="";
 let mobileUserLimit=8;
@@ -1615,8 +1639,10 @@ function sourceDisplayLabel(row){
   if(isGoRow(row))return "GO";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
-  return raw;
+  return displayUpperFirst(raw);
 }
+
+
 
 function sourceDisplayClass(row){
   if(isMineRow(row))return " source-mine";
@@ -3421,25 +3447,25 @@ function userWorkRowsForScope(scope,categoryKey=""){
 
 function userWorkCategoryIcon(name){
   const key=searchKey(name||"");
-  let body='<path d="M4 7h16v12H4z"/><path d="m4 7 4-3h8l4 3"/>';
-  if(key.includes("bia"))body='<path d="M6 7h9v12H6z"/><path d="M15 9h2a3 3 0 0 1 0 6h-2"/><path d="M8 4h5v3H8z"/>';
-  else if(key.includes("nuoc ngot"))body='<path d="M9 3h6l-1 5 2 3v8a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-8l2-3z"/>';
-  else if(key==="mi"||key.includes(" mi "))body='<path d="M4 11h16"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M8 7c1-2 2-2 3-4M13 7c1-2 2-2 3-4"/>';
-  else if(key.includes("sua"))body='<path d="M8 3h8l2 5v12H6V8z"/><path d="M8 3v5h10"/>';
-  else if(key.includes("thuoc la"))body='<path d="M4 14h14v4H4z"/><path d="M18 14h2v4h-2z"/><path d="M5 10c2-2 4 1 6-1s4 1 6-1"/>';
-  else if(key.includes("banh")||key.includes("keo"))body='<path d="m5 9-3 3 3 3 3-2h8l3 2 3-3-3-3-3 2H8z"/>';
-  else if(key.includes("gia vi"))body='<path d="M9 4h6l1 4H8z"/><path d="M7 8h10l-1 12H8z"/><path d="M10 12h4"/>';
-  else if(key.includes("masan"))body='<path d="M4 9 12 3l8 6v11H4z"/><path d="M9 20v-6h6v6"/>';
-  else if(key.includes("hang u"))body='<path d="m4 8 8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>';
-  return '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24">'+body+'</svg>';
+  let icon="package";
+  if(key.includes("bia"))icon="beer";
+  else if(key.includes("nuoc ngot"))icon="bottle";
+  else if(key==="mi"||key.includes(" mi "))icon="bowl";
+  else if(key.includes("sua"))icon="milk";
+  else if(key.includes("thuoc la"))icon="cigarette";
+  else if(key.includes("banh")||key.includes("keo"))icon="candy";
+  else if(key.includes("gia vi"))icon="spice";
+  else if(key.includes("masan"))icon="building-store";
+  else if(key.includes("hang u")||key.includes("hang thuong"))icon="package";
+  return workIconSvg(icon,"user-work-category-icon");
 }
 
 
 function userWorkCategoryDisplayLabel(name,scope,compact=false){
-  const raw=String(name||"").trim();
+  const raw=displayUpperFirst(name);
   if(!compact||scope!=="mine")return raw;
-  const short=raw.replace(/^Hàng\s+/iu,"").trim();
-  return short||raw;
+  const short=String(raw).replace(/^Hàng\s+/iu,"").trim();
+  return displayUpperFirst(short||raw);
 }
 
 function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
@@ -3448,7 +3474,7 @@ function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
   const compact=attribute==="data-mobile-category";
   host.innerHTML=[
     '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">'+
-      '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>'+
+      workIconSvg("category","user-work-category-icon")+
       '<span>Tất cả</span></button>',
     ...categories.map(item=>
       '<button class="user-work-category-button '+(item.key===activeKey?"active":"")+'" '+
@@ -3599,7 +3625,7 @@ function mobileSupplierSourceLabel(key){
     isMineRow(item)&&mobileSupplierSourceKey(item)===key
   );
   const label=String(row&&row.supplier_source_name||"").trim();
-  if(label)return label;
+  if(label)return displayUpperFirst(label);
   const fallbacks={
     "hang-u":"Hàng U",
     "thuoc-la":"Thuốc lá",
@@ -4120,7 +4146,8 @@ function renderMobileUserSourceTabs(){
       MOBILE_USER_SCOPES.map(key=>
         '<button class="mobile-user-source-chip '+(key===mobileUserScope?"active":"")+'" '+
           'data-mobile-scope="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserScope?"true":"false")+'">'+
-          escapeHtml(MOBILE_USER_SCOPE_LABELS[key]||key)+
+          workIconSvg(key==="mine"?"building-store":"shopping-cart","ui-icon")+
+          '<span>'+escapeHtml(MOBILE_USER_SCOPE_LABELS[key]||key)+'</span>'+
         '</button>'
       ).join("")+
     '</div>';

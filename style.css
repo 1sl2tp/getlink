@@ -13921,3 +13921,167 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
   background:#f5fbf7!important;
   box-shadow:inset 3px 0 0 rgba(10,143,77,.38),0 3px 10px rgba(16,24,40,.04);
 }
+
+
+/* Work typography v54 — match Chat shell visual scale.
+   Chat top tabs are 14px desktop / 12.5px mobile, so GETLINK controls
+   and product content use that as the primary visual reference. */
+body[data-app-role="user"] .user-work-home{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+}
+
+/* Desktop / tablet */
+@media(min-width:640px){
+  .user-work-desktop .user-work-search input{
+    font-size:14px;
+    font-weight:450;
+  }
+  .user-work-desktop .user-work-jump-button{
+    font-size:14px;
+    font-weight:600;
+  }
+  .user-work-category-panel{
+    grid-auto-rows:42px;
+  }
+  .user-work-category-button{
+    height:42px;
+    font-size:13px;
+    font-weight:650;
+  }
+  .user-work-category-icon{
+    width:18px;
+    height:18px;
+    flex-basis:18px;
+  }
+
+  .user-work-desktop .user-work-section-title strong{
+    font-size:15px;
+    line-height:1.2;
+    font-weight:700;
+  }
+  .user-work-desktop .user-work-section-title small{
+    font-size:10.5px;
+    line-height:1.25;
+  }
+
+  .user-work-desktop .user-work-market-name{
+    font-size:13.5px;
+    line-height:1.3;
+    font-weight:650;
+  }
+  .user-work-desktop .user-work-market-pack{
+    font-size:10.5px;
+    line-height:1.2;
+  }
+  .user-work-desktop .user-work-market-price{
+    font-size:16px;
+    font-weight:750;
+  }
+
+  .user-work-order-head{
+    min-height:42px;
+    font-size:11.5px;
+    font-weight:700;
+  }
+  .user-work-order-row{
+    min-height:64px;
+  }
+  .user-work-order-name strong{
+    font-size:13px;
+    line-height:1.25;
+    font-weight:650;
+  }
+  .user-work-order-name small{
+    font-size:10.5px;
+    line-height:1.2;
+  }
+  .user-work-order-price{
+    font-size:12px;
+  }
+  .user-work-order-price strong{
+    font-size:13.5px;
+    font-weight:700;
+  }
+  .user-work-order-qty b{
+    font-size:12.5px;
+  }
+  .user-work-order-bargain input{
+    font-size:12px;
+  }
+  #userWorkSelectedCount{
+    font-size:11.5px;
+  }
+  .user-work-send-order{
+    font-size:12.5px;
+  }
+}
+
+/* Mobile — stay visually proportional to Chat's 12.5px mode tabs.
+   Search remains 16px to avoid browser zoom on focus. */
+@media(max-width:639px){
+  .mobile-user-search input{
+    font-size:16px!important;
+    font-weight:450;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    min-width:62px;
+    height:36px;
+    font-size:12.5px!important;
+    font-weight:650;
+  }
+  .mobile-user-source-level.child .user-work-category-button{
+    height:30px;
+    padding-inline:10px;
+    font-size:12px;
+    font-weight:650;
+  }
+  .mobile-user-source-level.child .user-work-category-icon{
+    width:15px;
+    height:15px;
+    flex-basis:15px;
+  }
+
+  .mobile-user-product-name{
+    font-size:13.5px;
+    line-height:1.3;
+    font-weight:650;
+  }
+  .mobile-user-product-qc{
+    font-size:10.5px;
+    line-height:1.25;
+  }
+  .mobile-user-product-price{
+    font-size:15px;
+    font-weight:750;
+  }
+  .mobile-user-price-stack>small{
+    font-size:10px;
+  }
+  .mobile-user-qty b{
+    font-size:12.5px;
+  }
+  .mobile-user-own-price>b{
+    font-size:15px;
+  }
+  .mobile-user-order-bar>span{
+    font-size:11.5px;
+  }
+  .mobile-user-send-order{
+    font-size:12.5px;
+  }
+  .mobile-user-empty{
+    font-size:12px;
+  }
+}
+
+/* Keep the smallest supported mobile readable without forcing controls to wrap. */
+@media(max-width:340px){
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    min-width:54px!important;
+    padding-inline:5px!important;
+    font-size:11.5px!important;
+  }
+  .mobile-user-source-level.child .user-work-category-button{
+    font-size:11.5px;
+  }
+}

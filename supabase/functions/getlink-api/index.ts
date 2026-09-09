@@ -2223,6 +2223,7 @@ async function saveUserFeedback(body:any){
   const clientId=clean(body?.client_id||"").slice(0,120);
   if(!raw||!clientId)throw new Error("feedback_missing_fields");
   const itemUrl=canonical(raw);
+  sourceKey(itemUrl);
   const bargainRaw=body?.bargain_price_vnd;
   const ratingRaw=body?.rating;
   const bargain=bargainRaw===null||bargainRaw===undefined||bargainRaw===""

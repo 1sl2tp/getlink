@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code";
+const UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1680,6 +1680,12 @@ function syncTableSourceSortHeader(){
 }
 
 
+function supplierPercentText(value){
+  const n=Number(value);
+  if(!Number.isFinite(n))return "—";
+  return n.toLocaleString("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:3})+"%";
+}
+
 function supplierTableRow(row){
   const displayName=canonicalDisplayName(row);
   const pref=String(row.preference_state||"normal");
@@ -1693,10 +1699,20 @@ function supplierTableRow(row){
     (!rawInputBasis&&retail>0&&carton<=0)||
     (String(row&&row.supplier_source_key||"")==="thuoc-la"&&retail>0&&carton<=0);
   const inputBasis=inferredRetailBasis?"Lẻ":"Thùng";
+  const expectedPercentRaw=row&&row.supplier_expected_profit_percent;
+  const expectedPercent=expectedPercentRaw===null||expectedPercentRaw===undefined
+    ?null
+    :Number(expectedPercentRaw);
+  const expectedProfit=Number(row&&row.supplier_expected_profit_vnd||0);
+  const appliedProfitRaw=row&&row.supplier_applied_profit_vnd;
+  const appliedProfit=appliedProfitRaw===null||appliedProfitRaw===undefined
+    ?null
+    :Number(appliedProfitRaw);
+  const pricingMode=String(row&&row.supplier_pricing_profit_mode||"expected")==="applied"
+    ?(appliedProfit!==null?"Lãi áp dụng":"Lãi kỳ vọng")
+    :"Lãi kỳ vọng";
   const unitsPerCarton=Number(row&&row.supplier_units_per_carton||0);
   const retailUnit=String(row&&row.supplier_retail_unit||"").trim();
-  const actualProfit=Number(row&&row.supplier_actual_profit_vnd||0);
-  const expectedProfit=Number(row&&row.supplier_expected_profit_vnd||0);
   const previousCost=Number(row&&row.supplier_previous_input_price_vnd||0);
   const direction=String(row&&row.supplier_price_direction||"").trim();
   const delta=Number(row&&row.supplier_price_delta_vnd||0);
@@ -1723,6 +1739,8 @@ function supplierTableRow(row){
     ?'<small class="supplier-stock-note">'+escapeHtml(stock)+'</small>'
     :"";
 
+  const modeClass=pricingMode==="Lãi áp dụng"?"is-applied":"is-expected";
+
   return '<tr class="product-card xls-row supplier-table-row source-mine '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -1731,12 +1749,14 @@ function supplierTableRow(row){
       '</td>'+
       '<td class="xls-num supplier-col-source">'+(supplierCost?money(supplierCost):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="supplier-col-basis"><span class="supplier-basis-badge '+(inputBasis==="Lẻ"?"is-retail":"is-carton")+'">'+inputBasis+'</span></td>'+
+      '<td class="xls-num supplier-col-profit">'+(expectedPercent!==null?supplierPercentText(expectedPercent):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-profit">'+(expectedProfit?money(expectedProfit):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-profit">'+(appliedProfit!==null?money(appliedProfit):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="supplier-col-profit supplier-profit-mode"><span class="supplier-profit-mode-badge '+modeClass+'">'+pricingMode+'</span></td>'+
       '<td class="xls-num supplier-col-sale">'+(carton?'<span class="supplier-price-main">'+money(carton)+'</span>'+stockNote:'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-sale">'+(retail?'<span class="supplier-price-main">'+money(retail)+'</span>':'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-pack">'+(unitsPerCarton>1?String(unitsPerCarton):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="supplier-col-pack supplier-retail-pack">'+(retailUnit?escapeHtml(retailUnit):'<span class="xls-empty">—</span>')+'</td>'+
-      '<td class="xls-num supplier-col-profit">'+(actualProfit?money(actualProfit):'<span class="xls-empty">—</span>')+'</td>'+
-      '<td class="xls-num supplier-col-profit">'+(expectedProfit?money(expectedProfit):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-history">'+(previousCost?money(previousCost):'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-history">'+changeCell+'</td>'+
       '<td class="supplier-col-history supplier-change-date">'+escapeHtml(changedDate)+'</td>'+
@@ -3054,7 +3074,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?12:12)+'">Đang đọc thư viện Supabase...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?14:12)+'">Đang đọc thư viện Supabase...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{

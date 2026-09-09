@@ -14278,3 +14278,141 @@ html[data-getlink-embed="1"] .site-chat-notice{
     display:none!important;
   }
 }
+
+
+/* Work UI v56 — Chat-aligned type scale + Tabler-style grocery icons */
+.work-icon{
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+/* Chat desktop mode tabs are 14px. GETLINK desktop content should never
+   visually read smaller than that baseline. */
+@media(min-width:640px){
+  .user-work-desktop .user-work-search input{
+    font-size:14.5px!important;
+    font-weight:475!important;
+  }
+  .user-work-desktop .user-work-jump-button{
+    gap:6px!important;
+    font-size:14px!important;
+    font-weight:600!important;
+  }
+  .user-work-desktop .user-work-jump-button .ui-icon{
+    display:block!important;
+    width:16.5px!important;
+    height:16.5px!important;
+    flex:0 0 16.5px;
+  }
+
+  .user-work-category-panel{
+    grid-auto-rows:44px!important;
+  }
+  .user-work-category-button{
+    height:44px!important;
+    font-size:14px!important;
+    font-weight:625!important;
+  }
+  .user-work-category-icon{
+    width:18px!important;
+    height:18px!important;
+    flex-basis:18px!important;
+    stroke-width:1.8!important;
+  }
+
+  .user-work-desktop .user-work-section-title strong{
+    font-size:15.5px!important;
+  }
+  .user-work-desktop .user-work-section-title small{
+    font-size:11.5px!important;
+  }
+
+  .user-work-desktop .user-work-market-name{
+    font-size:14px!important;
+    line-height:1.32!important;
+  }
+  .user-work-desktop .user-work-market-pack{
+    font-size:11px!important;
+  }
+  .user-work-desktop .user-work-market-price{
+    font-size:16.5px!important;
+  }
+
+  .user-work-order-head{
+    font-size:12.5px!important;
+  }
+  .user-work-order-row{
+    min-height:68px!important;
+  }
+  .user-work-order-name strong{
+    font-size:14px!important;
+    line-height:1.28!important;
+  }
+  .user-work-order-name small{
+    font-size:11px!important;
+  }
+  .user-work-order-price{
+    font-size:13px!important;
+  }
+  .user-work-order-price strong{
+    font-size:14.5px!important;
+  }
+  .user-work-order-qty,
+  .user-work-order-qty b{
+    font-size:13px!important;
+  }
+  .user-work-order-bargain input{
+    font-size:12.5px!important;
+  }
+  #userWorkSelectedCount{
+    font-size:12.5px!important;
+  }
+  .user-work-send-order{
+    gap:6px!important;
+    font-size:13.5px!important;
+  }
+  .user-work-send-order .ui-icon{
+    width:17px!important;
+    height:17px!important;
+  }
+}
+
+/* Mobile stays close to Chat's 12.5px mode-tab rhythm, but gains the same
+   semantic icons without making the search/source row wrap. */
+@media(max-width:639px){
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    display:inline-flex!important;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip .ui-icon{
+    width:13px;
+    height:13px;
+    flex:0 0 13px;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip span{
+    min-width:0;
+  }
+  .mobile-user-send-order{
+    gap:6px!important;
+  }
+  .mobile-user-send-order .ui-icon{
+    width:16px!important;
+    height:16px!important;
+  }
+}
+
+@media(max-width:340px){
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    gap:3px;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip .ui-icon{
+    width:12px;
+    height:12px;
+    flex-basis:12px;
+  }
+}

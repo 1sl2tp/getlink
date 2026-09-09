@@ -5124,13 +5124,7 @@ if(userWorkHome){
 
     if(e.target.closest("#mobileMergeToggle")){
       mobileMergeMode=!mobileMergeMode;
-      mobileMergeSelected.clear();
-      renderUserWorkHome();
-      return;
-    }
-
-    if(e.target.closest("#mobileMergeCancel")){
-      mobileMergeMode=false;
+      mobileMergeTargetUrl="";
       mobileMergeSelected.clear();
       const status=$("#mobileMergeStatus");
       if(status)status.textContent="";
@@ -5138,24 +5132,27 @@ if(userWorkHome){
       return;
     }
 
-    const mergeGroup=e.target.closest("[data-mobile-merge-group]");
-    if(mergeGroup&&!mergeGroup.disabled){
-      toggleMobileMergeGroup(mergeGroup.dataset.mobileMergeGroup||"");
+    if(e.target.closest("#mobileMergeCancel")){
+      mobileMergeMode=false;
+      mobileMergeTargetUrl="";
+      mobileMergeSelected.clear();
+      const status=$("#mobileMergeStatus");
+      if(status)status.textContent="";
       renderUserWorkHome();
       return;
     }
 
-    const mergeSelect=e.target.closest("[data-mobile-merge-select]");
-    if(mergeSelect&&!mergeSelect.disabled){
-      const url=canonical(mergeSelect.dataset.mobileMergeSelect||"");
-      if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
-      else mobileMergeSelected.add(url);
-      renderUserWorkHome();
+    const mergeTarget=e.target.closest("[data-mobile-merge-target]");
+    if(mergeTarget&&!mergeTarget.disabled){
+      const row=findLibraryRow(mergeTarget.dataset.mobileMergeTarget||"");
+      if(row&&setMobileMergeTarget(row))renderUserWorkHome();
       return;
     }
 
-    if(e.target.closest("#mobileMergeConfirm")){
-      saveMobileCanonicalMerge();
+    const mergeSource=e.target.closest("[data-mobile-merge-source]");
+    if(mergeSource&&!mergeSource.disabled){
+      const row=findLibraryRow(mergeSource.dataset.mobileMergeSource||"");
+      if(row)quickAttachMobileMergeSource(row);
       return;
     }
 
@@ -5192,21 +5189,15 @@ if(userWorkHome){
       return;
     }
 
-    const mergedCard=e.target.closest(".mobile-user-merged-card[data-canonical-id]");
-    if(mobileMergeMode&&mergedCard&&!e.target.closest("[data-work-qty]")){
-      toggleMobileMergeGroup(mergedCard.dataset.canonicalId||"");
-      renderUserWorkHome();
-      return;
-    }
-
     const mobileCard=e.target.closest(".mobile-user-product-card[data-url]");
     if(mobileMergeMode&&mobileCard&&!e.target.closest("[data-work-qty]")){
-      const url=canonical(mobileCard.dataset.url||"");
-      const row=findLibraryRow(url);
-      if(row&&!String(row.canonical_product_id||"").trim()){
-        if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
-        else mobileMergeSelected.add(url);
-        renderUserWorkHome();
+      const row=findLibraryRow(mobileCard.dataset.url||"");
+      if(row){
+        if(isMineRow(row)){
+          if(setMobileMergeTarget(row))renderUserWorkHome();
+        }else if(mobileMergeTargetRow()){
+          quickAttachMobileMergeSource(row);
+        }
       }
       return;
     }

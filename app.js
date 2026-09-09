@@ -161,6 +161,7 @@ let mobileUserSource="";
 let mobileUserLimit=8;
 let mobileMergeMode=false;
 const mobileMergeSelected=new Set();
+let mobileMergeTargetUrl="";
 let mobileMergeBusy=false;
 let mobileMergeAdminToken="";
 const USER_WORK_QTY_KEY="getlink:user-work-order-qty";

@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v10-xls-root";
+const UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1685,6 +1685,7 @@ function supplierTableRow(row){
   const pref=String(row.preference_state||"normal");
   const stock=supplierAvailabilityText(row);
   const supplierCost=Number(row&&row.supplier_input_price_vnd||0);
+  const inputBasis=String(row&&row.supplier_input_price_basis||"carton")==="retail"?"Lẻ":"Thùng";
   const carton=Number(row&&row.supplier_carton_price_vnd||0);
   const retail=Number(row&&row.supplier_retail_price_vnd||0);
   const unitsPerCarton=Number(row&&row.supplier_units_per_carton||0);
@@ -1724,6 +1725,7 @@ function supplierTableRow(row){
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-num supplier-col-source">'+(supplierCost?money(supplierCost):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="supplier-col-basis"><span class="supplier-basis-badge '+(inputBasis==="Lẻ"?"is-retail":"is-carton")+'">'+inputBasis+'</span></td>'+
       '<td class="xls-num supplier-col-sale">'+(carton?'<span class="supplier-price-main">'+money(carton)+'</span>'+stockNote:'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-sale">'+(retail?'<span class="supplier-price-main">'+money(retail)+'</span>':'<span class="xls-empty">—</span>')+'</td>'+
       '<td class="xls-num supplier-col-pack">'+(unitsPerCarton>1?String(unitsPerCarton):'<span class="xls-empty">—</span>')+'</td>'+
@@ -3047,7 +3049,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?11:12)+'">Đang đọc thư viện Supabase...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?12:12)+'">Đang đọc thư viện Supabase...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{

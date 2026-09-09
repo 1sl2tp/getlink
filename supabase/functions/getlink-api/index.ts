@@ -2925,6 +2925,103 @@ async function newsFetchText(url:string){
     clearTimeout(timer);
   }
 }
+const NEWS_DETAIL_CACHE_MS=5*60*1000;
+const newsDetailCache=new Map<string,{at:number;payload:any}>();
+function newsAllowedDetailHost(host:string){
+  const key=String(host||"").toLowerCase().replace(/^www\./,"");
+  return NEWS_SOURCES.some(source=>key===source.domain||key.endsWith("."+source.domain));
+}
+function newsAbsoluteUrl(value:unknown,base:string){
+  const raw=newsXmlText(value);
+  if(!raw)return "";
+  try{
+    const u=new URL(raw,base);
+    return /^https?:$/.test(u.protocol)?u.toString():"";
+  }catch{return "";}
+}
+function newsJsonLdCollect(value:any,out:{bodies:string[];images:string[]}){
+  if(!value)return;
+  if(Array.isArray(value)){for(const item of value)newsJsonLdCollect(item,out);return;}
+  if(typeof value!=="object")return;
+  if(typeof value.articleBody==="string"&&clean(value.articleBody))out.bodies.push(clean(value.articleBody));
+  const image=value.image;
+  if(typeof image==="string")out.images.push(image);
+  else if(Array.isArray(image)){
+    for(const x of image){
+      if(typeof x==="string")out.images.push(x);
+      else if(x&&typeof x==="object"&&typeof x.url==="string")out.images.push(x.url);
+    }
+  }else if(image&&typeof image==="object"&&typeof image.url==="string")out.images.push(image.url);
+  if(Array.isArray(value["@graph"]))newsJsonLdCollect(value["@graph"],out);
+}
+function newsArticleParagraphs(html:string){
+  const article=String(html||"").match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]||"";
+  const scope=article||String(html||"");
+  const out:string[]=[];
+  for(const m of scope.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi)){
+    const text=newsStripHtml(m[1]);
+    if(text.length>=35&&!out.includes(text))out.push(text);
+    if(out.join("\n\n").length>12000)break;
+  }
+  return out;
+}
+function newsArticleImages(html:string,base:string,jsonImages:string[]){
+  const values:string[]=[];
+  const add=(value:unknown)=>{
+    const url=newsAbsoluteUrl(value,base);
+    if(url&&!values.includes(url))values.push(url);
+  };
+  for(const value of jsonImages)add(value);
+  for(const m of String(html||"").matchAll(/<meta\b[^>]*(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]*content=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  const article=String(html||"").match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]||"";
+  for(const m of article.matchAll(/<img\b[^>]*(?:src|data-src)=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  return values.slice(0,12);
+}
+async function newsArticleDetail(rawUrl:string){
+  const requested=new URL(rawUrl);
+  const requestedHost=requested.hostname.toLowerCase().replace(/^www\./,"");
+  if(!newsAllowedDetailHost(requestedHost))throw new Error("news_detail_host_not_allowed");
+  const key=requested.toString();
+  const cached=newsDetailCache.get(key);
+  if(cached&&Date.now()-cached.at<NEWS_DETAIL_CACHE_MS)return {...cached.payload,cache_hit:true};
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),6500);
+  try{
+    const res=await fetch(key,{
+      signal:controller.signal,
+      redirect:"follow",
+      headers:{
+        "accept":"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
+        "user-agent":"GETLINK-News-Reader/1.0 (+https://get.taphoa.xyz)"
+      }
+    });
+    if(!res.ok)throw new Error("news_detail_http_"+res.status);
+    const finalUrl=res.url||key;
+    const finalHost=new URL(finalUrl).hostname.toLowerCase().replace(/^www\./,"");
+    if(!newsAllowedDetailHost(finalHost))throw new Error("news_detail_redirect_not_allowed");
+    const html=await res.text();
+    const collected={bodies:[] as string[],images:[] as string[]};
+    for(const m of html.matchAll(/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>([\s\S]*?)<\/script>/gi)){
+      try{newsJsonLdCollect(JSON.parse(m[1]),collected);}catch{}
+    }
+    const body=collected.bodies.sort((a,b)=>b.length-a.length)[0]||"";
+    const paragraphs=body
+      ?body.split(/\n{2,}|(?<=[.!?])\s+(?=[A-ZÀ-ỸĐ])/u).map(x=>clean(x)).filter(x=>x.length>=30)
+      :newsArticleParagraphs(html);
+    const images=newsArticleImages(html,finalUrl,collected.images);
+    const payload={
+      url:finalUrl,
+      content:paragraphs.join("\n\n").slice(0,16000),
+      paragraphs:paragraphs.slice(0,40),
+      images,
+      cache_hit:false
+    };
+    newsDetailCache.set(key,{at:Date.now(),payload});
+    return payload;
+  }finally{
+    clearTimeout(timer);
+  }
+}
 async function newsFetchSource(source:NewsSourceDef,topic:NewsTopicKey){
   const primary=source.feeds[topic]||"";
   const candidates=[primary,newsGoogleFeed(source,topic)].filter((x,i,a)=>x&&a.indexOf(x)===i);
@@ -3866,6 +3963,16 @@ Deno.serve(async(req:Request)=>{
       if(source!=="all"&&!NEWS_SOURCES.some(x=>x.key===source))return response(req,{error:"invalid_news_source"},400);
       return response(req,await newsSnapshot(topic,source,limit));
     }
+    if(req.method==="GET"&&route==="/api/news-detail"){
+      const raw=clean(url.searchParams.get("url")||"");
+      if(!raw)return response(req,{error:"missing_news_url"},400);
+      try{
+        return response(req,await newsArticleDetail(raw));
+      }catch(e){
+        return response(req,{error:"news_detail_failed",detail:errorText(e).slice(0,220)},502);
+      }
+    }
+
 
     if(req.method==="GET"&&route==="/health"){
       const {count,error}=await sb.from("getlink_links").select("*",{count:"exact",head:true}); if(error)throw error;

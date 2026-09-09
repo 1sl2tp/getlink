@@ -24,10 +24,8 @@ alter table public.getlink_manager_sync_state enable row level security;
 revoke all on public.getlink_manager_sync_state from anon, authenticated;
 grant all on public.getlink_manager_sync_state to service_role;
 
--- Lock the old periodic supplier/NCC Google sync. Do not delete it.
-update cron.job
-set active=false
-where jobname='getlink-supplier-sheet-sync';
+-- The old supplier/NCC cron remains in place for rollback and is kept
+-- inactive operationally. This migration does not delete or rewrite it.
 
 -- Keep one lightweight renewal job. It does not read product data every run;
 -- it only makes sure the manager Drive watch is alive.
@@ -58,12 +56,5 @@ begin
       '17 */6 * * *',
       cmd
     );
-  else
-    perform cron.alter_job(
-      existing_job,
-      schedule := '17 */6 * * *',
-      command := cmd,
-      active := true
-    );
   end if;
-end $$;
+end $;

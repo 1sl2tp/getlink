@@ -12687,10 +12687,18 @@ body[data-app-role="user"] .workspace-detail{
     color:#202124;
     font-size:16px;
   }
+  .mobile-user-source-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:6px;
+    align-items:center;
+    margin-top:6px;
+  }
   .mobile-user-source-tabs{
     display:flex;
     gap:6px;
-    margin-top:6px;
+    min-width:0;
+    margin-top:0;
     overflow-x:auto;
     scrollbar-width:none;
     overscroll-behavior-x:contain;
@@ -12713,6 +12721,87 @@ body[data-app-role="user"] .workspace-detail{
     background:#edf8f2;
     color:#087a40;
   }
+  .mobile-merge-toggle{
+    height:30px;
+    padding:0 10px;
+    border:1px solid #d9e1e6;
+    border-radius:999px;
+    background:#fff;
+    color:#475467;
+    font-size:10.5px;
+    font-weight:750;
+    white-space:nowrap;
+  }
+  .mobile-merge-toggle.active{
+    border-color:#0a8f4d;
+    background:#0a8f4d;
+    color:#fff;
+  }
+  .mobile-merge-panel{
+    margin:6px 8px 0;
+    padding:8px;
+    border:1px solid #dfe7e2;
+    border-radius:10px;
+    background:#f8fcfa;
+  }
+  .mobile-merge-panel[hidden]{display:none!important}
+  .mobile-merge-summary{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    margin-bottom:7px;
+  }
+  .mobile-merge-summary strong{
+    font-size:11px;
+  }
+  .mobile-merge-summary button{
+    border:0;
+    background:transparent;
+    color:#667085;
+    font-size:10px;
+    font-weight:700;
+  }
+  .mobile-merge-panel>label{
+    display:grid;
+    grid-template-columns:82px minmax(0,1fr);
+    gap:7px;
+    align-items:center;
+    margin-top:5px;
+    color:#667085;
+    font-size:9.5px;
+  }
+  .mobile-merge-panel select,
+  .mobile-merge-panel input{
+    width:100%;
+    min-width:0;
+    height:30px;
+    border:1px solid #d9e1e6;
+    border-radius:7px;
+    background:#fff;
+    color:#202124;
+    padding:0 7px;
+    font-size:10px;
+  }
+  .mobile-merge-password[hidden]{display:none!important}
+  .mobile-merge-status{
+    min-height:14px;
+    margin-top:5px;
+    color:#b42318;
+    font-size:9px;
+  }
+  .mobile-merge-confirm{
+    width:100%;
+    height:32px;
+    margin-top:4px;
+    border:0;
+    border-radius:8px;
+    background:#0a8f4d;
+    color:#fff;
+    font-size:10.5px;
+    font-weight:800;
+  }
+  .mobile-merge-confirm:disabled{opacity:.42}
   .mobile-user-results{
     min-width:0;
     height:clamp(240px,calc(100dvh - 190px),680px);
@@ -12728,10 +12817,42 @@ body[data-app-role="user"] .workspace-detail{
     background:#f7f8f9;
   }
   .mobile-user-product-card{
+    position:relative;
     min-width:0;
     border:1px solid #e4e8ec;
     border-radius:10px;
     background:#fff;
+  }
+  .mobile-user-product-card.merge-selected{
+    border-color:#0a8f4d;
+    box-shadow:0 0 0 1px #0a8f4d inset;
+  }
+  .mobile-merge-select{
+    position:absolute;
+    top:5px;
+    right:5px;
+    z-index:2;
+    width:24px;
+    height:24px;
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:1px solid #d7dfe4;
+    border-radius:50%;
+    background:#fff;
+    color:#667085;
+    font-size:13px;
+    font-weight:850;
+  }
+  .mobile-merge-select.selected{
+    border-color:#0a8f4d;
+    background:#0a8f4d;
+    color:#fff;
+  }
+  .mobile-merge-select.grouped{
+    border-color:#b9ddca;
+    background:#edf8f2;
+    color:#087a40;
   }
   .mobile-user-mine-card{
     display:grid;
@@ -12857,6 +12978,48 @@ body[data-app-role="user"] .workspace-detail{
     font-size:11px;
     font-weight:700;
   }
+  .mobile-user-merged-card{
+    display:grid;
+    grid-template-columns:58px minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    min-height:78px;
+    padding:7px;
+    border-color:#cfe6d9;
+    background:#fbfefc;
+  }
+  .mobile-user-source-prices{
+    display:flex;
+    flex-wrap:wrap;
+    gap:3px;
+    margin-top:4px;
+  }
+  .mobile-user-source-price{
+    display:inline-flex;
+    align-items:baseline;
+    gap:3px;
+    max-width:100%;
+    padding:2px 5px;
+    border-radius:5px;
+    background:#f2f4f7;
+  }
+  .mobile-user-source-price small{
+    max-width:120px;
+    overflow:hidden;
+    color:#667085;
+    font-size:8px;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .mobile-user-source-price b{
+    color:#d92d20;
+    font-size:10px;
+    white-space:nowrap;
+  }
+  .mobile-user-source-price.mine{background:#edf8f2}
+  .mobile-user-source-price.bhx{background:#eef8f2}
+  .mobile-user-source-price.wm{background:#fff1f3}
+  .mobile-user-source-price.go{background:#fff7e8}
   .mobile-user-empty{
     padding:24px 12px;
     text-align:center;

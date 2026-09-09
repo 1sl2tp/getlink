@@ -546,7 +546,14 @@ assert.equal(money(0),"—");
   assert.match(app,/\/api\/user-feedback/);
   assert.match(edge,/if\(!\(await adminSessionAuthorized\(req\)\)\)return response\(req,\{error:"admin_locked"\},401\);/);
   assert.match(edge,/function publicCatalogRow\(row:any\)/);
+  assert.match(edge,/source:clean\(row\?\.source\|\|""\)/);
+  assert.match(edge,/function publicCatalogRows\(rows:any\[\]\)\{[\s\S]*?return rows\.map\(publicCatalogRow\)/);
   assert.match(edge,/getlink_user_product_feedback/);
+  assert.match(app,/function userGridProductCard\(row\)/);
+  assert.match(app,/function userPublicPackInfo\(row,levels\)/);
+  assert.match(html,/>Giá thùng</);
+  assert.match(html,/>Giá lẻ</);
+  assert.match(css,/Customer image cards keep the same 5 public fields/);
   assert.match(css,/Admin \/ customer roles v23/);
 }
 

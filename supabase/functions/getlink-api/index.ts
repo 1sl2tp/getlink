@@ -1993,17 +1993,41 @@ async function libraryRows(includeHidden=true){
     const groupKey=clean(group?.group_key||"chua-phan-loai");
     const groupName=clean(group?.name||"Chưa phân loại");
     const stockStatus=clean(s.stock_status||"no_price");
-    const carton=Number(s.carton_price_vnd||s.display_price_vnd||0)||null;
-    const retail=Number(s.retail_price_vnd||0)||null;
-    const primaryPackaging=clean(s.primary_packaging|| (clean(s.source_key)==="thuoc-la"?"1 cây":"Thùng"));
-    const retailPackaging=clean(s.retail_packaging||"");
-    const primaryMatch=primaryPackaging.match(/^\s*(\d+(?:[.,]\d+)?)\s*(.+)$/u);
-    const retailMatch=retailPackaging.match(/^\s*(\d+(?:[.,]\d+)?)\s*(.+)$/u);
-    const primaryQty=primaryMatch?Number(String(primaryMatch[1]).replace(",","."))||1:1;
-    const primaryLabel=primaryMatch?clean(primaryMatch[2]):primaryPackaging;
-    const retailQty=retailMatch?Number(String(retailMatch[1]).replace(",","."))||1:(retailPackaging?1:0);
-    const retailLabel=retailMatch?clean(retailMatch[2]):retailPackaging;
-    const current=carton||retail||null;
+    // Supplier spreadsheets only provide name + one price. The price level is
+    // our business rule: tobacco defaults to retail (1 cây); every other
+    // supplier source defaults to carton. units_per_carton is our own pack
+    // configuration and is never inferred from the supplier sheet.
+    const supplierRetailDefault=clean(s.source_key)==="thuoc-la";
+    const sourcePrice=Number(s.display_price_vnd||s.input_price_vnd||0)||null;
+    const unitsPerCarton=Math.max(0,Number(s.units_per_carton||0)||0);
+    const retailUnit=clean(s.retail_unit||(supplierRetailDefault?"cây":""));
+    const storedCarton=Number(s.carton_price_vnd||0)||null;
+    const storedRetail=Number(s.retail_price_vnd||0)||null;
+    const carton=supplierRetailDefault
+      ?(unitsPerCarton>1
+        ?(storedCarton||(sourcePrice?Math.round(sourcePrice*unitsPerCarton):null))
+        :null)
+      :(storedCarton||sourcePrice);
+    const retail=supplierRetailDefault
+      ?(storedRetail||sourcePrice)
+      :(storedRetail||(unitsPerCarton>1&&sourcePrice
+        ?Math.round(sourcePrice/unitsPerCarton)
+        :null));
+    const hasCarton=Boolean(carton);
+    const hasRetail=Boolean(retail);
+    const retailLabel=retailUnit||(hasRetail?"Lẻ":"");
+    const retailPackaging=clean(
+      s.retail_packaging||
+      (hasRetail&&retailLabel?("1 "+retailLabel):"")
+    );
+    const primaryPackaging=hasCarton
+      ?(unitsPerCarton>1&&retailLabel
+        ?("Thùng · "+unitsPerCarton+" "+retailLabel)
+        :"Thùng")
+      :(retailPackaging||clean(s.primary_packaging||""));
+    const current=supplierRetailDefault
+      ?(retail||carton||null)
+      :(carton||retail||null);
     const prefRow=pref.get(s.canonical_url)||{};
     const state=prefRow.state||"normal";
     if(!includeHidden&&state==="hidden")continue;
@@ -2027,23 +2051,23 @@ async function libraryRows(includeHidden=true){
       auto_refresh:prefRow.auto_refresh?1:0,
       refresh_hours:Number(prefRow.refresh_hours)||24,
       image:"",
-      pack_kind:primaryLabel,
-      pack_quantity:primaryQty,
-      pack_unit:primaryLabel,
+      pack_kind:hasCarton?"Thùng":retailLabel,
+      pack_quantity:hasCarton?1:(hasRetail?1:0),
+      pack_unit:hasCarton?"Thùng":retailLabel,
       size_value:null,
       size_unit:"",
-      regular_pack_price:carton||retail,
+      regular_pack_price:current,
       promo_pack_price:null,
       regular_unit_price:retail,
       promo_unit_price:null,
       promotion_active:0,
       has_promo:0,
-      pack_label_1:primaryLabel,
-      pack_qty_1:primaryQty,
+      pack_label_1:hasCarton?"Thùng":"",
+      pack_qty_1:hasCarton?1:0,
       pack_label_2:"",
       pack_qty_2:0,
-      pack_label_3:retailLabel,
-      pack_qty_3:retailQty,
+      pack_label_3:hasRetail?retailLabel:"",
+      pack_qty_3:hasRetail?(hasCarton&&unitsPerCarton>1?unitsPerCarton:1):0,
       pack_evidence:"supplier-sheet",
       hierarchy_locked:1,
       source_product_id:clean(s.source_key)+":"+String(s.source_row),
@@ -2070,7 +2094,7 @@ async function libraryRows(includeHidden=true){
       promo_middle_price:null,
       web_leaf_price:retail,
       promo_leaf_price:null,
-      unit_price:null,
+      unit_price:retail,
       supplier_source_key:clean(s.source_key),
       supplier_source_name:clean(sourceMeta.source_name),
       supplier_input_price_vnd:Number(s.input_price_vnd||0)||null,
@@ -2079,6 +2103,8 @@ async function libraryRows(includeHidden=true){
       supplier_retail_price_vnd:retail,
       supplier_retail_packaging:retailPackaging,
       supplier_primary_packaging:primaryPackaging,
+      supplier_units_per_carton:unitsPerCarton||null,
+      supplier_retail_unit:retailUnit,
       supplier_stock_status:stockStatus,
       supplier_stock_label:clean(s.stock_label||"")
     });

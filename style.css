@@ -11666,3 +11666,97 @@ body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
     padding-right:6px!important;
   }
 }
+
+
+/* =========================================================
+   Mobile readability v39 — balanced against chat UI
+   ========================================================= */
+@media(max-width:720px){
+  /* Main compact controls: keep density, restore normal reading size. */
+  .purchase-mode-row .catalog-pack-tabs .pack-chip{
+    font-size:12.5px!important;
+    font-weight:600!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-chip-label{
+    font-size:10.5px!important;
+    font-weight:600!important;
+  }
+  .catalog-search-row .catalog-search input{
+    font-size:12px!important;
+  }
+  .view-button .ui-icon{
+    width:17px!important;
+    height:17px!important;
+  }
+
+  /* Image-card typography. */
+  body[data-app-role="user"] .user-grid-name,
+  body[data-app-role="user"] .grid-product-name{
+    font-size:13px!important;
+    line-height:1.32!important;
+    font-weight:600!important;
+  }
+  body[data-app-role="user"] .user-grid-field>span{
+    font-size:10.5px!important;
+    line-height:1.2!important;
+  }
+  body[data-app-role="user"] .user-grid-field>strong{
+    font-size:12px!important;
+    line-height:1.2!important;
+  }
+  .user-grid-product-compact .user-grid-field-price strong{
+    font-size:12.5px!important;
+  }
+
+  /* Table typography: readable without turning the sheet into oversized cards. */
+  .xls-price-table.user-table-mode #userTableHead th{
+    font-size:11.5px!important;
+    line-height:1.2!important;
+  }
+  .xls-price-table.user-table-mode .user-table-row td{
+    height:44px!important;
+    font-size:12px!important;
+    line-height:1.3!important;
+  }
+  .user-product-name,
+  .user-col-product{
+    font-size:12px!important;
+    line-height:1.3!important;
+  }
+  .user-price-main{
+    font-size:12.5px!important;
+    line-height:1.2!important;
+  }
+  .user-qc-text,
+  .user-unit-text{
+    font-size:11.5px!important;
+  }
+  .user-col-bargain .xls-input,
+  .user-grid-bargain{
+    font-size:12px!important;
+  }
+
+  /* Small status/footer text should still be legible. */
+  .catalog-render-more,
+  .catalog-render-more *{
+    font-size:10.5px!important;
+  }
+}
+
+@media(max-width:390px){
+  .purchase-mode-row .catalog-pack-tabs .pack-chip{
+    font-size:12px!important;
+  }
+  body[data-app-role="user"] .user-grid-name,
+  body[data-app-role="user"] .grid-product-name{
+    font-size:12.5px!important;
+  }
+  .xls-price-table.user-table-mode #userTableHead th{
+    font-size:11px!important;
+  }
+  .xls-price-table.user-table-mode .user-table-row td,
+  .user-product-name,
+  .user-col-product{
+    font-size:11.5px!important;
+  }
+}

@@ -53,6 +53,13 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertRegex(APP,r"isMineRow\(a\.row\)\?0:1")
         self.assertRegex(APP,r"mobileUserPackRank\(a\.row\)-mobileUserPackRank\(b\.row\)")
 
+    def test_mobile_sale_price_uses_official_catalog_sell_price(self):
+        block=re.search(r"function\s+mobileUserSalePrice\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(block)
+        body=block.group(1)
+        self.assertIn("row&&row.current_price",body)
+        self.assertNotIn("rowOwnPriceParts",body)
+
     def test_mobile_mine_card_is_sale_price_and_quantity_only(self):
         block=re.search(r"function\s+mobileUserMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)

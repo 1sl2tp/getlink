@@ -215,6 +215,8 @@ const NEWS_SOURCE_LABELS={
 const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
 const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v2";
+const NEWS_HOT_SNAPSHOT_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/latest.json";
+const NEWS_HOT_SNAPSHOT_MAX_AGE=8*60*1000;
 const newsCache=new Map();
 const newsDetailCache=new Map();
 let newsTopic="latest";
@@ -500,6 +502,38 @@ function applyNewsPayload(data){
   newsItems=Array.isArray(data&&data.items)?data.items:[];
   newsError="";
 }
+function newsSnapshotAge(data){
+  const t=Date.parse(String(data&&data.generated_at||""));
+  return Number.isFinite(t)?Math.max(0,Date.now()-t):Infinity;
+}
+async function fetchNewsHotSnapshot(){
+  const bucket=Math.floor(Date.now()/60000);
+  const response=await fetch(NEWS_HOT_SNAPSHOT_URL+"?m="+bucket,{
+    cache:"no-store",
+    mode:"cors",
+    credentials:"omit"
+  });
+  if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
+  const data=await response.json();
+  if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
+  return data;
+}
+function backgroundRefreshLatestNews(){
+  if(!API)return;
+  apiFetch("/api/news?topic=latest&source=all&limit=80&refresh=1",{cache:"no-store"})
+    .then(async response=>{
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok||!Array.isArray(data&&data.items))return;
+      newsCache.set("latest",{at:Date.now(),items:data.items});
+      writeNewsBrowserCache("latest",data.items);
+      if(newsTopic==="latest"){
+        newsItems=data.items;
+        newsError="";
+        refreshNewsViews();
+      }
+    })
+    .catch(error=>console.debug("GETLINK latest background refresh",error));
+}
 function ensureNewsLoaded(force=false){
   if(!API)return;
   const key=newsTopic;
@@ -527,16 +561,45 @@ function ensureNewsLoaded(force=false){
   newsError="";
   const seq=++newsRequestSeq;
   refreshNewsViews();
-  const suffix=force?"&refresh=1":"";
-  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80"+suffix,{cache:force?"no-store":"default"})
-    .then(async response=>{
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok)throw new Error(data.error||"Không đọc được tin");
-      if(seq!==newsRequestSeq||key!==newsTopic)return;
-      applyNewsPayload(data);
-      newsCache.set(key,{at:Date.now(),items:newsItems});
-      writeNewsBrowserCache(key,newsItems);
-    })
+
+  const finish=(data,cacheKey=key)=>{
+    if(seq!==newsRequestSeq)return false;
+    const items=Array.isArray(data&&data.items)?data.items:[];
+    if(!items.length)return false;
+    newsCache.set(cacheKey,{at:Date.now(),items});
+    writeNewsBrowserCache(cacheKey,items);
+    if(newsTopic===cacheKey){
+      newsItems=items;
+      newsError="";
+    }
+    return true;
+  };
+
+  const fallbackToApi=()=>{
+    const suffix=force?"&refresh=1":"";
+    return apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80"+suffix,{cache:force?"no-store":"default"})
+      .then(async response=>{
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok)throw new Error(data.error||"Không đọc được tin");
+        finish(data,key);
+      });
+  };
+
+  const loadPromise=(!force&&key==="latest")
+    ?fetchNewsHotSnapshot()
+      .then(data=>{
+        const accepted=finish(data,"latest");
+        if(accepted&&newsSnapshotAge(data)>NEWS_HOT_SNAPSHOT_MAX_AGE){
+          queueMicrotask(backgroundRefreshLatestNews);
+        }
+      })
+      .catch(error=>{
+        console.debug("GETLINK hot snapshot fallback",error);
+        return fallbackToApi();
+      })
+    :fallbackToApi();
+
+  loadPromise
     .catch(error=>{
       if(seq!==newsRequestSeq)return;
       if(!newsItems.length)newsError="Chưa đọc được tin. Thử làm mới.";

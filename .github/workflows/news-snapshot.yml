@@ -1,0 +1,47 @@
+name: Refresh hot news snapshot
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/build_news_snapshot.py"
+      - ".github/workflows/news-snapshot.yml"
+      - "supabase/functions/getlink-api/index.ts"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: getlink-hot-news-snapshot
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Checkout app source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Build latest hot-news snapshot
+        run: |
+          python .github/scripts/build_news_snapshot.py --output /tmp/getlink-news/latest.json --limit 100
+
+      - name: Publish replace-only cache branch
+        run: |
+          git config user.name "GETLINK News Cache"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout --orphan news-cache-publish
+          git rm -rf .
+          mkdir -p news
+          cp /tmp/getlink-news/latest.json news/latest.json
+          printf '{"updated_at":"%s","history":false,"database":false}\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > news/meta.json
+          git add news/latest.json news/meta.json
+          git commit -m "Refresh hot news snapshot"
+          git push --force origin HEAD:news-cache

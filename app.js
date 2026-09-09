@@ -301,6 +301,23 @@ function searchKey(value){
 }
 
 
+function stripLotPackPhrase(value){
+  let text=String(value||"").normalize("NFC").trim();
+  if(!text)return "";
+  const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
+  const qty="\\d+(?:\\s*\\+\\s*\\d+)*(?![\\p{L}\\p{N}])";
+  const lotRe=new RegExp(
+    "(^|\\s)lô\\s+"+qty+
+    "(?:\\s+"+unit+")?"+
+    "(?:\\s*[x×](?=\\s*\\d)\\s*)?",
+    "giu"
+  );
+  return text
+    .replace(lotRe," ")
+    .replace(/\\s{2,}/g," ")
+    .trim();
+}
+
 function stripCartonPackPhrase(value){
   const mode=arguments[1]||"carton";
   let text=String(value||"").normalize("NFC").trim();
@@ -327,13 +344,13 @@ function stripCartonPackPhrase(value){
 }
 
 function searchDisplayName(row){
-  let text=String(
+  let text=stripLotPackPhrase(String(
     row&&(
       row.source_name||
       row.name||
       row.source_raw_name
     )||""
-  ).trim();
+  ).trim());
 
   const packaging=String(row&&row.packaging||"").trim();
   const packKey=searchKey(packaging);
@@ -1528,7 +1545,7 @@ function capitalizeDisplayName(value){
 }
 
 function compactCartonDisplayName(name,hierarchy){
-  let text=String(name||"").trim();
+  let text=stripLotPackPhrase(String(name||"").trim());
   if(!text)return "Sản phẩm";
   const isCarton=String(hierarchy&&hierarchy.label1||"").trim()==="Thùng";
   const isMiddle=!isCarton&&Boolean(String(hierarchy&&hierarchy.label2||"").trim());
@@ -1619,6 +1636,12 @@ function catalogSourceDisplayClass(row){
 
 function rowPrimaryQc(row){
   const h=rowPackHierarchy(row);
+  if(searchKey(h.label1)==="lo"){
+    const child=h.label2
+      ?packHierarchyText(h.qty2||h.qty1||1,h.label2)
+      :(h.label3?packHierarchyText(h.qty3||h.qty1||1,h.label3):"");
+    return child||"";
+  }
   if(h.label1==="Thùng"){
     const child=h.label2
       ?packHierarchyText(h.qty2||1,h.label2)

@@ -1998,9 +1998,21 @@ async function libraryRows(includeHidden=true){
     const inputPriceBasis=clean(s.input_price_basis)==="retail"?"retail":"carton";
     const supplierRetailBasis=inputPriceBasis==="retail";
     const supplierCost=Number(s.input_price_vnd||0)||null;
+    const expectedProfitPercent=s.expected_profit_percent===null||s.expected_profit_percent===undefined
+      ?null
+      :Number(s.expected_profit_percent);
     const expectedProfit=Number(s.expected_profit_vnd||0)||0;
+    const appliedProfit=s.applied_profit_vnd===null||s.applied_profit_vnd===undefined
+      ?null
+      :Number(s.applied_profit_vnd);
+    const pricingProfitMode=clean(s.pricing_profit_mode)==="applied"&&appliedProfit!==null
+      ?"applied"
+      :"expected";
+    const selectedProfit=pricingProfitMode==="applied"
+      ?Number(appliedProfit||0)
+      :expectedProfit;
     const sellPrice=Number(s.display_price_vnd||0)||
-      (supplierCost?Math.round(supplierCost+expectedProfit):null);
+      (supplierCost?Math.round(supplierCost+selectedProfit):null);
     const unitsPerCarton=Math.max(0,Number(s.units_per_carton||0)||0);
     const retailUnit=clean(s.retail_unit||(clean(s.source_key)==="thuoc-la"?"cây":""));
     const storedCarton=Number(s.carton_price_vnd||0)||null;
@@ -2104,7 +2116,11 @@ async function libraryRows(includeHidden=true){
       supplier_sell_price_vnd:sellPrice,
       supplier_margin_thousand:s.margin_thousand??null,
       supplier_actual_profit_vnd:Number(s.actual_profit_vnd??(sellPrice&&supplierCost?sellPrice-supplierCost:0))||0,
+      supplier_expected_profit_percent:expectedProfitPercent,
       supplier_expected_profit_vnd:expectedProfit,
+      supplier_applied_profit_vnd:appliedProfit,
+      supplier_pricing_profit_mode:pricingProfitMode,
+      supplier_selected_profit_vnd:selectedProfit,
       supplier_previous_input_price_vnd:Number(s.previous_input_price_vnd||0)||null,
       supplier_price_delta_vnd:Number(s.supplier_price_delta_vnd||0)||null,
       supplier_price_direction:clean(s.supplier_price_direction||""),
@@ -2559,6 +2575,18 @@ function sheetNumber(value:unknown):number|null{
   return Number.isFinite(n)?n:null;
 }
 
+function sheetPercent(value:unknown):number|null{
+  let s=clean(value).replace(/\s+/g,"");
+  if(!s)return null;
+  const hasPercent=s.endsWith("%");
+  if(hasPercent)s=s.slice(0,-1);
+  const n=sheetNumber(s);
+  if(n===null)return null;
+  const percent=hasPercent?n:(Math.abs(n)<=1?n*100:n);
+  if(!Number.isFinite(percent)||percent<0||percent>100)return null;
+  return percent;
+}
+
 function titleCaseFirst(value:unknown):string{
   const s=clean(value);
   if(!s)return "";
@@ -2653,7 +2681,10 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
     const rows=parseCsvRows(csv);
     if(rows.length<2)throw new Error("supplier_sheet_empty");
     const header=supplierSheetHeaderIndex(rows[0]);
-    for(const required of ["Tên sản phẩm","Giá nhập NCC","Trạng thái","Giá nhập theo","Mã SP"]){
+    for(const required of [
+      "Tên sản phẩm","Giá nhập NCC","Trạng thái","Giá nhập theo",
+      "% lãi kỳ vọng","Lãi áp dụng","Tính giá theo","Mã SP"
+    ]){
       if(!header.has(plain(required)))throw new Error("supplier_sheet_missing_column:"+required);
     }
 
@@ -2684,12 +2715,21 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       const rawStatus=supplierCell(row,header,"Trạng thái");
       const rawBasis=supplierCell(row,header,"Giá nhập theo");
       const input=sheetNumber(supplierCell(row,header,"Giá nhập NCC"));
-      const expected=sheetNumber(supplierCell(row,header,"Lãi kỳ vọng"));
-      const saleCarton=sheetNumber(supplierCell(row,header,"Giá bán thùng"));
-      const saleRetail=sheetNumber(supplierCell(row,header,"Giá bán lẻ"));
+      const expectedPercent=sheetPercent(supplierCell(row,header,"% lãi kỳ vọng"));
+      const appliedProfit=sheetNumber(supplierCell(row,header,"Lãi áp dụng"));
+      const rawProfitMode=supplierCell(row,header,"Tính giá theo");
       const units=sheetNumber(supplierCell(row,header,"QC / thùng"));
       const rawRetailUnit=supplierCell(row,header,"Đơn vị lẻ");
       const basis=plain(rawBasis)==="le"?"retail":"carton";
+      const profitMode=(plain(rawProfitMode)==="lai ap dung"&&appliedProfit!==null)
+        ?"applied"
+        :"expected";
+      const expectedProfit=(input!==null&&expectedPercent!==null)
+        ?input*expectedPercent/100
+        :0;
+      const selectedProfit=profitMode==="applied"
+        ?Number(appliedProfit||0)
+        :expectedProfit;
       const retailUnit=(sourceKey==="thuoc-la"&&basis==="retail"&&!rawRetailUnit)
         ?"cây"
         :rawRetailUnit;
@@ -2710,12 +2750,9 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       }
 
       const old=existingByCode.get(code);
-      let displayPrice:number|null=null;
-      if(basis==="retail"&&saleRetail!==null)displayPrice=Math.round(saleRetail*1000);
-      if(basis==="carton"&&saleCarton!==null)displayPrice=Math.round(saleCarton*1000);
-      if(displayPrice===null&&input!==null&&expected!==null){
-        displayPrice=Math.round((input+expected)*1000);
-      }
+      const displayPrice=input===null
+        ?null
+        :Math.round((input+selectedProfit)*1000);
 
       const canonicalUrl="https://get.taphoa.xyz/nguon-hang/"+sourceKey+"/"+code;
       const rowPayload={
@@ -2725,8 +2762,11 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
         product_name:name,
         input_price_vnd:input===null?null:Math.round(input*1000),
         input_price_basis:basis,
-        expected_profit_vnd:expected===null?0:Math.round(expected*1000),
-        margin_thousand:expected,
+        expected_profit_percent:expectedPercent,
+        expected_profit_vnd:Math.round(expectedProfit*1000),
+        applied_profit_vnd:appliedProfit===null?null:Math.round(appliedProfit*1000),
+        pricing_profit_mode:profitMode,
+        margin_thousand:expectedProfit,
         display_price_vnd:displayPrice,
         units_per_carton:units&&units>=1?units:null,
         retail_unit:retailUnit,
@@ -2743,7 +2783,8 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       else{
         const comparable=[
           "source_row","product_name","input_price_vnd","input_price_basis",
-          "expected_profit_vnd","display_price_vnd","units_per_carton",
+          "expected_profit_percent","expected_profit_vnd","applied_profit_vnd",
+          "pricing_profit_mode","display_price_vnd","units_per_carton",
           "retail_unit","stock_status","stock_label","is_active"
         ];
         if(comparable.some(key=>String(old?.[key]??"")!==String((rowPayload as any)[key]??""))){

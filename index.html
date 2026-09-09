@@ -284,28 +284,18 @@
               <button id="mobileMergeToggle" class="mobile-merge-toggle" type="button" aria-pressed="false">Hợp nhất</button>
             </div>
           </div>
-          <section id="mobileMergePanel" class="mobile-merge-panel" hidden aria-label="Xác nhận sản phẩm chuẩn">
+          <section id="mobileMergePanel" class="mobile-merge-panel mobile-merge-quick" hidden aria-label="Hợp nhất nhanh sản phẩm">
             <div class="mobile-merge-summary">
-              <strong id="mobileMergeCount">Đã chọn 0 nguồn</strong>
+              <div>
+                <strong id="mobileMergeTarget">Chọn hàng Tạp hóa làm sản phẩm đích</strong>
+                <small id="mobileMergeHint">Sau đó chạm các nguồn siêu thị liên quan để cập nhật ngay.</small>
+              </div>
               <button id="mobileMergeCancel" type="button">Hủy</button>
             </div>
-            <label>Nhãn / dung tích / mã
-              <select id="mobileMergeIdentitySource"></select>
-            </label>
-            <label>Tên chuẩn (có thể bỏ qua)
-              <select id="mobileMergeNameSource"></select>
-            </label>
-            <label>Quy cách chuẩn
-              <select id="mobileMergePackSource"></select>
-            </label>
-            <label>Ảnh chuẩn
-              <select id="mobileMergeImageSource"></select>
-            </label>
             <label id="mobileMergePasswordWrap" class="mobile-merge-password">Mật khẩu quản trị
-              <input id="mobileMergePassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Nhập mật khẩu">
+              <input id="mobileMergePassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Nhập một lần">
             </label>
             <div id="mobileMergeStatus" class="mobile-merge-status" aria-live="polite"></div>
-            <button id="mobileMergeConfirm" class="mobile-merge-confirm" type="button" disabled>Xác nhận hợp nhất</button>
           </section>
           <div id="mobileUserResults" class="mobile-user-results" aria-live="polite"></div>
           <div id="mobileUserEmpty" class="mobile-user-empty" hidden>Không có sản phẩm phù hợp.</div>

@@ -39,7 +39,8 @@ class CanonicalProductLearningContractTest(unittest.TestCase):
         self.assertIn("mobileMergeTargetUrl",APP)
         self.assertIn("mobileMergeTargetMembers",APP)
         self.assertIn("setMobileMergeTarget",APP)
-        self.assertIn("quickAttachMobileMergeSource",APP)
+        self.assertIn("toggleMobileMergeSource",APP)
+        self.assertIn("applyMobileMergePreview",APP)
         self.assertIn("canonical_product_id",APP)
 
     def test_merge_panel_is_quick_and_identity_is_learned_automatically(self):

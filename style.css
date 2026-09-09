@@ -13474,10 +13474,10 @@ body[data-app-role="user"] .user-work-home{
   font-size:9px;
 }
 
-/* Desktop supermarket browse becomes a compact list rather than stretched cards. */
+/* Desktop supermarket browse: use available width, never stretch into one long row. */
 .user-work-desktop .user-work-market-grid{
   display:grid;
-  grid-template-columns:minmax(0,1fr);
+  grid-template-columns:repeat(auto-fit,minmax(300px,1fr));
   gap:6px;
 }
 .user-work-desktop .user-work-market-card{
@@ -13849,5 +13849,28 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     width:auto!important;
     max-width:none!important;
     white-space:nowrap!important;
+  }
+}
+
+
+/* Supermarket mode is browse-only: no order action bar. */
+.mobile-user-order-bar[hidden],
+.mobile-user-order-status[hidden]{
+  display:none!important;
+}
+
+/* Let wide desktop surfaces show more cards at once. */
+@media(min-width:1280px){
+  .user-work-desktop{
+    grid-template-columns:minmax(280px,340px) minmax(0,1fr);
+  }
+  .user-work-desktop .user-work-market-grid{
+    grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  }
+}
+
+@media(min-width:1600px){
+  .user-work-desktop .user-work-market-grid{
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
   }
 }

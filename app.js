@@ -3833,8 +3833,7 @@ function mobileUserMineCard(row){
       '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
       '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
       '<div class="mobile-user-product-bottom">'+
-        '<span class="mobile-user-price-stack"><small>Giá bán</small><b class="mobile-user-product-price">'+(price?money(price):"—")+'</b></span>'+
-        '<span class="mobile-user-product-source mine">Tạp hóa</span>'+
+        '<b class="mobile-user-product-price">'+(price?money(price):"—")+'</b>'+
       '</div>'+
     '</div>'+
     '<div class="mobile-user-qty" data-work-url="'+escapeAttr(row.canonical_url)+'">'+

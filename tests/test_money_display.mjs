@@ -516,7 +516,7 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_retail_price_vnd/);
   assert.match(app,/supplier_retail_packaging/);
   assert.match(app,/function syncSupplierTableMode\(\)/);
-  assert.match(css,/Supplier priority table v18/);
+  assert.match(css,/Supplier spreadsheet v19/);
   assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v7-supplier-spreadsheet-layout"/);
 }
 

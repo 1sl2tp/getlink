@@ -39,11 +39,14 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         )
         self.assertRegex(CSS,r"\.mobile-user-mine-card\s*,\s*\n\s*\.mobile-user-merged-card\.has-own\s*\{[^}]*grid-column\s*:\s*1\s*/\s*-1")
 
-    def test_taphoa_is_a_search_source_and_all_is_default(self):
-        self.assertIn('const MOBILE_USER_SOURCES=["","mine","bhx","wm","go"]',APP)
-        self.assertIn('let mobileUserSource=""',APP)
-        self.assertIn('"Tạp hóa"',APP)
-        self.assertRegex(APP,r"rowMatchesSourceFilter\(row,mobileUserSource\)")
+    def test_mobile_uses_two_parent_scopes_with_child_sources(self):
+        self.assertIn('const MOBILE_USER_SCOPES=["mine","market"]',APP)
+        self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"]',APP)
+        self.assertIn('mine:"Tạp hóa"',APP)
+        self.assertIn('market:"Siêu thị"',APP)
+        self.assertIn('let mobileUserScope=""',APP)
+        self.assertIn('let mobileUserChildSource=""',APP)
+        self.assertIn('mobileSupplierSources()',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
         block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)

@@ -1,0 +1,12 @@
+{
+  "version": "GETLINK",
+  "build_id": "f0645eadae25aa710710d5bfd5b5366cbfd6911892b50c6211982c79f53874b9",
+  "update_policy": "auto-when-safe",
+  "published_from": "github-main",
+  "assets": [
+    "index.html",
+    "style.css",
+    "config.js",
+    "app.js"
+  ]
+}

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-profit-mode-v25">
+  <link rel="stylesheet" href="style.css?v=20260909-role-v26">
 </head>
 <body>
 <main class="wrap">
@@ -13,6 +13,10 @@
     <div class="site-brand-copy">
       <h1>GETLINK</h1>
       <p>Thư viện giá BHX + WM + GO · Tra cứu và so sánh theo quy cách</p>
+    </div>
+    <div class="role-switch" aria-label="Chế độ sử dụng">
+      <span id="roleBadge" class="role-badge">Khách</span>
+      <button id="roleAdminButton" class="role-admin-button" type="button">Admin</button>
     </div>
     <button id="mobileCategoryButton" class="mobile-category-button" type="button" aria-expanded="false" aria-controls="workspaceNav">
       <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
@@ -223,6 +227,13 @@
       <div id="tableView" class="xls-table-wrap" hidden>
         <table class="xls-price-table">
           <thead>
+            <tr id="userTableHead" hidden>
+              <th class="user-head-product">Tên sản phẩm</th>
+              <th class="th-num user-head-sale">Giá bán</th>
+              <th class="user-head-pack">Quy cách</th>
+              <th class="th-num user-head-bargain">Mặc cả</th>
+              <th class="user-head-rating">Đánh giá</th>
+            </tr>
             <tr id="standardTableHead">
               <th class="standard-head-product">Tên sản phẩm</th>
               <th id="tableSourceHeader" class="standard-head-source" aria-sort="none">
@@ -368,6 +379,21 @@
   </div>
 </main>
 
+<div id="adminLoginPanel" class="admin-login-overlay" hidden aria-hidden="true">
+  <section class="admin-login-card" role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle">
+    <div class="admin-login-copy">
+      <strong id="adminLoginTitle">Mở chế độ Admin</strong>
+      <small>Nhập mật khẩu để dùng GETLINK, cập nhật và dữ liệu quản trị.</small>
+    </div>
+    <input id="adminLoginPassword" type="password" inputmode="numeric" autocomplete="off" maxlength="4" placeholder="••••" aria-label="Mật khẩu Admin">
+    <div class="admin-login-actions">
+      <button id="adminLoginCancel" type="button">Hủy</button>
+      <button id="adminLoginUnlock" type="button">Mở Admin</button>
+    </div>
+    <span id="adminLoginStatus" class="admin-login-status"></span>
+  </section>
+</div>
+
 <div id="sourceManagerPanel" class="source-manager-overlay" hidden aria-hidden="true">
   <section class="source-manager-card" role="dialog" aria-modal="true" aria-labelledby="sourceManagerTitle">
     <header class="source-manager-head">
@@ -418,6 +444,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-profit-mode-v29"></script>
+<script src="app.js?v=20260909-role-v30"></script>
 </body>
 </html>

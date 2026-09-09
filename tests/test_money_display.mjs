@@ -372,7 +372,7 @@ assert.equal(money(0),"—");
   const sourceCycleHandler=app.match(/\$\("#tableSourceSort"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
   assert.ok(sourceCycleHandler,"table source cycle handler not found");
   assert.match(sourceCycleHandler[0],/setActiveSourceFilter\(nextTableSourceFilter\(\)\)/);
-  assert.match(app,/const TABLE_SOURCE_CYCLE=\["","bhx","wm","go"\]/);
+  assert.match(app,/const TABLE_SOURCE_CYCLE=\["","mine","bhx","wm","go"\]/);
   assert.match(app,/function nextTableSourceFilter\(\)/);
   assert.match(app,/function memoBrowseRows\(key,builder\)/);
   assert.match(app,/function scheduleCategoryMenuRefresh\(\)/);
@@ -458,6 +458,17 @@ assert.equal(money(0),"—");
   assert.match(app,/\/api\/update-settings\/run-now/);
   assert.match(app,/UPDATE_ADMIN_TOKEN_KEY/);
   assert.match(css,/Protected automatic update settings v12/);
+}
+
+{
+  // Tạp hóa own-price source contract
+  assert.match(app,/mine:\{full:"Tạp hóa",short:"Tạp hóa"/);
+  assert.match(app,/function rowHasOwnPrice\(row\)/);
+  assert.match(app,/function rowMatchesSourceFilter\(row,source\)/);
+  assert.match(app,/if\(source==="mine"\)return rowHasOwnPrice\(row\)/);
+  assert.match(app,/activeSourceFilter==="mine"\?rowPrimaryOwnPrice\(row\):sourcePrice/);
+  assert.match(css,/Tạp hóa own-price source v13/);
+  assert.match(css,/repeat\(3,minmax\(44px,1fr\)\)/);
 }
 
 console.log("money and hierarchy UI tests passed");

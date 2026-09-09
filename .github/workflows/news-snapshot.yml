@@ -10,7 +10,6 @@ on:
     paths:
       - ".github/scripts/build_news_snapshot.py"
       - ".github/workflows/news-snapshot.yml"
-      - "supabase/functions/getlink-api/index.ts"
 
 permissions:
   contents: write
@@ -28,6 +27,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
+
+      - name: Install RSS parser
+        run: python -m pip install --quiet feedparser
 
       - name: Build latest hot-news snapshot
         run: |

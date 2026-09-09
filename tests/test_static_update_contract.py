@@ -15,7 +15,10 @@ class StaticUpdateContractTest(unittest.TestCase):
         self.assertEqual(match.group(1), VERSION["build_id"])
         self.assertIn('const BUILD_PARAM="__build"', HTML)
         self.assertIn('const VERSION_URL="./version.json"', HTML)
-        self.assertRegex(HTML, r'assetUrl\("style\.css",\s*build\)')
+        style = re.search(r'<link rel="stylesheet" href="./style\.css\?v=([0-9a-f]{64})">', HTML)
+        self.assertIsNotNone(style)
+        self.assertEqual(style.group(1), VERSION["build_id"])
+        self.assertNotIn("function loadStyle(", HTML)
         self.assertRegex(HTML, r'assetUrl\("config\.js",\s*build\)')
         self.assertRegex(HTML, r'assetUrl\("app\.js",\s*build\)')
 

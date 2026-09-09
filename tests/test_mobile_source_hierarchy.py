@@ -6,10 +6,11 @@ ROOT=Path(__file__).resolve().parents[1]
 APP=(ROOT/"app.js").read_text(encoding="utf-8")
 
 class MobileSourceHierarchyTest(unittest.TestCase):
-    def test_parent_scope_has_only_mine_and_market(self):
-        self.assertIn('const MOBILE_USER_SCOPES=["mine","market"];', APP)
+    def test_parent_scope_has_mine_market_and_news(self):
+        self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"];', APP)
         self.assertIn('mine:"Tạp hóa"', APP)
         self.assertIn('market:"Siêu thị"', APP)
+        self.assertIn('news:"Tin tức"', APP)
 
     def test_market_children_are_supermarkets(self):
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"];', APP)

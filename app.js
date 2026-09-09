@@ -3602,7 +3602,7 @@ function mobileUserMergedCard(group){
     .sort((a,b)=>mobileUserPackRank(a)-mobileUserPackRank(b))
     .map(mobileUserSourcePrice)
     .join("");
-  return '<article class="mobile-user-merged-card mobile-user-product-card" data-canonical-id="'+escapeAttr(first.canonical_product_id||"")+'">'+
+  return '<article class="mobile-user-merged-card mobile-user-product-card '+(own?"has-own":"")+'" data-canonical-id="'+escapeAttr(first.canonical_product_id||"")+'">'+
     mobileMergeGroupButton(group)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+

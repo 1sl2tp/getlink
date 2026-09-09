@@ -153,6 +153,34 @@ let classificationVersion="";
 let classificationCheckTimer=0;
 let classificationRefreshBusy=false;
 
+let userWorkMarketLimit=8;
+let userWorkMineLimit=12;
+const USER_WORK_QTY_KEY="getlink:user-work-order-qty";
+
+function readUserWorkQtyMap(){
+  try{
+    const value=JSON.parse(localStorage.getItem(USER_WORK_QTY_KEY)||"{}");
+    return value&&typeof value==="object"?value:{};
+  }catch{return {}}
+}
+function writeUserWorkQtyMap(value){
+  try{localStorage.setItem(USER_WORK_QTY_KEY,JSON.stringify(value||{}));}catch{}
+}
+function userWorkQty(url){
+  const map=readUserWorkQtyMap();
+  return Math.max(0,Number(map[canonical(url)]||0)||0);
+}
+function setUserWorkQty(url,value){
+  const key=canonical(url);
+  if(!key)return 0;
+  const map=readUserWorkQtyMap();
+  const next=Math.max(0,Math.min(999,Math.round(Number(value)||0)));
+  if(next)map[key]=next;
+  else delete map[key];
+  writeUserWorkQtyMap(map);
+  return next;
+}
+
 function rebuildLibraryIndex(){
   libraryByUrl=new Map();
   for(const row of libraryCache){
@@ -3216,7 +3244,151 @@ function syncViewMode(){
   syncMatchAuditMode();
 }
 
+
+function userWorkSearchKey(row){
+  return searchKey([
+    searchDisplayName(row),
+    rowCanonicalBrand(row),
+    rowRootGroup(row),
+    row&&row.source_category_name,
+    row&&row.source,
+    row&&row.supplier_source_name
+  ].filter(Boolean).join(" "));
+}
+
+function userWorkRows(){
+  const q=searchKey(libraryQuery);
+  const tokens=q.split(/\s+/).filter(Boolean);
+  let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+  if(tokens.length){
+    rows=rows.filter(row=>{
+      const hay=userWorkSearchKey(row);
+      return tokens.every(token=>hay.includes(token));
+    });
+  }
+  return rows;
+}
+
+function userWorkPrimaryMarketPrice(row){
+  const levels=rowPriceLevels(row);
+  const direct=Number(
+    row&&(
+      row.current_price||
+      row.promo_price||
+      row.regular_pack_price||
+      row.price
+    )||0
+  );
+  return direct||
+    Number(levels.promoLeafPrice||levels.leafPrice||0)||
+    Number(levels.promoMiddlePrice||levels.middlePrice||0)||
+    Number(levels.promoCartonPrice||levels.cartonPrice||0);
+}
+
+function userWorkMarketCard(row){
+  const image=String(row&&row.image||"").trim();
+  const name=canonicalDisplayName(row);
+  const price=userWorkPrimaryMarketPrice(row);
+  const source=sourceDisplayLabel(row);
+  const sourceClass=rowSourceFilterKey(row);
+  const pack=rowPrimaryQc(row);
+  return '<article class="user-work-market-card product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<div class="user-work-market-image">'+
+      (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
+    '</div>'+
+    '<div class="user-work-market-copy">'+
+      '<strong class="user-work-market-name">'+escapeHtml(name)+'</strong>'+
+      '<small class="user-work-market-pack">'+escapeHtml(pack==="—"?"":pack)+'</small>'+
+      '<div class="user-work-market-bottom">'+
+        '<b class="user-work-market-price">'+(price?money(price):"—")+'</b>'+
+        '<span class="user-work-source-tag '+escapeAttr(sourceClass)+'">'+escapeHtml(source)+'</span>'+
+      '</div>'+
+    '</div>'+
+  '</article>';
+}
+
+function userWorkMineRow(row){
+  const levels=rowPriceLevels(row);
+  const image=String(row&&row.image||"").trim();
+  const name=canonicalDisplayName(row);
+  const pack=rowPrimaryQc(row);
+  const carton=Number(levels.promoCartonPrice||levels.cartonPrice||0);
+  const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
+  const qty=userWorkQty(row.canonical_url);
+  const bargain=readOwnPrice(row.canonical_url,"bargain");
+
+  return '<div class="user-work-order-row product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<div class="user-work-order-product">'+
+      '<div class="user-work-order-thumb">'+
+        (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
+      '</div>'+
+      '<div class="user-work-order-name"><strong>'+escapeHtml(name)+'</strong><small>'+escapeHtml(pack==="—"?"":pack)+'</small></div>'+
+    '</div>'+
+    '<div class="user-work-order-price">'+(carton?'<strong>'+money(carton)+'</strong>':'<span>—</span>')+'</div>'+
+    '<div class="user-work-order-price">'+(retail?'<strong>'+money(retail)+'</strong>':'<span>—</span>')+'</div>'+
+    '<div class="user-work-order-qty" data-work-url="'+escapeAttr(row.canonical_url)+'">'+
+      '<button type="button" data-work-qty="-1" aria-label="Giảm số lượng">−</button>'+
+      '<b>'+qty+'</b>'+
+      '<button type="button" data-work-qty="1" aria-label="Tăng số lượng">+</button>'+
+    '</div>'+
+    '<div class="user-work-order-bargain">'+
+      '<input inputmode="numeric" max="100000" maxlength="6" data-work-bargain="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá">'+
+    '</div>'+
+  '</div>';
+}
+
+function updateUserWorkOrderSummary(){
+  const mineRows=userWorkRows().filter(isMineRow);
+  const selected=mineRows.filter(row=>userWorkQty(row.canonical_url)>0);
+  const countHost=$("#userWorkSelectedCount");
+  const send=$("#userWorkSendOrder");
+  if(countHost)countHost.textContent="Đã chọn "+selected.length+" sản phẩm";
+  if(send)send.disabled=selected.length===0;
+}
+
+function renderUserWorkHome(){
+  const home=$("#userWorkHome");
+  if(!home)return;
+  home.hidden=false;
+
+  const rows=userWorkRows();
+  const market=rows.filter(row=>!isMineRow(row));
+  const mine=rows.filter(isMineRow);
+
+  const marketHost=$("#userWorkMarketGrid");
+  const marketEmpty=$("#userWorkMarketEmpty");
+  if(marketHost){
+    marketHost.innerHTML=market.slice(0,userWorkMarketLimit).map(userWorkMarketCard).join("");
+  }
+  if(marketEmpty)marketEmpty.hidden=market.length!==0;
+  const marketMore=$("#userWorkMarketMore");
+  if(marketMore){
+    marketMore.hidden=market.length<=userWorkMarketLimit;
+    marketMore.textContent=market.length>userWorkMarketLimit?"Xem thêm →":"";
+  }
+
+  const mineHost=$("#userWorkMineRows");
+  const mineEmpty=$("#userWorkMineEmpty");
+  if(mineHost){
+    mineHost.innerHTML=mine.slice(0,userWorkMineLimit).map(userWorkMineRow).join("");
+  }
+  if(mineEmpty)mineEmpty.hidden=mine.length!==0;
+  const mineMore=$("#userWorkMineMore");
+  if(mineMore){
+    mineMore.hidden=mine.length<=userWorkMineLimit;
+    mineMore.textContent=mine.length>userWorkMineLimit?"Xem thêm →":"";
+  }
+
+  updateUserWorkOrderSummary();
+}
+
 function renderLibraryProducts(){
+  const home=$("#userWorkHome");
+  if(appRole==="user"){
+    renderUserWorkHome();
+    return;
+  }
+  if(home)home.hidden=true;
   if(matchAuditActive){
     syncMatchAuditMode();
     return;
@@ -3575,6 +3747,23 @@ $("#librarySearch").addEventListener("input",e=>{
 $("#librarySearch").addEventListener("compositionend",e=>{
   queueLibrarySearch(e.target.value);
 });
+
+const userWorkSearch=$("#userWorkSearch");
+if(userWorkSearch){
+  userWorkSearch.addEventListener("input",e=>{
+    if(e.isComposing)return;
+    libraryQuery=String(e.target.value||"").trim();
+    userWorkMarketLimit=8;
+    userWorkMineLimit=12;
+    renderUserWorkHome();
+  });
+  userWorkSearch.addEventListener("compositionend",e=>{
+    libraryQuery=String(e.target.value||"").trim();
+    userWorkMarketLimit=8;
+    userWorkMineLimit=12;
+    renderUserWorkHome();
+  });
+}
 
 
 
@@ -4377,6 +4566,74 @@ $("#get").addEventListener("click",async()=>{
   }
 });
 
+
+
+const userWorkHome=$("#userWorkHome");
+if(userWorkHome){
+  userWorkHome.addEventListener("click",e=>{
+    const jump=e.target.closest(".user-work-jump-button");
+    if(jump){
+      const target=jump.dataset.workTarget==="mine"?$("#userWorkMine"):$("#userWorkMarket");
+      document.querySelectorAll(".user-work-jump-button").forEach(btn=>btn.classList.toggle("active",btn===jump));
+      if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+      return;
+    }
+
+    if(e.target.closest("#userWorkMarketMore")){
+      userWorkMarketLimit+=8;
+      renderUserWorkHome();
+      return;
+    }
+    if(e.target.closest("#userWorkMineMore")){
+      userWorkMineLimit+=20;
+      renderUserWorkHome();
+      return;
+    }
+
+    const qtyButton=e.target.closest("[data-work-qty]");
+    if(qtyButton){
+      const box=qtyButton.closest("[data-work-url]");
+      const url=box&&box.dataset.workUrl||"";
+      const next=setUserWorkQty(url,userWorkQty(url)+Number(qtyButton.dataset.workQty||0));
+      const value=box&&box.querySelector("b");
+      if(value)value.textContent=String(next);
+      updateUserWorkOrderSummary();
+      return;
+    }
+
+    const send=e.target.closest("#userWorkSendOrder");
+    if(send&&!send.disabled){
+      const selected=userWorkRows()
+        .filter(isMineRow)
+        .map(row=>({row,qty:userWorkQty(row.canonical_url)}))
+        .filter(item=>item.qty>0)
+        .map(item=>({
+          url:item.row.canonical_url,
+          name:canonicalDisplayName(item.row),
+          qty:item.qty,
+          bargain:readOwnPrice(item.row.canonical_url,"bargain")
+        }));
+      try{localStorage.setItem("getlink:work-order-draft",JSON.stringify(selected));}catch{}
+      const status=$("#userWorkOrderStatus");
+      if(status)status.textContent="Đã giữ đơn tạm "+selected.length+" sản phẩm · bước sau sẽ nối sang Chat.";
+      return;
+    }
+
+    const card=e.target.closest(".user-work-market-card");
+    if(card){
+      openLibraryItem(card.dataset.url||"");
+    }
+  });
+
+  userWorkHome.addEventListener("input",e=>{
+    const input=e.target.closest("[data-work-bargain]");
+    if(!input)return;
+    const url=input.dataset.workBargain||"";
+    const value=writeOwnPrice(url,"bargain",input.value);
+    input.value=value?String(value):"";
+    queueUserFeedback(url);
+  });
+}
 
 const AUTO_UPDATE_CHECK_MS=30000;
 const AUTO_UPDATE_ATTEMPT_KEY="getlink:auto-update-attempt";

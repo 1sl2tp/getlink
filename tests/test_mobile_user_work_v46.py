@@ -44,7 +44,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"]',APP)
         self.assertIn('mine:"Tạp hóa"',APP)
         self.assertIn('market:"Siêu thị"',APP)
-        self.assertIn('let mobileUserScope=""',APP)
+        self.assertIn('let mobileUserScope="mine"',APP)
         self.assertIn('let mobileUserCategoryKey=""',APP)
         self.assertIn('userWorkCategories(scope)',APP)
 
@@ -67,7 +67,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
             self.assertIn(token,mine_body)
             self.assertIn(token,market_body)
         self.assertNotIn(">Tạp hóa<",mine_body)
-        self.assertIn("'source-'+escapeAttr(sourceKey)",market_body)
+        self.assertIn("source-'+escapeAttr(sourceKey)",market_body)
         self.assertIn("data-work-qty",mine_body)
         self.assertNotIn("data-work-qty",market_body)
 

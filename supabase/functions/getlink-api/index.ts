@@ -64,11 +64,13 @@ function sourceKey(raw: string) {
   if (host === "bachhoaxanh.com") return "bachhoaxanh";
   if (host === "winmart.vn") return "winmart";
   if (host === "sieuthi-go.vn") return "go";
+  if (host === "get.taphoa.xyz" && new URL(raw).pathname.startsWith("/nguon-hang/")) return "mine";
   throw new Error("unsupported_source_url");
 }
 function sourceObject(key: string) {
   if (key === "winmart") return { key, name: "WinMart", host: "winmart.vn" };
   if (key === "go") return { key, name: "GO!", host: "sieuthi-go.vn" };
+  if (key === "mine") return { key, name: "Tạp hóa", host: "get.taphoa.xyz" };
   return { key: "bachhoaxanh", name: "Bách Hóa XANH", host: "bachhoaxanh.com" };
 }
 function sourceName(key: string) {
@@ -175,10 +177,15 @@ function canonicalGo(raw: string) {
   const path = (u.pathname || "/").replace(/\/+/g, "/").replace(/\/$/, "") || "/";
   return "https://sieuthi-go.vn" + path;
 }
+function canonicalMine(raw:string){
+  const u=new URL(raw);
+  return ("https://get.taphoa.xyz"+(u.pathname||"/").replace(/\/+$/,"")).toLowerCase();
+}
 function canonical(raw: string) {
   const key = sourceKey(raw);
   if (key === "winmart") return canonicalWinmart(raw);
   if (key === "go") return canonicalGo(raw);
+  if (key === "mine") return canonicalMine(raw);
   return canonicalBhx(raw);
 }
 function heuristicType(url: string) {
@@ -189,6 +196,7 @@ function heuristicType(url: string) {
     return /--c\d+$/i.test(last) || u.searchParams.has("cate2") ? "category" : "product";
   }
   if (key === "go") return new URL(url).pathname.includes("/product/") ? "product" : "category";
+  if (key === "mine") return "product";
   return pathParts(url).length <= 1 ? "category" : "product";
 }
 async function idFor(value: string) {
@@ -1651,6 +1659,27 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
 }
 
 
+function supplierStartsMatches(name:unknown,rule:any):boolean{
+  if(rule?.rule_type!=="name_starts")return false;
+  const hay=plain(manualGroupComparableName(name));
+  const val=plain(rule?.rule_value||"");
+  return Boolean(val)&&hay.startsWith(val);
+}
+function supplierGroupForName(name:unknown,rules:any[],groupByKey:Map<string,any>){
+  const starts=[...rules]
+    .filter((r:any)=>r?.rule_type==="name_starts")
+    .sort((a:any,b:any)=>
+      plain(b.rule_value||"").length-plain(a.rule_value||"").length||
+      Number(a.rule_order||0)-Number(b.rule_order||0)
+    );
+  for(const rule of starts){
+    if(!supplierStartsMatches(name,rule))continue;
+    const group=groupByKey.get(clean(rule.group_key));
+    if(group&&!group.is_fallback)return group;
+  }
+  return groupByKey.get("chua-phan-loai")||null;
+}
+
 function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|""{
   const s=plain(value);
   if(s.includes("bach hoa xanh"))return "bhx";
@@ -1895,7 +1924,7 @@ async function sourceManagerSnapshot(force=false){
 }
 
 async function libraryRows(includeHidden=true){
-  const [links,prefs,assets,comps,hier,ids,manualMembers,manualGroups]=await Promise.all([
+  const [links,prefs,assets,comps,hier,ids,manualMembers,manualGroups,supplierSources,supplierProducts,supplierRules]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").neq("last_status","unlisted").order("name",{ascending:true})),
     fetchAll("getlink_link_preferences"),
     fetchAll("getlink_link_assets"),
@@ -1907,7 +1936,18 @@ async function libraryRows(includeHidden=true){
       "getlink_manual_groups",
       "group_key,name,sort_order,is_fallback,enabled",
       (q:any)=>q.eq("enabled",true)
-    )
+    ),
+    fetchAll(
+      "getlink_supplier_sources",
+      "source_key,source_name,enabled",
+      (q:any)=>q.eq("enabled",true)
+    ),
+    fetchAll(
+      "getlink_supplier_products",
+      "*",
+      (q:any)=>q.order("source_key",{ascending:true}).order("source_row",{ascending:true})
+    ),
+    loadManualGroupRules()
   ]);
   const pref=new Map(prefs.map((x:any)=>[x.link_url,x])), asset=new Map(assets.map((x:any)=>[x.link_url,x])),
     cmp=new Map(comps.map((x:any)=>[x.link_url,x])), hm=new Map(hier.map((x:any)=>[x.link_url,x])), im=new Map(ids.map((x:any)=>[x.link_url,x])),
@@ -1945,11 +1985,96 @@ async function libraryRows(includeHidden=true){
       unit_price:c.promo_unit_price||c.regular_unit_price||null
     });
   }
+  const supplierSourceByKey=new Map(supplierSources.map((x:any)=>[clean(x.source_key),x]));
+  for(const s of supplierProducts){
+    const sourceMeta=supplierSourceByKey.get(clean(s.source_key));
+    if(!sourceMeta||!clean(s.product_name))continue;
+    const group=supplierGroupForName(s.product_name,supplierRules,manualGroupByKey);
+    const groupKey=clean(group?.group_key||"chua-phan-loai");
+    const groupName=clean(group?.name||"Chưa phân loại");
+    const stockStatus=clean(s.stock_status||"no_price");
+    const current=Number(s.display_price_vnd||0)||null;
+    const prefRow=pref.get(s.canonical_url)||{};
+    const state=prefRow.state||"normal";
+    if(!includeHidden&&state==="hidden")continue;
+    rows.push({
+      canonical_url:clean(s.canonical_url),
+      source:"Tạp hóa",
+      source_name:clean(s.product_name),
+      name:clean(s.product_name),
+      group_name:groupName,
+      branch_name:"",
+      brand_name:"",
+      packaging:"",
+      current_price:current,
+      original_price:null,
+      promotion_price:null,
+      promotion_text:stockStatus==="out_of_stock"?"Đang hết":"",
+      last_checked_at:s.updated_at||s.imported_at||"",
+      last_status:stockStatus==="out_of_stock"?"out_of_stock":"ok",
+      updated_at:s.updated_at||s.imported_at||"",
+      preference_state:state,
+      auto_refresh:prefRow.auto_refresh?1:0,
+      refresh_hours:Number(prefRow.refresh_hours)||24,
+      image:"",
+      pack_kind:"",
+      pack_quantity:1,
+      pack_unit:"",
+      size_value:null,
+      size_unit:"",
+      regular_pack_price:current,
+      promo_pack_price:null,
+      regular_unit_price:null,
+      promo_unit_price:null,
+      promotion_active:0,
+      has_promo:0,
+      pack_label_1:"",
+      pack_qty_1:0,
+      pack_label_2:"",
+      pack_qty_2:0,
+      pack_label_3:"",
+      pack_qty_3:0,
+      pack_evidence:"",
+      hierarchy_locked:0,
+      source_product_id:clean(s.source_key)+":"+String(s.source_row),
+      source_code:clean(s.source_key),
+      barcode:"",
+      sku:"",
+      manual_group_key:groupKey,
+      manual_group_name:groupName,
+      manual_group_sort_order:Number(group?.sort_order||999999),
+      manual_group_fallback:group?.is_fallback?1:0,
+      source_raw_name:clean(s.product_name),
+      source_raw_description:"Nguồn hàng: "+clean(sourceMeta.source_name),
+      match_key:"",
+      match_basis:"supplier_sheet",
+      source_category_name:clean(sourceMeta.source_name),
+      bhx_group_name:"",
+      bhx_brand_name:"",
+      bhx_match_url:"",
+      bhx_match_name:"",
+      source_root_name:clean(sourceMeta.source_name),
+      web_carton_price:null,
+      promo_carton_price:null,
+      web_middle_price:null,
+      promo_middle_price:null,
+      web_leaf_price:current,
+      promo_leaf_price:null,
+      unit_price:null,
+      supplier_source_key:clean(s.source_key),
+      supplier_source_name:clean(sourceMeta.source_name),
+      supplier_input_price_vnd:Number(s.input_price_vnd||0)||null,
+      supplier_margin_thousand:s.margin_thousand??null,
+      supplier_stock_status:stockStatus,
+      supplier_stock_label:clean(s.stock_label||"")
+    });
+  }
+
   return rows;
 }
 async function reconstructItem(url:string){
   const rows=await libraryRows(true); const row=rows.find((x:any)=>canonical(x.canonical_url)===canonical(url)); if(!row)return null;
-  const source=String(row.source||"").includes("WinMart")?sourceObject("winmart"):String(row.source||"").includes("GO")?sourceObject("go"):sourceObject("bachhoaxanh");
+  const source=String(row.source||"").includes("Tạp hóa")?sourceObject("mine"):String(row.source||"").includes("WinMart")?sourceObject("winmart"):String(row.source||"").includes("GO")?sourceObject("go"):sourceObject("bachhoaxanh");
   const h={label1:row.pack_label_1||"",qty1:Number(row.pack_qty_1)||0,label2:row.pack_label_2||"",qty2:Number(row.pack_qty_2)||0,label3:row.pack_label_3||"",qty3:Number(row.pack_qty_3)||0,evidence:row.pack_evidence||"",locked:false};
   const cmp={pack_kind:row.pack_kind||"",pack_quantity:Number(row.pack_quantity)||1,pack_unit:row.pack_unit||"",size_value:row.size_value??null,size_unit:row.size_unit||"",regular_pack_price:row.regular_pack_price??row.current_price,promo_pack_price:row.promo_pack_price??null,regular_unit_price:row.regular_unit_price??null,promo_unit_price:row.promo_unit_price??null,promotion_active:Boolean(row.promotion_active)};
   const product={source,group:row.group_name||"",branch:row.branch_name||"",name:row.name||"",packaging:{text:row.packaging||""},hierarchy:h,comparison:cmp,price:{current:row.current_price||null,original:row.original_price||null},promotion:{active:Boolean(row.promotion_active),price:row.promotion_price||null,text:row.promotion_text||""},url:row.canonical_url,image:row.image||"",breadcrumbs:[row.group_name,row.branch_name].filter(Boolean),last_checked_at:row.last_checked_at||row.updated_at};

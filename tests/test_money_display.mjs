@@ -490,4 +490,11 @@ assert.equal(money(0),"—");
   assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v3-supplier"/);
 }
 
+{
+  // productCard supplier stock runtime guard
+  const productCardBlock=app.match(/function productCard\(row\)\{[\s\S]*?\n\}/);
+  assert.ok(productCardBlock);
+  assert.match(productCardBlock[0],/const supplierStock=supplierAvailabilityText\(row\)/);
+}
+
 console.log("money and hierarchy UI tests passed");

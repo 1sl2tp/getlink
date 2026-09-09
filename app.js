@@ -1594,6 +1594,34 @@ function supplierAvailabilityText(row){
   return "";
 }
 
+function supplierPriceChangeHtml(row){
+  if(!isMineRow(row))return "";
+  const direction=String(row&&row.supplier_price_direction||"").trim();
+  const delta=Number(row&&row.supplier_price_delta_vnd||0);
+  if((direction!=="up"&&direction!=="down")||!delta)return "";
+  const changedAt=String(row&&row.supplier_price_changed_at||"").trim();
+  let shortDate="";
+  if(changedAt){
+    try{
+      shortDate=new Intl.DateTimeFormat("vi-VN",{
+        timeZone:"Asia/Ho_Chi_Minh",
+        day:"2-digit",
+        month:"2-digit"
+      }).format(new Date(changedAt));
+    }catch{}
+  }
+  const oldPrice=Number(row&&row.supplier_previous_input_price_vnd||0);
+  const newPrice=Number(row&&row.supplier_input_price_vnd||0);
+  const arrow=direction==="up"?"↑":"↓";
+  const label=arrow+" "+money(Math.abs(delta))+(shortDate?" · "+shortDate:"");
+  const title=(direction==="up"?"Giá nhập tăng ":"Giá nhập giảm ")+
+    money(Math.abs(delta))+
+    (oldPrice&&newPrice?" · "+money(oldPrice)+" → "+money(newPrice):"")+
+    (shortDate?" · phát hiện "+shortDate:"");
+  return '<small class="supplier-price-change '+(direction==="up"?"is-up":"is-down")+'" title="'+
+    escapeAttr(title)+'">'+escapeHtml(label)+'</small>';
+}
+
 function tablePrimarySourcePrice(levels,row){
   if(activeSourceFilter==="mine"){
     const stock=supplierAvailabilityText(row);
@@ -1663,13 +1691,14 @@ function supplierTableRow(row){
     (retailUnit?"1 "+retailUnit:"");
   const primaryPack=String(row&&row.supplier_primary_packaging||"").trim()||
     (carton>0?"Thùng":retailPack);
+  const changeHtml=supplierPriceChangeHtml(row);
   const cartonHtml=stock
     ?'<span class="xls-out-of-stock">'+stock+'</span>'
     :(carton>0
-      ?'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>'
+      ?'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>'+changeHtml
       :'<span class="xls-empty">—</span>');
   const retailHtml=retail>0
-    ?xlsWebPrice(retail,0)
+    ?xlsWebPrice(retail,0)+(carton>0?"":changeHtml)
     :'<span class="xls-empty">—</span>';
   return '<tr class="product-card xls-row supplier-table-row source-mine '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
@@ -1980,6 +2009,7 @@ function gridProductCard(row){
   const cartonMeta=rowIsCarton(row)?rowCartonCardMeta(row,price):null;
   const qc=cartonMeta?cartonMeta.pack:rowPrimaryQc(row);
   const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
+  const supplierChangeHtml=supplierPriceChangeHtml(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
 
   return '<article class="grid-product product-card'+catalogSourceDisplayClass(row)+' '+
@@ -2001,9 +2031,10 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
-          '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+'">'+
+          '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+(supplierChangeHtml?" has-change":"")+'">'+
             '<strong class="grid-price'+(activeSourceFilter==="mine"||isMineRow(row)?" source-price-mine":"")+(supplierStock?" is-out-of-stock":"")+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+(supplierStock?supplierStock:money(price))+'</strong>'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
+            supplierChangeHtml+
           '</span>'+
         '</div>'+
       '</div>'+

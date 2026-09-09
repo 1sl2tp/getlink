@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 const app=fs.readFileSync("app.js","utf8");
 const html=fs.readFileSync("index.html","utf8");
 const css=fs.readFileSync("style.css","utf8");
+const edge=fs.readFileSync("supabase/functions/getlink-api/index.ts","utf8");
 
 const moneyMatch=app.match(/function money\(v\)\{[\s\S]*?\n\}/);
 assert.ok(moneyMatch,"money() not found");
@@ -535,5 +536,5 @@ assert.match(app,/\["sua",30\],[\s\S]*?\["masan",40\],[\s\S]*?\["hang-thuong",50
 
 
 // Stable supplier identity + retail-basis fallback.
-assert.match(app,/supplier_product_code/);
+assert.match(edge,/supplier_product_code/);
 assert.match(app,/inferredRetailBasis/);

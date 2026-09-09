@@ -76,7 +76,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
 
     def test_all_results_prioritize_mine_then_supermarket_carton_middle_retail(self):
         self.assertRegex(APP,r"function\s+mobileUserPackRank\s*\(")
-        self.assertRegex(APP,r"if\(rowIsCarton\(row\)\)return 0")
+        self.assertRegex(APP,r'h\.label1\s*===\s*"Thùng"')
         self.assertRegex(APP,r"if\(h\.label2\)return 1")
         self.assertRegex(APP,r"return 2")
         self.assertRegex(APP,r"isMineRow\(a\.row\)\?0:1")

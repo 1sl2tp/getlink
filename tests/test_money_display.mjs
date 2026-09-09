@@ -500,9 +500,17 @@ assert.equal(money(0),"—");
 {
   // supplier priority table contract
   assert.match(html,/id="supplierTableHead"/);
-  assert.match(html,/>Giá thùng</);
-  assert.match(html,/>Giá lẻ</);
-  assert.match(html,/>Quy cách lẻ</);
+  assert.match(html,/>Tên sản phẩm</);
+  assert.match(html,/>Giá nhập NCC</);
+  assert.match(html,/>Giá bán thùng</);
+  assert.match(html,/>Giá bán lẻ</);
+  assert.match(html,/>QC \/ thùng</);
+  assert.match(html,/>Đơn vị lẻ</);
+  assert.match(html,/>Lãi thật</);
+  assert.match(html,/>Lãi kỳ vọng</);
+  assert.match(html,/>Giá nhập trước</);
+  assert.match(html,/>Biến động</);
+  assert.match(html,/>Ngày đổi giá</);
   assert.match(app,/function supplierTableRow\(row\)/);
   assert.match(app,/supplier_primary_packaging/);
   assert.match(app,/supplier_retail_price_vnd/);

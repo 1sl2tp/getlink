@@ -11932,3 +11932,72 @@ body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
     padding-right:3px!important;
   }
 }
+
+
+/* =========================================================
+   Mobile image-card footer v41 — pack left / price right
+   ========================================================= */
+@media(max-width:720px){
+  .user-grid-product-compact .user-grid-fields-compact{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) minmax(88px,.72fr)!important;
+    align-items:end!important;
+    gap:10px!important;
+    margin-top:7px!important;
+    padding-top:7px!important;
+    border-top:1px solid #edf0f2!important;
+  }
+  .user-grid-product-compact .user-grid-field{
+    min-width:0!important;
+    min-height:34px!important;
+    display:flex!important;
+    flex-direction:column!important;
+    justify-content:flex-end!important;
+    gap:3px!important;
+    padding:0!important;
+    border:0!important;
+  }
+  .user-grid-product-compact .user-grid-field>span{
+    font-size:10.5px!important;
+    line-height:1!important;
+    font-weight:400!important;
+    color:#8a94a1!important;
+  }
+  .user-grid-product-compact .user-grid-field>strong{
+    font-size:12.5px!important;
+    line-height:1.15!important;
+    font-weight:600!important;
+    color:#344054!important;
+  }
+  .user-grid-product-compact .user-grid-field-pack{
+    align-items:flex-start!important;
+    text-align:left!important;
+  }
+  .user-grid-product-compact .user-grid-field-pack strong{
+    max-width:100%!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .user-grid-product-compact .user-grid-field-price{
+    align-items:flex-end!important;
+    text-align:right!important;
+  }
+  .user-grid-product-compact .user-grid-field-price strong{
+    font-size:16px!important;
+    line-height:1!important;
+    font-weight:700!important;
+    color:#087a40!important;
+    font-variant-numeric:tabular-nums!important;
+  }
+}
+
+@media(max-width:390px){
+  .user-grid-product-compact .user-grid-fields-compact{
+    grid-template-columns:minmax(0,1fr) minmax(76px,.68fr)!important;
+    gap:8px!important;
+  }
+  .user-grid-product-compact .user-grid-field-price strong{
+    font-size:15.5px!important;
+  }
+}

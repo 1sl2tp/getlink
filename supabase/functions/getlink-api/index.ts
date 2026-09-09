@@ -2139,6 +2139,115 @@ async function libraryRows(includeHidden=true){
 
   return rows;
 }
+
+function publicCatalogRow(row:any){
+  return {
+    canonical_url:clean(row?.canonical_url||""),
+    source:"Tạp hóa",
+    source_name:clean(row?.source_name||row?.name||""),
+    name:clean(row?.name||row?.source_name||""),
+    group_name:clean(row?.group_name||""),
+    branch_name:"",
+    brand_name:"",
+    packaging:clean(row?.packaging||row?.supplier_primary_packaging||""),
+    current_price:Number(row?.current_price||0)||null,
+    original_price:null,
+    promotion_price:null,
+    promotion_text:clean(row?.promotion_text||""),
+    last_checked_at:row?.last_checked_at||row?.updated_at||"",
+    last_status:clean(row?.last_status||"ok"),
+    updated_at:row?.updated_at||"",
+    image:clean(row?.image||""),
+    pack_kind:clean(row?.pack_kind||""),
+    pack_quantity:Number(row?.pack_quantity||0)||0,
+    pack_unit:clean(row?.pack_unit||""),
+    regular_pack_price:Number(row?.regular_pack_price||row?.current_price||0)||null,
+    promo_pack_price:null,
+    regular_unit_price:Number(row?.regular_unit_price||row?.supplier_retail_price_vnd||0)||null,
+    promo_unit_price:null,
+    promotion_active:0,
+    has_promo:0,
+    pack_label_1:clean(row?.pack_label_1||""),
+    pack_qty_1:Number(row?.pack_qty_1||0)||0,
+    pack_label_2:clean(row?.pack_label_2||""),
+    pack_qty_2:Number(row?.pack_qty_2||0)||0,
+    pack_label_3:clean(row?.pack_label_3||""),
+    pack_qty_3:Number(row?.pack_qty_3||0)||0,
+    pack_evidence:"",
+    hierarchy_locked:1,
+    source_product_id:clean(row?.supplier_product_code||row?.source_product_id||""),
+    source_code:clean(row?.supplier_source_key||""),
+    barcode:"",
+    sku:"",
+    manual_group_key:clean(row?.manual_group_key||""),
+    manual_group_name:clean(row?.manual_group_name||row?.group_name||""),
+    manual_group_sort_order:Number(row?.manual_group_sort_order||999999),
+    manual_group_fallback:Number(row?.manual_group_fallback||0)>0?1:0,
+    source_raw_name:clean(row?.source_name||row?.name||""),
+    source_raw_description:"",
+    match_key:"",
+    match_basis:"",
+    source_category_name:"",
+    bhx_group_name:"",
+    bhx_brand_name:"",
+    bhx_match_url:"",
+    bhx_match_name:"",
+    source_root_name:"",
+    web_carton_price:Number(row?.supplier_carton_price_vnd||row?.web_carton_price||0)||null,
+    promo_carton_price:null,
+    web_middle_price:null,
+    promo_middle_price:null,
+    web_leaf_price:Number(row?.supplier_retail_price_vnd||row?.web_leaf_price||0)||null,
+    promo_leaf_price:null,
+    unit_price:Number(row?.supplier_retail_price_vnd||row?.unit_price||0)||null,
+    supplier_source_key:clean(row?.supplier_source_key||""),
+    supplier_product_code:clean(row?.supplier_product_code||""),
+    supplier_carton_price_vnd:Number(row?.supplier_carton_price_vnd||0)||null,
+    supplier_retail_price_vnd:Number(row?.supplier_retail_price_vnd||0)||null,
+    supplier_retail_packaging:clean(row?.supplier_retail_packaging||""),
+    supplier_primary_packaging:clean(row?.supplier_primary_packaging||row?.packaging||""),
+    supplier_units_per_carton:Number(row?.supplier_units_per_carton||0)||null,
+    supplier_retail_unit:clean(row?.supplier_retail_unit||""),
+    supplier_stock_status:clean(row?.supplier_stock_status||""),
+    supplier_stock_label:clean(row?.supplier_stock_label||"")
+  };
+}
+
+function publicCatalogRows(rows:any[]){
+  return rows
+    .filter((row:any)=>Boolean(clean(row?.supplier_product_code||""))||clean(row?.source)==="Tạp hóa")
+    .map(publicCatalogRow);
+}
+
+async function saveUserFeedback(body:any){
+  const raw=clean(body?.url||"");
+  const clientId=clean(body?.client_id||"").slice(0,120);
+  if(!raw||!clientId)throw new Error("feedback_missing_fields");
+  const itemUrl=canonical(raw);
+  if(sourceKey(itemUrl)!=="mine")throw new Error("feedback_invalid_product");
+  const bargainRaw=body?.bargain_price_vnd;
+  const ratingRaw=body?.rating;
+  const bargain=bargainRaw===null||bargainRaw===undefined||bargainRaw===""
+    ?null
+    :Math.max(0,Math.round(Number(bargainRaw)||0));
+  const rating=ratingRaw===null||ratingRaw===undefined||ratingRaw===""
+    ?null
+    :Math.max(1,Math.min(5,Math.round(Number(ratingRaw)||0)));
+  const now=new Date().toISOString();
+  const {data,error}=await sb.from("getlink_user_product_feedback")
+    .upsert({
+      canonical_url:itemUrl,
+      client_id:clientId,
+      bargain_price_vnd:bargain,
+      rating,
+      updated_at:now
+    },{onConflict:"canonical_url,client_id"})
+    .select("canonical_url,bargain_price_vnd,rating,updated_at")
+    .single();
+  if(error)throw error;
+  return data;
+}
+
 async function reconstructItem(url:string){
   const rows=await libraryRows(true); const row=rows.find((x:any)=>canonical(x.canonical_url)===canonical(url)); if(!row)return null;
   const source=String(row.source||"").includes("Tạp hóa")?sourceObject("mine"):String(row.source||"").includes("WinMart")?sourceObject("winmart"):String(row.source||"").includes("GO")?sourceObject("go"):sourceObject("bachhoaxanh");
@@ -2984,6 +3093,7 @@ Deno.serve(async(req:Request)=>{
       return response(req,{ok:true,mode:"supabase-only",links:Number(count||0),stale_jobs_cleaned:staleJobsCleaned});
     }
     if(req.method==="POST"&&route==="/api/get-price"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
       const body=await req.json(); const raw=clean(body?.url); if(!raw)return response(req,{error:"missing_url"},400);
       const input=canonical(raw), force=Boolean(body?.force);
       if(!force){
@@ -3018,6 +3128,7 @@ Deno.serve(async(req:Request)=>{
       }
     }
     if(req.method==="GET"&&route==="/api/result"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
       const id=clean(url.searchParams.get("id")); if(!id)return response(req,{error:"missing_id"},400);
       const {data,error}=await sb.from("getlink_jobs").select("*").eq("request_id",id).maybeSingle(); if(error)throw error;if(!data)return response(req,{error:"not_found"},404);
       if(data.status==="complete"){
@@ -3030,7 +3141,9 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method==="GET"&&route==="/api/library"){
       const view=clean(url.searchParams.get("view")||"groups");
+      const isAdmin=await adminSessionAuthorized(req);
       if(view==="supplier-price-history"){
+        if(!isAdmin)return response(req,{error:"admin_locked"},401);
         const raw=clean(url.searchParams.get("url")||"");
         if(!raw)return response(req,{error:"missing_url"},400);
         const itemUrl=canonical(raw);
@@ -3043,6 +3156,7 @@ Deno.serve(async(req:Request)=>{
         return response(req,{url:itemUrl,history});
       }
       if(view==="manual-group"){
+        if(!isAdmin)return response(req,{error:"admin_locked"},401);
         const groupKey=clean(url.searchParams.get("group")||"");
         if(!groupKey)return response(req,{error:"missing_group"},400);
         const detail=await sourceManagerManualGroupDetail(groupKey);
@@ -3050,15 +3164,17 @@ Deno.serve(async(req:Request)=>{
         return response(req,detail);
       }
       if(view==="source-manager"){
+        if(!isAdmin)return response(req,{error:"admin_locked"},401);
         return response(req,await sourceManagerSnapshot(false));
       }
       if(view==="search"||view==="products"){
         const limit=Math.min(10000,Math.max(1,Number(url.searchParams.get("limit")||500)));
-        let rows=await libraryRows(url.searchParams.get("include_hidden")==="1");
+        let rows=await libraryRows(isAdmin&&url.searchParams.get("include_hidden")==="1");
+        if(!isAdmin)rows=publicCatalogRows(rows);
         if(view==="products"&&url.searchParams.get("parent")){
           const parent=canonical(clean(url.searchParams.get("parent"))); rows=rows.filter((x:any)=>x.parent_url===parent);
         }
-        return response(req,{products:rows.slice(0,limit)});
+        return response(req,{products:rows.slice(0,limit),role:isAdmin?"admin":"user"});
       }
       if(view==="classification-version"){
         const [{data:maxRow,error:maxError},{count,error:countError}]=await Promise.all([
@@ -3078,7 +3194,9 @@ Deno.serve(async(req:Request)=>{
         });
       }
       if(view==="groups"){
-        const rows=await libraryRows(false); const map=new Map<string,any>();
+        let rows=await libraryRows(false);
+        if(!isAdmin)rows=publicCatalogRows(rows);
+        const map=new Map<string,any>();
         for(const r of rows){
           const key=clean(r.manual_group_key);
           const name=clean(r.manual_group_name);
@@ -3101,6 +3219,7 @@ Deno.serve(async(req:Request)=>{
         });
       }
       if(view==="item"){
+        if(!isAdmin)return response(req,{error:"admin_locked"},401);
         const raw=clean(url.searchParams.get("url")); if(!raw)return response(req,{error:"invalid_url"},400); const itemUrl=canonical(raw);
         const {data}=await sb.from("getlink_jobs").select("result_json,updated_at").eq("canonical_url",itemUrl).eq("status","complete").order("updated_at",{ascending:false}).limit(1).maybeSingle();
         let payload=sanitizeCatalogPayload(data?.result_json||null); if(!payload)payload=await reconstructItem(itemUrl); payload=sanitizeCatalogPayload(payload); if(!payload)return response(req,{error:"not_found"},404);
@@ -3108,6 +3227,7 @@ Deno.serve(async(req:Request)=>{
         return response(req,{status:"complete",payload,source:"supabase",updated_at:data?.updated_at||"",preference:pref||{state:"normal",auto_refresh:false,refresh_hours:24,pinned:false}});
       }
       if(view==="matches"){
+        if(!isAdmin)return response(req,{error:"admin_locked"},401);
         const [ids,links]=await Promise.all([fetchAll("getlink_source_product_identity"),fetchAll("getlink_links","canonical_url,name,current_price,original_price,promotion_price,parent_url,last_status",(q:any)=>q.eq("link_type","product"))]);
         const lm=new Map(links.map((x:any)=>[x.canonical_url,x])), groups=new Map<string,any>();
         for(const i of ids){const l=lm.get(i.link_url);if(!l||l.last_status==="unlisted"||!i.match_key)continue;const key=i.match_key;if(!groups.has(key))groups.set(key,{match_key:key,match_basis:i.match_basis||"",items:[],sources:new Set()});const g=groups.get(key);g.sources.add(i.source_name);g.items.push({...i,...l});}
@@ -3117,7 +3237,17 @@ Deno.serve(async(req:Request)=>{
       return response(req,{error:"invalid_view"},400);
     }
 
+    if(req.method==="POST"&&route==="/api/user-feedback"){
+      const body=await req.json().catch(()=>({}));
+      try{
+        return response(req,{feedback:await saveUserFeedback(body)});
+      }catch(e){
+        return response(req,{error:"feedback_invalid",detail:errorText(e).slice(0,300)},400);
+      }
+    }
+
     if(req.method==="POST"&&route==="/api/preference"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
       const body=await req.json(); const link=canonical(clean(body?.url)); const state=["normal","watch","hidden"].includes(body?.state)?body.state:"normal"; const now=new Date().toISOString();
       const row={link_url:link,state,auto_refresh:state==="watch",refresh_hours:Math.max(1,Number(body?.refresh_hours)||24),pinned:false,updated_at:now};
       await must(sb.from("getlink_link_preferences").upsert(row,{onConflict:"link_url"}));

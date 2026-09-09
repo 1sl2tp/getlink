@@ -2726,12 +2726,7 @@ function newsStripHtml(value:unknown){
     .replace(/<[^>]+>/g," "));
 }
 function newsEscapeRe(value:string){
-  return value.replace(/[-/\\^$*+?.()|[\]{}]/g,"\\function routePath(req:Request){
-  const p=new URL(req.url).pathname; const marker="/getlink-api"; const i=p.indexOf(marker); return i>=0?(p.slice(i+marker.length)||"/"):p;
-}
-
-
-const UPDATE_ADMIN_PIN_SHA256=");
+  return value.replace(/[.*+?^$()|[\]{}\\]/g,"\\$&");
 }
 function newsTag(block:string,names:string[]){
   for(const raw of names){

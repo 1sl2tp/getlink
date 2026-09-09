@@ -21,9 +21,9 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         m=re.search(r'function mobileUserRows\(\)\{([\s\S]*?)\n\}', APP)
         self.assertIsNotNone(m)
         body=m.group(1)
-        self.assertIn('mobileUserScope==="mine"', body)
+        self.assertIn('userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey)', body)
         self.assertIn('mobileUserScope==="market"', body)
-        self.assertIn('mobileUserChildSource', body)
+        self.assertIn('userWorkMarketSortRows(baseRows)', body)
 
     def test_source_tabs_render_parent_and_child_levels(self):
         m=re.search(r'function renderMobileUserSourceTabs\(\)\{([\s\S]*?)\n\}', APP)
@@ -32,7 +32,7 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         self.assertIn('mobile-user-source-level parent', body)
         self.assertIn('mobile-user-source-level child', body)
         self.assertIn('data-mobile-scope', body)
-        self.assertIn('data-mobile-source', body)
+        self.assertIn('data-mobile-category', body)
 
 if __name__=="__main__":
     unittest.main()

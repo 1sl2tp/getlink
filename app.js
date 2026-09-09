@@ -4009,6 +4009,12 @@ function setupMobileUserAutoLoad(){
   mobileUserAutoLoadObserver.observe(target);
 }
 
+function resetMobileUserResultsScroll(){
+  const host=$("#mobileUserResults");
+  if(!host)return;
+  host.scrollTop=0;
+}
+
 function renderMobileUserWork(){
   const search=$("#mobileUserSearch");
   if(search&&document.activeElement!==search)search.value=libraryQuery;
@@ -5455,6 +5461,7 @@ if(userWorkHome){
       mobileUserChildSource="";
       mobileUserLimit=8;
       renderUserWorkHome();
+      resetMobileUserResultsScroll();
       return;
     }
 
@@ -5469,6 +5476,7 @@ if(userWorkHome){
         :"";
       mobileUserLimit=8;
       renderUserWorkHome();
+      resetMobileUserResultsScroll();
       return;
     }
 

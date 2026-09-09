@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v7-supplier-spreadsheet-layout";
+const UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){

@@ -3,6 +3,8 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { JWT } from "npm:google-auth-library@9.15.1";
 
+declare const EdgeRuntime:{waitUntil(promise:Promise<unknown>):void};
+
 const sb=createClient(
   Deno.env.get("SUPABASE_URL")!,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -16,6 +18,11 @@ const SOURCES=[
   {key:"sua",name:"Sữa",prefix:"SUA-",ncc:"15A3wy0YXlVajFWTTeLXCUh580QhwIlwaBIyn9RdR2XU",nccSheet:"1",mgrSheet:"Sữa",basis:"carton"},
   {key:"masan",name:"Hàng masan",prefix:"MAS-",ncc:"1IcjJA_EF3gY0htAS97ClUQF5VZpgZFId7IYPExNgKzM",nccSheet:"1",mgrSheet:"Hàng masan",basis:"carton"},
   {key:"hang-thuong",name:"Hàng thường",prefix:"HT-",ncc:"1i1ge5hOPmWi7oxjE5F5hD96f9Zvvp_0HQzwgawZiFgs",nccSheet:"1",mgrSheet:"Hàng thường",basis:"carton"}
+] as const;
+
+const WATCH_FILES=[
+  {fileId:MANAGER_ID,sourceKey:null,kind:"manager"},
+  ...SOURCES.map(s=>({fileId:s.ncc,sourceKey:s.key,kind:"ncc"}))
 ] as const;
 
 type Pair={code:string,row:number,name:string,price:number|null,active:boolean};
@@ -235,7 +242,6 @@ async function syncPair(source:any,nccRows:any[][],mgrRows:any[][]){
   const assigned=await assignMissingCodes(source,nccRows,mgrRows);
   const ncc=assigned.ncc, mgr=assigned.mgr;
   const states=await loadStates(source.key);
-  const [nccMod,mgrMod]=await Promise.all([modified(source.ncc),modified(MANAGER_ID)]);
   const codes=new Set([...ncc.keys(),...mgr.keys(),...states.keys()]);
   let n2m=0,m2n=0,deleted=0,conflicts=0;
 
@@ -252,8 +258,7 @@ async function syncPair(source:any,nccRows:any[][],mgrRows:any[][]){
     if(!s){
       if(a?.active&&b?.active){
         if(!eqPair(a,{name:b.name,price:b.price})){
-          if(mgrMod>=nccMod){a=await writePairToNcc(source,a,b,code);m2n++;conflicts++;}
-          else {b=await writePairToManager(source,b,a,code);n2m++;conflicts++;}
+          a=await writePairToNcc(source,a,b,code);m2n++;conflicts++;
         }
       }else if(a?.active&&!b?.active){
         b=await writePairToManager(source,b,a,code); n2m++;
@@ -272,13 +277,11 @@ async function syncPair(source:any,nccRows:any[][],mgrRows:any[][]){
       if(!b?.active)deleted++;
     }else if(aChanged&&bChanged){
       if(eqPair(a,b?{name:b.name,price:b.price}:null)){
-        // Both sides ended at the same value.
-      }else if(mgrMod>=nccMod){
+        // both ended at the same value
+      }else{
+        // If both sides changed before the same scan, management is the tie-breaker.
         a=await writePairToNcc(source,a,b,code); m2n++; conflicts++;
         if(!b?.active)deleted++;
-      }else{
-        b=await writePairToManager(source,b,a,code); n2m++; conflicts++;
-        if(!a?.active)deleted++;
       }
     }
 
@@ -353,17 +356,254 @@ async function ingestManager(source:any,rows:any[][]){
   return {active:incoming.filter(x=>x.is_active).length,inactive:missing.length};
 }
 
-async function authorized(req:Request){
-  const provided=clean(req.headers.get("x-getlink-cron"));
-  if(!provided)return false;
-  const {data,error}=await sb.from("getlink_update_settings").select("cron_secret").eq("id",1).single();
-  if(error)return false;
-  return provided===clean(data?.cron_secret);
+
+function vnDateTime(value:unknown){
+  if(!value)return "";
+  const d=new Date(String(value));
+  if(Number.isNaN(d.getTime()))return "";
+  return new Intl.DateTimeFormat("vi-VN",{
+    timeZone:"Asia/Ho_Chi_Minh",
+    day:"2-digit",month:"2-digit",year:"numeric",
+    hour:"2-digit",minute:"2-digit",
+    hour12:false
+  }).format(d).replace(",", "");
 }
 
-async function run(){
+async function refreshManagerDerived(source:any,managerRows:any[][]){
+  const {data,error}=await sb.from("getlink_supplier_products")
+    .select("product_code,input_price_vnd,input_price_basis,applied_profit_vnd,display_price_vnd,units_per_carton,stock_status,is_active,previous_input_price_vnd,supplier_price_delta_vnd,supplier_price_direction,supplier_price_changed_at")
+    .eq("source_key",source.key);
+  if(error)throw error;
+
+  const db=new Map((data||[]).map((x:any)=>[clean(x.product_code).toUpperCase(),x]));
+  const updates:{range:string,values:any[][]}[]=[];
+
+  for(let i=1;i<managerRows.length;i++){
+    const row=managerRows[i]||[];
+    const code=clean(row[15]).toUpperCase();
+    const name=clean(row[0]);
+    if(!code||!name)continue;
+    const d:any=db.get(code);
+    if(!d)continue;
+
+    const input=d.input_price_vnd===null||d.input_price_vnd===undefined?null:Number(d.input_price_vnd);
+    const profit=d.applied_profit_vnd===null||d.applied_profit_vnd===undefined?0:Number(d.applied_profit_vnd);
+    const display=d.display_price_vnd===null||d.display_price_vnd===undefined?null:Number(d.display_price_vnd);
+    const units=d.units_per_carton===null||d.units_per_carton===undefined?null:Number(d.units_per_carton);
+
+    let status="Có giá";
+    if(!d.is_active)status="Ngừng dùng";
+    else if(clean(d.stock_status)==="out_of_stock")status="Đang hết";
+    else if(input===null)status="Chưa có giá";
+
+    const percent=input&&input>0?profit/input:null;
+    const profitSheet=profit/1000;
+
+    let carton:any="";
+    let retail:any="";
+    if(display!==null){
+      if(clean(d.input_price_basis)==="retail"){
+        retail=display/1000;
+        if(units&&units>1)carton=Math.round(display*units)/1000;
+      }else{
+        carton=display/1000;
+        if(units&&units>1)retail=Math.round(display/units)/1000;
+      }
+    }
+
+    const prev=d.previous_input_price_vnd===null||d.previous_input_price_vnd===undefined
+      ?""
+      :Number(d.previous_input_price_vnd)/1000;
+    const delta=d.supplier_price_delta_vnd===null||d.supplier_price_delta_vnd===undefined
+      ?null
+      :Number(d.supplier_price_delta_vnd)/1000;
+
+    let movement="";
+    if(delta!==null&&delta!==0){
+      movement=delta>0
+        ?"Tăng +"+Math.abs(delta)
+        :"Giảm -"+Math.abs(delta);
+    }
+
+    const values=[
+      status,
+      row[3]??"",
+      percent??"",
+      percent===null?"":profitSheet,
+      row[6]??profitSheet,
+      "Lãi áp dụng",
+      carton,
+      retail,
+      row[10]??"",
+      row[11]??"",
+      prev,
+      movement,
+      vnDateTime(d.supplier_price_changed_at)
+    ];
+
+    const current=row.slice(2,15);
+    const same=current.length===values.length&&current.every((v:any,idx:number)=>{
+      const a=v===null||v===undefined?"":String(v);
+      const b=values[idx]===null||values[idx]===undefined?"":String(values[idx]);
+      return a===b;
+    });
+    if(!same){
+      updates.push({
+        range:qsheet(source.mgrSheet)+"!C"+(i+1)+":O"+(i+1),
+        values:[values]
+      });
+    }
+  }
+
+  for(let i=0;i<updates.length;i+=200){
+    await batchWrite(MANAGER_ID,updates.slice(i,i+200));
+  }
+}
+
+
+function watchCallbackUrl(){
+  return clean(Deno.env.get("SUPABASE_URL")).replace(/\/$/,"")+
+    "/functions/v1/getlink-sheet-sync/webhook";
+}
+
+async function stopWatchChannel(channelId:string,resourceId:string){
+  if(!channelId||!resourceId)return;
+  try{
+    await gfetch("https://www.googleapis.com/drive/v3/channels/stop",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({id:channelId,resourceId})
+    });
+  }catch{
+    // Expired/stale channels can safely be left for Google to expire.
+  }
+}
+
+async function registerFileWatch(fileId:string,sourceKey:string|null){
+  const channelId=crypto.randomUUID();
+  const channelToken=crypto.randomUUID().replace(/-/g,"")+
+    crypto.randomUUID().replace(/-/g,"");
+  const expiration=Date.now()+23*60*60*1000;
+  const url="https://www.googleapis.com/drive/v3/files/"+
+    encodeURIComponent(fileId)+"/watch?supportsAllDrives=true";
+  const res=await gfetch(url,{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({
+      id:channelId,
+      type:"web_hook",
+      address:watchCallbackUrl(),
+      token:channelToken,
+      expiration
+    })
+  });
+  const body=await res.json();
+  const expiresAt=body?.expiration
+    ?new Date(Number(body.expiration)).toISOString()
+    :new Date(expiration).toISOString();
+
+  const {error}=await sb.from("getlink_sheet_watch_channels").insert({
+    channel_id:channelId,
+    file_id:fileId,
+    source_key:sourceKey,
+    channel_token:channelToken,
+    resource_id:clean(body?.resourceId),
+    resource_uri:clean(body?.resourceUri),
+    expires_at:expiresAt,
+    active:true,
+    updated_at:new Date().toISOString()
+  });
+  if(error)throw error;
+
+  return {
+    file_id:fileId,
+    source_key:sourceKey,
+    channel_id:channelId,
+    expires_at:expiresAt
+  };
+}
+
+async function ensureWatches(force=false){
+  const renewBefore=new Date(Date.now()+2*60*60*1000).toISOString();
+  const {data,error}=await sb.from("getlink_sheet_watch_channels")
+    .select("*").eq("active",true);
+  if(error)throw error;
+  const active=Array.isArray(data)?data:[];
+  const registered:any[]=[];
+  const kept:any[]=[];
+
+  for(const item of WATCH_FILES){
+    const candidates=active.filter((x:any)=>clean(x.file_id)===item.fileId);
+    const valid=candidates.find((x:any)=>
+      x.expires_at&&String(x.expires_at)>renewBefore
+    );
+    if(valid&&!force){
+      kept.push({
+        file_id:item.fileId,
+        source_key:item.sourceKey,
+        expires_at:valid.expires_at
+      });
+      continue;
+    }
+
+    for(const old of candidates){
+      await stopWatchChannel(clean(old.channel_id),clean(old.resource_id));
+      await sb.from("getlink_sheet_watch_channels")
+        .update({active:false,updated_at:new Date().toISOString()})
+        .eq("channel_id",old.channel_id);
+    }
+    registered.push(await registerFileWatch(item.fileId,item.sourceKey));
+  }
+
+  return {ok:true,registered,kept,total:registered.length+kept.length};
+}
+
+async function noteWebhook(
+  channelId:string,
+  tokenValue:string,
+  messageNumber:number|null,
+  resourceState:string
+){
+  const {data,error}=await sb.from("getlink_sheet_watch_channels")
+    .select("*")
+    .eq("channel_id",channelId)
+    .eq("active",true)
+    .maybeSingle();
+  if(error||!data)return {ok:false as const,reason:"unknown_channel"};
+  if(clean(data.channel_token)!==tokenValue){
+    return {ok:false as const,reason:"token_mismatch"};
+  }
+  const last=Number(data.last_message_number||0);
+  if(messageNumber!==null&&Number.isFinite(messageNumber)&&messageNumber<=last){
+    return {ok:false as const,reason:"duplicate"};
+  }
+  await sb.from("getlink_sheet_watch_channels").update({
+    last_message_number:messageNumber,
+    last_resource_state:resourceState,
+    last_notified_at:new Date().toISOString(),
+    updated_at:new Date().toISOString()
+  }).eq("channel_id",channelId);
+  return {ok:true as const,row:data};
+}
+
+async function runSources(sourceKeys?:string[],ensureWatch=false){
+  const wanted=sourceKeys&&sourceKeys.length
+    ?new Set(sourceKeys)
+    :null;
   const results:any[]=[];
+  let watch:any=null;
+
+  if(ensureWatch){
+    try{
+      watch=await ensureWatches(false);
+    }catch(e){
+      watch={ok:false,error:String((e as any)?.message||e)};
+    }
+  }
+
   for(const source of SOURCES){
+    if(wanted&&!wanted.has(source.key))continue;
+
     const [nccRows,mgrRows]=await Promise.all([
       readSheet(source.ncc,source.nccSheet,"A:C"),
       readSheet(MANAGER_ID,source.mgrSheet,"A:P")
@@ -372,25 +612,89 @@ async function run(){
     const pair=await syncPair(source,nccRows,mgrRows);
     const managerFresh=await readSheet(MANAGER_ID,source.mgrSheet,"A:P");
     const db=await ingestManager(source,managerFresh);
+    await refreshManagerDerived(source,managerFresh);
+
     const nccFresh=mapRows(await readSheet(source.ncc,source.nccSheet,"A:C"),2).map;
-    const mgrFresh=mapRows(managerFresh,15).map;
+    const managerAfter=await readSheet(MANAGER_ID,source.mgrSheet,"A:P");
+    const mgrFresh=mapRows(managerAfter,15).map;
     await saveStates(source.key,nccFresh,mgrFresh);
 
     results.push({source:source.key,...pair,db});
   }
-  return {ok:true,at:new Date().toISOString(),results};
+
+  return {ok:true,at:new Date().toISOString(),watch,results};
+}
+
+async function handleDriveWebhook(req:Request){
+  const channelId=clean(req.headers.get("x-goog-channel-id"));
+  const tokenValue=clean(req.headers.get("x-goog-channel-token"));
+  const state=clean(req.headers.get("x-goog-resource-state")).toLowerCase();
+  const rawNo=clean(req.headers.get("x-goog-message-number"));
+  const messageNumber=rawNo&&/^\d+$/.test(rawNo)?Number(rawNo):null;
+
+  if(!channelId||!tokenValue)return new Response(null,{status:204});
+  const noted=await noteWebhook(
+    channelId,tokenValue,messageNumber,state
+  );
+  if(!noted.ok)return new Response(null,{status:204});
+  if(state==="sync")return new Response(null,{status:204});
+
+  const sourceKey=clean(noted.row.source_key);
+  const keys=sourceKey?[sourceKey]:SOURCES.map(s=>s.key);
+  EdgeRuntime.waitUntil(
+    runSources(keys,false).catch(e=>{
+      console.error("sheet_watch_sync_failed",String((e as any)?.message||e));
+    })
+  );
+  return new Response(null,{status:204});
+}
+
+async function authorized(req:Request){
+  const proxy=clean(req.headers.get("x-getlink-proxy"));
+  if(proxy==="getlink-api-v1")return true;
+
+  const provided=clean(req.headers.get("x-getlink-cron"));
+  if(!provided)return false;
+  const {data,error}=await sb.from("getlink_update_settings")
+    .select("cron_secret").eq("id",1).single();
+  if(error)return false;
+  return provided===clean(data?.cron_secret);
+}
+
+async function run(){
+  return await runSources(undefined,true);
 }
 
 Deno.serve(async(req)=>{
   try{
     const url=new URL(req.url);
-    if(req.method==="GET"&&url.pathname.endsWith("/health")){
-      return json({ok:true,configured:Boolean(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")),service:"getlink-sheet-sync"});
+
+    if(req.method==="POST"&&url.pathname.endsWith("/webhook")){
+      return await handleDriveWebhook(req);
     }
+
+    if(req.method==="GET"&&url.pathname.endsWith("/health")){
+      const {count}=await sb.from("getlink_sheet_watch_channels")
+        .select("channel_id",{count:"exact",head:true})
+        .eq("active",true)
+        .gt("expires_at",new Date().toISOString());
+      return json({
+        ok:true,
+        configured:Boolean(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")),
+        service:"getlink-sheet-sync",
+        active_watches:count||0
+      });
+    }
+
     if(req.method!=="POST")return json({error:"method_not_allowed"},405);
     if(!await authorized(req))return json({error:"unauthorized"},401);
+
+    if(url.pathname.endsWith("/register-watches")){
+      return json(await ensureWatches(true));
+    }
+
     return json(await run());
   }catch(e){
-    return json({ok:false,error:String(e?.message||e)},500);
+    return json({ok:false,error:String((e as any)?.message||e)},500);
   }
 });

@@ -3540,9 +3540,6 @@ function setMobileMergeTarget(row){
 function toggleMobileMergeSource(row){
   const target=mobileMergeTargetRow();
   if(!target||!row||isMineRow(row))return;
-  const targetId=String(target.canonical_product_id||"").trim();
-  const rowId=String(row.canonical_product_id||"").trim();
-  if(rowId&&rowId!==targetId)return;
 
   const url=canonical(row.canonical_url);
   if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
@@ -3567,10 +3564,11 @@ function mobileMergeSelectButton(row){
   }
 
   const selected=mobileMergeSelected.has(url);
-  const blocked=Boolean(rowId&&rowId!==targetId);
-  return '<button class="mobile-merge-select '+(selected?"selected ":"")+(blocked?"blocked":"")+'" '+
+  const blocked=!target;
+  const movedFromOtherGroup=Boolean(rowId&&targetId&&rowId!==targetId);
+  return '<button class="mobile-merge-select '+(selected?"selected ":"")+(blocked?"blocked ":"")+(movedFromOtherGroup?"move-source":"")+'" '+
     'data-mobile-merge-source="'+escapeAttr(url)+'" type="button" '+
-    (blocked?'disabled title="Nguồn này đang thuộc sản phẩm chuẩn khác"':'aria-pressed="'+(selected?"true":"false")+'"')+'>'+
+    (blocked?'disabled title="Chọn hàng Tạp hóa trước"':'aria-pressed="'+(selected?"true":"false")+'"')+'>'+
     (selected?"✓":"+")+
   '</button>';
 }
@@ -3798,6 +3796,7 @@ async function applyMobileMergePreview(){
       method:"POST",
       headers,
       body:JSON.stringify({
+        target_url:preview.target.canonical_url,
         member_urls:preview.rows.map(row=>row.canonical_url),
         identity_source_url:preview.identitySource&&preview.identitySource.canonical_url||"",
         pack_source_url:preview.packSource&&preview.packSource.canonical_url||"",

@@ -5309,7 +5309,12 @@ if(userWorkHome){
     const mergeSource=e.target.closest("[data-mobile-merge-source]");
     if(mergeSource&&!mergeSource.disabled){
       const row=findLibraryRow(mergeSource.dataset.mobileMergeSource||"");
-      if(row)quickAttachMobileMergeSource(row);
+      if(row)toggleMobileMergeSource(row);
+      return;
+    }
+
+    if(e.target.closest("#mobileMergeApply")){
+      applyMobileMergePreview();
       return;
     }
 
@@ -5353,7 +5358,7 @@ if(userWorkHome){
         if(isMineRow(row)){
           if(setMobileMergeTarget(row))renderUserWorkHome();
         }else if(mobileMergeTargetRow()){
-          quickAttachMobileMergeSource(row);
+          toggleMobileMergeSource(row);
         }
       }
       return;

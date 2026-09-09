@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout";
+const UI_LIBRARY_CACHE_KEY="library-data-v9-masan-source";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1898,7 +1898,8 @@ const SUPPLIER_GROUP_ORDER=new Map([
   ["hang-u",10],
   ["thuoc-la",20],
   ["sua",30],
-  ["hang-thuong",40]
+  ["masan",40],
+  ["hang-thuong",50]
 ]);
 function supplierBrowseGroupKey(row){
   const key=String(row&&row.supplier_source_key||"").trim();

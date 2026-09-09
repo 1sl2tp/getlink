@@ -27,22 +27,26 @@ HTTP_TIMEOUT = 18
 DETAIL_TIMEOUT = 12
 
 
-def api_base() -> str:
+def api_config() -> tuple[str, str]:
     text = CONFIG.read_text("utf-8")
-    match = re.search(r'GETLINK_API_BASE\s*=\s*"([^"]+)"', text)
-    if not match:
+    base = re.search(r'GETLINK_API_BASE\s*=\s*"([^"]+)"', text)
+    key = re.search(r'GETLINK_API_KEY\s*=\s*"([^"]+)"', text)
+    if not base:
         raise SystemExit("GETLINK_API_BASE not found in config.js")
-    return match.group(1).rstrip("/")
+    return base.group(1).rstrip("/"), (key.group(1) if key else "")
 
 
-def fetch_json(url: str, timeout: int = HTTP_TIMEOUT) -> dict:
+def fetch_json(url: str, timeout: int = HTTP_TIMEOUT, api_key: str = "") -> dict:
+    headers = {
+        "Accept": "application/json",
+        "User-Agent": "GETLINK-News-Snapshot/1.0",
+        "Cache-Control": "no-cache",
+    }
+    if api_key:
+        headers["apikey"] = api_key
     req = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "GETLINK-News-Snapshot/1.0",
-            "Cache-Control": "no-cache",
-        },
+        headers=headers,
     )
     with urllib.request.urlopen(req, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
@@ -84,13 +88,13 @@ def needs_detail(item: dict) -> bool:
     return len(unique_images(item)) == 0 or len(str(item.get("content") or "")) < 450
 
 
-def enrich_one(base: str, item: dict) -> dict:
+def enrich_one(base: str, api_key: str, item: dict) -> dict:
     url = str(item.get("url") or "").strip()
     if not url:
         return item
     detail_url = base + "/api/news-detail?url=" + urllib.parse.quote(url, safe="")
     try:
-        detail = fetch_json(detail_url, DETAIL_TIMEOUT)
+        detail = fetch_json(detail_url, DETAIL_TIMEOUT, api_key)
     except Exception:
         return item
 
@@ -137,9 +141,9 @@ def compact(item: dict, now: dt.datetime) -> dict:
 
 
 def build_snapshot(limit: int = DEFAULT_LIMIT) -> dict:
-    base = api_base()
+    base, api_key = api_config()
     url = base + f"/api/news?topic=latest&source=all&limit={limit}&refresh=1"
-    payload = fetch_json(url)
+    payload = fetch_json(url, api_key=api_key)
     items = list(payload.get("items") or [])
     now = dt.datetime.now(dt.timezone.utc)
 
@@ -156,7 +160,7 @@ def build_snapshot(limit: int = DEFAULT_LIMIT) -> dict:
         index_by_id = {str(item.get("id") or ""): index for index, item in enumerate(items)}
         with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
             future_map = {
-                pool.submit(enrich_one, base, item): str(item.get("id") or "")
+                pool.submit(enrich_one, base, api_key, item): str(item.get("id") or "")
                 for item in candidates
             }
             for future in concurrent.futures.as_completed(future_map):

@@ -1334,9 +1334,11 @@ function rowIsCarton(row){
     String(row&&row.supplier_primary_packaging||"").trim()
   );
   if(supplier){
+    const primary=searchKey(String(row&&row.supplier_primary_packaging||""));
     return Boolean(
       Number(row&&row.supplier_carton_price_vnd||0)>0 ||
-      String(row&&row.supplier_primary_packaging||"").trim()
+      primary==="thung" ||
+      primary.startsWith("thung ")
     );
   }
   return rowPackHierarchy(row).label1==="Thùng";
@@ -1350,7 +1352,8 @@ function rowIsRetail(row){
   if(supplier){
     return Boolean(
       Number(row&&row.supplier_retail_price_vnd||0)>0 ||
-      String(row&&row.supplier_retail_packaging||"").trim()
+      String(row&&row.supplier_retail_packaging||"").trim() ||
+      String(row&&row.supplier_retail_unit||"").trim()
     );
   }
   return !rowIsCarton(row);
@@ -1362,11 +1365,16 @@ function rowPriceLevels(row){
   const mine=isMineRow(row);
   const wmPrice=Number(row.current_price||row.regular_pack_price||0);
   const carton=mine
-    ?Number(row.supplier_carton_price_vnd||row.web_carton_price||row.current_price||0)
+    ?Number(row.supplier_carton_price_vnd||row.web_carton_price||0)
     :(wm&&h.label1?wmPrice:Number(row.web_carton_price||0));
   const middle=mine?0:(wm&&h.label2?wmPrice:Number(row.web_middle_price||0));
   const leaf=mine
-    ?Number(row.supplier_retail_price_vnd||row.web_leaf_price||0)
+    ?Number(
+      row.supplier_retail_price_vnd||
+      row.web_leaf_price||
+      (!rowIsCarton(row)?row.current_price:0)||
+      0
+    )
     :(wm&&h.label3?wmPrice:Number(row.web_leaf_price||0));
   const promoCarton=wm?0:Number(row.promo_carton_price||0);
   const promoMiddle=wm?0:Number(row.promo_middle_price||0);
@@ -1650,12 +1658,19 @@ function supplierTableRow(row){
   const stock=supplierAvailabilityText(row);
   const carton=Number(row&&row.supplier_carton_price_vnd||0);
   const retail=Number(row&&row.supplier_retail_price_vnd||0);
-  const retailPack=String(row&&row.supplier_retail_packaging||"").trim();
+  const retailUnit=String(row&&row.supplier_retail_unit||"").trim();
+  const retailPack=String(row&&row.supplier_retail_packaging||"").trim()||
+    (retailUnit?"1 "+retailUnit:"");
   const primaryPack=String(row&&row.supplier_primary_packaging||"").trim()||
-    (String(row&&row.supplier_source_key||"")==="thuoc-la"?"1 cây":"Thùng");
+    (carton>0?"Thùng":retailPack);
   const cartonHtml=stock
     ?'<span class="xls-out-of-stock">'+stock+'</span>'
-    :'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>';
+    :(carton>0
+      ?'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>'
+      :'<span class="xls-empty">—</span>');
+  const retailHtml=retail>0
+    ?xlsWebPrice(retail,0)
+    :'<span class="xls-empty">—</span>';
   return '<tr class="product-card xls-row supplier-table-row source-mine '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -1663,7 +1678,7 @@ function supplierTableRow(row){
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
       '<td class="xls-num supplier-carton-price">'+cartonHtml+'</td>'+
-      '<td class="xls-num supplier-retail-price">'+xlsWebPrice(retail,0)+'</td>'+
+      '<td class="xls-num supplier-retail-price">'+retailHtml+'</td>'+
       '<td class="xls-pack-level supplier-retail-pack">'+(retailPack?escapeHtml(retailPack):'<span class="xls-empty">—</span>')+'</td>'+
     '</tr>';
 }

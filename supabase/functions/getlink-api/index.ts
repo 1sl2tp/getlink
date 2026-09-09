@@ -1965,6 +1965,15 @@ async function libraryRows(includeHidden=true){
       canonical_product_id:"",
       canonical_product_name:"",
       canonical_product_image:"",
+      canonical_brand:"",
+      canonical_size_value:null,
+      canonical_size_unit:"",
+      canonical_primary_code:"",
+      canonical_primary_code_kind:"",
+      canonical_identity_source_url:"",
+      canonical_name_source_url:"",
+      canonical_pack_source_url:"",
+      canonical_image_source_url:"",
       canonical_pack_label_1:"",
       canonical_pack_qty_1:0,
       canonical_pack_label_2:"",
@@ -1976,6 +1985,15 @@ async function libraryRows(includeHidden=true){
       canonical_product_id:clean(product.id),
       canonical_product_name:clean(product.canonical_name),
       canonical_product_image:clean(product.image_url||""),
+      canonical_brand:clean(product.canonical_brand||""),
+      canonical_size_value:product.size_value===null||product.size_value===undefined?null:Number(product.size_value),
+      canonical_size_unit:clean(product.size_unit||""),
+      canonical_primary_code:clean(product.primary_code||""),
+      canonical_primary_code_kind:clean(product.primary_code_kind||""),
+      canonical_identity_source_url:clean(product.identity_source_url||""),
+      canonical_name_source_url:clean(product.name_source_url||""),
+      canonical_pack_source_url:clean(product.pack_source_url||""),
+      canonical_image_source_url:clean(product.image_source_url||""),
       canonical_pack_label_1:clean(product.pack_label_1||""),
       canonical_pack_qty_1:Number(product.pack_qty_1)||0,
       canonical_pack_label_2:clean(product.pack_label_2||""),
@@ -1997,7 +2015,7 @@ async function libraryRows(includeHidden=true){
     const isCarton=Boolean(h.label1), isMiddle=!isCarton&&Boolean(h.label2);
     const levelPrice=Number(l.current_price||l.promotion_price||0);
     rows.push({
-      ...l,brand_name:l.branch_name||"",preference_state:state,auto_refresh:p.auto_refresh?1:0,refresh_hours:Number(p.refresh_hours)||24,
+      ...l,brand_name:id.brand||l.branch_name||"",preference_state:state,auto_refresh:p.auto_refresh?1:0,refresh_hours:Number(p.refresh_hours)||24,
       image:a.image_url||"",pack_kind:c.pack_kind||"",pack_quantity:Number(c.pack_quantity)||1,pack_unit:c.pack_unit||"",
       size_value:c.size_value??id.size_value??null,size_unit:c.size_unit||id.size_unit||"",
       regular_pack_price:c.regular_pack_price??l.current_price??null,promo_pack_price:c.promo_pack_price??null,
@@ -2177,7 +2195,7 @@ function publicCatalogRow(row:any){
     name:clean(row?.name||row?.source_name||""),
     group_name:clean(row?.group_name||""),
     branch_name:"",
-    brand_name:"",
+    brand_name:clean(row?.brand_name||row?.bhx_brand_name||row?.branch_name||""),
     packaging:clean(row?.packaging||row?.supplier_primary_packaging||""),
     current_price:Number(row?.current_price||0)||null,
     original_price:null,
@@ -2190,6 +2208,8 @@ function publicCatalogRow(row:any){
     pack_kind:clean(row?.pack_kind||""),
     pack_quantity:Number(row?.pack_quantity||0)||0,
     pack_unit:clean(row?.pack_unit||""),
+    size_value:row?.size_value===null||row?.size_value===undefined?null:Number(row.size_value),
+    size_unit:clean(row?.size_unit||""),
     regular_pack_price:Number(row?.regular_pack_price||row?.current_price||0)||null,
     promo_pack_price:null,
     regular_unit_price:Number(row?.regular_unit_price||row?.supplier_retail_price_vnd||0)||null,
@@ -2205,9 +2225,9 @@ function publicCatalogRow(row:any){
     pack_evidence:"",
     hierarchy_locked:1,
     source_product_id:clean(row?.supplier_product_code||row?.source_product_id||""),
-    source_code:clean(row?.supplier_source_key||""),
-    barcode:"",
-    sku:"",
+    source_code:clean(row?.source_code||row?.supplier_product_code||row?.supplier_source_key||""),
+    barcode:clean(row?.barcode||""),
+    sku:clean(row?.sku||""),
     manual_group_key:clean(row?.manual_group_key||""),
     manual_group_name:clean(row?.manual_group_name||row?.group_name||""),
     manual_group_sort_order:Number(row?.manual_group_sort_order||999999),
@@ -2243,6 +2263,15 @@ function publicCatalogRow(row:any){
     canonical_product_id:clean(row?.canonical_product_id||""),
     canonical_product_name:clean(row?.canonical_product_name||""),
     canonical_product_image:clean(row?.canonical_product_image||""),
+    canonical_brand:clean(row?.canonical_brand||""),
+    canonical_size_value:row?.canonical_size_value===null||row?.canonical_size_value===undefined?null:Number(row.canonical_size_value),
+    canonical_size_unit:clean(row?.canonical_size_unit||""),
+    canonical_primary_code:clean(row?.canonical_primary_code||""),
+    canonical_primary_code_kind:clean(row?.canonical_primary_code_kind||""),
+    canonical_identity_source_url:clean(row?.canonical_identity_source_url||""),
+    canonical_name_source_url:clean(row?.canonical_name_source_url||""),
+    canonical_pack_source_url:clean(row?.canonical_pack_source_url||""),
+    canonical_image_source_url:clean(row?.canonical_image_source_url||""),
     canonical_pack_label_1:clean(row?.canonical_pack_label_1||""),
     canonical_pack_qty_1:Number(row?.canonical_pack_qty_1||0)||0,
     canonical_pack_label_2:clean(row?.canonical_pack_label_2||""),
@@ -2256,18 +2285,62 @@ function publicCatalogRows(rows:any[]){
   return rows.map(publicCatalogRow);
 }
 
+function canonicalIdentityFromRow(row:any){
+  const barcode=clean(row?.barcode||"");
+  const sku=clean(row?.sku||"");
+  const supplierCode=clean(row?.supplier_product_code||"");
+  const sourceCode=clean(row?.source_code||"");
+  const primaryCode=barcode||sku||supplierCode||sourceCode;
+  const primaryCodeKind=barcode?"barcode":(sku?"sku":(supplierCode?"supplier_code":(sourceCode?"source_code":"")));
+  return {
+    canonical_brand:clean(row?.brand_name||row?.bhx_brand_name||row?.branch_name||""),
+    size_value:row?.size_value===null||row?.size_value===undefined?null:Number(row.size_value),
+    size_unit:clean(row?.size_unit||""),
+    primary_code:primaryCode,
+    primary_code_kind:primaryCodeKind
+  };
+}
+
+function canonicalIdentityRowScore(row:any){
+  const identity=canonicalIdentityFromRow(row);
+  let score=0;
+  if(clean(row?.barcode))score+=1000;
+  else if(clean(row?.sku))score+=500;
+  else if(clean(row?.supplier_product_code)||clean(row?.source_code))score+=200;
+  if(identity.canonical_brand)score+=100;
+  if(identity.size_value&&identity.size_unit)score+=100;
+  if(clean(row?.image))score+=10;
+  return score;
+}
+
 async function saveCanonicalProductMerge(body:any){
   const requested=Array.isArray(body?.member_urls)?body.member_urls:[];
   const memberUrls:string[]=[...new Set<string>(requested.map((x:any):string=>{
     try{return canonical(clean(x));}catch{return "";}
   }).filter((x:string)=>Boolean(x)))];
-  if(memberUrls.length<2||memberUrls.length>12)throw new Error("merge_member_count");
+  if(memberUrls.length<2||memberUrls.length>24)throw new Error("merge_member_count");
 
   const rows=await libraryRows(true);
-  const rowByUrl=new Map(rows.map((row:any)=>[canonical(clean(row.canonical_url)),row]));
-  const members=memberUrls.map(url=>rowByUrl.get(url)).filter(Boolean);
+  const rowByUrl=new Map<string,any>(rows.map((row:any)=>[canonical(clean(row.canonical_url)),row]));
+  const members:any[]=memberUrls.map(url=>rowByUrl.get(url)).filter(Boolean);
   if(members.length!==memberUrls.length)throw new Error("merge_member_not_found");
-  if(members.some((row:any)=>clean(row.canonical_product_id)))throw new Error("merge_member_already_grouped");
+
+  const existingCanonicalIds=[...new Set<string>(
+    members.map((row:any)=>clean(row.canonical_product_id)).filter((x:string)=>Boolean(x))
+  )];
+  if(existingCanonicalIds.length>1)throw new Error("merge_multiple_existing_groups");
+
+  const targetCanonicalId=existingCanonicalIds[0]||("cp_"+crypto.randomUUID().replace(/-/g,""));
+  let existingProduct:any=null;
+  if(existingCanonicalIds.length){
+    const {data,error}=await sb.from("getlink_canonical_products")
+      .select("*")
+      .eq("id",targetCanonicalId)
+      .maybeSingle();
+    if(error)throw error;
+    existingProduct=data||null;
+    if(!existingProduct)throw new Error("merge_target_not_found");
+  }
 
   const chosen=(raw:any)=>{
     let url="";
@@ -2276,54 +2349,92 @@ async function saveCanonicalProductMerge(body:any){
     return rowByUrl.get(url)||null;
   };
 
-  const nameRow=chosen(body?.name_source_url)||members.find((row:any)=>sourceKey(row.canonical_url)==="mine")||members[0];
-  const packRow=chosen(body?.pack_source_url)||[...members].sort((a:any,b:any)=>{
+  const identityRow=chosen(body?.identity_source_url)||
+    [...members].sort((a:any,b:any)=>canonicalIdentityRowScore(b)-canonicalIdentityRowScore(a))[0]||
+    members[0];
+
+  const ownRow=members.find((row:any)=>sourceKey(row.canonical_url)==="mine")||null;
+  const requestedNameRow=chosen(body?.name_source_url);
+  const nameRow=requestedNameRow||ownRow||identityRow||members[0];
+
+  const existingPackRow=existingProduct?.pack_source_url?chosen(existingProduct.pack_source_url):null;
+  const packRow=chosen(body?.pack_source_url)||existingPackRow||[...members].sort((a:any,b:any)=>{
     const ah=a.pack_label_1==="Thùng"?0:(a.pack_label_2?1:2);
     const bh=b.pack_label_1==="Thùng"?0:(b.pack_label_2?1:2);
     return ah-bh;
   })[0];
-  const imageRow=chosen(body?.image_source_url)||members.find((row:any)=>clean(row.image))||null;
 
-  const canonicalName=clean(body?.canonical_name||nameRow?.source_name||nameRow?.name);
+  const existingImageRow=existingProduct?.image_source_url?chosen(existingProduct.image_source_url):null;
+  const imageRow=chosen(body?.image_source_url)||existingImageRow||members.find((row:any)=>clean(row.image))||null;
+
+  const canonicalName=clean(
+    body?.canonical_name||
+    existingProduct?.canonical_name||
+    nameRow?.source_name||
+    nameRow?.name
+  );
   if(!canonicalName)throw new Error("merge_name_missing");
 
-  const productId="cp_"+crypto.randomUUID().replace(/-/g,"");
+  const identity=canonicalIdentityFromRow(identityRow);
   const now=new Date().toISOString();
-  const product={
-    id:productId,
+  const productPatch={
     canonical_name:canonicalName,
-    image_url:clean(imageRow?.image||"")||null,
-    pack_label_1:clean(packRow?.pack_label_1||""),
-    pack_qty_1:Number(packRow?.pack_qty_1)||0,
-    pack_label_2:clean(packRow?.pack_label_2||""),
-    pack_qty_2:Number(packRow?.pack_qty_2)||0,
-    pack_label_3:clean(packRow?.pack_label_3||""),
-    pack_qty_3:Number(packRow?.pack_qty_3)||0,
-    name_source_url:canonical(clean(nameRow.canonical_url)),
+    image_url:clean(imageRow?.image||existingProduct?.image_url||"")||null,
+    canonical_brand:identity.canonical_brand||clean(existingProduct?.canonical_brand||""),
+    size_value:identity.size_value??existingProduct?.size_value??null,
+    size_unit:identity.size_unit||clean(existingProduct?.size_unit||""),
+    primary_code:identity.primary_code||clean(existingProduct?.primary_code||""),
+    primary_code_kind:identity.primary_code_kind||clean(existingProduct?.primary_code_kind||""),
+    identity_source_url:canonical(clean(identityRow.canonical_url)),
+    pack_label_1:clean(packRow?.pack_label_1||existingProduct?.pack_label_1||""),
+    pack_qty_1:Number(packRow?.pack_qty_1??existingProduct?.pack_qty_1)||0,
+    pack_label_2:clean(packRow?.pack_label_2||existingProduct?.pack_label_2||""),
+    pack_qty_2:Number(packRow?.pack_qty_2??existingProduct?.pack_qty_2)||0,
+    pack_label_3:clean(packRow?.pack_label_3||existingProduct?.pack_label_3||""),
+    pack_qty_3:Number(packRow?.pack_qty_3??existingProduct?.pack_qty_3)||0,
+    name_source_url:requestedNameRow
+      ?canonical(clean(requestedNameRow.canonical_url))
+      :(existingProduct?.name_source_url||canonical(clean(nameRow.canonical_url))),
     pack_source_url:canonical(clean(packRow.canonical_url)),
-    image_source_url:imageRow?canonical(clean(imageRow.canonical_url)):null,
-    created_at:now,
+    image_source_url:imageRow?canonical(clean(imageRow.canonical_url)):(existingProduct?.image_source_url||null),
     updated_at:now
   };
+
+  if(existingProduct){
+    const {error}=await sb.from("getlink_canonical_products")
+      .update(productPatch).eq("id",targetCanonicalId);
+    if(error)throw error;
+  }else{
+    await must(sb.from("getlink_canonical_products").insert({
+      id:targetCanonicalId,
+      ...productPatch,
+      created_at:now
+    }));
+  }
+
   const memberRows=members.map((row:any)=>({
     source_url:canonical(clean(row.canonical_url)),
-    canonical_product_id:productId,
+    canonical_product_id:targetCanonicalId,
     source_key:sourceKey(row.canonical_url),
     added_at:now
   }));
-
-  await must(sb.from("getlink_canonical_products").insert(product));
-  const {error:memberError}=await sb.from("getlink_canonical_product_members").insert(memberRows);
+  const {error:memberError}=await sb.from("getlink_canonical_product_members")
+    .upsert(memberRows,{onConflict:"source_url"});
   if(memberError){
-    await sb.from("getlink_canonical_products").delete().eq("id",productId);
+    if(!existingProduct)await sb.from("getlink_canonical_products").delete().eq("id",targetCanonicalId);
     throw memberError;
   }
+
+  const {data:product,error:productError}=await sb.from("getlink_canonical_products")
+    .select("*").eq("id",targetCanonicalId).single();
+  if(productError)throw productError;
 
   return {
     product,
     members:memberRows,
     member_urls:memberRows.map((x:any)=>x.source_url),
     canonical_name:product.canonical_name,
+    identity_source_url:product.identity_source_url,
     image_source_url:product.image_source_url,
     pack_source_url:product.pack_source_url
   };

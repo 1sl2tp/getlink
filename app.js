@@ -3450,7 +3450,12 @@ function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
 }
 
 function userWorkMarketPackGroup(row){
-  return rowIsCarton(row)?"carton":"retail";
+  const h=rowPackHierarchy(row);
+  const top=searchKey(String(h&&h.label1||""));
+  // Market rows can carry supplier metadata after canonical linking, so do not
+  // use rowIsCarton() here. The actual market hierarchy owns this decision.
+  // "Lô N ..." is treated as the same multi-pack lane as "Thùng N ...".
+  return top==="thung"||top==="lo"?"carton":"retail";
 }
 
 function userWorkMarketSortRows(rows){
@@ -3467,6 +3472,33 @@ function userWorkMarketSortRows(rows){
       return a.index-b.index;
     })
     .map(item=>item.row);
+}
+
+function userWorkMarketVisibleRows(rows,limit){
+  const cartons=rows.filter(row=>userWorkMarketPackGroup(row)==="carton");
+  const retail=rows.filter(row=>userWorkMarketPackGroup(row)==="retail");
+  if(!cartons.length||!retail.length)return rows.slice(0,limit);
+
+  const retailLanes=window.matchMedia&&window.matchMedia("(min-width:1280px)").matches?2:1;
+  const cartonQuota=Math.min(
+    cartons.length,
+    Math.max(1,Math.round(limit/(retailLanes+1)))
+  );
+  let retailQuota=Math.min(retail.length,Math.max(0,limit-cartonQuota));
+  let cartonTake=cartonQuota;
+
+  // If one side is short, use the remaining capacity for the other side.
+  let remaining=limit-cartonTake-retailQuota;
+  if(remaining>0){
+    const extraRetail=Math.min(remaining,retail.length-retailQuota);
+    retailQuota+=extraRetail;
+    remaining-=extraRetail;
+  }
+  if(remaining>0){
+    cartonTake+=Math.min(remaining,cartons.length-cartonTake);
+  }
+
+  return [...cartons.slice(0,cartonTake),...retail.slice(0,retailQuota)];
 }
 
 function userWorkPrimaryMarketPrice(row){
@@ -3591,7 +3623,11 @@ function mobileSupplierSources(){
 
 function mobileUserRows(){
   let baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey);
-  if(mobileUserScope==="market")baseRows=userWorkMarketSortRows(baseRows);
+  if(mobileUserScope==="market"){
+    // Market browsing is deterministic: multi-pack first, then retail;
+    // cheapest first inside each group.
+    return userWorkMarketSortRows(baseRows);
+  }
   const profiles=mobileCanonicalProfiles(baseRows);
   let rows=baseRows.map((row,index)=>({row,index}));
 
@@ -4337,8 +4373,10 @@ function renderUserWorkHome(){
 
   let hasMore=false;
   if(userWorkDesktopScope==="market"){
-    const visible=scoped.slice(0,userWorkMarketLimit);
+    const visible=userWorkMarketVisibleRows(scoped,userWorkMarketLimit);
     if(marketHost){
+      const hasCartons=scoped.some(row=>userWorkMarketPackGroup(row)==="carton");
+      marketHost.classList.toggle("has-carton-lane",hasCartons);
       let retailLane=0;
       marketHost.innerHTML=visible.map(row=>{
         const lane=userWorkMarketPackGroup(row)==="retail"?retailLane++:0;

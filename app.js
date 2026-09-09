@@ -2826,9 +2826,9 @@ function nextTableSourceFilter(){
 function sourceLogoMark(key){
   const logos={
     mine:"assets/logo-taphoa-v2.png",
-    bhx:"assets/logo-bhx-v2.png",
-    wm:"assets/logo-winmart-v2.png",
-    go:"assets/logo-go-v2.png"
+    bhx:"assets/logo-bhx.svg",
+    wm:"assets/logo-winmart.svg",
+    go:"assets/logo-go.svg"
   };
   if(logos[key]){
     const fallback=key==="mine"?"TẠP HÓA":(key==="bhx"?"BHX":(key==="wm"?"WinMart":"GO!"));

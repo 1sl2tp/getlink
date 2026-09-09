@@ -2688,8 +2688,11 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       const saleCarton=sheetNumber(supplierCell(row,header,"Giá bán thùng"));
       const saleRetail=sheetNumber(supplierCell(row,header,"Giá bán lẻ"));
       const units=sheetNumber(supplierCell(row,header,"QC / thùng"));
-      const retailUnit=supplierCell(row,header,"Đơn vị lẻ");
+      const rawRetailUnit=supplierCell(row,header,"Đơn vị lẻ");
       const basis=plain(rawBasis)==="le"?"retail":"carton";
+      const retailUnit=(sourceKey==="thuoc-la"&&basis==="retail"&&!rawRetailUnit)
+        ?"cây"
+        :rawRetailUnit;
       const statusPlain=plain(rawStatus);
       const isActive=statusPlain!=="ngung dung";
       let stockStatus="available";

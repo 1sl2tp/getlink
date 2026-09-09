@@ -4047,10 +4047,10 @@ function renderMobileUserWork(){
   if(empty)empty.hidden=rows.length!==0;
   const more=$("#mobileUserMore");
   if(more){
-    more.hidden=rows.length===0;
-    more.textContent=visible.length+"/"+rows.length;
+    more.hidden=!hasMore;
+    more.textContent="";
     more.dataset.hasMore=hasMore?"1":"0";
-    more.setAttribute("aria-label","Đã hiển thị "+visible.length+" trên "+rows.length+" sản phẩm");
+    more.removeAttribute("aria-label");
   }
   setupMobileUserAutoLoad();
   updateUserWorkOrderSummary();

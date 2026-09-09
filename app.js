@@ -3348,15 +3348,17 @@ function mobileUserPackRank(row){
 }
 
 function mobileUserSalePrice(row){
-  const own=rowOwnPriceParts(row);
-  const configured=Number(own.carton||own.middle||own.retail||own.generic||0);
-  if(configured>0)return configured;
+  const official=Number(
+    row&&row.current_price||
+    row&&row.regular_pack_price||
+    0
+  );
+  if(official>0)return official;
   const levels=rowPriceLevels(row);
   return Number(
     levels.promoCartonPrice||levels.cartonPrice||
     levels.promoMiddlePrice||levels.middlePrice||
     levels.promoLeafPrice||levels.leafPrice||
-    row&&row.current_price||
     0
   );
 }

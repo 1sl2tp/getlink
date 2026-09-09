@@ -26,17 +26,15 @@ class QuickMobileMergeContractTest(unittest.TestCase):
         self.assertIn("if(!isMineRow(row)&&id)",APP)
         self.assertIn("mobileMergeTargetUrl=canonical(row.canonical_url)",APP)
 
-    def test_tapping_related_source_saves_immediately_and_keeps_mode_open(self):
-        self.assertIn("async function quickAttachMobileMergeSource",APP)
-        block=re.search(r"async function quickAttachMobileMergeSource\(row\)\{([\s\S]*?)\n\}",APP)
+    def test_tapping_related_source_only_stages_preview_until_apply(self):
+        self.assertIn("function toggleMobileMergeSource",APP)
+        block=re.search(r"function toggleMobileMergeSource\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         body=block.group(1)
-        self.assertIn('"/api/product-merge"',body)
-        self.assertIn("member_urls",body)
-        self.assertIn("await fetchLibraryFromSupabase()",body)
+        self.assertIn("mobileMergeSelected",body)
         self.assertIn("renderUserWorkHome()",body)
-        self.assertNotIn("mobileMergeMode=false",body)
-        self.assertNotIn("mobileMergeTargetUrl=",body)
+        self.assertNotIn('"/api/product-merge"',body)
+        self.assertIn("async function applyMobileMergePreview",APP)
 
     def test_supermarket_rows_keep_original_source_rendering_after_link(self):
         market=re.search(r"function\s+mobileUserMarketCard\s*\(row\)\{([\s\S]*?)\n\}",APP)

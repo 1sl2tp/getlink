@@ -36,7 +36,12 @@ jobs:
           test "$(jq -r '.mode' /tmp/health.json)" = "supabase-only"
           jq -e '.stale_jobs_cleaned | type=="number"' /tmp/health.json >/dev/null
 
-          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1"             > /tmp/library.json
+          LIBRARY_CODE="$(curl --silent --show-error --output /tmp/library.json --write-out '%{http_code}'             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1")"
+          if [ "$LIBRARY_CODE" != "200" ]; then
+            echo "Library HTTP $LIBRARY_CODE"
+            cat /tmp/library.json
+            exit 1
+          fi
           jq '{products:(.products|length),role:.role}' /tmp/library.json
           jq -e '.products | type=="array"' /tmp/library.json >/dev/null
           test "$(jq -r '.role' /tmp/library.json)" = "user"

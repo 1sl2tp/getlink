@@ -4426,8 +4426,7 @@ function renderMobileUserSourceTabs(){
 
   if(mobileUserScope==="news"){
     host.innerHTML=parent+
-      '<div class="mobile-user-source-level child news-mobile-topics">'+newsTopicButtons()+'</div>'+
-      '<div class="mobile-user-source-level news-mobile-sources">'+newsSourceButtons()+'</div>';
+      '<div class="mobile-user-source-level child news-mobile-topics">'+newsTopicButtons()+'</div>';
     return;
   }
 
@@ -4505,6 +4504,7 @@ function renderMobileUserWork(){
 
   const host=$("#mobileUserResults");
   if(host){
+    host.classList.remove("news-results");
     host.innerHTML=visible.map(row=>{
       if(isMineRow(row)){
         return String(row.canonical_product_id||"").trim()

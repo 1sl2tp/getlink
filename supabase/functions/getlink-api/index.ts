@@ -1945,7 +1945,7 @@ async function libraryRows(includeHidden=true){
     fetchAll(
       "getlink_supplier_products",
       "*",
-      (q:any)=>q.order("source_key",{ascending:true}).order("source_row",{ascending:true})
+      (q:any)=>q.eq("is_active",true).order("source_key",{ascending:true}).order("source_row",{ascending:true})
     ),
     loadManualGroupRules()
   ]);
@@ -2070,7 +2070,7 @@ async function libraryRows(includeHidden=true){
       pack_qty_3:hasRetail?(hasCarton&&unitsPerCarton>1?unitsPerCarton:1):0,
       pack_evidence:"supplier-sheet:"+inputPriceBasis,
       hierarchy_locked:1,
-      source_product_id:clean(s.source_key)+":"+String(s.source_row),
+      source_product_id:clean(s.product_code||"")||clean(s.source_key)+":"+String(s.source_row),
       source_code:clean(s.source_key),
       barcode:"",
       sku:"",
@@ -2097,6 +2097,8 @@ async function libraryRows(includeHidden=true){
       unit_price:retail,
       supplier_source_key:clean(s.source_key),
       supplier_source_name:clean(sourceMeta.source_name),
+      supplier_product_code:clean(s.product_code||""),
+      supplier_source_row:Number(s.source_row)||0,
       supplier_input_price_vnd:supplierCost,
       supplier_input_price_basis:inputPriceBasis,
       supplier_sell_price_vnd:sellPrice,

@@ -2594,6 +2594,321 @@ function routePath(req:Request){
 }
 
 
+type NewsTopicKey="latest"|"thoi-su"|"kinh-doanh"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
+type NewsSourceDef={
+  key:string;
+  name:string;
+  domain:string;
+  feeds:Partial<Record<NewsTopicKey,string>>;
+};
+type NewsItem={
+  id:string;
+  title:string;
+  summary:string;
+  url:string;
+  image:string;
+  published_at:string;
+  source_key:string;
+  source_name:string;
+  topic:NewsTopicKey;
+  duplicate_count:number;
+  also_sources:string[];
+};
+
+const NEWS_TOPICS:{key:NewsTopicKey;name:string;query:string}[]=[
+  {key:"latest",name:"Mới nhất",query:""},
+  {key:"thoi-su",name:"Thời sự",query:"\"thời sự\" OR \"xã hội\" OR \"chính trị\""},
+  {key:"kinh-doanh",name:"Kinh doanh",query:"\"kinh doanh\" OR \"thị trường\" OR \"tài chính\""},
+  {key:"cong-nghe",name:"Công nghệ",query:"\"công nghệ\" OR \"AI\" OR \"điện thoại\""},
+  {key:"the-thao",name:"Thể thao",query:"\"thể thao\" OR \"bóng đá\""},
+  {key:"giai-tri",name:"Giải trí",query:"\"giải trí\" OR \"âm nhạc\" OR \"điện ảnh\""},
+  {key:"suc-khoe",name:"Sức khỏe",query:"\"sức khỏe\" OR \"y tế\""}
+];
+
+const NEWS_SOURCES:NewsSourceDef[]=[
+  {
+    key:"vnexpress",name:"VnExpress",domain:"vnexpress.net",
+    feeds:{
+      "latest":"https://vnexpress.net/rss/tin-moi-nhat.rss",
+      "thoi-su":"https://vnexpress.net/rss/thoi-su.rss",
+      "kinh-doanh":"https://vnexpress.net/rss/kinh-doanh.rss",
+      "cong-nghe":"https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss",
+      "the-thao":"https://vnexpress.net/rss/the-thao.rss",
+      "giai-tri":"https://vnexpress.net/rss/giai-tri.rss",
+      "suc-khoe":"https://vnexpress.net/rss/suc-khoe.rss"
+    }
+  },
+  {
+    key:"dantri",name:"Dân Trí",domain:"dantri.com.vn",
+    feeds:{
+      "latest":"https://dantri.com.vn/rss/home.rss",
+      "thoi-su":"https://dantri.com.vn/rss/thoi-su.rss",
+      "kinh-doanh":"https://dantri.com.vn/rss/kinh-doanh.rss",
+      "cong-nghe":"https://dantri.com.vn/rss/cong-nghe.rss",
+      "the-thao":"https://dantri.com.vn/rss/the-thao.rss",
+      "giai-tri":"https://dantri.com.vn/rss/giai-tri.rss",
+      "suc-khoe":"https://dantri.com.vn/rss/suc-khoe.rss"
+    }
+  },
+  {
+    key:"tuoitre",name:"Tuổi Trẻ",domain:"tuoitre.vn",
+    feeds:{
+      "latest":"https://tuoitre.vn/home.rss",
+      "thoi-su":"https://tuoitre.vn/thoi-su.rss",
+      "kinh-doanh":"https://tuoitre.vn/kinh-doanh.rss",
+      "cong-nghe":"https://tuoitre.vn/nhip-song-so.rss",
+      "the-thao":"https://tuoitre.vn/the-thao.rss",
+      "giai-tri":"https://tuoitre.vn/giai-tri.rss",
+      "suc-khoe":"https://tuoitre.vn/suc-khoe.rss"
+    }
+  },
+  {key:"baomoi",name:"Báo Mới",domain:"baomoi.com",feeds:{}},
+  {key:"vietnamnet",name:"VietnamNet",domain:"vietnamnet.vn",feeds:{}},
+  {
+    key:"kenh14",name:"Kênh14",domain:"kenh14.vn",
+    feeds:{
+      "latest":"https://kenh14.vn/rss/home.rss",
+      "thoi-su":"https://kenh14.vn/xa-hoi.rss",
+      "kinh-doanh":"https://kenh14.vn/money14.rss",
+      "cong-nghe":"https://kenh14.vn/tek-life.rss",
+      "the-thao":"https://kenh14.vn/sport.rss",
+      "giai-tri":"https://kenh14.vn/star.rss",
+      "suc-khoe":"https://kenh14.vn/suc-khoe.rss"
+    }
+  },
+  {key:"zing",name:"Zing News",domain:"znews.vn",feeds:{}},
+  {
+    key:"thanhnien",name:"Báo Thanh Niên",domain:"thanhnien.vn",
+    feeds:{
+      "latest":"https://thanhnien.vn/rss/home.rss",
+      "thoi-su":"https://thanhnien.vn/rss/thoi-su.rss"
+    }
+  },
+  {key:"laodong",name:"Lao Động",domain:"laodong.vn",feeds:{}}
+];
+
+const NEWS_CACHE_MS=3*60*1000;
+const NEWS_FETCH_TIMEOUT_MS=5500;
+const newsMemoryCache=new Map<string,{at:number;payload:any}>();
+const NEWS_TITLE_STOP=new Set([
+  "va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi","la","mot","nhung",
+  "cac","co","duoc","se","da","dang","ve","noi","theo","nay","hom","ngay","moi","nhat","vi","o"
+]);
+
+function newsTopicDef(key:string){
+  return NEWS_TOPICS.find(x=>x.key===key)||NEWS_TOPICS[0];
+}
+function newsGoogleFeed(source:NewsSourceDef,topic:NewsTopicKey){
+  const topicDef=newsTopicDef(topic);
+  const query=["site:"+source.domain,topicDef.query,"when:2d"].filter(Boolean).join(" ");
+  return "https://news.google.com/rss/search?q="+encodeURIComponent(query)+
+    "&hl=vi&gl=VN&ceid=VN:vi";
+}
+function newsXmlText(value:unknown){
+  return String(value??"")
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1")
+    .replace(/&#(\d+);/g,(_,n)=>String.fromCodePoint(Number(n)||32))
+    .replace(/&#x([0-9a-f]+);/gi,(_,n)=>String.fromCodePoint(parseInt(n,16)||32))
+    .replace(/&nbsp;/gi," ")
+    .replace(/&amp;/gi,"&")
+    .replace(/&quot;/gi,"\"")
+    .replace(/&apos;/gi,"'")
+    .replace(/&lt;/gi,"<")
+    .replace(/&gt;/gi,">")
+    .trim();
+}
+function newsStripHtml(value:unknown){
+  return clean(newsXmlText(value)
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi," ")
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi," ")
+    .replace(/<br\s*\/?>/gi," ")
+    .replace(/<\/p>/gi," ")
+    .replace(/<[^>]+>/g," "));
+}
+function newsEscapeRe(value:string){
+  return value.replace(/[-/\\^$*+?.()|[\]{}]/g,"\\function routePath(req:Request){
+  const p=new URL(req.url).pathname; const marker="/getlink-api"; const i=p.indexOf(marker); return i>=0?(p.slice(i+marker.length)||"/"):p;
+}
+
+
+const UPDATE_ADMIN_PIN_SHA256=");
+}
+function newsTag(block:string,names:string[]){
+  for(const raw of names){
+    const name=newsEscapeRe(raw);
+    const m=block.match(new RegExp("<"+name+"\\b[^>]*>([\\s\\S]*?)<\\/"+name+">","i"));
+    if(m)return newsXmlText(m[1]);
+  }
+  return "";
+}
+function newsAttr(block:string,tags:string[],attr:string){
+  for(const raw of tags){
+    const tag=newsEscapeRe(raw);
+    const re=new RegExp("<"+tag+"\\b[^>]*\\b"+attr+"=[\"']([^\"']+)[\"'][^>]*>","i");
+    const m=block.match(re);
+    if(m)return newsXmlText(m[1]);
+  }
+  return "";
+}
+function newsSafeUrl(value:unknown){
+  try{
+    const u=new URL(newsXmlText(value));
+    return /^https?:$/.test(u.protocol)?u.toString():"";
+  }catch{return "";}
+}
+function newsImageFromItem(block:string,description:string){
+  const direct=
+    newsAttr(block,["media:content","media:thumbnail"],"url")||
+    (()=>{const m=block.match(/<enclosure\b[^>]*\btype=["']image\/[^"']+["'][^>]*\burl=["']([^"']+)["'][^>]*>/i);return m?.[1]||"";})()||
+    (()=>{const m=description.match(/<img\b[^>]*\bsrc=["']([^"']+)["']/i);return m?.[1]||"";})();
+  return newsSafeUrl(direct);
+}
+function newsPublished(value:unknown){
+  const d=new Date(String(value||""));
+  return Number.isFinite(d.getTime())?d.toISOString():"";
+}
+function newsTitleTokens(value:unknown){
+  return new Set(
+    plain(value)
+      .replace(/[^a-z0-9\s]/g," ")
+      .split(/\s+/)
+      .map(x=>x.trim())
+      .filter(x=>x.length>1&&!NEWS_TITLE_STOP.has(x)&&!/^\d{1,2}$/.test(x))
+  );
+}
+function newsNearDuplicate(a:NewsItem,b:NewsItem){
+  const ta=newsTitleTokens(a.title),tb=newsTitleTokens(b.title);
+  if(!ta.size||!tb.size)return false;
+  let common=0;
+  for(const t of ta)if(tb.has(t))common++;
+  const minSize=Math.min(ta.size,tb.size);
+  const union=ta.size+tb.size-common;
+  const overlap=common/minSize;
+  const jaccard=common/Math.max(1,union);
+  const at=new Date(a.published_at||0).getTime();
+  const bt=new Date(b.published_at||0).getTime();
+  const nearTime=!at||!bt||Math.abs(at-bt)<=48*60*60*1000;
+  return nearTime&&common>=4&&(overlap>=0.72||jaccard>=0.58);
+}
+function newsDeduplicate(items:NewsItem[]){
+  const ordered=[...items].sort((a,b)=>
+    new Date(b.published_at||0).getTime()-new Date(a.published_at||0).getTime()
+  );
+  const out:NewsItem[]=[];
+  for(const item of ordered){
+    const duplicate=out.find(existing=>
+      (item.url&&existing.url===item.url)||newsNearDuplicate(existing,item)
+    );
+    if(!duplicate){
+      out.push({...item,duplicate_count:1,also_sources:[]});
+      continue;
+    }
+    duplicate.duplicate_count+=1;
+    if(item.source_name!==duplicate.source_name&&!duplicate.also_sources.includes(item.source_name)){
+      duplicate.also_sources.push(item.source_name);
+    }
+    if(!duplicate.image&&item.image)duplicate.image=item.image;
+    if((item.summary||"").length>(duplicate.summary||"").length)duplicate.summary=item.summary;
+  }
+  return out;
+}
+async function newsParseItems(xml:string,source:NewsSourceDef,topic:NewsTopicKey){
+  const blocks=[...String(xml||"").matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(x=>x[0]).slice(0,35);
+  const items=await Promise.all(blocks.map(async block=>{
+    const title=newsStripHtml(newsTag(block,["title"])).replace(/\s+-\s+[^-]{2,60}$/,"").trim();
+    const descriptionRaw=newsTag(block,["description","content:encoded","content"]);
+    const summary=newsStripHtml(descriptionRaw).slice(0,650);
+    const link=newsSafeUrl(newsTag(block,["link","guid"]));
+    if(!title||!link)return null;
+    const published_at=newsPublished(newsTag(block,["pubDate","published","updated","dc:date"]));
+    return {
+      id:await idFor("news:"+source.key+":"+link+":"+title),
+      title,
+      summary,
+      url:link,
+      image:newsImageFromItem(block,descriptionRaw),
+      published_at,
+      source_key:source.key,
+      source_name:source.name,
+      topic,
+      duplicate_count:1,
+      also_sources:[]
+    } as NewsItem;
+  }));
+  return items.filter((x):x is NewsItem=>Boolean(x));
+}
+async function newsFetchText(url:string){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),NEWS_FETCH_TIMEOUT_MS);
+  try{
+    const res=await fetch(url,{
+      signal:controller.signal,
+      headers:{
+        "accept":"application/rss+xml, application/xml, text/xml, */*;q=0.8",
+        "user-agent":"GETLINK-RSS/1.0 (+https://get.taphoa.xyz)"
+      }
+    });
+    if(!res.ok)throw new Error("rss_http_"+res.status);
+    return await res.text();
+  }finally{
+    clearTimeout(timer);
+  }
+}
+async function newsFetchSource(source:NewsSourceDef,topic:NewsTopicKey){
+  const primary=source.feeds[topic]||"";
+  const candidates=[primary,newsGoogleFeed(source,topic)].filter((x,i,a)=>x&&a.indexOf(x)===i);
+  let lastError="";
+  for(const feed of candidates){
+    try{
+      const xml=await newsFetchText(feed);
+      const items=await newsParseItems(xml,source,topic);
+      if(items.length)return {items,feed,mode:feed.includes("news.google.com")?"google-rss":"official-rss"};
+      lastError="rss_empty";
+    }catch(e){
+      lastError=errorText(e).slice(0,180);
+    }
+  }
+  return {items:[] as NewsItem[],feed:candidates[0]||"",mode:"unavailable",error:lastError||"rss_unavailable"};
+}
+async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
+  const topic=newsTopicDef(topicRaw).key;
+  const requestedSource=clean(sourceRaw);
+  const sources=requestedSource&&requestedSource!=="all"
+    ?NEWS_SOURCES.filter(x=>x.key===requestedSource)
+    :NEWS_SOURCES;
+  const limit=Math.max(10,Math.min(100,Number(limitRaw)||60));
+  const cacheKey=topic+"|"+(requestedSource||"all")+"|"+limit;
+  const cached=newsMemoryCache.get(cacheKey);
+  if(cached&&Date.now()-cached.at<NEWS_CACHE_MS)return {...cached.payload,cache_hit:true};
+
+  const settled=await Promise.all(sources.map(async source=>{
+    const result=await newsFetchSource(source,topic);
+    return {source,result};
+  }));
+  const items=newsDeduplicate(settled.flatMap(x=>x.result.items)).slice(0,limit);
+  const errors=settled
+    .filter(x=>!x.result.items.length)
+    .map(x=>({source_key:x.source.key,source_name:x.source.name,error:x.result.error||"rss_unavailable"}));
+  const payload={
+    topic,
+    fetched_at:new Date().toISOString(),
+    cache_hit:false,
+    topics:NEWS_TOPICS.map(({key,name})=>({key,name})),
+    sources:NEWS_SOURCES.map(({key,name})=>({key,name})),
+    items,
+    source_status:settled.map(x=>({
+      source_key:x.source.key,
+      source_name:x.source.name,
+      count:x.result.items.length,
+      mode:x.result.mode
+    })),
+    errors
+  };
+  newsMemoryCache.set(cacheKey,{at:Date.now(),payload});
+  return payload;
+}
+
+
 const UPDATE_ADMIN_PIN_SHA256="fbdf2bdc4b2a45f3508c8ced68098f58375edbf2fe81ec8fe4b113185670939a";
 const UPDATE_SESSION_MS=2*60*60*1000;
 const UPDATE_AUTH_LOCK_MS=15*60*1000;
@@ -3472,6 +3787,15 @@ Deno.serve(async(req:Request)=>{
     if(route==="/health"||route==="/api/get-price"||route==="/api/result"){
       staleJobsCleaned=await expireStaleJobs();
     }
+    if(req.method==="GET"&&route==="/api/news"){
+      const topic=clean(url.searchParams.get("topic")||"latest");
+      const source=clean(url.searchParams.get("source")||"all");
+      const limit=Number(url.searchParams.get("limit")||60);
+      if(topic&&!NEWS_TOPICS.some(x=>x.key===topic))return response(req,{error:"invalid_news_topic"},400);
+      if(source!=="all"&&!NEWS_SOURCES.some(x=>x.key===source))return response(req,{error:"invalid_news_source"},400);
+      return response(req,await newsSnapshot(topic,source,limit));
+    }
+
     if(req.method==="GET"&&route==="/health"){
       const {count,error}=await sb.from("getlink_links").select("*",{count:"exact",head:true}); if(error)throw error;
       return response(req,{ok:true,mode:"supabase-only",links:Number(count||0),stale_jobs_cleaned:staleJobsCleaned});

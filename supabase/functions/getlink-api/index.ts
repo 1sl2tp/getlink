@@ -2143,7 +2143,7 @@ async function libraryRows(includeHidden=true){
 function publicCatalogRow(row:any){
   return {
     canonical_url:clean(row?.canonical_url||""),
-    source:"Tạp hóa",
+    source:clean(row?.source||""),
     source_name:clean(row?.source_name||row?.name||""),
     name:clean(row?.name||row?.source_name||""),
     group_name:clean(row?.group_name||""),
@@ -2215,9 +2215,7 @@ function publicCatalogRow(row:any){
 }
 
 function publicCatalogRows(rows:any[]){
-  return rows
-    .filter((row:any)=>Boolean(clean(row?.supplier_product_code||""))||clean(row?.source)==="Tạp hóa")
-    .map(publicCatalogRow);
+  return rows.map(publicCatalogRow);
 }
 
 async function saveUserFeedback(body:any){
@@ -2225,7 +2223,6 @@ async function saveUserFeedback(body:any){
   const clientId=clean(body?.client_id||"").slice(0,120);
   if(!raw||!clientId)throw new Error("feedback_missing_fields");
   const itemUrl=canonical(raw);
-  if(sourceKey(itemUrl)!=="mine")throw new Error("feedback_invalid_product");
   const bargainRaw=body?.bargain_price_vnd;
   const ratingRaw=body?.rating;
   const bargain=bargainRaw===null||bargainRaw===undefined||bargainRaw===""

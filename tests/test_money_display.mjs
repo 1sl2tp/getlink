@@ -477,7 +477,7 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_stock_status/);
   assert.match(app,/function supplierAvailabilityText\(row\)/);
   assert.match(app,/Đang hết/);
-  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)\|\|rowHasOwnPrice\(row\)/);
+  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)/);
   assert.match(css,/Supplier stock status v14/);
 }
 

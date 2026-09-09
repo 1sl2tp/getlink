@@ -3385,15 +3385,41 @@ function userWorkRowsForScope(scope,categoryKey=""){
   });
 }
 
+function userWorkCategoryIcon(name){
+  const key=searchKey(name||"");
+  let body='<path d="M4 7h16v12H4z"/><path d="m4 7 4-3h8l4 3"/>';
+  if(key.includes("bia"))body='<path d="M6 7h9v12H6z"/><path d="M15 9h2a3 3 0 0 1 0 6h-2"/><path d="M8 4h5v3H8z"/>';
+  else if(key.includes("nuoc ngot"))body='<path d="M9 3h6l-1 5 2 3v8a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-8l2-3z"/>';
+  else if(key==="mi"||key.includes(" mi "))body='<path d="M4 11h16"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M8 7c1-2 2-2 3-4M13 7c1-2 2-2 3-4"/>';
+  else if(key.includes("sua"))body='<path d="M8 3h8l2 5v12H6V8z"/><path d="M8 3v5h10"/>';
+  else if(key.includes("thuoc la"))body='<path d="M4 14h14v4H4z"/><path d="M18 14h2v4h-2z"/><path d="M5 10c2-2 4 1 6-1s4 1 6-1"/>';
+  else if(key.includes("banh")||key.includes("keo"))body='<path d="m5 9-3 3 3 3 3-2h8l3 2 3-3-3-3-3 2H8z"/>';
+  else if(key.includes("gia vi"))body='<path d="M9 4h6l1 4H8z"/><path d="M7 8h10l-1 12H8z"/><path d="M10 12h4"/>';
+  else if(key.includes("masan"))body='<path d="M4 9 12 3l8 6v11H4z"/><path d="M9 20v-6h6v6"/>';
+  else if(key.includes("hang u"))body='<path d="m4 8 8-4 8 4-8 4z"/><path d="M4 8v8l8 4 8-4V8"/>';
+  return '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24">'+body+'</svg>';
+}
+
+function workSourceBrandBadge(row,extraClass=""){
+  const key=rowSourceFilterKey(row);
+  const label=sourceDisplayLabel(row);
+  return '<span class="work-source-brand '+escapeAttr(key)+' '+escapeAttr(extraClass)+'" title="'+escapeAttr(label)+'">'+
+    sourceLogoMark(key)+
+    '<span class="work-source-brand-label">'+escapeHtml(label)+'</span>'+
+  '</span>';
+}
+
 function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
   if(!host)return;
   const categories=userWorkCategories(scope);
   host.innerHTML=[
-    '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">Tất cả</button>',
+    '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">'+
+      '<svg class="user-work-category-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/></svg>'+
+      '<span>Tất cả</span></button>',
     ...categories.map(item=>
       '<button class="user-work-category-button '+(item.key===activeKey?"active":"")+'" '+
       attribute+'="'+escapeAttr(item.key)+'" type="button" aria-pressed="'+(item.key===activeKey?"true":"false")+'">'+
-      escapeHtml(item.name)+'</button>'
+      userWorkCategoryIcon(item.name)+'<span>'+escapeHtml(item.name)+'</span></button>'
     )
   ].join("");
 }
@@ -3988,7 +4014,7 @@ function mobileUserMarketCard(row){
       (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
       '<div class="mobile-user-product-bottom">'+
         (price?'<b class="mobile-user-product-price">'+money(price)+'</b>':'')+
-        '<span class="mobile-user-product-source '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</span>'+
+        workSourceBrandBadge(row,"mobile")+
       '</div>'+
     '</div>'+
   '</article>';
@@ -4106,7 +4132,7 @@ function userWorkMarketCard(row){
       (pack?'<small class="user-work-market-pack">'+escapeHtml(pack)+'</small>':'')+
       '<div class="user-work-market-bottom">'+
         (price?'<b class="user-work-market-price">'+money(price)+'</b>':'')+
-        '<span class="user-work-source-tag '+escapeAttr(sourceClass)+'">'+escapeHtml(source)+'</span>'+
+        workSourceBrandBadge(row,"desktop")+
       '</div>'+
     '</div>'+
   '</article>';

@@ -4102,8 +4102,6 @@ function renderMobileUserWork(){
   renderMobileMergePanel();
   const empty=$("#mobileUserEmpty");
   if(empty)empty.hidden=rows.length!==0;
-  const more=$("#mobileUserMore");
-  if(more)more.hidden=true;
   setupMobileUserAutoLoad();
   updateUserWorkOrderSummary();
 }

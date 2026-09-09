@@ -2824,16 +2824,14 @@ function nextTableSourceFilter(){
 }
 
 function sourceLogoMark(key){
-  if(key==="mine"){
-    return '<span class="source-logo-mark source-logo-mine" aria-hidden="true"><b>TẠP HÓA</b></span>';
-  }
   const logos={
+    mine:"assets/logo-taphoa.svg",
     bhx:"assets/logo-bhx.svg",
     wm:"assets/logo-winmart.svg",
     go:"assets/logo-go.svg"
   };
   if(logos[key]){
-    const fallback=key==="bhx"?"BHX":(key==="wm"?"WinMart":"GO!");
+    const fallback=key==="mine"?"TẠP HÓA":(key==="bhx"?"BHX":(key==="wm"?"WinMart":"GO!"));
     return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true">'+
       '<img class="source-logo-image" src="'+logos[key]+'" alt="" loading="eager" decoding="async" onerror="this.hidden=true">'+
       '<b class="source-logo-fallback">'+fallback+'</b>'+

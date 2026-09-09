@@ -2931,6 +2931,10 @@ function newsAllowedDetailHost(host:string){
   const key=String(host||"").toLowerCase().replace(/^www\./,"");
   return NEWS_SOURCES.some(source=>key===source.domain||key.endsWith("."+source.domain));
 }
+function newsAllowedDetailEntryHost(host:string){
+  const key=String(host||"").toLowerCase().replace(/^www\./,"");
+  return newsAllowedDetailHost(key)||key==="news.google.com";
+}
 function newsAbsoluteUrl(value:unknown,base:string){
   const raw=newsXmlText(value);
   if(!raw)return "";
@@ -2965,6 +2969,21 @@ function newsArticleParagraphs(html:string){
   }
   return out;
 }
+function newsMetaImageValues(html:string,base:string){
+  const values:string[]=[];
+  const add=(value:unknown)=>{
+    const url=newsAbsoluteUrl(value,base);
+    if(url&&!values.includes(url))values.push(url);
+  };
+  for(const meta of String(html||"").matchAll(/<meta\b[^>]*>/gi)){
+    const tag=meta[0];
+    const property=(tag.match(/\b(?:property|name)=["']([^"']+)["']/i)?.[1]||"").toLowerCase();
+    if(!["og:image","og:image:url","twitter:image","twitter:image:src"].includes(property))continue;
+    const content=tag.match(/\bcontent=["']([^"']+)["']/i)?.[1]||"";
+    if(content)add(content);
+  }
+  return values;
+}
 function newsArticleImages(html:string,base:string,jsonImages:string[]){
   const values:string[]=[];
   const add=(value:unknown)=>{
@@ -2972,15 +2991,19 @@ function newsArticleImages(html:string,base:string,jsonImages:string[]){
     if(url&&!values.includes(url))values.push(url);
   };
   for(const value of jsonImages)add(value);
-  for(const m of String(html||"").matchAll(/<meta\b[^>]*(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]*content=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  for(const value of newsMetaImageValues(html,base))add(value);
   const article=String(html||"").match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]||"";
-  for(const m of article.matchAll(/<img\b[^>]*(?:src|data-src)=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  for(const m of article.matchAll(/<img\b[^>]*(?:src|data-src)=["']([^"']+)["'][^>]*>/gi))add(m[1]);
+  for(const m of article.matchAll(/<img\b[^>]*(?:srcset|data-srcset)=["']([^"']+)["'][^>]*>/gi)){
+    const first=String(m[1]||"").split(",")[0]?.trim().split(/\s+/)[0]||"";
+    if(first)add(first);
+  }
   return values.slice(0,12);
 }
 async function newsArticleDetail(rawUrl:string){
   const requested=new URL(rawUrl);
   const requestedHost=requested.hostname.toLowerCase().replace(/^www\./,"");
-  if(!newsAllowedDetailHost(requestedHost))throw new Error("news_detail_host_not_allowed");
+  if(!newsAllowedDetailEntryHost(requestedHost))throw new Error("news_detail_host_not_allowed");
   const key=requested.toString();
   const cached=newsDetailCache.get(key);
   if(cached&&Date.now()-cached.at<NEWS_DETAIL_CACHE_MS)return {...cached.payload,cache_hit:true};

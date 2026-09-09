@@ -22,7 +22,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertRegex(
             CSS,
             r"@media\s*\(max-width\s*:\s*639px\)[\s\S]*?"
-            r"\.mobile-user-work\s*\{[^}]*display\s*:\s*block"
+            r"\.mobile-user-work\s*\{[^}]*display\s*:\s*flex"
         )
         self.assertRegex(
             CSS,
@@ -45,8 +45,8 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('mine:"Tạp hóa"',APP)
         self.assertIn('market:"Siêu thị"',APP)
         self.assertIn('let mobileUserScope=""',APP)
-        self.assertIn('let mobileUserChildSource=""',APP)
-        self.assertIn('mobileSupplierSources()',APP)
+        self.assertIn('let mobileUserCategoryKey=""',APP)
+        self.assertIn('userWorkCategories(scope)',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
         block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)
@@ -67,7 +67,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
             self.assertIn(token,mine_body)
             self.assertIn(token,market_body)
         self.assertNotIn(">Tạp hóa<",mine_body)
-        self.assertIn("mobile-user-product-source",market_body)
+        self.assertIn("'source-'+escapeAttr(sourceKey)",market_body)
         self.assertIn("data-work-qty",mine_body)
         self.assertNotIn("data-work-qty",market_body)
 

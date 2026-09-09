@@ -14236,3 +14236,45 @@ body[data-app-role="user"] .user-work-home{
 html[data-getlink-embed="1"] .site-chat-notice{
   display:none!important;
 }
+
+
+/* Chat handoff notice v2 — notice owns the standalone header row */
+.site-head{
+  align-items:center;
+}
+.site-head .site-chat-notice{
+  min-width:0;
+  max-width:none;
+  flex:1 1 auto;
+  margin-left:0;
+  padding:10px 12px;
+}
+.site-head .site-chat-notice-copy strong{
+  font-size:14px;
+}
+.site-head .site-chat-notice-copy small{
+  max-width:none;
+  font-size:11.5px;
+}
+.site-head .site-chat-notice-icon{
+  width:36px;
+  height:36px;
+  flex-basis:36px;
+}
+.site-head .site-chat-notice-cta{
+  padding:7px 11px;
+  font-size:11.5px;
+}
+@media(max-width:900px){
+  .site-head .site-chat-notice{
+    display:flex!important;
+  }
+  .site-head .site-chat-notice-copy small{
+    max-width:55vw;
+  }
+}
+@media(max-width:720px){
+  .site-head .site-chat-notice{
+    display:none!important;
+  }
+}

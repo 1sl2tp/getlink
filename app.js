@@ -1844,39 +1844,104 @@ function supplierTableRow(row){
     '</tr>';
 }
 
+function publicSourceCompactLabel(row){
+  const key=rowSourceFilterKey(row);
+  if(key==="mine")return "Tạp hóa";
+  if(key==="bhx")return "BHX";
+  if(key==="wm")return "WinMart";
+  if(key==="go")return "GO!";
+  return String(row&&row.source||"").trim()||"Nguồn";
+}
+
+function userPublicPackInfo(row,levels){
+  const h=levels.hierarchy||{};
+  const supplierQty=Math.max(0,Number(row&&row.supplier_units_per_carton||0)||0);
+  const supplierUnit=String(row&&row.supplier_retail_unit||"").trim();
+  const leafLabel=String(h.label3||"").trim();
+  const middleLabel=String(h.label2||"").trim();
+  const unit=supplierUnit||leafLabel||middleLabel||String(row&&row.pack_unit||"").trim()||"lẻ";
+  const qty=supplierQty>1
+    ?supplierQty
+    :(Number(h.qty3||0)>1?Number(h.qty3):(Number(h.qty2||0)>1?Number(h.qty2):0));
+  return {unit,qty};
+}
+
 function userTableRow(row){
   const displayName=canonicalDisplayName(row);
-  const carton=Number(row&&row.supplier_carton_price_vnd||row&&row.web_carton_price||0);
-  const retail=Number(row&&row.supplier_retail_price_vnd||row&&row.web_leaf_price||0);
-  const units=Math.max(0,Number(row&&row.supplier_units_per_carton||0)||0);
-  const unit=String(row&&row.supplier_retail_unit||"").trim();
-  const primary=String(row&&row.supplier_primary_packaging||row&&row.packaging||"").trim();
-  const retailPack=String(row&&row.supplier_retail_packaging||"").trim();
+  const levels=rowPriceLevels(row);
+  const pack=userPublicPackInfo(row,levels);
   const bargain=readOwnPrice(row.canonical_url,"bargain");
   const rating=readOwnRating(row.canonical_url);
   const stock=supplierAvailabilityText(row);
-  const prices=[];
-  if(!stock&&carton)prices.push('<span class="user-sale-level"><small>Thùng</small><strong>'+money(carton)+'</strong></span>');
-  if(!stock&&retail)prices.push('<span class="user-sale-level"><small>'+escapeHtml(unit||"Lẻ")+'</small><strong>'+money(retail)+'</strong></span>');
-  const priceHtml=stock
+  const carton=Number(levels.promoCartonPrice||levels.cartonPrice||0);
+  const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
+
+  const cartonHtml=stock
     ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
-    :(prices.length?prices.join('<span class="user-sale-sep">·</span>'):'<span class="xls-empty">—</span>');
-  const packText=units>1&&unit
-    ?units+" "+unit+" / thùng"
-    :(primary||retailPack||unit||"—");
+    :(carton
+      ?'<strong class="user-price-main">'+money(carton)+'</strong><small class="user-price-unit">'+
+        (pack.qty>1?'thùng × '+pack.qty+' '+escapeHtml(pack.unit):'thùng')+'</small>'
+      :'<span class="xls-empty">—</span>');
+  const retailHtml=stock
+    ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
+    :(retail
+      ?'<strong class="user-price-main">'+money(retail)+'</strong><small class="user-price-unit">'+escapeHtml(pack.unit||"lẻ")+'</small>'
+      :'<span class="xls-empty">—</span>');
+
   const stars=[1,2,3,4,5].map(n=>
-    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" '+
-      'data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" '+
-      'aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
+    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
   ).join("");
+
   return '<tr class="product-card xls-row user-table-row" data-url="'+escapeAttr(row.canonical_url)+'">'+
-    '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+escapeHtml(displayName)+'</td>'+
-    '<td class="user-col-sale">'+priceHtml+'</td>'+
-    '<td class="user-col-pack">'+escapeHtml(packText)+'</td>'+
-    '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
+    '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+
+      '<span class="user-product-name">'+escapeHtml(displayName)+'</span>'+
+      '<span class="user-product-source '+escapeAttr(rowSourceFilterKey(row))+'">'+escapeHtml(publicSourceCompactLabel(row))+'</span>'+
+    '</td>'+
+    '<td class="user-col-carton-price">'+cartonHtml+'</td>'+
+    '<td class="user-col-retail-price">'+retailHtml+'</td>'+
+    '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
     '<td class="user-col-rating"><span class="user-rating" role="group" aria-label="Đánh giá sản phẩm">'+stars+'</span></td>'+
   '</tr>';
 }
+
+function userGridProductCard(row){
+  const levels=rowPriceLevels(row);
+  const displayName=canonicalDisplayName(row);
+  const pack=userPublicPackInfo(row,levels);
+  const image=String(row.image||"").trim();
+  const stock=supplierAvailabilityText(row);
+  const carton=Number(levels.promoCartonPrice||levels.cartonPrice||0);
+  const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
+  const bargain=readOwnPrice(row.canonical_url,"bargain");
+  const rating=readOwnRating(row.canonical_url);
+  const stars=[1,2,3,4,5].map(n=>
+    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
+  ).join("");
+  const priceLine=(label,price,unitText)=>
+    '<span class="user-grid-price-line"><small>'+label+'</small>'+
+      (stock?'<strong class="is-out-of-stock">'+escapeHtml(stock)+'</strong>':
+        (price?'<strong>'+money(price)+'</strong><em>'+escapeHtml(unitText)+'</em>':'<strong>—</strong>'))+
+    '</span>';
+
+  return '<article class="grid-product product-card user-grid-product" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<div class="grid-product-image">'+
+      (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span class="grid-product-fallback">GL</span>')+
+    '</div>'+
+    '<div class="grid-product-body">'+
+      '<div class="user-grid-source">'+escapeHtml(publicSourceCompactLabel(row))+'</div>'+
+      '<div class="grid-product-name user-grid-name">'+escapeHtml(displayName)+'</div>'+
+      '<div class="user-grid-prices">'+
+        priceLine("Thùng",carton,pack.qty>1?'thùng × '+pack.qty+' '+pack.unit:'thùng')+
+        priceLine("Lẻ",retail,pack.unit||"lẻ")+
+      '</div>'+
+      '<div class="user-grid-actions">'+
+        '<input class="sheet-bargain xls-input user-grid-bargain" inputmode="numeric" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Mặc cả">'+
+        '<span class="user-rating">'+stars+'</span>'+
+      '</div>'+
+    '</div>'+
+  '</article>';
+}
+
 
 function productCard(row){
   if(appRole==="user")return userTableRow(row);
@@ -2160,6 +2225,7 @@ function renderCategoryMenu(){
   }
 }
 function gridProductCard(row){
+  if(appRole==="user")return userGridProductCard(row);
   const levels=rowPriceLevels(row);
   const displayName=canonicalDisplayName(row);
   const hierarchy=levels.hierarchy;
@@ -3031,7 +3097,7 @@ function batchSizeForView(view){
 function updateCatalogRenderMore(){
   const host=$("#catalogRenderMore");
   if(!host)return;
-  const view=appRole==="user"?"table":libraryView;
+  const view=libraryView;
   const state=viewRenderState[view];
   const total=state.products.length;
   if(!total||state.rendered>=total){
@@ -3073,7 +3139,7 @@ function appendLocalViewBatch(view){
 }
 
 function renderActiveProductView(products){
-  const view=appRole==="user"?"table":libraryView;
+  const view=libraryView;
   const viewProducts=view==="table"?sortTableProducts(products):products;
   const key=productViewKey(viewProducts)+(view==="table"?"|source-sort:"+tableSourceSort:"");
   const state=viewRenderState[view];
@@ -3137,7 +3203,7 @@ function renderResultPager(){
 function syncViewMode(){
   const grid=$("#productGrid");
   const table=$("#tableView");
-  const view=appRole==="user"?"table":libraryView;
+  const view=libraryView;
   if(grid)grid.hidden=matchAuditActive||view!=="grid";
   if(table)table.hidden=matchAuditActive||view!=="table";
   document.querySelectorAll(".view-button").forEach(button=>{
@@ -3530,6 +3596,23 @@ document.querySelector(".view-switch").addEventListener("click",e=>{
 });
 
 $("#productGrid").addEventListener("click",async e=>{
+  const ratingButton=e.target.closest(".user-rating-button");
+  if(ratingButton){
+    e.preventDefault();
+    e.stopPropagation();
+    const url=ratingButton.dataset.url||"";
+    const rating=writeOwnRating(url,Number(ratingButton.dataset.rating||0));
+    syncUserRatingRow(ratingButton.closest(".user-grid-product"),url,rating);
+    queueUserFeedback(url);
+    return;
+  }
+  const bargain=e.target.closest(".user-grid-bargain");
+  if(bargain){
+    e.stopPropagation();
+    return;
+  }
+  if(appRole==="user")return;
+
   const zoomImage=e.target.closest(".grid-product-image img");
   if(zoomImage&&isCompactBrowse()){
     e.preventDefault();
@@ -3543,14 +3626,11 @@ $("#productGrid").addEventListener("click",async e=>{
     e.preventDefault();
     e.stopPropagation();
     if(watch.disabled)return;
-
     const url=watch.dataset.url||"";
     const key=canonical(url);
     const row=libraryByUrl.get(key);
     const wasWatch=watch.dataset.watch==="1";
     const next=wasWatch?"normal":"watch";
-
-    // Optimistic UI: the heart changes immediately; persistence happens after.
     watch.dataset.watch=wasWatch?"0":"1";
     watch.classList.toggle("active",!wasWatch);
     watch.innerHTML=watchIconSvg(!wasWatch);
@@ -3559,16 +3639,11 @@ $("#productGrid").addEventListener("click",async e=>{
       row.preference_state=next;
       libraryRenderVersion+=1;
     }
-
     watch.disabled=true;
     try{
       await updatePreference(url,next,6,false);
-
-      // If the current filter is Quan tâm and an item was unhearted,
-      // remove it after persistence succeeds.
       if(libraryState==="watch"&&next!=="watch")renderLibraryProducts();
     }catch{
-      // Roll back both local data and icon if persistence fails.
       if(row)row.preference_state=wasWatch?"watch":"normal";
       watch.dataset.watch=wasWatch?"1":"0";
       watch.classList.toggle("active",wasWatch);
@@ -3579,13 +3654,19 @@ $("#productGrid").addEventListener("click",async e=>{
     }
     return;
   }
-
   if(isCompactBrowse())return;
-
   const button=e.target.closest(".grid-product-name");
   const card=e.target.closest(".grid-product");
   const url=(button&&button.dataset.url)||(card&&card.dataset.url)||"";
   if(url)openLibraryItem(url);
+});
+
+$("#productGrid").addEventListener("input",e=>{
+  const bargain=e.target.closest(".user-grid-bargain");
+  if(!bargain||appRole!=="user")return;
+  const url=bargain.dataset.url||"";
+  writeOwnPrice(url,"bargain",bargain.value);
+  queueUserFeedback(url);
 });
 
 $("#productGrid").addEventListener("keydown",e=>{
@@ -3659,6 +3740,7 @@ $("#libraryProducts").addEventListener("input",e=>{
 });
 
 $("#libraryProducts").addEventListener("keydown",e=>{
+  if(appRole==="user")return;
   if((e.key==="Enter"||e.key===" ")&&!e.target.closest(".pref-action")&&!e.target.closest(".sheet-my-carton,.sheet-my-middle,.sheet-my-retail,.sheet-bargain")){
     const card=e.target.closest(".product-card");
     if(!card)return;
@@ -3740,8 +3822,8 @@ function applyAppRoleUi(){
     :"Bảng giá Tạp hóa · xem giá bán và gửi giá mặc cả";
 
   if(appRole==="user"){
-    activeSourceFilter="mine";
     libraryState="visible";
+    if(!["","mine","bhx","wm","go"].includes(activeSourceFilter))activeSourceFilter="";
     if($("#importCard"))$("#importCard").hidden=true;
     if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
     if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;

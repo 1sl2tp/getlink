@@ -9355,3 +9355,118 @@ body.source-manager-open{overflow:hidden!important}
     line-height:1.1;
   }
 }
+
+
+/* Tạp hóa own-price source v13 */
+/*
+  Tạp hóa is a logical price source layered over the same product catalog.
+  It does not duplicate products in Supabase; it filters rows that have
+  a user-owned price and paints the price using the store identity.
+*/
+.source-logo-mine{
+  width:48px!important;
+  max-width:100%!important;
+  height:20px!important;
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  border-radius:5px!important;
+  background:#0b9855!important;
+  color:#fff!important;
+  line-height:1!important;
+}
+.source-logo-mine b{
+  display:block!important;
+  color:#fff!important;
+  font-size:7px!important;
+  font-weight:900!important;
+  letter-spacing:.02em!important;
+  white-space:nowrap!important;
+}
+.source-mine,
+.xls-source.source-mine{
+  color:#087a40!important;
+}
+.source-price-mine,
+.grid-product.source-mine .grid-price,
+.xls-row.source-mine .xls-price-compact .xls-price-main{
+  color:#087a40!important;
+}
+.source-chip.source-mine.active{
+  border-color:#0b9855!important;
+  background:#effaf4!important;
+  color:#087a40!important;
+}
+
+/* Five logical price sources: All + Tạp hóa + BHX + WinMart + GO. */
+.workspace-list .purchase-mode-row .source-tabs-inline{
+  grid-template-columns:
+    minmax(60px,1.12fr)
+    minmax(52px,.95fr)
+    repeat(3,minmax(44px,1fr))!important;
+  gap:4px!important;
+}
+.quick-source-tabs{
+  grid-template-columns:
+    minmax(58px,1.1fr)
+    minmax(48px,.95fr)
+    repeat(3,minmax(40px,1fr))!important;
+  gap:4px!important;
+}
+.workspace-list .purchase-mode-row .source-tabs-inline .source-logo-mine{
+  width:46px!important;
+}
+.quick-source-tabs .source-logo-mine{
+  width:44px!important;
+}
+
+@media(min-width:721px) and (max-width:860px){
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    grid-template-columns:
+      minmax(54px,1.08fr)
+      minmax(46px,.92fr)
+      repeat(3,minmax(38px,1fr))!important;
+    gap:3px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine{
+    width:40px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine b{
+    font-size:6.4px!important;
+  }
+}
+
+@media(max-width:390px){
+  .workspace-list .purchase-mode-row .source-tabs-inline{
+    grid-template-columns:
+      minmax(48px,1.08fr)
+      minmax(42px,.92fr)
+      repeat(3,minmax(35px,1fr))!important;
+    gap:3px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine{
+    width:38px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine b{
+    font-size:6px!important;
+  }
+}
+
+@media(max-width:340px){
+  .workspace-list .purchase-mode-row .source-tabs-inline,
+  .quick-source-tabs{
+    grid-template-columns:
+      minmax(42px,1.08fr)
+      minmax(38px,.92fr)
+      repeat(3,minmax(31px,1fr))!important;
+    gap:2px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine,
+  .quick-source-tabs .source-logo-mine{
+    width:34px!important;
+  }
+  .workspace-list .purchase-mode-row .source-logo-mine b,
+  .quick-source-tabs .source-logo-mine b{
+    font-size:5.6px!important;
+  }
+}

@@ -11,7 +11,7 @@ WORKFLOW=(ROOT/".github/workflows/news-snapshot.yml").read_text(encoding="utf-8"
 
 class NewsHotSnapshotContractTest(unittest.TestCase):
     def test_snapshot_is_background_and_database_free(self):
-        self.assertIn("direct-rss-background-hot-snapshot",SCRIPT)
+        self.assertIn("google-news-primary-hot-snapshot",SCRIPT)
         self.assertIn('"database":False',SCRIPT)
         self.assertNotIn("supabase.table",SCRIPT.lower())
         self.assertNotIn("insert(",SCRIPT)
@@ -32,6 +32,12 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("DETAIL_LIMIT=24",SCRIPT)
         self.assertIn("enrich_article",SCRIPT)
         self.assertIn("google_feed",SCRIPT)
+        self.assertIn("google_query_feed",SCRIPT)
+        self.assertIn("google_top_feed",SCRIPT)
+        self.assertIn("fetch_google_query",SCRIPT)
+        self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
+        for phrase in ["Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
+            self.assertIn(f'"{phrase}"',SCRIPT)
         self.assertIn("feedparser.parse",SCRIPT)
 
     def test_frontend_has_static_snapshot_fast_path(self):

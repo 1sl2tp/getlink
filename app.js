@@ -159,6 +159,10 @@ const MOBILE_USER_SOURCES=["","mine","bhx","wm","go"];
 const MOBILE_USER_SOURCE_LABELS={"":"Tất cả",mine:"Tạp hóa",bhx:"BHX",wm:"WinMart",go:"GO!"};
 let mobileUserSource="";
 let mobileUserLimit=8;
+let mobileMergeMode=false;
+const mobileMergeSelected=new Set();
+let mobileMergeBusy=false;
+let mobileMergeAdminToken="";
 const USER_WORK_QTY_KEY="getlink:user-work-order-qty";
 
 function readUserWorkQtyMap(){
@@ -1563,7 +1567,8 @@ function isGoRow(row){
 function isMineRow(row){
   const raw=searchKey([
     row&&row.source,
-    row&&row.supplier_source_name
+    row&&row.supplier_source_name,
+    row&&row.canonical_product_name
   ].filter(Boolean).join(" "));
   if(raw.includes("tap hoa"))return true;
   try{
@@ -3383,13 +3388,235 @@ function mobileUserRows(){
   return rows.map(item=>item.row);
 }
 
+function canonicalProductQc(row){
+  const h={
+    label1:String(row&&row.canonical_pack_label_1||"").trim(),
+    qty1:Number(row&&row.canonical_pack_qty_1)||0,
+    label2:String(row&&row.canonical_pack_label_2||"").trim(),
+    qty2:Number(row&&row.canonical_pack_qty_2)||0,
+    label3:String(row&&row.canonical_pack_label_3||"").trim(),
+    qty3:Number(row&&row.canonical_pack_qty_3)||0
+  };
+  if(h.label1==="Thùng"){
+    const child=h.label2
+      ?packHierarchyText(h.qty2||1,h.label2)
+      :(h.label3?packHierarchyText(h.qty3||1,h.label3):"");
+    return child?"Thùng · "+child:"Thùng";
+  }
+  if(h.label2&&h.label3)return packHierarchyText(h.qty2||1,h.label2)+" · "+packHierarchyText(h.qty3||1,h.label3);
+  if(h.label3)return packHierarchyText(h.qty3||1,h.label3);
+  if(h.label2)return packHierarchyText(h.qty2||1,h.label2);
+  return "";
+}
+
+function mobileMergeSelectButton(row){
+  if(!mobileMergeMode)return "";
+  const url=canonical(row&&row.canonical_url||"");
+  const grouped=Boolean(String(row&&row.canonical_product_id||"").trim());
+  const selected=mobileMergeSelected.has(url);
+  return '<button class="mobile-merge-select '+(selected?"selected ":"")+(grouped?"grouped":"")+'" '+
+    'data-mobile-merge-select="'+escapeAttr(url)+'" type="button" '+
+    (grouped?'disabled title="Sản phẩm này đã hợp nhất"':'aria-pressed="'+(selected?"true":"false")+'"')+'>'+
+    (grouped?"✓":(selected?"✓":"+"))+
+  '</button>';
+}
+
+function mobileUserResultGroups(rows){
+  const out=[];
+  const byId=new Map();
+  for(const row of rows){
+    const id=String(row&&row.canonical_product_id||"").trim();
+    if(!id){
+      out.push({key:"row:"+canonical(row.canonical_url),canonical:false,rows:[row]});
+      continue;
+    }
+    let group=byId.get(id);
+    if(!group){
+      group={key:"canonical:"+id,canonical:true,rows:[]};
+      byId.set(id,group);
+      out.push(group);
+    }
+    group.rows.push(row);
+  }
+  return out;
+}
+
+function mobileUserSourcePrice(row){
+  const source=sourceDisplayLabel(row);
+  const sourceKey=rowSourceFilterKey(row);
+  const price=isMineRow(row)?mobileUserSalePrice(row):userWorkPrimaryMarketPrice(row);
+  const qc=isMineRow(row)?"":rowPrimaryQc(row);
+  return '<span class="mobile-user-source-price '+escapeAttr(sourceKey)+'">'+
+    '<small>'+escapeHtml(source)+(qc&&qc!=="—"?" · "+escapeHtml(qc):"")+'</small>'+
+    '<b>'+(price?money(price):"—")+'</b>'+
+  '</span>';
+}
+
+function mobileUserMergedCard(group){
+  const rows=group&&Array.isArray(group.rows)?group.rows:[];
+  const first=rows[0]||{};
+  const own=rows.find(isMineRow)||null;
+  const image=String(first.canonical_product_image||"").trim();
+  const name=String(first.canonical_product_name||"").trim()||canonicalDisplayName(first);
+  const qc=canonicalProductQc(first)||rowPrimaryQc(first);
+  const qty=own?userWorkQty(own.canonical_url):0;
+  const prices=[...rows].sort((a,b)=>{
+    const am=isMineRow(a)?0:1,bm=isMineRow(b)?0:1;
+    if(am!==bm)return am-bm;
+    return mobileUserPackRank(a)-mobileUserPackRank(b);
+  }).map(mobileUserSourcePrice).join("");
+  return '<article class="mobile-user-merged-card mobile-user-product-card" data-canonical-id="'+escapeAttr(first.canonical_product_id||"")+'">'+
+    '<div class="mobile-user-product-image">'+
+      (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
+    '</div>'+
+    '<div class="mobile-user-product-copy">'+
+      '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
+      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
+      '<div class="mobile-user-source-prices">'+prices+'</div>'+
+    '</div>'+
+    (own?'<div class="mobile-user-qty" data-work-url="'+escapeAttr(own.canonical_url)+'">'+
+      '<button type="button" data-work-qty="-1" aria-label="Giảm số lượng">−</button>'+
+      '<b>'+qty+'</b>'+
+      '<button type="button" data-work-qty="1" aria-label="Tăng số lượng">+</button>'+
+    '</div>':'')+
+  '</article>';
+}
+
+function mobileMergeRows(){
+  return [...mobileMergeSelected]
+    .map(url=>findLibraryRow(url))
+    .filter(row=>row&&!String(row.canonical_product_id||"").trim());
+}
+
+function mobileMergeOption(row,kind){
+  const url=canonical(row.canonical_url);
+  const source=sourceDisplayLabel(row);
+  if(kind==="pack"){
+    const qc=rowPrimaryQc(row);
+    return '<option value="'+escapeAttr(url)+'">'+escapeHtml(source+" · "+(qc==="—"?"Chưa có QC":qc))+'</option>';
+  }
+  if(kind==="image"){
+    return '<option value="'+escapeAttr(url)+'">'+escapeHtml(source+" · "+canonicalDisplayName(row))+'</option>';
+  }
+  return '<option value="'+escapeAttr(url)+'">'+escapeHtml(source+" · "+canonicalDisplayName(row))+'</option>';
+}
+
+function renderMobileMergePanel(){
+  const panel=$("#mobileMergePanel");
+  if(!panel)return;
+  panel.hidden=!mobileMergeMode;
+  const toggle=$("#mobileMergeToggle");
+  if(toggle){
+    toggle.classList.toggle("active",mobileMergeMode);
+    toggle.setAttribute("aria-pressed",mobileMergeMode?"true":"false");
+    toggle.textContent=mobileMergeMode?"Đang chọn":"Hợp nhất";
+  }
+  if(!mobileMergeMode)return;
+
+  const rows=mobileMergeRows();
+  const count=$("#mobileMergeCount");
+  if(count)count.textContent="Đã chọn "+rows.length+" nguồn";
+
+  const nameSelect=$("#mobileMergeNameSource");
+  const packSelect=$("#mobileMergePackSource");
+  const imageSelect=$("#mobileMergeImageSource");
+  const keepName=nameSelect&&nameSelect.value;
+  const keepPack=packSelect&&packSelect.value;
+  const keepImage=imageSelect&&imageSelect.value;
+  const values=new Set(rows.map(row=>canonical(row.canonical_url)));
+
+  if(nameSelect){
+    nameSelect.innerHTML=rows.map(row=>mobileMergeOption(row,"name")).join("");
+    const preferred=rows.find(isMineRow)||rows[0];
+    nameSelect.value=values.has(keepName)?keepName:(preferred?canonical(preferred.canonical_url):"");
+  }
+  if(packSelect){
+    const sorted=[...rows].sort((a,b)=>mobileUserPackRank(a)-mobileUserPackRank(b));
+    packSelect.innerHTML=sorted.map(row=>mobileMergeOption(row,"pack")).join("");
+    packSelect.value=values.has(keepPack)?keepPack:(sorted[0]?canonical(sorted[0].canonical_url):"");
+  }
+  if(imageSelect){
+    const images=rows.filter(row=>String(row.image||"").trim());
+    imageSelect.innerHTML='<option value="">Không chọn ảnh</option>'+images.map(row=>mobileMergeOption(row,"image")).join("");
+    imageSelect.value=values.has(keepImage)?keepImage:(images[0]?canonical(images[0].canonical_url):"");
+  }
+
+  const passwordWrap=$("#mobileMergePasswordWrap");
+  if(passwordWrap)passwordWrap.hidden=Boolean(updateAdminToken||mobileMergeAdminToken);
+  const confirm=$("#mobileMergeConfirm");
+  if(confirm)confirm.disabled=rows.length<2||mobileMergeBusy;
+}
+
+async function ensureMobileMergeAdmin(){
+  if(updateAdminToken||mobileMergeAdminToken)return updateAdminToken||mobileMergeAdminToken;
+  const password=String($("#mobileMergePassword")?.value||"");
+  if(!password)throw new Error("Nhập mật khẩu quản trị.");
+  const res=await apiFetch("/api/update-settings/unlock",{
+    method:"POST",
+    headers:{"content-type":"application/json"},
+    body:JSON.stringify({password})
+  });
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok)throw new Error(res.status===429?"Đang khóa tạm. Thử lại sau.":"Mật khẩu chưa đúng.");
+  mobileMergeAdminToken=String(data.token||"");
+  if(!mobileMergeAdminToken)throw new Error("Chưa tạo được phiên hợp nhất.");
+  return mobileMergeAdminToken;
+}
+
+async function saveMobileCanonicalMerge(){
+  if(mobileMergeBusy)return;
+  const rows=mobileMergeRows();
+  if(rows.length<2)return;
+  const status=$("#mobileMergeStatus");
+  mobileMergeBusy=true;
+  renderMobileMergePanel();
+  if(status)status.textContent="Đang lưu sản phẩm chuẩn...";
+  try{
+    const token=await ensureMobileMergeAdmin();
+    const nameSource=String($("#mobileMergeNameSource")?.value||"");
+    const nameRow=findLibraryRow(nameSource)||rows[0];
+    const payload={
+      member_urls:rows.map(row=>row.canonical_url),
+      canonical_name:canonicalDisplayName(nameRow),
+      name_source_url:nameSource,
+      pack_source_url:String($("#mobileMergePackSource")?.value||""),
+      image_source_url:String($("#mobileMergeImageSource")?.value||"")
+    };
+    const headers=new Headers({"content-type":"application/json"});
+    if(API_KEY)headers.set("apikey",API_KEY);
+    headers.set("x-getlink-admin",token);
+    const res=await fetch(API+"/api/product-merge",{
+      method:"POST",
+      headers,
+      body:JSON.stringify(payload)
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok){
+      if(res.status===401)mobileMergeAdminToken="";
+      throw new Error(data.detail||data.error||"Chưa hợp nhất được.");
+    }
+    mobileMergeMode=false;
+    mobileMergeSelected.clear();
+    mobileUserLimit=8;
+    await fetchLibraryFromSupabase();
+    renderUserWorkHome();
+    if(status)status.textContent="";
+  }catch(error){
+    if(status)status.textContent=String(error&&error.message||error);
+  }finally{
+    mobileMergeBusy=false;
+    renderMobileMergePanel();
+  }
+}
+
 function mobileUserMineCard(row){
   const image=String(row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
   const price=mobileUserSalePrice(row);
   const qc=rowPrimaryQc(row);
   const qty=userWorkQty(row.canonical_url);
-  return '<article class="mobile-user-mine-card mobile-user-product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="mobile-user-mine-card mobile-user-product-card '+(mobileMergeSelected.has(canonical(row.canonical_url))?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
@@ -3416,7 +3643,8 @@ function mobileUserMarketCard(row){
   const qc=rowPrimaryQc(row);
   const source=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
-  return '<article class="mobile-user-market-card mobile-user-product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="mobile-user-market-card mobile-user-product-card '+(mobileMergeSelected.has(canonical(row.canonical_url))?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
@@ -3448,30 +3676,34 @@ function renderMobileUserWork(){
 
   renderMobileUserSourceTabs();
   const rows=mobileUserRows();
+  const groups=mobileUserResultGroups(rows);
   let visible=[];
   let hasMore=false;
 
   if(!mobileUserSource){
-    const mine=rows.filter(isMineRow);
-    const market=rows.filter(row=>!isMineRow(row));
+    const mine=groups.filter(group=>group.rows.some(isMineRow));
+    const market=groups.filter(group=>!group.rows.some(isMineRow));
     visible=[
       ...mine.slice(0,mobileUserLimit),
       ...market.slice(0,mobileUserLimit)
     ];
     hasMore=mine.length>mobileUserLimit||market.length>mobileUserLimit;
   }else{
-    visible=rows.slice(0,mobileUserLimit*2);
-    hasMore=rows.length>visible.length;
+    visible=groups.slice(0,mobileUserLimit*2);
+    hasMore=groups.length>visible.length;
   }
 
   const host=$("#mobileUserResults");
   if(host){
-    host.innerHTML=visible.map(row=>
-      isMineRow(row)?mobileUserMineCard(row):mobileUserMarketCard(row)
-    ).join("");
+    host.innerHTML=visible.map(group=>{
+      if(group.canonical)return mobileUserMergedCard(group);
+      const row=group.rows[0];
+      return isMineRow(row)?mobileUserMineCard(row):mobileUserMarketCard(row);
+    }).join("");
   }
+  renderMobileMergePanel();
   const empty=$("#mobileUserEmpty");
-  if(empty)empty.hidden=rows.length!==0;
+  if(empty)empty.hidden=groups.length!==0;
   const more=$("#mobileUserMore");
   if(more)more.hidden=!hasMore;
   updateUserWorkOrderSummary();
@@ -4830,6 +5062,36 @@ if(userWorkHome){
       return;
     }
 
+    if(e.target.closest("#mobileMergeToggle")){
+      mobileMergeMode=!mobileMergeMode;
+      mobileMergeSelected.clear();
+      renderUserWorkHome();
+      return;
+    }
+
+    if(e.target.closest("#mobileMergeCancel")){
+      mobileMergeMode=false;
+      mobileMergeSelected.clear();
+      const status=$("#mobileMergeStatus");
+      if(status)status.textContent="";
+      renderUserWorkHome();
+      return;
+    }
+
+    const mergeSelect=e.target.closest("[data-mobile-merge-select]");
+    if(mergeSelect&&!mergeSelect.disabled){
+      const url=canonical(mergeSelect.dataset.mobileMergeSelect||"");
+      if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
+      else mobileMergeSelected.add(url);
+      renderUserWorkHome();
+      return;
+    }
+
+    if(e.target.closest("#mobileMergeConfirm")){
+      saveMobileCanonicalMerge();
+      return;
+    }
+
     const mobileSource=e.target.closest("[data-mobile-source]");
     if(mobileSource){
       mobileUserSource=MOBILE_USER_SOURCES.includes(mobileSource.dataset.mobileSource)
@@ -4860,6 +5122,18 @@ if(userWorkHome){
     const send=e.target.closest("#userWorkSendOrder,#mobileUserSendOrder");
     if(send&&!send.disabled){
       saveUserWorkOrderDraft();
+      return;
+    }
+
+    const mobileCard=e.target.closest(".mobile-user-product-card[data-url]");
+    if(mobileMergeMode&&mobileCard&&!e.target.closest("[data-work-qty]")){
+      const url=canonical(mobileCard.dataset.url||"");
+      const row=findLibraryRow(url);
+      if(row&&!String(row.canonical_product_id||"").trim()){
+        if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
+        else mobileMergeSelected.add(url);
+        renderUserWorkHome();
+      }
       return;
     }
 

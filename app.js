@@ -1896,7 +1896,7 @@ function userTableRow(row){
     ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
     :(hasCarton?'<strong class="user-price-main">'+money(carton)+'</strong>':'<span class="xls-empty">—</span>');
   const qcCartonHtml=hasCarton&&pack.qty>1
-    ?'<span class="user-qc-text">'+pack.qty+' '+escapeHtml(pack.unit)+'</span>'
+    ?'<span class="user-qc-text">'+pack.qty+'</span>'
     :'<span class="xls-empty">—</span>';
   const retailHtml=stock
     ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
@@ -1913,13 +1913,13 @@ function userTableRow(row){
 
   return '<tr class="product-card xls-row user-table-row" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+escapeHtml(displayName)+'</td>'+
-    '<td class="user-col-source">'+userSourceCell(row)+'</td>'+
     '<td class="user-col-carton-price">'+cartonHtml+'</td>'+
     '<td class="user-col-carton-qc">'+qcCartonHtml+'</td>'+
     '<td class="user-col-retail-price">'+retailHtml+'</td>'+
     '<td class="user-col-retail-unit">'+retailUnitHtml+'</td>'+
     '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" max="100000" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
     '<td class="user-col-rating"><span class="user-rating" role="group" aria-label="Đánh giá sản phẩm">'+stars+'</span></td>'+
+    '<td class="user-col-source">'+userSourceCell(row)+'</td>'+
   '</tr>';
 }
 
@@ -1946,13 +1946,13 @@ function userGridProductCard(row){
     '<div class="grid-product-body">'+
       '<div class="user-grid-name">'+escapeHtml(displayName)+'</div>'+
       '<div class="user-grid-fields">'+
-        '<div class="user-grid-field"><span>Nguồn</span><strong>'+userSourceCell(row)+'</strong></div>'+
         '<div class="user-grid-field"><span>Giá thùng</span><strong>'+(stock?escapeHtml(stock):(carton?money(carton):"—"))+'</strong></div>'+
-        '<div class="user-grid-field"><span>QC thùng</span><strong>'+(carton&&pack.qty>1?pack.qty+" "+escapeHtml(pack.unit):"—")+'</strong></div>'+
+        '<div class="user-grid-field"><span>QC</span><strong>'+(carton&&pack.qty>1?pack.qty:"—")+'</strong></div>'+
         '<div class="user-grid-field"><span>Giá lẻ</span><strong>'+(stock?escapeHtml(stock):(retail?money(retail):"—"))+'</strong></div>'+
         '<div class="user-grid-field"><span>Đơn vị lẻ</span><strong>'+(retail?escapeHtml(pack.unit||"lẻ"):"—")+'</strong></div>'+
         '<div class="user-grid-field user-grid-field-bargain"><span>Mặc cả</span><input class="sheet-bargain xls-input user-grid-bargain" inputmode="numeric" max="100000" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></div>'+
         '<div class="user-grid-field user-grid-field-rating"><span>Đánh giá</span><strong class="user-rating">'+stars+'</strong></div>'+
+        '<div class="user-grid-field"><span>Nguồn</span><strong>'+userSourceCell(row)+'</strong></div>'+
       '</div>'+
     '</div>'+
   '</article>';

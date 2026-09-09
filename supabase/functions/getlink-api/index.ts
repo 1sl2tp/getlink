@@ -1998,20 +1998,25 @@ async function libraryRows(includeHidden=true){
     // supplier source defaults to carton. units_per_carton is our own pack
     // configuration and is never inferred from the supplier sheet.
     const supplierRetailDefault=clean(s.source_key)==="thuoc-la";
-    const sourcePrice=Number(s.display_price_vnd||s.input_price_vnd||0)||null;
+    // input_price_vnd is the supplier's raw column B (cost).
+    // display_price_vnd is our selling price = supplier cost + our expected profit.
+    const supplierCost=Number(s.input_price_vnd||0)||null;
+    const expectedProfit=Number(s.expected_profit_vnd||0)||0;
+    const sellPrice=Number(s.display_price_vnd||0)||
+      (supplierCost?Math.round(supplierCost+expectedProfit):null);
     const unitsPerCarton=Math.max(0,Number(s.units_per_carton||0)||0);
     const retailUnit=clean(s.retail_unit||(supplierRetailDefault?"cây":""));
     const storedCarton=Number(s.carton_price_vnd||0)||null;
     const storedRetail=Number(s.retail_price_vnd||0)||null;
     const carton=supplierRetailDefault
       ?(unitsPerCarton>1
-        ?(storedCarton||(sourcePrice?Math.round(sourcePrice*unitsPerCarton):null))
+        ?(storedCarton||(sellPrice?Math.round(sellPrice*unitsPerCarton):null))
         :null)
-      :(storedCarton||sourcePrice);
+      :(storedCarton||sellPrice);
     const retail=supplierRetailDefault
-      ?(storedRetail||sourcePrice)
-      :(storedRetail||(unitsPerCarton>1&&sourcePrice
-        ?Math.round(sourcePrice/unitsPerCarton)
+      ?(storedRetail||sellPrice)
+      :(storedRetail||(unitsPerCarton>1&&sellPrice
+        ?Math.round(sellPrice/unitsPerCarton)
         :null));
     const hasCarton=Boolean(carton);
     const hasRetail=Boolean(retail);
@@ -2097,8 +2102,16 @@ async function libraryRows(includeHidden=true){
       unit_price:retail,
       supplier_source_key:clean(s.source_key),
       supplier_source_name:clean(sourceMeta.source_name),
-      supplier_input_price_vnd:Number(s.input_price_vnd||0)||null,
+      supplier_input_price_vnd:supplierCost,
+      supplier_sell_price_vnd:sellPrice,
       supplier_margin_thousand:s.margin_thousand??null,
+      supplier_actual_profit_vnd:Number(s.actual_profit_vnd??(sellPrice&&supplierCost?sellPrice-supplierCost:0))||0,
+      supplier_expected_profit_vnd:expectedProfit,
+      supplier_previous_input_price_vnd:Number(s.previous_input_price_vnd||0)||null,
+      supplier_price_delta_vnd:Number(s.supplier_price_delta_vnd||0)||null,
+      supplier_price_direction:clean(s.supplier_price_direction||""),
+      supplier_price_changed_at:s.supplier_price_changed_at||"",
+      supplier_price_last_seen_at:s.supplier_price_last_seen_at||"",
       supplier_carton_price_vnd:carton,
       supplier_retail_price_vnd:retail,
       supplier_retail_packaging:retailPackaging,
@@ -2627,6 +2640,18 @@ Deno.serve(async(req:Request)=>{
     }
     if(req.method==="GET"&&route==="/api/library"){
       const view=clean(url.searchParams.get("view")||"groups");
+      if(view==="supplier-price-history"){
+        const raw=clean(url.searchParams.get("url")||"");
+        if(!raw)return response(req,{error:"missing_url"},400);
+        const itemUrl=canonical(raw);
+        const limit=Math.min(100,Math.max(1,Number(url.searchParams.get("limit")||30)));
+        const history=await fetchAll(
+          "getlink_supplier_price_history",
+          "source_key,source_row,canonical_url,product_name,old_price_vnd,new_price_vnd,delta_vnd,direction,detected_at,source_reported_at",
+          (q:any)=>q.eq("canonical_url",itemUrl).order("detected_at",{ascending:false}).limit(limit)
+        );
+        return response(req,{url:itemUrl,history});
+      }
       if(view==="manual-group"){
         const groupKey=clean(url.searchParams.get("group")||"");
         if(!groupKey)return response(req,{error:"missing_group"},400);

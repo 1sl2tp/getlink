@@ -469,7 +469,9 @@ function ensureNewsLoaded(force=false){
   const key=newsTopic;
   const cached=newsCache.get(key);
   if(!force&&cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL){
-    if(newsItems!==cached.items)newsItems=cached.items;
+    const changed=newsItems!==cached.items;
+    newsItems=cached.items||[];
+    if(changed)queueMicrotask(refreshNewsViews);
     return;
   }
   if(newsLoading)return;

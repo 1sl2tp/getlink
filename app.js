@@ -1926,33 +1926,23 @@ function userTableRow(row){
 function userGridProductCard(row){
   const levels=rowPriceLevels(row);
   const displayName=canonicalDisplayName(row);
-  const pack=userPublicPackInfo(row,levels);
   const image=String(row.image||"").trim();
   const stock=supplierAvailabilityText(row);
   const carton=Number(levels.promoCartonPrice||levels.cartonPrice||0);
+  const middle=Number(levels.promoMiddlePrice||levels.middlePrice||0);
   const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
-  const bargain=readOwnPrice(row.canonical_url,"bargain");
-  const rating=readOwnRating(row.canonical_url);
-  const stars=[1,2,3,4,5].map(n=>
-    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" '+
-      'data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" '+
-      'aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
-  ).join("");
+  const primaryPrice=carton||middle||retail||Number(row.current_price||0);
+  const packText=rowPrimaryQc(row);
 
-  return '<article class="grid-product product-card user-grid-product" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="grid-product product-card user-grid-product user-grid-product-compact" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="grid-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span class="grid-product-fallback">GL</span>')+
     '</div>'+
     '<div class="grid-product-body">'+
       '<div class="user-grid-name">'+escapeHtml(displayName)+'</div>'+
-      '<div class="user-grid-fields">'+
-        '<div class="user-grid-field"><span>Giá thùng</span><strong>'+(stock?escapeHtml(stock):(carton?money(carton):"—"))+'</strong></div>'+
-        '<div class="user-grid-field"><span>QC</span><strong>'+(carton&&pack.qty>1?pack.qty:"—")+'</strong></div>'+
-        '<div class="user-grid-field"><span>Giá lẻ</span><strong>'+(stock?escapeHtml(stock):(retail?money(retail):"—"))+'</strong></div>'+
-        '<div class="user-grid-field"><span>Đơn vị lẻ</span><strong>'+(retail?escapeHtml(pack.unit||"lẻ"):"—")+'</strong></div>'+
-        '<div class="user-grid-field user-grid-field-bargain"><span>Mặc cả</span><input class="sheet-bargain xls-input user-grid-bargain" inputmode="numeric" max="100000" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></div>'+
-        '<div class="user-grid-field user-grid-field-rating"><span>Đánh giá</span><strong class="user-rating">'+stars+'</strong></div>'+
-        '<div class="user-grid-field"><span>Nguồn</span><strong>'+userSourceCell(row)+'</strong></div>'+
+      '<div class="user-grid-fields user-grid-fields-compact">'+
+        '<div class="user-grid-field user-grid-field-pack"><span>Quy cách</span><strong>'+escapeHtml(packText||"—")+'</strong></div>'+
+        '<div class="user-grid-field user-grid-field-price"><span>Giá</span><strong>'+(stock?escapeHtml(stock):(primaryPrice?money(primaryPrice):"—"))+'</strong></div>'+
       '</div>'+
     '</div>'+
   '</article>';

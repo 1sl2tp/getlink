@@ -11122,3 +11122,25 @@ body{
 .compact-price strong{
   font-weight:600!important;
 }
+
+
+.user-grid-product-compact .user-grid-fields-compact{
+  gap:0;
+  margin-top:5px;
+}
+.user-grid-product-compact .user-grid-field{
+  grid-template-columns:58px minmax(0,1fr);
+  min-height:24px;
+  padding:2px 0;
+}
+.user-grid-product-compact .user-grid-field-pack strong{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.user-grid-product-compact .user-grid-field-price strong{
+  color:#176b45;
+  font-size:11px;
+  font-weight:700!important;
+  font-variant-numeric:tabular-nums;
+}

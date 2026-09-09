@@ -4110,6 +4110,13 @@ function renderMobileUserWork(){
   renderMobileMergePanel();
   const empty=$("#mobileUserEmpty");
   if(empty)empty.hidden=rows.length!==0;
+
+  const orderBar=document.querySelector(".mobile-user-order-bar");
+  const orderStatus=$("#mobileUserOrderStatus");
+  const marketMode=mobileUserScope==="market";
+  if(orderBar)orderBar.hidden=marketMode;
+  if(orderStatus)orderStatus.hidden=marketMode;
+
   setupMobileUserAutoLoad();
   updateUserWorkOrderSummary();
 }

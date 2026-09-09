@@ -1684,31 +1684,55 @@ function supplierTableRow(row){
   const displayName=canonicalDisplayName(row);
   const pref=String(row.preference_state||"normal");
   const stock=supplierAvailabilityText(row);
+  const supplierCost=Number(row&&row.supplier_input_price_vnd||0);
   const carton=Number(row&&row.supplier_carton_price_vnd||0);
   const retail=Number(row&&row.supplier_retail_price_vnd||0);
+  const unitsPerCarton=Number(row&&row.supplier_units_per_carton||0);
   const retailUnit=String(row&&row.supplier_retail_unit||"").trim();
-  const retailPack=String(row&&row.supplier_retail_packaging||"").trim()||
-    (retailUnit?"1 "+retailUnit:"");
-  const primaryPack=String(row&&row.supplier_primary_packaging||"").trim()||
-    (carton>0?"Thùng":retailPack);
-  const changeHtml=supplierPriceChangeHtml(row);
-  const cartonHtml=stock
-    ?'<span class="xls-out-of-stock">'+stock+'</span>'
-    :(carton>0
-      ?'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>'+changeHtml
-      :'<span class="xls-empty">—</span>');
-  const retailHtml=retail>0
-    ?xlsWebPrice(retail,0)+(carton>0?"":changeHtml)
+  const actualProfit=Number(row&&row.supplier_actual_profit_vnd||0);
+  const expectedProfit=Number(row&&row.supplier_expected_profit_vnd||0);
+  const previousCost=Number(row&&row.supplier_previous_input_price_vnd||0);
+  const direction=String(row&&row.supplier_price_direction||"").trim();
+  const delta=Number(row&&row.supplier_price_delta_vnd||0);
+  const changedAt=String(row&&row.supplier_price_changed_at||"").trim();
+
+  let changedDate="—";
+  if(changedAt){
+    try{
+      changedDate=new Intl.DateTimeFormat("vi-VN",{
+        timeZone:"Asia/Ho_Chi_Minh",
+        day:"2-digit",
+        month:"2-digit",
+        year:"numeric"
+      }).format(new Date(changedAt));
+    }catch{}
+  }
+
+  const changeCell=(direction==="up"||direction==="down")&&delta
+    ?'<span class="supplier-change-badge '+(direction==="up"?"is-up":"is-down")+'">'+
+      (direction==="up"?"↑ ":"↓ ")+money(Math.abs(delta))+'</span>'
     :'<span class="xls-empty">—</span>';
+
+  const stockNote=stock
+    ?'<small class="supplier-stock-note">'+escapeHtml(stock)+'</small>'
+    :"";
+
   return '<tr class="product-card xls-row supplier-table-row source-mine '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
-      '<td class="xls-name" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+
+      '<td class="xls-name supplier-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
-      '<td class="xls-num supplier-carton-price">'+cartonHtml+'</td>'+
-      '<td class="xls-num supplier-retail-price">'+retailHtml+'</td>'+
-      '<td class="xls-pack-level supplier-retail-pack">'+(retailPack?escapeHtml(retailPack):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-source">'+(supplierCost?money(supplierCost):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-sale">'+(carton?'<span class="supplier-price-main">'+money(carton)+'</span>'+stockNote:'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-sale">'+(retail?'<span class="supplier-price-main">'+money(retail)+'</span>':'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-pack">'+(unitsPerCarton>1?String(unitsPerCarton):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="supplier-col-pack supplier-retail-pack">'+(retailUnit?escapeHtml(retailUnit):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-profit">'+(actualProfit?money(actualProfit):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-profit">'+(expectedProfit?money(expectedProfit):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-history">'+(previousCost?money(previousCost):'<span class="xls-empty">—</span>')+'</td>'+
+      '<td class="xls-num supplier-col-history">'+changeCell+'</td>'+
+      '<td class="supplier-col-history supplier-change-date">'+escapeHtml(changedDate)+'</td>'+
     '</tr>';
 }
 

@@ -12651,20 +12651,18 @@ body[data-app-role="user"] .workspace-detail{
   }
   .user-work-desktop{display:none!important}
   .mobile-user-work{
-    display:block;
+    display:flex;
+    flex-direction:column;
     min-width:0;
     height:100%;
     min-height:0;
-    overflow-y:auto;
-    overflow-x:hidden;
-    overscroll-behavior-y:contain;
-    -webkit-overflow-scrolling:touch;
+    overflow:hidden;
     background:#fff;
   }
   .mobile-user-toolbar{
-    position:sticky;
-    top:0;
+    position:relative;
     z-index:30;
+    flex:0 0 auto;
     display:grid;
     grid-template-columns:minmax(0,1fr) auto;
     align-items:center;
@@ -12942,6 +12940,7 @@ body[data-app-role="user"] .workspace-detail{
   }
   .mobile-merge-confirm:disabled{opacity:.42}
   .mobile-user-results{
+    flex:1 1 auto;
     min-width:0;
     min-height:0;
     height:auto;
@@ -12950,8 +12949,19 @@ body[data-app-role="user"] .workspace-detail{
     align-content:start;
     gap:6px;
     padding:8px;
-    overflow:visible;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior-y:contain;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
     background:#f7f8f9;
+  }
+  .mobile-user-results::-webkit-scrollbar{display:none}
+  .mobile-user-results[hidden]{display:none!important}
+  .mobile-user-empty:not([hidden]){
+    flex:1 1 auto;
+    display:grid;
+    place-items:center;
   }
   .mobile-user-product-card{
     position:relative;
@@ -13190,9 +13200,9 @@ body[data-app-role="user"] .workspace-detail{
     user-select:none;
   }
   .mobile-user-order-bar{
-    position:sticky;
-    bottom:0;
+    position:relative;
     z-index:30;
+    flex:0 0 auto;
     min-height:50px;
     display:flex;
     align-items:center;
@@ -13224,6 +13234,7 @@ body[data-app-role="user"] .workspace-detail{
   .mobile-user-send-order .ui-icon{width:15px;height:15px}
   .mobile-user-send-order:disabled{opacity:.42}
   .mobile-user-order-status{
+    flex:0 0 auto;
     min-height:0;
     padding:0 8px 6px;
     color:#087a40;

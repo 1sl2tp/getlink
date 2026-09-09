@@ -48,22 +48,51 @@ class NewsRssContractTest(unittest.TestCase):
         ]:
             self.assertIn(url,EDGE)
 
-    def test_quick_view_is_local_sanitized_ui_without_ad_iframe(self):
+    def test_quick_view_is_local_content_reader_without_ad_iframe(self):
         self.assertIn('id="newsQuickView"',HTML)
-        self.assertIn('id="newsQuickTitle"',HTML)
-        self.assertIn('id="newsQuickSummary"',HTML)
+        self.assertIn('id="newsQuickGallery"',HTML)
+        self.assertIn('id="newsQuickContent"',HTML)
         self.assertIn('id="newsQuickOriginal"',HTML)
+        self.assertNotIn('id="newsQuickTitle"',HTML)
+        self.assertNotIn('id="newsQuickMeta"',HTML)
         quick=HTML[HTML.index('id="newsQuickView"'):]
         self.assertNotIn("<iframe",quick.split("<script>")[0].lower())
         self.assertIn('if(e.target.id==="newsQuickView")closeNewsQuickView()',APP)
-        self.assertIn('closeNewsQuickView()',APP)
+        self.assertIn('loadNewsQuickDetail(item,request)',APP)
+        self.assertIn('/api/news-detail?url=',APP)
+
+    def test_news_ui_hides_publishers_and_mobile_is_two_columns(self):
+        self.assertNotIn('id="newsSourceTabs"',HTML)
+        self.assertIn(".news-source-tabs",CSS)
+        self.assertIn("display:none!important",CSS)
+        self.assertIn(".mobile-user-results.news-results",CSS)
+        self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))!important",CSS)
+        self.assertIn('results.classList.add("news-results")',APP)
+        card=APP[APP.index("function newsCardHtml"):APP.index("function renderNewsDesktop")]
+        self.assertNotIn("source_name",card)
+        self.assertNotIn("also_sources",card)
+
+    def test_news_prefers_richer_images_and_deduplicates_title_or_content(self):
+        self.assertIn("images:string[]",EDGE)
+        self.assertIn("content:string",EDGE)
+        self.assertIn("newsImagesFromItem",EDGE)
+        self.assertIn("newsItemQuality",EDGE)
+        self.assertIn("newsMergeDuplicate",EDGE)
+        self.assertIn("contentClose",EDGE)
+        self.assertIn("titleSame",EDGE)
+
+    def test_news_detail_endpoint_is_sanitized_and_host_limited(self):
+        self.assertIn('route==="/api/news-detail"',EDGE)
+        self.assertIn("newsAllowedDetailHost",EDGE)
+        self.assertIn("articleBody",EDGE)
+        self.assertIn("newsArticleParagraphs",EDGE)
+        self.assertIn("newsArticleImages",EDGE)
 
     def test_news_ui_owns_its_scroll_and_mobile_rows(self):
         self.assertIn(".news-grid",CSS)
         self.assertIn(".news-quick-view",CSS)
         self.assertIn(".news-mobile-topics",CSS)
-        self.assertIn(".news-mobile-sources",CSS)
-        self.assertIn("grid-template-rows:auto auto auto!important",CSS)
+        self.assertIn("grid-template-rows:auto auto!important",CSS)
 
 
 if __name__=="__main__":

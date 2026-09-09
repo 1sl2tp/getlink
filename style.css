@@ -12419,11 +12419,6 @@ body[data-app-role="user"] .workspace-detail{
 .user-work-section-title small{
   display:block;margin-top:2px;color:#7a8592;font-size:10.5px;
 }
-.user-work-more{
-  flex:0 0 auto;height:32px;padding:0 10px;border:1px solid #dfe5ea;
-  border-radius:999px;background:#fff;color:#087a40;font-size:10.5px;font-weight:700;
-}
-.user-work-more[hidden]{display:none!important}
 
 .user-work-market-grid{
   display:grid;
@@ -13190,18 +13185,6 @@ body[data-app-role="user"] .workspace-detail{
     font-size:11px;
     background:#f7f8f9;
   }
-  .mobile-user-more{
-    width:100%;
-    height:1px;
-    min-height:1px;
-    margin:0;
-    padding:0;
-    border:0;
-    background:transparent;
-    overflow:hidden;
-    pointer-events:none;
-    user-select:none;
-  }
   .mobile-user-order-bar{
     position:relative;
     z-index:30;
@@ -13489,11 +13472,6 @@ body[data-app-role="user"] .user-work-home{
 }
 .user-work-desktop .user-work-section-title small{
   font-size:9px;
-}
-.user-work-desktop .user-work-more{
-  height:28px;
-  padding:0 9px;
-  font-size:9.5px;
 }
 
 /* Desktop supermarket browse becomes a compact list rather than stretched cards. */

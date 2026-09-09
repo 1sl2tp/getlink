@@ -12469,17 +12469,30 @@ body[data-app-role="user"] .workspace-detail{
 .user-work-source-tag.go{background:#fff3ea;color:#e85d04}
 
 .user-work-order-wrap{
-  overflow:hidden;border:1px solid #e4e9ee;border-radius:12px;background:#fff;
+  --work-col-carton:100px;
+  --work-col-retail:90px;
+  --work-col-qty:126px;
+  --work-col-bargain:132px;
+  overflow-x:auto;overflow-y:hidden;border:1px solid #e4e9ee;border-radius:12px;background:#fff;
 }
 .user-work-order-head,
 .user-work-order-row{
+  width:100%;
   display:grid;
-  grid-template-columns:minmax(250px,1.9fr) 100px 90px 126px 132px;
+  grid-template-columns:
+    minmax(220px,1fr)
+    minmax(78px,var(--work-col-carton))
+    minmax(70px,var(--work-col-retail))
+    minmax(94px,var(--work-col-qty))
+    minmax(98px,var(--work-col-bargain));
   gap:0;align-items:center;
 }
 .user-work-order-head{
-  min-height:34px;padding:0 10px;background:#fbfcfd;border-bottom:1px solid #e7ebef;
+  min-height:38px;padding:0 10px;background:#fbfcfd;border-bottom:1px solid #e7ebef;
   color:#667085;font-size:9.5px;font-weight:700;
+}
+.user-work-order-head span{
+  min-width:0;padding:0 3px;line-height:1.15;
 }
 .user-work-order-head span:not(:first-child){text-align:center}
 .user-work-order-row{
@@ -12501,19 +12514,25 @@ body[data-app-role="user"] .workspace-detail{
 .user-work-order-name small{
   display:block;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#8a94a1;font-size:9.5px;
 }
-.user-work-order-price{text-align:center;color:#667085;font-size:11px}
-.user-work-order-price strong{color:#1f2937;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums}
+.user-work-order-price{
+  min-width:0;padding:0 3px;text-align:center;color:#667085;font-size:11px;
+}
+.user-work-order-price strong{
+  display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  color:#1f2937;font-size:12px;font-weight:650;font-variant-numeric:tabular-nums;
+}
 .user-work-order-qty{
-  width:112px;height:32px;margin:auto;display:grid;grid-template-columns:32px 1fr 32px;
+  box-sizing:border-box;width:calc(100% - 8px);max-width:112px;min-width:0;height:32px;margin:auto;
+  display:grid;grid-template-columns:minmax(24px,32px) minmax(22px,1fr) minmax(24px,32px);
   align-items:center;overflow:hidden;border:1px solid #dfe4e8;border-radius:8px;background:#fff;
 }
 .user-work-order-qty button{
-  width:32px;height:30px;padding:0;border:0;background:#f8fafb;color:#475467;font-size:16px;
+  width:100%;min-width:0;height:30px;padding:0;border:0;background:#f8fafb;color:#475467;font-size:16px;
 }
-.user-work-order-qty b{text-align:center;font-size:11px;font-weight:650}
-.user-work-order-bargain{padding-left:7px}
+.user-work-order-qty b{min-width:0;text-align:center;font-size:11px;font-weight:650}
+.user-work-order-bargain{min-width:0;padding:0 4px}
 .user-work-order-bargain input{
-  width:100%;height:32px;border:1px solid #dfe4e8;border-radius:8px;padding:0 9px;outline:0;background:#fff;
+  box-sizing:border-box;width:100%;min-width:0;height:32px;border:1px solid #dfe4e8;border-radius:8px;padding:0 8px;outline:0;background:#fff;
   color:#202124;font-size:10.5px;
 }
 .user-work-order-bargain input:focus{border-color:#9fcbb3;box-shadow:0 0 0 3px rgba(10,143,77,.07)}
@@ -12550,9 +12569,21 @@ body[data-app-role="user"] .workspace-detail{
   .user-work-market-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
   .user-work-market-card{grid-template-columns:82px minmax(0,1fr)}
   .user-work-market-image{height:82px}
-  .user-work-order-wrap{overflow:auto}
+  .user-work-order-wrap{
+    --work-col-carton:88px;
+    --work-col-retail:80px;
+    --work-col-qty:108px;
+    --work-col-bargain:112px;
+  }
   .user-work-order-head,
-  .user-work-order-row{min-width:720px}
+  .user-work-order-row{
+    grid-template-columns:
+      minmax(150px,1fr)
+      minmax(66px,var(--work-col-carton))
+      minmax(60px,var(--work-col-retail))
+      minmax(84px,var(--work-col-qty))
+      minmax(88px,var(--work-col-bargain));
+  }
 }
 @media(max-width:560px){
   .user-work-home{padding:6px}
@@ -12569,4 +12600,30 @@ body[data-app-role="user"] .workspace-detail{
   .user-work-market-image{height:88px}
   .user-work-market-name{font-size:12.5px}
   .user-work-market-price{font-size:17px}
+  .user-work-order-wrap{
+    --work-col-carton:72px;
+    --work-col-retail:66px;
+    --work-col-qty:92px;
+    --work-col-bargain:96px;
+  }
+  .user-work-order-head,
+  .user-work-order-row{
+    grid-template-columns:
+      minmax(110px,1fr)
+      minmax(54px,var(--work-col-carton))
+      minmax(50px,var(--work-col-retail))
+      minmax(72px,var(--work-col-qty))
+      minmax(76px,var(--work-col-bargain));
+  }
+  .user-work-order-product{grid-template-columns:34px minmax(0,1fr);gap:6px}
+  .user-work-order-thumb{width:34px;height:38px}
+  .user-work-order-name strong{font-size:10.5px}
+  .user-work-order-name small{font-size:9px}
+  .user-work-order-price strong{font-size:10.5px}
+  .user-work-order-qty{
+    width:calc(100% - 4px);
+    grid-template-columns:minmax(20px,28px) minmax(18px,1fr) minmax(20px,28px);
+  }
+  .user-work-order-bargain{padding:0 2px}
+  .user-work-order-bargain input{padding:0 5px;font-size:9.5px}
 }

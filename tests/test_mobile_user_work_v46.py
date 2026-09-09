@@ -39,11 +39,12 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         )
         self.assertRegex(CSS,r"\.mobile-user-mine-card\s*,\s*\n\s*\.mobile-user-merged-card\.has-own\s*\{[^}]*grid-column\s*:\s*1\s*/\s*-1")
 
-    def test_mobile_uses_two_parent_scopes_with_child_sources(self):
-        self.assertIn('const MOBILE_USER_SCOPES=["mine","market"]',APP)
+    def test_mobile_uses_three_parent_scopes_with_child_sources(self):
+        self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"]',APP)
         self.assertIn('mine:"Tạp hóa"',APP)
         self.assertIn('market:"Siêu thị"',APP)
+        self.assertIn('news:"Tin tức"',APP)
         self.assertIn('let mobileUserScope="mine"',APP)
         self.assertIn('let mobileUserCategoryKey=""',APP)
         self.assertIn('userWorkCategories(scope)',APP)

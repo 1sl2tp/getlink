@@ -12502,6 +12502,11 @@ body[data-app-role="user"] .workspace-detail{
 .user-work-order-row{
   min-height:58px;padding:0 10px;border-bottom:1px solid #edf0f2;
 }
+.user-work-order-row.product-card{
+  min-width:0!important;
+  width:100%!important;
+  grid-template-columns:var(--work-order-columns)!important;
+}
 .user-work-order-row:last-child{border-bottom:0}
 .user-work-order-product{
   min-width:0;display:grid;grid-template-columns:40px minmax(0,1fr);gap:9px;align-items:center;

@@ -4,7 +4,112 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-embedded-shell-v43">
+  <script>
+  (() => {
+    const BUILD_PARAM="__build";
+    const BUILD_STORAGE_KEY="getlink:last-web-build";
+    const LATEST_COMMIT_URL="https://api.github.com/repos/1sl2tp/getlink/commits/main";
+    const DEPLOY_GRACE_MS=90*1000;
+    const CHECK_MS=2*60*1000;
+    const CHECK_THROTTLE_MS=30*1000;
+    const FALLBACK_BUILD="20260909-auto-update-v45";
+    let lastCheckAt=0;
+
+    function assetUrl(path,build){
+      const url=new URL(path,document.baseURI);
+      url.searchParams.set("v",build||FALLBACK_BUILD);
+      return url.toString();
+    }
+
+    function currentRequestedBuild(){
+      return new URL(location.href).searchParams.get(BUILD_PARAM)||"";
+    }
+
+    function loadStyle(build){
+      const link=document.createElement("link");
+      link.rel="stylesheet";
+      link.href=assetUrl("style.css",build);
+      link.dataset.getlinkBuild=build;
+      document.head.appendChild(link);
+    }
+
+    function loadScript(path,build){
+      return new Promise((resolve,reject)=>{
+        const script=document.createElement("script");
+        script.src=assetUrl(path,build);
+        script.async=false;
+        script.dataset.getlinkBuild=build;
+        script.onload=()=>resolve();
+        script.onerror=()=>reject(new Error("Không tải được "+path));
+        document.body.appendChild(script);
+      });
+    }
+
+    async function fetchLatestBuild(){
+      const response=await fetch(LATEST_COMMIT_URL,{cache:"no-store",headers:{Accept:"application/vnd.github+json"}});
+      if(!response.ok)throw new Error("GitHub build check "+response.status);
+      const data=await response.json();
+      const sha=String(data&&data.sha||"").trim();
+      const committedAt=Date.parse(
+        data&&data.commit&&data.commit.committer&&data.commit.committer.date||
+        data&&data.commit&&data.commit.author&&data.commit.author.date||
+        ""
+      );
+      if(!/^[0-9a-f]{40}$/i.test(sha))throw new Error("SHA build không hợp lệ");
+      return {sha,committedAt:Number.isFinite(committedAt)?committedAt:0};
+    }
+
+    function switchBuild(sha){
+      const requested=currentRequestedBuild();
+      if(!sha||sha===requested)return false;
+      try{localStorage.setItem(BUILD_STORAGE_KEY,sha);}catch{}
+      const next=new URL(location.href);
+      next.searchParams.set(BUILD_PARAM,sha);
+      location.replace(next.toString());
+      return true;
+    }
+
+    async function checkForNewBuild(force=false){
+      const now=Date.now();
+      if(!force&&now-lastCheckAt<CHECK_THROTTLE_MS)return false;
+      lastCheckAt=now;
+      try{
+        const latest=await fetchLatestBuild();
+        if(latest.committedAt&&now-latest.committedAt<DEPLOY_GRACE_MS)return false;
+        const requested=currentRequestedBuild();
+        if(latest.sha!==requested)return switchBuild(latest.sha);
+        try{localStorage.setItem(BUILD_STORAGE_KEY,latest.sha);}catch{}
+      }catch(error){
+        console.debug("GETLINK update check skipped",error);
+      }
+      return false;
+    }
+
+    const requested=currentRequestedBuild();
+    let activeBuild=requested;
+    if(!activeBuild){
+      try{activeBuild=localStorage.getItem(BUILD_STORAGE_KEY)||"";}catch{}
+    }
+    if(!activeBuild)activeBuild=FALLBACK_BUILD;
+
+    loadStyle(activeBuild);
+
+    window.__GETLINK_BUILD_RUNTIME__={
+      BUILD_PARAM,
+      activeBuild,
+      assetUrl,
+      loadScript,
+      checkForNewBuild
+    };
+
+    setTimeout(()=>checkForNewBuild(true),0);
+    setInterval(checkForNewBuild,CHECK_MS);
+    document.addEventListener("visibilitychange",()=>{
+      if(document.visibilityState==="visible")checkForNewBuild(true);
+    });
+    window.addEventListener("focus",()=>checkForNewBuild(false));
+  })();
+  </script>
 </head>
 <body>
 <main class="wrap">
@@ -519,8 +624,18 @@
 
 <script>
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
+(async()=>{
+  const runtime=window.__GETLINK_BUILD_RUNTIME__;
+  const build=runtime&&runtime.activeBuild||"20260909-auto-update-v45";
+  const loadScript=runtime&&runtime.loadScript;
+  if(!loadScript)return;
+  try{
+    await loadScript("config.js",build);
+    await loadScript("app.js",build);
+  }catch(error){
+    console.error("GETLINK bootstrap failed",error);
+  }
+})();
 </script>
-<script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-embedded-shell-v43"></script>
 </body>
 </html>

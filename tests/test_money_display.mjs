@@ -491,7 +491,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v10-xls-root"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis"/);
 }
 
 {
@@ -506,6 +506,7 @@ assert.equal(money(0),"—");
   assert.match(html,/id="supplierTableHead"/);
   assert.match(html,/>Tên sản phẩm</);
   assert.match(html,/>Giá nhập NCC</);
+  assert.match(html,/>Giá nhập theo</);
   assert.match(html,/>Giá bán thùng</);
   assert.match(html,/>Giá bán lẻ</);
   assert.match(html,/>QC \/ thùng</);
@@ -521,7 +522,9 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_retail_packaging/);
   assert.match(app,/function syncSupplierTableMode\(\)/);
   assert.match(css,/Supplier spreadsheet v19/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v10-xls-root"/);
+  assert.match(css,/Supplier input basis v21/);
+  assert.match(app,/supplier_input_price_basis/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis"/);
 }
 
 console.log("money and hierarchy UI tests passed");

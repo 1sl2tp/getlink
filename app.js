@@ -3256,15 +3256,40 @@ function userWorkSearchKey(row){
   ].filter(Boolean).join(" "));
 }
 
+function userWorkSearchRank(row,q,tokens){
+  if(!q)return 0;
+  const name=searchKey(canonicalDisplayName(row)||searchDisplayName(row));
+  if(name===q)return 0;
+  if(name.startsWith(q))return 1;
+
+  const first=tokens[0]||q;
+  const nameWords=name.split(/\s+/).filter(Boolean);
+  if(first&&nameWords.some(word=>word.startsWith(first)))return 2;
+  if(name.includes(q))return 3;
+
+  const brand=searchKey(rowCanonicalBrand(row));
+  if(brand&&brand.startsWith(q))return 4;
+
+  const category=searchKey([
+    rowRootGroup(row),
+    row&&row.source_category_name
+  ].filter(Boolean).join(" "));
+  if(category&&(category.startsWith(q)||category.split(/\s+/).some(word=>word.startsWith(first))))return 5;
+
+  return 6;
+}
+
 function userWorkRows(){
   const q=searchKey(libraryQuery);
   const tokens=q.split(/\s+/).filter(Boolean);
   let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
   if(tokens.length){
-    rows=rows.filter(row=>{
-      const hay=userWorkSearchKey(row);
-      return tokens.every(token=>hay.includes(token));
-    });
+    rows=rows
+      .map((row,index)=>({row,index,hay:userWorkSearchKey(row)}))
+      .filter(item=>tokens.every(token=>item.hay.includes(token)))
+      .map(item=>({...item,rank:userWorkSearchRank(item.row,q,tokens)}))
+      .sort((a,b)=>a.rank-b.rank||a.index-b.index)
+      .map(item=>item.row);
   }
   return rows;
 }

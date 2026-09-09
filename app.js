@@ -3417,6 +3417,23 @@ $("#mobileCategoryButton").addEventListener("click",()=>{
 });
 $("#mobileNavScrim").addEventListener("click",closeMobileCategoryNav);
 
+const mobileFilterToggle=$("#mobileFilterToggle");
+if(mobileFilterToggle){
+  mobileFilterToggle.addEventListener("click",()=>{
+    const list=document.querySelector(".workspace-list");
+    if(!list)return;
+    const open=!list.classList.contains("mobile-filter-open");
+    list.classList.toggle("mobile-filter-open",open);
+    mobileFilterToggle.setAttribute("aria-expanded",open?"true":"false");
+  });
+}
+const mobileAdminShortcut=$("#mobileAdminShortcut");
+if(mobileAdminShortcut){
+  mobileAdminShortcut.addEventListener("click",()=>{
+    $("#roleAdminButton")?.click();
+  });
+}
+
 function closeQuickBrowseMenu(){
   const menu=$("#quickBrowseMenu");
   const button=$("#quickBrowseButton");

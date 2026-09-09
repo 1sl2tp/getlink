@@ -1329,7 +1329,11 @@ function rowPackHierarchy(row){
 }
 
 function rowIsCarton(row){
-  if(isMineRow(row)){
+  const supplier=Boolean(
+    String(row&&row.supplier_source_key||"").trim() ||
+    String(row&&row.supplier_primary_packaging||"").trim()
+  );
+  if(supplier){
     return Boolean(
       Number(row&&row.supplier_carton_price_vnd||0)>0 ||
       String(row&&row.supplier_primary_packaging||"").trim()
@@ -1339,7 +1343,11 @@ function rowIsCarton(row){
 }
 
 function rowIsRetail(row){
-  if(isMineRow(row)){
+  const supplier=Boolean(
+    String(row&&row.supplier_source_key||"").trim() ||
+    String(row&&row.supplier_primary_packaging||"").trim()
+  );
+  if(supplier){
     return Boolean(
       Number(row&&row.supplier_retail_price_vnd||0)>0 ||
       String(row&&row.supplier_retail_packaging||"").trim()

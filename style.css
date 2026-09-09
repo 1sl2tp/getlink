@@ -10843,3 +10843,137 @@ body[data-app-role="user"] .product-grid{
     max-width:205px!important;
   }
 }
+
+
+/* Customer value-sized columns v25
+   Core fields stay contiguous. Source sits at the far edge.
+   Widths are based on requested max values:
+   Giá thùng 10000 · QC 100 · Giá lẻ 1000 · Mặc cả 100000. */
+body[data-app-role="user"] #standardTableHead,
+body[data-app-role="user"] #supplierTableHead{
+  display:none!important;
+}
+body[data-app-role="user"] #userTableHead{
+  display:table-row!important;
+}
+
+.xls-price-table.user-table-mode{
+  width:100%!important;
+  min-width:760px!important;
+  max-width:none!important;
+  table-layout:fixed!important;
+}
+
+/* Tên SP absorbs every remaining pixel. */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(1),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+  width:auto!important;
+  min-width:220px!important;
+  max-width:none!important;
+  text-align:left!important;
+}
+
+/* Giá thùng: max 10000 */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(2),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(2){
+  width:66px!important;
+  min-width:66px!important;
+  max-width:66px!important;
+  text-align:right!important;
+}
+
+/* QC: max 100 */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(3),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(3){
+  width:46px!important;
+  min-width:46px!important;
+  max-width:46px!important;
+  text-align:center!important;
+}
+
+/* Giá lẻ: max 1000 */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(4),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(4){
+  width:60px!important;
+  min-width:60px!important;
+  max-width:60px!important;
+  text-align:right!important;
+}
+
+/* Đơn vị lẻ: cây / bịch / gói / chai... */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(5),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(5){
+  width:68px!important;
+  min-width:68px!important;
+  max-width:68px!important;
+  text-align:center!important;
+}
+
+/* Mặc cả: max 100000 */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(6),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(6){
+  width:84px!important;
+  min-width:84px!important;
+  max-width:84px!important;
+  text-align:center!important;
+}
+
+/* 5 sao */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(7),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(7){
+  width:90px!important;
+  min-width:90px!important;
+  max-width:90px!important;
+  text-align:center!important;
+}
+
+/* Nguồn: outer edge */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(8),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(8){
+  width:80px!important;
+  min-width:80px!important;
+  max-width:80px!important;
+  text-align:center!important;
+}
+
+.xls-price-table.user-table-mode #userTableHead th,
+.xls-price-table.user-table-mode .user-table-row td{
+  padding-left:6px!important;
+  padding-right:6px!important;
+}
+.user-col-carton-qc .user-qc-text{
+  font-variant-numeric:tabular-nums;
+  font-weight:760;
+}
+.user-col-source .source-logo-mark{
+  width:60px!important;
+  min-width:60px!important;
+  max-width:60px!important;
+  height:23px!important;
+}
+.user-col-bargain .xls-input{
+  width:72px!important;
+  min-width:72px!important;
+  max-width:72px!important;
+  padding-left:5px!important;
+  padding-right:5px!important;
+}
+
+@media (max-width:760px){
+  .xls-price-table.user-table-mode{
+    min-width:705px!important;
+  }
+  .xls-price-table.user-table-mode #userTableHead th:nth-child(1),
+  .xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+    min-width:170px!important;
+  }
+  .xls-price-table.user-table-mode #userTableHead th:nth-child(7),
+  .xls-price-table.user-table-mode .user-table-row td:nth-child(7){
+    width:84px!important;
+    min-width:84px!important;
+    max-width:84px!important;
+  }
+  .user-rating-button{
+    font-size:12px!important;
+  }
+}

@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v3-supplier";
+const UI_LIBRARY_CACHE_KEY="library-data-v4-supplier-pack";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -1329,20 +1329,37 @@ function rowPackHierarchy(row){
 }
 
 function rowIsCarton(row){
+  if(isMineRow(row)){
+    return Boolean(
+      Number(row&&row.supplier_carton_price_vnd||0)>0 ||
+      String(row&&row.supplier_primary_packaging||"").trim()
+    );
+  }
   return rowPackHierarchy(row).label1==="Thùng";
 }
 
 function rowIsRetail(row){
+  if(isMineRow(row)){
+    return Boolean(
+      Number(row&&row.supplier_retail_price_vnd||0)>0 ||
+      String(row&&row.supplier_retail_packaging||"").trim()
+    );
+  }
   return !rowIsCarton(row);
 }
 
 function rowPriceLevels(row){
   const h=rowPackHierarchy(row);
   const wm=isWinmartRow(row);
+  const mine=isMineRow(row);
   const wmPrice=Number(row.current_price||row.regular_pack_price||0);
-  const carton=wm&&h.label1?wmPrice:Number(row.web_carton_price||0);
-  const middle=wm&&h.label2?wmPrice:Number(row.web_middle_price||0);
-  const leaf=wm&&h.label3?wmPrice:Number(row.web_leaf_price||0);
+  const carton=mine
+    ?Number(row.supplier_carton_price_vnd||row.web_carton_price||row.current_price||0)
+    :(wm&&h.label1?wmPrice:Number(row.web_carton_price||0));
+  const middle=mine?0:(wm&&h.label2?wmPrice:Number(row.web_middle_price||0));
+  const leaf=mine
+    ?Number(row.supplier_retail_price_vnd||row.web_leaf_price||0)
+    :(wm&&h.label3?wmPrice:Number(row.web_leaf_price||0));
   const promoCarton=wm?0:Number(row.promo_carton_price||0);
   const promoMiddle=wm?0:Number(row.promo_middle_price||0);
   const promoLeaf=wm?0:Number(row.promo_leaf_price||0);
@@ -1357,9 +1374,9 @@ function rowPriceLevels(row){
   return {
     rawName:String(row.source_name||row.name||"Sản phẩm").trim()||"Sản phẩm",
     hierarchy:h,
-    hasCarton:wm?Boolean(h.label1):h.label1==="Thùng",
-    hasMiddle:Boolean(h.label2),
-    hasLeaf:Boolean(h.label3),
+    hasCarton:mine?rowIsCarton(row):(wm?Boolean(h.label1):h.label1==="Thùng"),
+    hasMiddle:mine?false:Boolean(h.label2),
+    hasLeaf:mine?rowIsRetail(row):Boolean(h.label3),
     hasPromo,
     cartonPrice:carton,
     middlePrice:middle,
@@ -1597,6 +1614,16 @@ function sortTableProducts(products){
   });
 }
 
+function syncSupplierTableMode(){
+  const table=document.querySelector(".xls-price-table");
+  const standard=document.getElementById("standardTableHead");
+  const supplier=document.getElementById("supplierTableHead");
+  const mine=activeSourceFilter==="mine";
+  if(table)table.classList.toggle("supplier-table-mode",mine);
+  if(standard)standard.hidden=mine;
+  if(supplier)supplier.hidden=!mine;
+}
+
 function syncTableSourceSortHeader(){
   const head=document.getElementById("tableSourceHeader");
   const button=document.getElementById("tableSourceSort");
@@ -1609,7 +1636,32 @@ function syncTableSourceSortHeader(){
 }
 
 
+function supplierTableRow(row){
+  const displayName=canonicalDisplayName(row);
+  const pref=String(row.preference_state||"normal");
+  const stock=supplierAvailabilityText(row);
+  const carton=Number(row&&row.supplier_carton_price_vnd||0);
+  const retail=Number(row&&row.supplier_retail_price_vnd||0);
+  const retailPack=String(row&&row.supplier_retail_packaging||"").trim();
+  const primaryPack=String(row&&row.supplier_primary_packaging||"").trim()||
+    (String(row&&row.supplier_source_key||"")==="thuoc-la"?"1 cây":"Thùng");
+  const cartonHtml=stock
+    ?'<span class="xls-out-of-stock">'+stock+'</span>'
+    :'<span class="supplier-price-main">'+money(carton)+'</span><small class="supplier-primary-pack">'+escapeHtml(primaryPack)+'</small>';
+  return '<tr class="product-card xls-row supplier-table-row source-mine '+(pref==="hidden"?"is-hidden ":"")+
+    (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
+    '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
+      '<td class="xls-name" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+
+        '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
+      '</td>'+
+      '<td class="xls-num supplier-carton-price">'+cartonHtml+'</td>'+
+      '<td class="xls-num supplier-retail-price">'+xlsWebPrice(retail,0)+'</td>'+
+      '<td class="xls-pack-level supplier-retail-pack">'+(retailPack?escapeHtml(retailPack):'<span class="xls-empty">—</span>')+'</td>'+
+    '</tr>';
+}
+
 function productCard(row){
+  if(activeSourceFilter==="mine"&&isMineRow(row))return supplierTableRow(row);
   const levels=rowPriceLevels(row);
   const hierarchy=levels.hierarchy;
   const displayName=canonicalDisplayName(row);
@@ -2451,6 +2503,14 @@ function setActiveSourceFilter(nextSource,{scroll=true}={}){
     activeGroupUrl="";
   }
   normalizeBrowseCategoryForSource(activeSourceFilter);
+  const sourceRows=sourceRowsForSelection(activeSourceFilter);
+  if(
+    (activePackKind==="Thùng"&&!sourceRows.some(row=>rowIsCarton(row)))||
+    (activePackKind==="Lẻ"&&!sourceRows.some(row=>rowIsRetail(row)))
+  ){
+    activePackKind="";
+    localStorage.removeItem("getlink:filter-pack");
+  }
   libraryPage=1;
   resetBrowseDetail();
 
@@ -2869,6 +2929,7 @@ function renderLibraryProducts(){
   renderPackTabs();
   renderSourceTabs();
   syncStateControls();
+  syncSupplierTableMode();
   const products=filteredLibraryProducts();
 
   if(activeRootGroup){
@@ -2907,7 +2968,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="12">Đang đọc thư viện Supabase...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?4:12)+'">Đang đọc thư viện Supabase...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{

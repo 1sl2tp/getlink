@@ -2441,6 +2441,26 @@ async function saveCanonicalProductMerge(body:any){
     throw memberError;
   }
 
+  let removedMemberUrls:string[]=[];
+  if(existingProduct&&body?.replace_members===true){
+    const {data:existingMembers,error:existingMembersError}=await sb
+      .from("getlink_canonical_product_members")
+      .select("source_url")
+      .eq("canonical_product_id",targetCanonicalId);
+    if(existingMembersError)throw existingMembersError;
+    const keep=new Set(memberUrls);
+    removedMemberUrls=(existingMembers||[])
+      .map((x:any)=>clean(x.source_url))
+      .filter((url:string)=>url&&!keep.has(url));
+    if(removedMemberUrls.length){
+      const {error:removeError}=await sb
+        .from("getlink_canonical_product_members")
+        .delete().eq("canonical_product_id",targetCanonicalId)
+        .in("source_url",removedMemberUrls);
+      if(removeError)throw removeError;
+    }
+  }
+
   const {data:product,error:productError}=await sb.from("getlink_canonical_products")
     .select("*").eq("id",targetCanonicalId).single();
   if(productError)throw productError;
@@ -2452,7 +2472,9 @@ async function saveCanonicalProductMerge(body:any){
     canonical_name:product.canonical_name,
     identity_source_url:product.identity_source_url,
     image_source_url:product.image_source_url,
-    pack_source_url:product.pack_source_url
+    pack_source_url:product.pack_source_url,
+    replace_members:body?.replace_members===true,
+    removed_member_urls:removedMemberUrls
   };
 }
 

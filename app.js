@@ -1625,6 +1625,7 @@ function productCard(row){
     ?readOwnPrice(row.canonical_url,"retail")
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
+  const supplierStock=supplierAvailabilityText(row);
 
   return '<tr class="product-card xls-row'+catalogSourceDisplayClass(row)+' '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+

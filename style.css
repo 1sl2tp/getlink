@@ -11228,3 +11228,136 @@ body{
     padding:2px 4px!important;
   }
 }
+
+
+/* Readability v36 — larger text without changing layout structure */
+body[data-app-role="user"]{
+  font-size:14px!important;
+}
+
+/* Header / section titles */
+body[data-app-role="user"] .site-head p{
+  font-size:13.5px!important;
+}
+body[data-app-role="user"] .workspace-list .catalog-toolbar h2{
+  font-size:19px!important;
+  line-height:1.25!important;
+}
+body[data-app-role="user"] .workspace-list .catalog-toolbar p,
+body[data-app-role="user"] .workspace-list .catalog-toolbar>#libraryCount{
+  font-size:12px!important;
+  line-height:1.35!important;
+}
+body[data-app-role="user"] .nav-head,
+body[data-app-role="user"] .control-label{
+  font-size:10.5px!important;
+}
+
+/* Left navigation + counts */
+body[data-app-role="user"] .workspace-nav .category-chip,
+body[data-app-role="user"] .workspace-nav .brand-chip,
+body[data-app-role="user"] .workspace-nav .pack-chip,
+body[data-app-role="user"] .workspace-nav .state-chip{
+  font-size:12.5px!important;
+  line-height:1.25!important;
+}
+body[data-app-role="user"] .workspace-nav .category-chip small,
+body[data-app-role="user"] .workspace-nav .brand-chip small,
+body[data-app-role="user"] .workspace-nav .pack-chip small{
+  font-size:11px!important;
+}
+
+/* Top filters/search/view */
+body[data-app-role="user"] .catalog-controls .pack-chip,
+body[data-app-role="user"] .catalog-controls .state-chip,
+body[data-app-role="user"] .view-button{
+  font-size:12px!important;
+}
+body[data-app-role="user"] .catalog-search-row .catalog-search input,
+body[data-app-role="user"] .catalog-search input{
+  font-size:13.5px!important;
+}
+body[data-app-role="user"] .source-count,
+body[data-app-role="user"] .pack-chip small,
+body[data-app-role="user"] .state-chip small{
+  font-size:10.5px!important;
+}
+
+/* Spreadsheet/table view */
+body[data-app-role="user"] .xls-price-table{
+  font-size:13.5px!important;
+}
+body[data-app-role="user"] .xls-price-table th{
+  font-size:11.5px!important;
+  line-height:1.2!important;
+}
+body[data-app-role="user"] .xls-price-table td{
+  height:46px!important;
+  font-size:13.5px!important;
+}
+body[data-app-role="user"] .xls-name,
+body[data-app-role="user"] .xls-open-detail{
+  font-size:15px!important;
+  line-height:1.3!important;
+}
+body[data-app-role="user"] .xls-qc-main,
+body[data-app-role="user"] .xls-num,
+body[data-app-role="user"] .xls-pack-level{
+  font-size:14px!important;
+}
+body[data-app-role="user"] .xls-unit{
+  font-size:13px!important;
+}
+body[data-app-role="user"] .xls-input,
+body[data-app-role="user"] .user-col-bargain .xls-input{
+  font-size:13px!important;
+}
+
+/* Image/card view */
+body[data-app-role="user"] .user-grid-name,
+body[data-app-role="user"] .grid-product-name{
+  min-height:38px!important;
+  height:auto!important;
+  font-size:13px!important;
+  line-height:1.35!important;
+}
+body[data-app-role="user"] .user-grid-field>span{
+  font-size:10.5px!important;
+}
+body[data-app-role="user"] .user-grid-field>strong{
+  font-size:12px!important;
+}
+body[data-app-role="user"] .user-grid-product-compact .user-grid-field-price strong{
+  font-size:13px!important;
+}
+body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
+  min-height:28px!important;
+  grid-template-columns:66px minmax(0,1fr)!important;
+}
+
+/* Mobile: still readable but keep two-column cards */
+@media(max-width:700px){
+  body[data-app-role="user"]{
+    font-size:13.5px!important;
+  }
+  body[data-app-role="user"] .workspace-nav .category-chip,
+  body[data-app-role="user"] .workspace-nav .brand-chip,
+  body[data-app-role="user"] .workspace-nav .pack-chip,
+  body[data-app-role="user"] .workspace-nav .state-chip{
+    font-size:12px!important;
+  }
+  body[data-app-role="user"] .catalog-search-row .catalog-search input,
+  body[data-app-role="user"] .catalog-search input{
+    font-size:13px!important;
+  }
+  body[data-app-role="user"] .user-grid-name,
+  body[data-app-role="user"] .grid-product-name{
+    font-size:12.5px!important;
+  }
+  body[data-app-role="user"] .user-grid-field>span{
+    font-size:10px!important;
+  }
+  body[data-app-role="user"] .user-grid-field>strong{
+    font-size:11.5px!important;
+  }
+}

@@ -12688,22 +12688,32 @@ body[data-app-role="user"] .workspace-detail{
     font-size:16px;
   }
   .mobile-user-source-row{
-    display:grid;
-    grid-template-columns:minmax(0,1fr) auto;
-    gap:6px;
-    align-items:center;
+    display:block;
     margin-top:6px;
   }
   .mobile-user-source-tabs{
-    display:flex;
+    display:grid;
     gap:6px;
     min-width:0;
     margin-top:0;
+    overflow:visible;
+  }
+  .mobile-user-source-level{
+    display:flex;
+    gap:6px;
+    min-width:0;
     overflow-x:auto;
     scrollbar-width:none;
     overscroll-behavior-x:contain;
   }
-  .mobile-user-source-tabs::-webkit-scrollbar{display:none}
+  .mobile-user-source-level::-webkit-scrollbar{display:none}
+  .mobile-user-source-level.parent{
+    overflow:visible;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    flex:1 1 0;
+    min-width:0;
+  }
   .mobile-user-source-chip{
     flex:0 0 auto;
     height:30px;
@@ -12715,6 +12725,13 @@ body[data-app-role="user"] .workspace-detail{
     font-size:11px;
     font-weight:700;
     white-space:nowrap;
+  }
+  .mobile-user-source-level.parent .mobile-user-source-chip{
+    font-size:11.5px;
+  }
+  .mobile-user-source-level.child .mobile-user-source-chip{
+    height:28px;
+    font-size:10.5px;
   }
   .mobile-user-source-chip.active{
     border-color:#0a8f4d;

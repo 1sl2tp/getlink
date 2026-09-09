@@ -3341,8 +3341,8 @@ function userWorkPrimaryMarketPrice(row){
 }
 
 function mobileUserPackRank(row){
-  if(rowIsCarton(row))return 0;
   const h=rowPackHierarchy(row);
+  if(h.label1==="Thùng")return 0;
   if(h.label2)return 1;
   return 2;
 }
@@ -3387,15 +3387,19 @@ function mobileUserMineCard(row){
   const image=String(row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
   const price=mobileUserSalePrice(row);
+  const qc=rowPrimaryQc(row);
   const qty=userWorkQty(row.canonical_url);
-  return '<article class="mobile-user-mine-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
-    '<div class="mobile-user-thumb">'+
+  return '<article class="mobile-user-mine-card mobile-user-product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
-    '<div class="mobile-user-copy">'+
-      '<strong class="mobile-user-name">'+escapeHtml(name)+'</strong>'+
-      '<div class="mobile-user-sale"><span>Giá bán</span><b>'+(price?money(price):"—")+'</b></div>'+
-      '<small class="mobile-user-source-label">Tạp hóa</small>'+
+    '<div class="mobile-user-product-copy">'+
+      '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
+      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
+      '<div class="mobile-user-product-bottom">'+
+        '<span class="mobile-user-price-stack"><small>Giá bán</small><b class="mobile-user-product-price">'+(price?money(price):"—")+'</b></span>'+
+        '<span class="mobile-user-product-source mine">Tạp hóa</span>'+
+      '</div>'+
     '</div>'+
     '<div class="mobile-user-qty" data-work-url="'+escapeAttr(row.canonical_url)+'">'+
       '<button type="button" data-work-qty="-1" aria-label="Giảm số lượng">−</button>'+
@@ -3412,16 +3416,16 @@ function mobileUserMarketCard(row){
   const qc=rowPrimaryQc(row);
   const source=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
-  return '<article class="mobile-user-market-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
-    '<div class="mobile-user-market-image">'+
+  return '<article class="mobile-user-market-card mobile-user-product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+    '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
-    '<div class="mobile-user-market-copy">'+
-      '<strong class="mobile-user-name">'+escapeHtml(name)+'</strong>'+
-      '<small class="mobile-user-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
-      '<div class="mobile-user-market-bottom">'+
-        '<b class="mobile-user-market-price">'+(price?money(price):"—")+'</b>'+
-        '<span class="mobile-user-source '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</span>'+
+    '<div class="mobile-user-product-copy">'+
+      '<strong class="mobile-user-product-name">'+escapeHtml(name)+'</strong>'+
+      '<small class="mobile-user-product-qc">'+escapeHtml(qc==="—"?"":qc)+'</small>'+
+      '<div class="mobile-user-product-bottom">'+
+        '<b class="mobile-user-product-price">'+(price?money(price):"—")+'</b>'+
+        '<span class="mobile-user-product-source '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</span>'+
       '</div>'+
     '</div>'+
   '</article>';

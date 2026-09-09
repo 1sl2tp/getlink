@@ -35,24 +35,26 @@ class CanonicalProductLearningContractTest(unittest.TestCase):
         self.assertRegex(EDGE,r'upsert\(memberRows,\{onConflict:"source_url"\}\)')
         self.assertRegex(EDGE,r'update\(productPatch\)\.eq\("id",targetCanonicalId\)')
 
-    def test_mobile_can_select_an_existing_group_then_add_more_sources(self):
-        self.assertIn("data-mobile-merge-group",APP)
-        self.assertIn("toggleMobileMergeGroup",APP)
-        self.assertIn("mobileMergeSelected",APP)
-        self.assertNotRegex(APP,r"grouped\?'disabled")
+    def test_mobile_can_reopen_existing_own_target_then_add_more_sources(self):
+        self.assertIn("mobileMergeTargetUrl",APP)
+        self.assertIn("mobileMergeTargetMembers",APP)
+        self.assertIn("setMobileMergeTarget",APP)
+        self.assertIn("quickAttachMobileMergeSource",APP)
+        self.assertIn("canonical_product_id",APP)
 
-    def test_merge_panel_has_identity_source_and_optional_name(self):
-        self.assertIn('id="mobileMergeIdentitySource"',HTML)
-        self.assertIn("Nhãn / dung tích / mã",HTML)
-        self.assertIn("Tên chuẩn (có thể bỏ qua)",HTML)
-        self.assertIn("mobileMergeIdentityScore",APP)
-        self.assertIn("barcode",APP)
-        self.assertIn("sku",APP)
-        self.assertIn("source_code",APP)
-        self.assertIn("identity_source_url",APP)
+    def test_merge_panel_is_quick_and_identity_is_learned_automatically(self):
+        self.assertIn('id="mobileMergeTarget"',HTML)
+        self.assertIn('id="mobileMergePassword"',HTML)
+        self.assertNotIn('id="mobileMergeIdentitySource"',HTML)
+        self.assertNotIn('id="mobileMergeConfirm"',HTML)
+        self.assertIn("canonicalIdentityRowScore",EDGE)
+        self.assertIn("barcode",EDGE)
+        self.assertIn("sku",EDGE)
+        self.assertIn("source_code",EDGE)
+        self.assertIn("identity_source_url",EDGE)
 
     def test_own_card_uses_canonical_image_pack_and_only_plain_own_price(self):
-        block=re.search(r"function\s+mobileUserMergedCard\s*\(group\)\{([\s\S]*?)\n\}",APP)
+        block=re.search(r"function\s+mobileUserCanonicalMineCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         body=block.group(1)
         self.assertIn("canonical_product_image",body)

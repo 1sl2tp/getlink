@@ -8972,11 +8972,6 @@ body.source-manager-open{overflow:hidden!important}
     white-space:nowrap!important;
   }
 
-  .workspace-nav .category-tabs .category-scroll-end-spacer{
-    grid-column:1 / -1!important;
-    width:100%!important;
-  }
-
   .quick-category-list{
     grid-template-columns:repeat(2,minmax(0,1fr))!important;
   }

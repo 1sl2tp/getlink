@@ -4376,19 +4376,26 @@ function renderMobileUserSourceTabs(){
 
   const parent=
     '<div class="mobile-user-source-level parent">'+
-      MOBILE_USER_SCOPES.map(key=>
-        '<button class="mobile-user-source-chip '+(key===mobileUserScope?"active":"")+'" '+
+      MOBILE_USER_SCOPES.map(key=>{
+        const icon=key==="mine"?"building-store":(key==="news"?"news":"shopping-cart");
+        return '<button class="mobile-user-source-chip '+(key===mobileUserScope?"active":"")+'" '+
           'data-mobile-scope="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserScope?"true":"false")+'">'+
-          workIconSvg(key==="mine"?"building-store":"shopping-cart","ui-icon")+
+          workIconSvg(icon,"ui-icon")+
           '<span>'+escapeHtml(MOBILE_USER_SCOPE_LABELS[key]||key)+'</span>'+
-        '</button>'
-      ).join("")+
+        '</button>';
+      }).join("")+
     '</div>';
+
+  if(mobileUserScope==="news"){
+    host.innerHTML=parent+
+      '<div class="mobile-user-source-level child news-mobile-topics">'+newsTopicButtons()+'</div>'+
+      '<div class="mobile-user-source-level news-mobile-sources">'+newsSourceButtons()+'</div>';
+    return;
+  }
 
   const categoryHost=document.createElement("div");
   renderUserWorkCategoryButtons(categoryHost,mobileUserScope,mobileUserCategoryKey,"data-mobile-category");
   const child='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
-
   host.innerHTML=parent+child;
 }
 
@@ -4424,9 +4431,23 @@ function resetMobileUserResultsScroll(){
 
 function renderMobileUserWork(){
   const search=$("#mobileUserSearch");
-  if(search&&document.activeElement!==search)search.value=libraryQuery;
+  const newsMode=mobileUserScope==="news";
+  if(search&&document.activeElement!==search)search.value=newsMode?newsQuery:libraryQuery;
+  if(search)search.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";
 
   renderMobileUserSourceTabs();
+
+  if(newsMode){
+    if(mobileUserAutoLoadObserver){
+      mobileUserAutoLoadObserver.disconnect();
+      mobileUserAutoLoadObserver=null;
+    }
+    const merge=$("#mobileMergePanel");
+    if(merge)merge.hidden=true;
+    renderMobileNews();
+    return;
+  }
+
   const rows=mobileUserRows();
   let visible=[];
   let hasMore=false;
@@ -4564,6 +4585,7 @@ function saveUserWorkOrderDraft(){
 }
 
 function userWorkDesktopScrollRoot(){
+  if(userWorkDesktopScope==="news")return $("#userWorkNewsResults");
   if(userWorkDesktopScope==="market")return $("#userWorkMarketGrid");
   return $("#userWorkMine")?.querySelector(".user-work-order-wrap")||null;
 }
@@ -4615,13 +4637,17 @@ function renderUserWorkHome(){
     legacyDetail.style.setProperty("display","none","important");
   }
 
-  const desktopSearch=$("#userWorkSearch");
-  if(desktopSearch&&document.activeElement!==desktopSearch)desktopSearch.value=libraryQuery;
-
   if(isMobileUserWork()){
     renderMobileUserWork();
     return;
   }
+
+  const newsMode=userWorkDesktopScope==="news";
+  const desktopSearch=$("#userWorkSearch");
+  if(desktopSearch&&document.activeElement!==desktopSearch){
+    desktopSearch.value=newsMode?newsQuery:libraryQuery;
+  }
+  if(desktopSearch)desktopSearch.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";
 
   document.querySelectorAll(".user-work-jump-button").forEach(btn=>{
     const active=btn.dataset.workTarget===userWorkDesktopScope;
@@ -4630,24 +4656,40 @@ function renderUserWorkHome(){
   });
 
   const categoryHost=$("#userWorkDesktopCategories");
-  renderUserWorkCategoryButtons(
-    categoryHost,
-    userWorkDesktopScope,
-    userWorkDesktopCategoryKey,
-    "data-work-category"
-  );
+  if(categoryHost){
+    categoryHost.hidden=newsMode;
+    if(!newsMode){
+      renderUserWorkCategoryButtons(
+        categoryHost,
+        userWorkDesktopScope,
+        userWorkDesktopCategoryKey,
+        "data-work-category"
+      );
+    }
+  }
+
+  const marketSection=$("#userWorkMarket");
+  const mineSection=$("#userWorkMine");
+  const newsSection=$("#userWorkNews");
+  if(marketSection)marketSection.hidden=userWorkDesktopScope!=="market";
+  if(mineSection)mineSection.hidden=userWorkDesktopScope!=="mine";
+  if(newsSection)newsSection.hidden=!newsMode;
+
+  if(newsMode){
+    if(userWorkDesktopAutoLoadObserver){
+      userWorkDesktopAutoLoadObserver.disconnect();
+      userWorkDesktopAutoLoadObserver=null;
+    }
+    renderNewsDesktop();
+    return;
+  }
 
   const scopedRaw=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey);
   const scoped=userWorkDesktopScope==="market"?userWorkMarketSortRows(scopedRaw):scopedRaw;
   const marketHost=$("#userWorkMarketGrid");
   const marketEmpty=$("#userWorkMarketEmpty");
-  const marketSection=$("#userWorkMarket");
   const mineHost=$("#userWorkMineRows");
   const mineEmpty=$("#userWorkMineEmpty");
-  const mineSection=$("#userWorkMine");
-
-  if(marketSection)marketSection.hidden=userWorkDesktopScope!=="market";
-  if(mineSection)mineSection.hidden=userWorkDesktopScope!=="mine";
 
   let hasMore=false;
   if(userWorkDesktopScope==="market"){
@@ -4962,6 +5004,7 @@ $("#workspaceNav").addEventListener("touchend",e=>{
 
 document.addEventListener("keydown",e=>{
   if(e.key!=="Escape")return;
+  closeNewsQuickView();
   closeImageZoom();
   closeMobileCategoryNav();
   closeQuickBrowseMenu();
@@ -4982,6 +5025,10 @@ $("#imageZoom").addEventListener("click",e=>{
   if(e.target.id==="imageZoom")closeImageZoom();
 });
 
+$("#newsQuickClose")?.addEventListener("click",closeNewsQuickView);
+$("#newsQuickView")?.addEventListener("click",e=>{
+  if(e.target.id==="newsQuickView")closeNewsQuickView();
+});
 
 $("#brandTabs").addEventListener("click",e=>{
   const chip=e.target.closest(".brand-chip");
@@ -5044,36 +5091,37 @@ $("#librarySearch").addEventListener("compositionend",e=>{
 
 const userWorkSearch=$("#userWorkSearch");
 if(userWorkSearch){
-  userWorkSearch.addEventListener("input",e=>{
-    libraryQuery=String(e.target.value||"").trim();
-    userWorkMarketLimit=8;
-    userWorkMineLimit=12;
-    renderUserWorkHome();
+  const update=event=>{
+    if(userWorkDesktopScope==="news"){
+      newsQuery=String(event.target.value||"").trim();
+      renderNewsDesktop();
+    }else{
+      libraryQuery=String(event.target.value||"").trim();
+      userWorkMarketLimit=8;
+      userWorkMineLimit=12;
+      renderUserWorkHome();
+    }
     resetUserWorkDesktopScroll();
-  });
-  userWorkSearch.addEventListener("compositionend",e=>{
-    libraryQuery=String(e.target.value||"").trim();
-    userWorkMarketLimit=8;
-    userWorkMineLimit=12;
-    renderUserWorkHome();
-    resetUserWorkDesktopScroll();
-  });
+  };
+  userWorkSearch.addEventListener("input",update);
+  userWorkSearch.addEventListener("compositionend",update);
 }
 
 const mobileUserSearch=$("#mobileUserSearch");
 if(mobileUserSearch){
-  mobileUserSearch.addEventListener("input",e=>{
-    libraryQuery=String(e.target.value||"").trim();
-    mobileUserLimit=8;
-    renderUserWorkHome();
+  const update=event=>{
+    if(mobileUserScope==="news"){
+      newsQuery=String(event.target.value||"").trim();
+      renderMobileNews();
+    }else{
+      libraryQuery=String(event.target.value||"").trim();
+      mobileUserLimit=8;
+      renderUserWorkHome();
+    }
     resetMobileUserResultsScroll();
-  });
-  mobileUserSearch.addEventListener("compositionend",e=>{
-    libraryQuery=String(e.target.value||"").trim();
-    mobileUserLimit=8;
-    renderUserWorkHome();
-    resetMobileUserResultsScroll();
-  });
+  };
+  mobileUserSearch.addEventListener("input",update);
+  mobileUserSearch.addEventListener("compositionend",update);
 }
 
 
@@ -5894,9 +5942,43 @@ $("#get").addEventListener("click",async()=>{
 const userWorkHome=$("#userWorkHome");
 if(userWorkHome){
   userWorkHome.addEventListener("click",e=>{
+    const newsCard=e.target.closest(".news-card[data-news-id]");
+    if(newsCard){
+      openNewsQuickView(newsItemById(newsCard.dataset.newsId||""));
+      return;
+    }
+
+    const topicButton=e.target.closest("[data-news-topic]");
+    if(topicButton){
+      setNewsTopic(topicButton.dataset.newsTopic||"latest");
+      if(isMobileUserWork())resetMobileUserResultsScroll();
+      else resetUserWorkDesktopScroll();
+      return;
+    }
+
+    const sourceButton=e.target.closest("[data-news-source]");
+    if(sourceButton){
+      newsSource=String(sourceButton.dataset.newsSource||"");
+      refreshNewsViews();
+      if(isMobileUserWork())resetMobileUserResultsScroll();
+      else resetUserWorkDesktopScroll();
+      return;
+    }
+
+    if(e.target.closest("#newsRefresh")){
+      newsCache.delete(newsTopic);
+      newsItems=[];
+      newsError="";
+      refreshNewsViews();
+      ensureNewsLoaded(true);
+      resetUserWorkDesktopScroll();
+      return;
+    }
+
     const jump=e.target.closest(".user-work-jump-button");
     if(jump){
-      userWorkDesktopScope=jump.dataset.workTarget==="market"?"market":"mine";
+      const target=String(jump.dataset.workTarget||"mine");
+      userWorkDesktopScope=["mine","market","news"].includes(target)?target:"mine";
       userWorkDesktopCategoryKey="";
       userWorkMarketLimit=8;
       userWorkMineLimit=12;

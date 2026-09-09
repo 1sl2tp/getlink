@@ -2340,11 +2340,26 @@ async function saveCanonicalProductMerge(body:any){
   const existingCanonicalIds=[...new Set<string>(
     members.map((row:any)=>clean(row.canonical_product_id)).filter((x:string)=>Boolean(x))
   )];
-  if(existingCanonicalIds.length>1)throw new Error("merge_multiple_existing_groups");
 
-  const targetCanonicalId=existingCanonicalIds[0]||("cp_"+crypto.randomUUID().replace(/-/g,""));
+  let targetUrl="";
+  try{targetUrl=canonical(clean(body?.target_url||""));}catch{}
+  const targetRow=targetUrl?rowByUrl.get(targetUrl):null;
+  if(targetUrl&&(!targetRow||sourceKey(targetUrl)!=="mine"))throw new Error("merge_target_invalid");
+
+  let targetCanonicalId="";
+  if(targetRow){
+    targetCanonicalId=clean(targetRow.canonical_product_id)||
+      ("cp_"+crypto.randomUUID().replace(/-/g,""));
+  }else{
+    if(existingCanonicalIds.length>1)throw new Error("merge_multiple_existing_groups");
+    targetCanonicalId=existingCanonicalIds[0]||
+      ("cp_"+crypto.randomUUID().replace(/-/g,""));
+  }
+
+  const previousCanonicalIds=existingCanonicalIds.filter(id=>id!==targetCanonicalId);
   let existingProduct:any=null;
-  if(existingCanonicalIds.length){
+  const targetAlreadyExists=existingCanonicalIds.includes(targetCanonicalId);
+  if(targetAlreadyExists){
     const {data,error}=await sb.from("getlink_canonical_products")
       .select("*")
       .eq("id",targetCanonicalId)
@@ -2441,6 +2456,23 @@ async function saveCanonicalProductMerge(body:any){
     throw memberError;
   }
 
+  let orphanCanonicalIds:string[]=[];
+  if(previousCanonicalIds.length){
+    const {data:remainingPrevious,error:remainingPreviousError}=await sb
+      .from("getlink_canonical_product_members")
+      .select("canonical_product_id")
+      .in("canonical_product_id",previousCanonicalIds);
+    if(remainingPreviousError)throw remainingPreviousError;
+    const stillUsed=new Set((remainingPrevious||[]).map((x:any)=>clean(x.canonical_product_id)));
+    orphanCanonicalIds=previousCanonicalIds.filter(id=>!stillUsed.has(id));
+    if(orphanCanonicalIds.length){
+      const {error:orphanDeleteError}=await sb
+        .from("getlink_canonical_products")
+        .delete().in("id",orphanCanonicalIds);
+      if(orphanDeleteError)throw orphanDeleteError;
+    }
+  }
+
   let removedMemberUrls:string[]=[];
   if(existingProduct&&body?.replace_members===true){
     const {data:existingMembers,error:existingMembersError}=await sb
@@ -2474,7 +2506,9 @@ async function saveCanonicalProductMerge(body:any){
     image_source_url:product.image_source_url,
     pack_source_url:product.pack_source_url,
     replace_members:body?.replace_members===true,
-    removed_member_urls:removedMemberUrls
+    removed_member_urls:removedMemberUrls,
+    previous_canonical_ids:previousCanonicalIds,
+    orphan_canonical_ids:orphanCanonicalIds
   };
 }
 

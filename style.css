@@ -13680,3 +13680,138 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
     font-size:10px;
   }
 }
+
+
+/* Frame polish v48 — visible labels, icons, and source brand marks */
+.getlink-work-brand-mark svg{
+  width:21px;
+  height:21px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.8;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.user-work-category-button{
+  gap:8px;
+}
+.user-work-category-button>span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.user-work-category-icon{
+  width:17px;
+  height:17px;
+  flex:0 0 17px;
+  fill:none;
+  stroke:currentColor;
+  stroke-width:1.65;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.work-source-brand{
+  flex:0 0 auto;
+  min-width:50px;
+  height:24px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:2px 6px;
+  overflow:hidden;
+  border:1px solid #e3e8e5;
+  border-radius:7px;
+  background:#f6f8f7;
+  color:#667085;
+  box-sizing:border-box;
+}
+.work-source-brand.bhx{
+  border-color:#cfe8d9;
+  background:#edf8f2;
+  color:#087a40;
+}
+.work-source-brand.wm{
+  border-color:#f3d1d1;
+  background:#fff3f4;
+  color:#c9302c;
+}
+.work-source-brand.go{
+  border-color:#f4dbc4;
+  background:#fff7ed;
+  color:#c55a11;
+}
+.work-source-brand .source-logo-mark{
+  width:28px!important;
+  height:17px!important;
+  min-width:28px!important;
+  display:grid!important;
+  place-items:center!important;
+  padding:0!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  box-shadow:none!important;
+}
+.work-source-brand .source-logo-image{
+  width:100%!important;
+  height:100%!important;
+  max-width:100%!important;
+  max-height:100%!important;
+  display:block!important;
+  object-fit:contain!important;
+  object-position:center!important;
+  transform:none!important;
+}
+.work-source-brand .source-logo-fallback{
+  display:none!important;
+}
+.work-source-brand-label{
+  font-size:8.5px;
+  line-height:1;
+  font-weight:750;
+  white-space:nowrap;
+}
+.user-work-desktop .work-source-brand{
+  min-width:58px;
+  height:22px;
+}
+.user-work-desktop .work-source-brand .source-logo-mark{
+  width:30px!important;
+  min-width:30px!important;
+  height:16px!important;
+}
+.user-work-desktop .work-source-brand-label{
+  font-size:8px;
+}
+
+@media(max-width:639px){
+  .getlink-work-brand-mark svg{
+    width:17px;
+    height:17px;
+  }
+  .mobile-user-source-level.child .user-work-category-button{
+    gap:5px;
+  }
+  .mobile-user-source-level.child .user-work-category-icon{
+    width:14px;
+    height:14px;
+    flex-basis:14px;
+  }
+  .work-source-brand.mobile{
+    min-width:48px;
+    height:22px;
+    gap:3px;
+    padding-left:5px;
+    padding-right:5px;
+  }
+  .work-source-brand.mobile .source-logo-mark{
+    width:26px!important;
+    min-width:26px!important;
+    height:15px!important;
+  }
+  .work-source-brand.mobile .work-source-brand-label{
+    display:none;
+  }
+}

@@ -464,12 +464,11 @@
           <div class="news-work-head">
             <div>
               <strong>Tin tức</strong>
-              <small>RSS gọn · lọc trùng · xem nhanh không quảng cáo.</small>
+              <small>Tin gọn · ưu tiên ảnh · mở thẳng nội dung.</small>
             </div>
             <button id="newsRefresh" class="news-refresh" type="button" title="Làm mới tin">Làm mới</button>
           </div>
           <div id="newsTopicTabs" class="news-filter-rail news-topic-tabs" role="group" aria-label="Chủ đề tin"></div>
-          <div id="newsSourceTabs" class="news-filter-rail news-source-tabs" role="group" aria-label="Nguồn tin"></div>
           <div id="userWorkNewsResults" class="news-grid" aria-live="polite"></div>
           <div id="userWorkNewsEmpty" class="user-work-empty" hidden>Chưa có tin phù hợp.</div>
         </section>
@@ -766,19 +765,15 @@
 </div>
 
 <div id="newsQuickView" class="news-quick-view" hidden aria-hidden="true">
-  <article class="news-quick-card" role="dialog" aria-modal="true" aria-labelledby="newsQuickTitle">
+  <article class="news-quick-card" role="dialog" aria-modal="true" aria-label="Xem nội dung tin">
     <button id="newsQuickClose" class="news-quick-close" type="button" aria-label="Đóng tin">
       <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
     </button>
-    <div id="newsQuickImageWrap" class="news-quick-image-wrap" hidden>
-      <img id="newsQuickImage" alt="">
-    </div>
+    <div id="newsQuickGallery" class="news-quick-gallery" hidden></div>
     <div class="news-quick-copy">
-      <div id="newsQuickMeta" class="news-quick-meta"></div>
-      <h2 id="newsQuickTitle"></h2>
-      <p id="newsQuickSummary"></p>
-      <div id="newsQuickDuplicates" class="news-quick-duplicates" hidden></div>
-      <a id="newsQuickOriginal" class="news-quick-original" href="#" target="_blank" rel="noopener noreferrer">Mở bài gốc</a>
+      <div id="newsQuickLoading" class="news-quick-loading" hidden>Đang mở nội dung...</div>
+      <div id="newsQuickContent" class="news-quick-content"></div>
+      <a id="newsQuickOriginal" class="news-quick-original" href="#" target="_blank" rel="noopener noreferrer">Xem bài gốc</a>
     </div>
   </article>
 </div>

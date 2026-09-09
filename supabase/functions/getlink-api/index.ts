@@ -1959,7 +1959,7 @@ async function reconstructItem(url:string){
 function cors(req:Request){
   const origin=req.headers.get("origin")||"";
   const allow=[...ALLOWED_ORIGINS].some(x=>origin===x||origin.startsWith(x+":"))?origin:"https://get.taphoa.xyz";
-  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 }
 function response(req:Request,data:any,status=200){return new Response(JSON.stringify(data),{status,headers:cors(req)});}
 const INTERNAL_WRITE_KEY = clean(Deno.env.get("GETLINK_INTERNAL_WRITE_KEY") || "");
@@ -1975,6 +1975,363 @@ function writeAuthorized(req:Request){
 }
 function routePath(req:Request){
   const p=new URL(req.url).pathname; const marker="/getlink-api"; const i=p.indexOf(marker); return i>=0?(p.slice(i+marker.length)||"/"):p;
+}
+
+
+const UPDATE_ADMIN_PIN_SHA256="fbdf2bdc4b2a45f3508c8ced68098f58375edbf2fe81ec8fe4b113185670939a";
+const UPDATE_SESSION_MS=2*60*60*1000;
+const UPDATE_AUTH_LOCK_MS=15*60*1000;
+const UPDATE_BATCH_SIZE=10;
+const UPDATE_BATCH_CONCURRENCY=3;
+
+function constantTimeEqual(a:unknown,b:unknown):boolean{
+  const x=String(a||""),y=String(b||"");
+  if(x.length!==y.length)return false;
+  let diff=0;
+  for(let i=0;i<x.length;i++)diff|=x.charCodeAt(i)^y.charCodeAt(i);
+  return diff===0;
+}
+
+async function getUpdateSettingsRow():Promise<any>{
+  const {data,error}=await sb
+    .from("getlink_update_settings")
+    .select("*")
+    .eq("id",1)
+    .maybeSingle();
+  if(error)throw error;
+  if(data)return data;
+  const {data:created,error:createError}=await sb
+    .from("getlink_update_settings")
+    .insert({id:1})
+    .select("*")
+    .single();
+  if(createError)throw createError;
+  return created;
+}
+
+function vnParts(value:Date){
+  const shifted=new Date(value.getTime()+7*60*60*1000);
+  return {
+    year:shifted.getUTCFullYear(),
+    month:shifted.getUTCMonth()+1,
+    day:shifted.getUTCDate(),
+    hour:shifted.getUTCHours()
+  };
+}
+function vnLocalToUtc(year:number,month:number,day:number,hour:number){
+  return new Date(Date.UTC(year,month-1,day,hour-7,0,0,0));
+}
+function addLocalDays(year:number,month:number,day:number,days:number){
+  const d=new Date(Date.UTC(year,month-1,day+days,0,0,0,0));
+  return {year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()};
+}
+function updateNextDueAt(settings:any):string|null{
+  if(!settings?.enabled)return null;
+  const runHour=Math.max(0,Math.min(23,Number(settings.run_hour)||0));
+  const interval=Math.max(1,Math.min(30,Number(settings.interval_days)||1));
+  if(settings.last_started_at){
+    const last=vnParts(new Date(settings.last_started_at));
+    const next=addLocalDays(last.year,last.month,last.day,interval);
+    return vnLocalToUtc(next.year,next.month,next.day,runHour).toISOString();
+  }
+  const now=vnParts(new Date());
+  return vnLocalToUtc(now.year,now.month,now.day,runHour).toISOString();
+}
+function updateIsDue(settings:any):boolean{
+  const next=updateNextDueAt(settings);
+  return Boolean(next&&Date.now()>=new Date(next).getTime());
+}
+
+async function updateScopeCounts():Promise<any>{
+  const {data,error}=await sb.rpc("getlink_update_scope_counts");
+  if(error)throw error;
+  const row=Array.isArray(data)?data[0]:data;
+  return {
+    total_products:Number(row?.total_products||0),
+    classified_products:Number(row?.classified_products||0),
+    unclassified_products:Number(row?.unclassified_products||0)
+  };
+}
+
+async function activeUpdateRun():Promise<any|null>{
+  const {data,error}=await sb
+    .from("getlink_update_runs")
+    .select("*")
+    .in("status",["queued","running"])
+    .order("created_at",{ascending:false})
+    .limit(1)
+    .maybeSingle();
+  if(error)throw error;
+  return data||null;
+}
+async function latestUpdateRun():Promise<any|null>{
+  const {data,error}=await sb
+    .from("getlink_update_runs")
+    .select("*")
+    .order("created_at",{ascending:false})
+    .limit(1)
+    .maybeSingle();
+  if(error)throw error;
+  return data||null;
+}
+function publicUpdateSettings(settings:any){
+  return {
+    enabled:Boolean(settings?.enabled),
+    interval_days:Math.max(1,Number(settings?.interval_days)||1),
+    run_hour:Math.max(0,Number(settings?.run_hour)||0),
+    scope:settings?.scope==="classified_only"?"classified_only":"all",
+    last_started_at:settings?.last_started_at||null,
+    last_completed_at:settings?.last_completed_at||null,
+    last_status:clean(settings?.last_status||"idle"),
+    last_summary:settings?.last_summary||{},
+    last_error:clean(settings?.last_error||""),
+    next_due_at:updateNextDueAt(settings)
+  };
+}
+async function updateSettingsSnapshot(){
+  const [settings,counts,active,last]=await Promise.all([
+    getUpdateSettingsRow(),
+    updateScopeCounts(),
+    activeUpdateRun(),
+    latestUpdateRun()
+  ]);
+  return {
+    settings:publicUpdateSettings(settings),
+    counts,
+    active_run:active,
+    last_run:last
+  };
+}
+
+async function adminSessionAuthorized(req:Request):Promise<boolean>{
+  const token=clean(req.headers.get("x-getlink-admin"));
+  if(!token)return false;
+  const settings=await getUpdateSettingsRow();
+  if(!settings.admin_session_hash||!settings.admin_session_expires_at)return false;
+  if(new Date(settings.admin_session_expires_at).getTime()<=Date.now())return false;
+  const hash=await sha256Text(token);
+  return constantTimeEqual(hash,settings.admin_session_hash);
+}
+
+async function unlockUpdateSettings(password:string){
+  const settings=await getUpdateSettingsRow();
+  const lockedUntil=settings.auth_locked_until?new Date(settings.auth_locked_until).getTime():0;
+  if(lockedUntil>Date.now()){
+    return {ok:false,status:429,error:"locked",retry_after_seconds:Math.ceil((lockedUntil-Date.now())/1000)};
+  }
+
+  const hash=await sha256Text(password);
+  if(!constantTimeEqual(hash,UPDATE_ADMIN_PIN_SHA256)){
+    const failures=Math.max(0,Number(settings.auth_fail_count)||0)+1;
+    const lock=failures>=5?new Date(Date.now()+UPDATE_AUTH_LOCK_MS).toISOString():null;
+    await must(sb.from("getlink_update_settings").update({
+      auth_fail_count:lock?0:failures,
+      auth_locked_until:lock,
+      updated_at:new Date().toISOString()
+    }).eq("id",1));
+    return {ok:false,status:401,error:"wrong_password",remaining:lock?0:Math.max(0,5-failures)};
+  }
+
+  const token=crypto.randomUUID().replace(/-/g,"")+crypto.randomUUID().replace(/-/g,"");
+  const tokenHash=await sha256Text(token);
+  const expiresAt=new Date(Date.now()+UPDATE_SESSION_MS).toISOString();
+  await must(sb.from("getlink_update_settings").update({
+    admin_session_hash:tokenHash,
+    admin_session_expires_at:expiresAt,
+    auth_fail_count:0,
+    auth_locked_until:null,
+    updated_at:new Date().toISOString()
+  }).eq("id",1));
+  return {ok:true,status:200,token,expires_at:expiresAt};
+}
+
+async function createUpdateRun(triggerKind:"manual"|"schedule",scopeOverride?:string):Promise<any>{
+  const existing=await activeUpdateRun();
+  if(existing)return existing;
+
+  const settings=await getUpdateSettingsRow();
+  const scope=scopeOverride==="classified_only"?"classified_only":
+    (scopeOverride==="all"?"all":(settings.scope==="classified_only"?"classified_only":"all"));
+  const categories=await fetchAll(
+    "getlink_links",
+    "canonical_url,source",
+    (q:any)=>q.eq("link_type","category").neq("last_status","unlisted").order("source",{ascending:true}).order("canonical_url",{ascending:true})
+  );
+  const runId="upd_"+crypto.randomUUID().replace(/-/g,"");
+  const now=new Date().toISOString();
+  const run={
+    id:runId,
+    trigger_kind:triggerKind,
+    scope,
+    status:"queued",
+    total_categories:categories.length,
+    created_at:now
+  };
+  const {error:runError}=await sb.from("getlink_update_runs").insert(run);
+  if(runError){
+    if(String(runError.code||"")==="23505"){
+      const raced=await activeUpdateRun();
+      if(raced)return raced;
+    }
+    throw runError;
+  }
+
+  if(categories.length){
+    for(let i=0;i<categories.length;i+=100){
+      const rows=categories.slice(i,i+100).map((x:any)=>({
+        run_id:runId,
+        category_url:canonical(x.canonical_url),
+        source:clean(x.source),
+        status:"pending",
+        created_at:now
+      }));
+      await must(sb.from("getlink_update_queue").insert(rows));
+    }
+    await must(sb.from("getlink_update_runs").update({status:"running",started_at:now}).eq("id",runId));
+    await must(sb.from("getlink_update_settings").update({
+      last_started_at:now,
+      last_status:"running",
+      last_error:null,
+      updated_at:now
+    }).eq("id",1));
+  }else{
+    await must(sb.from("getlink_update_runs").update({
+      status:"error",started_at:now,finished_at:now,last_error:"no_category_links"
+    }).eq("id",runId));
+  }
+  return (await activeUpdateRun())||(await latestUpdateRun());
+}
+
+async function filterPayloadByUpdateScope(payload:any,scope:string):Promise<any>{
+  if(scope!=="classified_only")return payload;
+  const products:Array<Product>=Array.isArray(payload?.products)?payload.products:[];
+  if(!products.length)return payload;
+  const urls=[...new Set(products.map((p:any)=>canonical(clean(p?.url))).filter(Boolean))];
+  const {data,error}=await sb.rpc("getlink_filter_classified_urls",{p_urls:urls});
+  if(error)throw error;
+  const allowed=new Set((data||[]).map((x:any)=>canonical(clean(x.link_url))).filter(Boolean));
+  payload.products=products.filter((p:any)=>allowed.has(canonical(clean(p?.url))));
+  payload.discovered_links=payload.products.map((p:any)=>p.url);
+  if(payload.product&&!allowed.has(canonical(clean(payload.product?.url))))payload.product=null;
+  return payload;
+}
+
+async function processOneUpdateQueueItem(run:any,item:any):Promise<{ok:boolean,updated:number,error?:string}>{
+  const requestId=crypto.randomUUID().replace(/-/g,"");
+  const input=canonical(clean(item.category_url));
+  const now=new Date().toISOString();
+  try{
+    await must(sb.from("getlink_jobs").insert({
+      request_id:requestId,
+      input_url:input,
+      canonical_url:input,
+      link_type:"category",
+      status:"running",
+      created_at:now,
+      updated_at:now
+    }));
+    const fetched=await fetchSource(input,requestId);
+    const scoped=await filterPayloadByUpdateScope(fetched.payload,run.scope);
+    const saved=await persistPayload(scoped,fetched.engine);
+    const updated=Array.isArray(saved?.payload?.products)?saved.payload.products.length:0;
+    await must(sb.from("getlink_update_queue").update({
+      status:"complete",
+      updated_products:updated,
+      finished_at:new Date().toISOString(),
+      last_error:null
+    }).eq("run_id",run.id).eq("category_url",input));
+    return {ok:true,updated};
+  }catch(e){
+    const detail=errorText(e).slice(0,1200);
+    await sb.from("getlink_jobs").update({
+      status:"error",error:detail,updated_at:new Date().toISOString()
+    }).eq("request_id",requestId);
+    await sb.from("getlink_update_queue").update({
+      status:"error",last_error:detail,finished_at:new Date().toISOString()
+    }).eq("run_id",run.id).eq("category_url",input);
+    return {ok:false,updated:0,error:detail};
+  }
+}
+
+async function refreshUpdateRunMetrics(runId:string){
+  const rows=await fetchAll(
+    "getlink_update_queue",
+    "status,updated_products,last_error",
+    (q:any)=>q.eq("run_id",runId)
+  );
+  const success=rows.filter((x:any)=>x.status==="complete").length;
+  const failed=rows.filter((x:any)=>x.status==="error").length;
+  const active=rows.filter((x:any)=>x.status==="pending"||x.status==="running").length;
+  const updated=rows.reduce((n:number,x:any)=>n+Math.max(0,Number(x.updated_products)||0),0);
+  const done=success+failed;
+  const lastError=clean([...rows].reverse().find((x:any)=>x.last_error)?.last_error||"");
+  const patch:any={
+    done_categories:done,
+    success_categories:success,
+    failed_categories:failed,
+    updated_products:updated,
+    last_error:lastError||null
+  };
+  if(active===0){
+    const finished=new Date().toISOString();
+    patch.status=failed?"complete_with_errors":"complete";
+    patch.finished_at=finished;
+    const summary={categories:rows.length,success,failed,updated_products:updated};
+    await must(sb.from("getlink_update_settings").update({
+      last_completed_at:finished,
+      last_status:patch.status,
+      last_summary:summary,
+      last_error:lastError||null,
+      updated_at:finished
+    }).eq("id",1));
+  }else{
+    patch.status="running";
+  }
+  await must(sb.from("getlink_update_runs").update(patch).eq("id",runId));
+  return {active,success,failed,updated,done};
+}
+
+async function processAutoUpdateBatch(allowScheduledCreate=true){
+  let run=await activeUpdateRun();
+  if(!run&&allowScheduledCreate){
+    const settings=await getUpdateSettingsRow();
+    if(settings.enabled&&updateIsDue(settings)){
+      run=await createUpdateRun("schedule");
+    }
+  }
+  if(!run)return {status:"idle",snapshot:await updateSettingsSnapshot()};
+
+  const staleCutoff=new Date(Date.now()-12*60*1000).toISOString();
+  await sb.from("getlink_update_queue").update({
+    status:"pending",started_at:null,last_error:"recovered_stale_worker"
+  }).eq("run_id",run.id).eq("status","running").lt("started_at",staleCutoff);
+
+  const {data:claimed,error:claimError}=await sb.rpc("getlink_claim_update_queue",{
+    p_run_id:run.id,
+    p_limit:UPDATE_BATCH_SIZE
+  });
+  if(claimError)throw claimError;
+
+  const items=Array.isArray(claimed)?claimed:[];
+  for(let i=0;i<items.length;i+=UPDATE_BATCH_CONCURRENCY){
+    await Promise.all(items.slice(i,i+UPDATE_BATCH_CONCURRENCY).map((item:any)=>processOneUpdateQueueItem(run,item)));
+  }
+
+  const metrics=await refreshUpdateRunMetrics(run.id);
+  return {
+    status:metrics.active===0?(metrics.failed?"complete_with_errors":"complete"):"running",
+    processed_now:items.length,
+    run_id:run.id,
+    metrics,
+    snapshot:await updateSettingsSnapshot()
+  };
+}
+
+async function cronRequestAuthorized(req:Request):Promise<boolean>{
+  const supplied=clean(req.headers.get("x-getlink-cron"));
+  if(!supplied)return false;
+  const settings=await getUpdateSettingsRow();
+  return constantTimeEqual(supplied,clean(settings.cron_secret));
 }
 
 const STALE_JOB_MS=10*60*1000;
@@ -1996,10 +2353,60 @@ async function expireStaleJobs():Promise<number>{
 
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
+  const url=new URL(req.url), route=routePath(req);
+
+  if(req.method==="POST"&&route==="/api/auto-update/worker"){
+    try{
+      if(!(await cronRequestAuthorized(req)))return response(req,{error:"cron_unauthorized"},401);
+      return response(req,await processAutoUpdateBatch(true));
+    }catch(e){
+      return response(req,{error:"auto_update_worker_failed",detail:errorText(e).slice(0,1500)},500);
+    }
+  }
+
   if(!authorized(req))return response(req,{error:"unauthorized"},401);
   if(req.method!=="GET"&&!writeAuthorized(req))return response(req,{error:"write_forbidden"},403);
-  const url=new URL(req.url), route=routePath(req);
   try{
+    if(req.method==="POST"&&route==="/api/update-settings/unlock"){
+      const body=await req.json().catch(()=>({}));
+      const unlocked=await unlockUpdateSettings(clean(body?.password||""));
+      if(!unlocked.ok)return response(req,{error:unlocked.error,remaining:unlocked.remaining,retry_after_seconds:unlocked.retry_after_seconds},unlocked.status);
+      return response(req,{
+        token:unlocked.token,
+        expires_at:unlocked.expires_at,
+        ...(await updateSettingsSnapshot())
+      });
+    }
+
+    if((req.method==="GET"||req.method==="POST")&&route==="/api/update-settings"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
+      if(req.method==="POST"){
+        const body=await req.json().catch(()=>({}));
+        const enabled=Boolean(body?.enabled);
+        const intervalDays=Math.max(1,Math.min(30,Number(body?.interval_days)||1));
+        const runHour=Math.max(0,Math.min(23,Number(body?.run_hour)||0));
+        const scope=body?.scope==="classified_only"?"classified_only":"all";
+        await must(sb.from("getlink_update_settings").update({
+          enabled,
+          interval_days:intervalDays,
+          run_hour:runHour,
+          scope,
+          updated_at:new Date().toISOString()
+        }).eq("id",1));
+      }
+      return response(req,await updateSettingsSnapshot());
+    }
+
+    if(req.method==="POST"&&route==="/api/update-settings/run-now"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
+      const body=await req.json().catch(()=>({}));
+      const scope=body?.scope==="classified_only"?"classified_only":
+        (body?.scope==="all"?"all":undefined);
+      const run=await createUpdateRun("manual",scope);
+      const batch=await processAutoUpdateBatch(false);
+      return response(req,{run,batch});
+    }
+
     let staleJobsCleaned=0;
     if(route==="/health"||route==="/api/get-price"||route==="/api/result"){
       staleJobsCleaned=await expireStaleJobs();

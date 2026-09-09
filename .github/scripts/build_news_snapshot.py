@@ -18,6 +18,27 @@ SOURCES=[
  {"key":"thanhnien","name":"Báo Thanh Niên","domain":"thanhnien.vn","feed":"https://thanhnien.vn/rss/home.rss"},
  {"key":"laodong","name":"Lao Động","domain":"laodong.vn","feed":""},
 ]
+GOOGLE_HOT_QUERIES=[
+ "Tăng giá",
+ "Chiến tranh",
+ "công an",
+ "xét xử",
+ "vĩ mô",
+ "bãi nhiệm",
+ "cách chức",
+ "bổ nhiệm",
+ "tạm giam",
+ "khởi tố",
+ "khám xét",
+ "tổng thống",
+ "lãi",
+ "thuế",
+ "thủ tướng",
+ "chứng khoán",
+ "chủ tịch",
+ "tỷ phú",
+ "lừa đảo",
+]
 STOP={"va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi","la","mot","nhung","cac","co","duoc","se","da","dang","ve","noi","theo","nay","hom","ngay","moi","nhat","vi","o"}
 
 def http_get(url,timeout,accept="*/*"):
@@ -32,6 +53,13 @@ def http_get(url,timeout,accept="*/*"):
 def google_feed(domain):
     q=urllib.parse.quote(f"site:{domain} when:2d")
     return f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi"
+
+def google_query_feed(query):
+    q=urllib.parse.quote(f'"{query}" when:1d')
+    return f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi"
+
+def google_top_feed():
+    return "https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"
 
 def plain(v):
     return re.sub(r"\s+"," ",html.unescape(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
@@ -102,6 +130,43 @@ def fetch_source(source):
         except Exception as exc:
             print("WARN",source["key"],feed_url,str(exc)[:160])
     return []
+
+def fetch_google_query(query):
+    feed_url=google_top_feed() if query=="__top__" else google_query_feed(query)
+    try:
+        body,_=http_get(feed_url,FEED_TIMEOUT,"application/rss+xml, application/xml, text/xml, */*;q=0.8")
+        feed=feedparser.parse(body); rows=[]
+        for e in list(feed.entries)[:30]:
+            source=e.get("source") or {}
+            source_name=plain(source.get("title") if isinstance(source,dict) else "") or "Google News"
+            source_href=str(source.get("href") if isinstance(source,dict) else "").strip()
+            title=plain(e.get("title"))
+            suffix=" - "+source_name
+            if source_name and title.lower().endswith(suffix.lower()):
+                title=title[:-len(suffix)].strip()
+            url=str(e.get("link") or "").strip()
+            if not title or not url:continue
+            summary_raw=e.get("summary") or e.get("description") or ""
+            summary=plain(summary_raw)[:650]
+            content=""
+            parts=e.get("content") or []
+            if parts and isinstance(parts[0],dict):content=plain(parts[0].get("value"))[:6000]
+            images=entry_images(e); published=parse_time(e)
+            source_key=norm(source_name).replace(" ","-")[:48] or "google-news"
+            rows.append({
+              "id":f"google:{source_key}:{norm(title)[:96]}:{published.timestamp():.0f}",
+              "title":title,"summary":summary,"content":content,"url":url,
+              "image":images[0] if images else "","images":images,
+              "published_at":published.isoformat().replace("+00:00","Z"),
+              "source_key":source_key,"source_name":source_name,
+              "source_home":source_href,
+              "google_query":"top" if query=="__top__" else query,
+              "duplicate_count":1,"also_sources":[]
+            })
+        return rows
+    except Exception as exc:
+        print("WARN google",query,str(exc)[:160])
+        return []
 
 def near(a,b):
     if norm(a.get("title"))==norm(b.get("title")) and norm(a.get("title")):return True
@@ -205,8 +270,16 @@ def compact(item,now):
     }
 
 def build_snapshot(limit=DEFAULT_LIMIT):
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:batches=list(pool.map(fetch_source,SOURCES))
-    items=dedupe([x for batch in batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
+    # Google News is the primary hot-news discovery layer, matching the
+    # previous Inoreader setup: one Google RSS feed per watched phrase plus
+    # the Vietnamese top-stories feed. Publisher RSS runs in parallel as a
+    # secondary layer so matching stories can contribute original URLs/images.
+    google_queries=["__top__",*GOOGLE_HOT_QUERIES]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+        google_batches=list(pool.map(fetch_google_query,google_queries))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:
+        source_batches=list(pool.map(fetch_source,SOURCES))
+    items=dedupe([x for batch in [*google_batches,*source_batches] for x in batch]);now=dt.datetime.now(dt.timezone.utc)
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     candidates=[x for x in items[:DETAIL_LIMIT] if not x.get("images") or len(str(x.get("content") or ""))<450]
     if candidates:
@@ -222,7 +295,7 @@ def build_snapshot(limit=DEFAULT_LIMIT):
     rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
     newest=max((iso(x.get("published_at")) for x in rows),default=now)
     return {"version":2,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
-      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"direct-rss-background-hot-snapshot",
+      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-primary-hot-snapshot",
       "storage":"git-ephemeral-branch","database":False,"source_count":len(SOURCES),"items":rows}
 
 def main():

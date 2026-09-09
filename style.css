@@ -6120,6 +6120,12 @@ body{color:var(--text-primary)!important}
   align-items:baseline!important;
   white-space:nowrap!important;
 }
+.grid-price-group.has-change{
+  display:grid!important;
+  justify-items:end!important;
+  align-items:end!important;
+  row-gap:1px!important;
+}
 .grid-price{
   flex:0 0 auto!important;
   white-space:nowrap!important;
@@ -6127,6 +6133,16 @@ body{color:var(--text-primary)!important}
 .grid-unit-price{
   display:none!important;
 }
+.supplier-price-change{
+  display:block;
+  margin-top:1px;
+  font-size:7.5px;
+  font-weight:760;
+  line-height:1.05;
+  white-space:nowrap;
+}
+.supplier-price-change.is-up{color:#b42318}
+.supplier-price-change.is-down{color:#067647}
 @media(max-width:720px){
   .grid-product-bottom{column-gap:5px!important}
   .grid-qc{

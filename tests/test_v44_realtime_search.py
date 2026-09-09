@@ -10,7 +10,8 @@ CSS = (ROOT / "style.css").read_text(encoding="utf-8")
 class V44RealtimeSearchContractTest(unittest.TestCase):
     def test_user_search_does_not_drop_composing_input_events(self):
         block = re.search(
-            r'const userWorkSearch=\$\("#userWorkSearch"\);[\s\S]*?\n\}\n\n\n',
+            r'const userWorkSearch=\$\("#userWorkSearch"\);[\s\S]*?'
+            r'const mobileUserSearch=\$\("#mobileUserSearch"\);',
             APP,
         )
         self.assertIsNotNone(block)
@@ -20,18 +21,9 @@ class V44RealtimeSearchContractTest(unittest.TestCase):
 
     def test_user_search_has_and_then_specific_token_fallback(self):
         self.assertIn("function userWorkSearchMatches", APP)
-        self.assertRegex(
-            APP,
-            r"tokens\.every\(token=>hay\.includes\(token\)\)",
-        )
-        self.assertRegex(
-            APP,
-            r"fallbackToken\s*=\s*tokens\[tokens\.length-1\]",
-        )
-        self.assertRegex(
-            APP,
-            r"hay\.includes\(fallbackToken\)",
-        )
+        self.assertRegex(APP, r"tokens\.every\(token=>hay\.includes\(token\)\)")
+        self.assertRegex(APP, r"fallbackToken\s*=\s*tokens\[tokens\.length-1\]")
+        self.assertRegex(APP, r"item\.hay\.includes\(fallbackToken\)")
 
     def test_vietnamese_search_normalization_remains_accent_insensitive(self):
         self.assertIn('.normalize("NFD")', APP)

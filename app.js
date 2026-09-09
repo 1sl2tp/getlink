@@ -307,7 +307,7 @@ function stripLotPackPhrase(value){
   const unit="(?:lốc|túi|hộp|chai|chia|lon|gói|bịch|khay|vỉ|ly|tô|bình|hũ|lọ|can|miếng|thanh|viên|cái|cây|bộ|đôi|tuýp|túyp)";
   const qty="\\d+(?:\\s*\\+\\s*\\d+)*(?![\\p{L}\\p{N}])";
   const lotRe=new RegExp(
-    "(^|\\s)lô\\s+"+qty+
+    "(^|\\s)(?:lô|lốc)\\s+"+qty+
     "(?:\\s+"+unit+")?"+
     "(?:\\s*[x×](?=\\s*\\d)\\s*)?",
     "giu"

@@ -74,3 +74,27 @@ Dữ liệu người dùng như giá của mình, trạng thái quan tâm, ghi c
 ## Phát triển
 
 Kiến trúc mục tiêu là **Supabase-only cho business/data**, Cloudflare chỉ transport BHX. Không quay lại mô hình GitHub Actions scrape rồi commit JSON/CSV vào `main`.
+
+
+## Cập nhật giá tự động
+
+Trong panel **Thêm / cập nhật link nguồn giá**, bấm **Cài đặt cập nhật** để mở vùng quản trị lịch chạy.
+
+- Vùng này được khóa bằng mật khẩu phía server; frontend không chứa mật khẩu rõ.
+- Có 3 chế độ: **Tắt / Mỗi ngày / Tùy chọn N ngày**.
+- Chọn giờ chạy theo múi giờ Việt Nam.
+- Phạm vi sản phẩm:
+  - **Tất cả**: cập nhật toàn bộ sản phẩm đang được phủ bởi 64 link danh mục nguồn.
+  - **Bỏ qua Chưa phân loại**: chỉ ghi lại giá cho sản phẩm đã thuộc nhóm thật; sản phẩm fallback Chưa phân loại không bị refresh.
+- Nút **Cập nhật ngay** tạo một run thủ công.
+- Supabase Cron gọi worker mỗi 5 phút để tiếp tục queue đến khi hoàn thành; không cần mở trình duyệt.
+- Queue chạy theo link danh mục, không gọi riêng từng sản phẩm, nên toàn bộ 8.905 sản phẩm hiện tại được phủ mà không tạo hàng nghìn request đầu vào.
+- Trạng thái run, số danh mục đã xong và số sản phẩm đã cập nhật được lưu trong Supabase.
+
+Các bảng liên quan:
+
+- getlink_update_settings
+- getlink_update_runs
+- getlink_update_queue
+
+Worker: POST /api/auto-update/worker — chỉ nhận credential nội bộ từ Supabase Cron.

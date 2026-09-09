@@ -37,18 +37,32 @@ jobs:
           jq -e '.stale_jobs_cleaned | type=="number"' /tmp/health.json >/dev/null
 
           curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1"             > /tmp/library.json
-          jq '{products:(.products|length)}' /tmp/library.json
+          jq '{products:(.products|length),role:.role}' /tmp/library.json
           jq -e '.products | type=="array"' /tmp/library.json >/dev/null
+          test "$(jq -r '.role' /tmp/library.json)" = "user"
+          jq -e 'all(.products[]; has("supplier_input_price_vnd")|not)' /tmp/library.json >/dev/null
+          jq -e 'all(.products[]; has("supplier_expected_profit_vnd")|not)' /tmp/library.json >/dev/null
+          jq -e 'all(.products[]; has("supplier_applied_profit_vnd")|not)' /tmp/library.json >/dev/null
 
-          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/api/library?view=source-manager"             > /tmp/source-manager.json
-          jq '{brands:(.brands|length),groups:(.groups|length),products:.products}' /tmp/source-manager.json
-          jq -e '.brands | type=="array"' /tmp/source-manager.json >/dev/null
-          jq -e '.groups | type=="array"' /tmp/source-manager.json >/dev/null
-          jq -e '.products.all | type=="number"' /tmp/source-manager.json >/dev/null
-          jq -e '.products.wm | type=="number"' /tmp/source-manager.json >/dev/null
-          jq -e '.products.bhx | type=="number"' /tmp/source-manager.json >/dev/null
-          jq -e '.products.go | type=="number"' /tmp/source-manager.json >/dev/null
+          CODE="$(curl --silent --output /tmp/source-manager.json --write-out '%{http_code}'             -H "apikey: $KEY"             "$API/api/library?view=source-manager")"
+          test "$CODE" = "401"
+          test "$(jq -r '.error' /tmp/source-manager.json)" = "admin_locked"
 
+
+      - name: Reject customer GETLINK without admin session
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
+          KEY="$(sed -n 's/^window.GETLINK_API_KEY="\([^"]*\)";/\1/p' config.js)"
+          CODE="$(curl --silent --output /tmp/get-price.json --write-out '%{http_code}' \
+            -H "apikey: $KEY" \
+            -H 'origin: https://get.taphoa.xyz' \
+            -H 'content-type: application/json' \
+            -X POST "$API/api/get-price" \
+            --data '{"url":"https://bachhoaxanh.com/"}')"
+          test "$CODE" = "401"
+          test "$(jq -r '.error' /tmp/get-price.json)" = "admin_locked"
 
       - name: Reject untrusted write
         shell: bash

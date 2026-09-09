@@ -4338,6 +4338,14 @@ function renderUserWorkHome(){
   if(!home)return;
   home.hidden=false;
 
+  // Defensive cleanup: the Work frame never owns the legacy detail drawer.
+  resetBrowseDetail();
+  const legacyDetail=document.querySelector(".workspace-detail");
+  if(legacyDetail){
+    legacyDetail.setAttribute("aria-hidden","true");
+    legacyDetail.style.setProperty("display","none","important");
+  }
+
   const desktopSearch=$("#userWorkSearch");
   if(desktopSearch&&document.activeElement!==desktopSearch)desktopSearch.value=libraryQuery;
 
@@ -5067,6 +5075,7 @@ function applyAppRoleUi(){
     ?"Quản trị GETLINK · nguồn giá · cập nhật"
     :"Bảng giá Tạp hóa · xem giá bán và gửi giá mặc cả";
 
+  const legacyDetail=document.querySelector(".workspace-detail");
   if(appRole==="user"){
     libraryState="visible";
     if(!["","mine","bhx","wm","go"].includes(activeSourceFilter))activeSourceFilter="";
@@ -5074,7 +5083,19 @@ function applyAppRoleUi(){
     if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
     if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;
     if($("#sourceManagerPanel"))$("#sourceManagerPanel").hidden=true;
+
+    // The customer Work frame must not expose legacy catalog detail fields
+    // such as Hãng/Nhóm/Ưu đãi/Quan tâm. Keep that entire surface out of the
+    // frame instead of trying to maintain two overlapping state owners.
+    resetBrowseDetail();
+    if(legacyDetail){
+      legacyDetail.setAttribute("aria-hidden","true");
+      legacyDetail.style.setProperty("display","none","important");
+    }
     stopPolling();
+  }else if(legacyDetail){
+    legacyDetail.removeAttribute("aria-hidden");
+    legacyDetail.style.removeProperty("display");
   }
   browseRowsMemo.clear();
   for(const state of Object.values(viewRenderState)){
@@ -5715,7 +5736,10 @@ if(userWorkHome){
 
     const card=e.target.closest(".user-work-market-card");
     if(card){
-      openLibraryItem(card.dataset.url||"");
+      // Work frame is browse-only here. Do not open the legacy product-detail
+      // drawer (Nhóm/Hãng/Quy cách/Ưu đãi/Quan tâm), because that old surface
+      // owns unrelated state and can break the isolated frame geometry.
+      return;
     }
   });
 

@@ -491,7 +491,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v9-masan-source"/);
 }
 
 {
@@ -521,7 +521,11 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_retail_packaging/);
   assert.match(app,/function syncSupplierTableMode\(\)/);
   assert.match(css,/Supplier spreadsheet v19/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v8-all-spreadsheet-layout"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v9-masan-source"/);
 }
 
 console.log("money and hierarchy UI tests passed");
+
+
+// Masan supplier source must stay between Sữa and Hàng thường.
+assert.match(app,/\["sua",30\],[\s\S]*?\["masan",40\],[\s\S]*?\["hang-thuong",50\]/);

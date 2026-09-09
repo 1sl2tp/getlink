@@ -23,7 +23,7 @@ class QuickMobileMergeContractTest(unittest.TestCase):
         self.assertIn("let mobileMergeTargetUrl",APP)
         self.assertIn("function setMobileMergeTarget",APP)
         self.assertIn("function mobileMergeTargetMembers",APP)
-        self.assertRegex(APP,r"if\(!isMineRow\(row\).*canonical_product_id")
+        self.assertIn("if(!isMineRow(row)&&id)",APP)
         self.assertIn("mobileMergeTargetUrl=canonical(row.canonical_url)",APP)
 
     def test_tapping_related_source_saves_immediately_and_keeps_mode_open(self):

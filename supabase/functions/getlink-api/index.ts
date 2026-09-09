@@ -2578,6 +2578,10 @@ function cors(req:Request){
   return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 }
 function response(req:Request,data:any,status=200){return new Response(JSON.stringify(data),{status,headers:cors(req)});}
+function cachedResponse(req:Request,data:any,status=200,cacheControl="public, max-age=120, s-maxage=120, stale-while-revalidate=300"){
+  const headers={...cors(req),"cache-control":cacheControl,"x-getlink-storage":"ephemeral-cache"};
+  return new Response(JSON.stringify(data),{status,headers});
+}
 const INTERNAL_WRITE_KEY = clean(Deno.env.get("GETLINK_INTERNAL_WRITE_KEY") || "");
 function trustedOrigin(req:Request){
   const origin=req.headers.get("origin")||"";
@@ -3061,7 +3065,7 @@ async function newsFetchSource(source:NewsSourceDef,topic:NewsTopicKey){
   }
   return {items:[] as NewsItem[],feed:candidates[0]||"",mode:"unavailable",error:lastError||"rss_unavailable"};
 }
-async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
+async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number,force=false){
   const topic=newsTopicDef(topicRaw).key;
   const requestedSource=clean(sourceRaw);
   const sources=requestedSource&&requestedSource!=="all"
@@ -3070,7 +3074,7 @@ async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
   const limit=Math.max(10,Math.min(100,Number(limitRaw)||60));
   const cacheKey=topic+"|"+(requestedSource||"all")+"|"+limit;
   const cached=newsMemoryCache.get(cacheKey);
-  if(cached&&Date.now()-cached.at<NEWS_CACHE_MS)return {...cached.payload,cache_hit:true};
+  if(!force&&cached&&Date.now()-cached.at<NEWS_CACHE_MS)return {...cached.payload,cache_hit:true,storage:"memory-cache"};
 
   const settled=await Promise.all(sources.map(async source=>{
     const result=await newsFetchSource(source,topic);
@@ -3093,7 +3097,8 @@ async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
       count:x.result.items.length,
       mode:x.result.mode
     })),
-    errors
+    errors,
+    storage:"memory-cache"
   };
   newsMemoryCache.set(cacheKey,{at:Date.now(),payload});
   return payload;
@@ -3982,15 +3987,21 @@ Deno.serve(async(req:Request)=>{
       const topic=clean(url.searchParams.get("topic")||"latest");
       const source=clean(url.searchParams.get("source")||"all");
       const limit=Number(url.searchParams.get("limit")||60);
+      const force=url.searchParams.get("refresh")==="1";
       if(topic&&!NEWS_TOPICS.some(x=>x.key===topic))return response(req,{error:"invalid_news_topic"},400);
       if(source!=="all"&&!NEWS_SOURCES.some(x=>x.key===source))return response(req,{error:"invalid_news_source"},400);
-      return response(req,await newsSnapshot(topic,source,limit));
+      return cachedResponse(
+        req,
+        await newsSnapshot(topic,source,limit,force),
+        200,
+        force?"no-store":"public, max-age=120, s-maxage=120, stale-while-revalidate=300"
+      );
     }
     if(req.method==="GET"&&route==="/api/news-detail"){
       const raw=clean(url.searchParams.get("url")||"");
       if(!raw)return response(req,{error:"missing_news_url"},400);
       try{
-        return response(req,await newsArticleDetail(raw));
+        return cachedResponse(req,await newsArticleDetail(raw),200,"public, max-age=300, s-maxage=300, stale-while-revalidate=900");
       }catch(e){
         return response(req,{error:"news_detail_failed",detail:errorText(e).slice(0,220)},502);
       }

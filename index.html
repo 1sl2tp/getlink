@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <link rel="stylesheet" href="style.css?v=20260909-supplier-logo-v15">
+  <link rel="stylesheet" href="style.css?v=20260909-supplier-priority-table-v18">
 </head>
 <body>
 <main class="wrap">
@@ -223,7 +223,7 @@
       <div id="tableView" class="xls-table-wrap" hidden>
         <table class="xls-price-table">
           <thead>
-            <tr>
+            <tr id="standardTableHead">
               <th>Tên</th>
               <th id="tableSourceHeader" aria-sort="none">
                 <button id="tableSourceSort" class="xls-sort-button" type="button" title="Sắp xếp theo nguồn">
@@ -241,6 +241,12 @@
               <th class="th-num">Giá mình / Giữa</th>
               <th class="th-num">Giá mình / Lẻ</th>
               <th class="th-num">Mặc cả</th>
+            </tr>
+            <tr id="supplierTableHead" hidden>
+              <th>Tên</th>
+              <th class="th-num">Giá thùng</th>
+              <th class="th-num">Giá lẻ</th>
+              <th>Quy cách lẻ</th>
             </tr>
           </thead>
           <tbody id="libraryProducts"></tbody>
@@ -402,6 +408,6 @@
 window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab8161d.workers.dev";
 </script>
 <script src="config.js?v=20260908-supabase-only2"></script>
-<script src="app.js?v=20260909-supplier-table-runtime-v17"></script>
+<script src="app.js?v=20260909-supplier-priority-table-v18"></script>
 </body>
 </html>

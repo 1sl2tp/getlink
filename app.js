@@ -3272,6 +3272,8 @@ function userWorkSearchKey(row){
     searchDisplayName(row),
     rowCanonicalBrand(row),
     rowRootGroup(row),
+    rowManualGroupName(row),
+    supplierBrowseGroupName(row),
     row&&row.source_category_name,
     row&&row.source,
     row&&row.supplier_source_name

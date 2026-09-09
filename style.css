@@ -10077,3 +10077,82 @@ body.source-manager-open{overflow:hidden!important}
     padding:6px!important;
   }
 }
+
+
+/* Supplier input basis v21 — per-product Thùng/Lẻ */
+.xls-price-table.supplier-table-mode{
+  min-width:1268px!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(2),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(2){
+  width:105px!important;min-width:105px!important;max-width:105px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(3),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(3){
+  width:88px!important;min-width:88px!important;max-width:88px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(4),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(4),
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(5),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(5){
+  width:110px!important;min-width:110px!important;max-width:110px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(6),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(6){
+  width:78px!important;min-width:78px!important;max-width:78px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(7),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(7){
+  width:86px!important;min-width:86px!important;max-width:86px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(8),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(8),
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(9),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(9){
+  width:100px!important;min-width:100px!important;max-width:100px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(10),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(10){
+  width:105px!important;min-width:105px!important;max-width:105px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(11),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(11){
+  width:92px!important;min-width:92px!important;max-width:92px!important;text-align:right!important;
+}
+.xls-price-table.supplier-table-mode #supplierTableHead th:nth-child(12),
+.xls-price-table.supplier-table-mode .supplier-table-row td:nth-child(12){
+  width:102px!important;min-width:102px!important;max-width:102px!important;text-align:center!important;
+}
+.xls-price-table.supplier-table-mode .supplier-head-basis{
+  background:#f5f3ff!important;
+  color:#564895!important;
+}
+.xls-price-table.supplier-table-mode .supplier-col-basis{
+  background:#fbfaff!important;
+  text-align:center!important;
+}
+.supplier-basis-badge{
+  display:inline-flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  min-width:34px!important;
+  padding:2px 6px!important;
+  border-radius:4px!important;
+  font-size:8px!important;
+  font-weight:820!important;
+  line-height:1.1!important;
+}
+.supplier-basis-badge.is-carton{
+  color:#315a86!important;
+  background:#eef5ff!important;
+}
+.supplier-basis-badge.is-retail{
+  color:#564895!important;
+  background:#f0edff!important;
+}
+@container (max-width:720px){
+  .xls-price-table.supplier-table-mode{min-width:1148px!important}
+}
+@container (max-width:420px){
+  .xls-price-table.supplier-table-mode{min-width:1098px!important}
+}

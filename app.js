@@ -3426,6 +3426,26 @@ function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
   ].join("");
 }
 
+function userWorkMarketPackGroup(row){
+  return rowIsCarton(row)?"carton":"retail";
+}
+
+function userWorkMarketSortRows(rows){
+  return rows
+    .map((row,index)=>({
+      row,
+      index,
+      pack:userWorkMarketPackGroup(row),
+      price:Number(userWorkPrimaryMarketPrice(row))||Number.POSITIVE_INFINITY
+    }))
+    .sort((a,b)=>{
+      if(a.pack!==b.pack)return a.pack==="carton"?-1:1;
+      if(a.price!==b.price)return a.price-b.price;
+      return a.index-b.index;
+    })
+    .map(item=>item.row);
+}
+
 function userWorkPrimaryMarketPrice(row){
   const levels=rowPriceLevels(row);
   const direct=Number(
@@ -3547,7 +3567,8 @@ function mobileSupplierSources(){
 }
 
 function mobileUserRows(){
-  const baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey);
+  let baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey);
+  if(mobileUserScope==="market")baseRows=userWorkMarketSortRows(baseRows);
   const profiles=mobileCanonicalProfiles(baseRows);
   let rows=baseRows.map((row,index)=>({row,index}));
 
@@ -4121,7 +4142,7 @@ function renderMobileUserWork(){
   updateUserWorkOrderSummary();
 }
 
-function userWorkMarketCard(row){
+function userWorkMarketCard(row,laneIndex=0){
   const image=String(row&&row.image||"").trim();
   const name=canonicalDisplayName(row);
   const price=userWorkPrimaryMarketPrice(row);
@@ -4129,7 +4150,11 @@ function userWorkMarketCard(row){
   const sourceClass=rowSourceFilterKey(row);
   const packRaw=rowPrimaryQc(row);
   const pack=packRaw==="—"?"":String(packRaw||"").trim();
-  return '<article class="user-work-market-card product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  const packGroup=userWorkMarketPackGroup(row);
+  const laneClass=packGroup==="retail"
+    ?(" market-pack-retail market-retail-"+(laneIndex%2===0?"a":"b"))
+    :" market-pack-carton";
+  return '<article class="user-work-market-card product-card'+laneClass+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="user-work-market-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
     '</div>'+
@@ -4275,7 +4300,8 @@ function renderUserWorkHome(){
     "data-work-category"
   );
 
-  const scoped=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey);
+  const scopedRaw=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey);
+  const scoped=userWorkDesktopScope==="market"?userWorkMarketSortRows(scopedRaw):scopedRaw;
   const marketHost=$("#userWorkMarketGrid");
   const marketEmpty=$("#userWorkMarketEmpty");
   const marketSection=$("#userWorkMarket");
@@ -4289,7 +4315,13 @@ function renderUserWorkHome(){
   let hasMore=false;
   if(userWorkDesktopScope==="market"){
     const visible=scoped.slice(0,userWorkMarketLimit);
-    if(marketHost)marketHost.innerHTML=visible.map(userWorkMarketCard).join("");
+    if(marketHost){
+      let retailLane=0;
+      marketHost.innerHTML=visible.map(row=>{
+        const lane=userWorkMarketPackGroup(row)==="retail"?retailLane++:0;
+        return userWorkMarketCard(row,lane);
+      }).join("");
+    }
     if(marketEmpty)marketEmpty.hidden=scoped.length!==0;
     hasMore=scoped.length>visible.length;
   }else{

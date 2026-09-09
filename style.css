@@ -12001,3 +12001,17 @@ body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
     font-size:15.5px!important;
   }
 }
+
+
+/* Official source marks v42 — no artificial per-logo scaling */
+@media(max-width:720px){
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-image{
+    width:calc(100% - 8px)!important;
+    height:calc(100% - 8px)!important;
+    max-width:calc(100% - 8px)!important;
+    max-height:calc(100% - 8px)!important;
+    object-fit:contain!important;
+    object-position:center!important;
+    transform:none!important;
+  }
+}

@@ -11760,3 +11760,175 @@ body[data-app-role="user"] .user-grid-product-compact .user-grid-field{
     font-size:11.5px!important;
   }
 }
+
+
+/* =========================================================
+   Mobile control relationship v40 — minimal header + grouped controls
+   ========================================================= */
+@media(max-width:720px){
+  /* Header: only menu + GL + admin icon. */
+  .site-brand-copy{
+    display:none!important;
+  }
+  .site-head{
+    min-height:48px!important;
+    padding:6px 8px!important;
+    gap:6px!important;
+  }
+  .mobile-category-button{
+    order:0!important;
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:0!important;
+    justify-content:center!important;
+  }
+  #mobileCategoryCurrent{display:none!important}
+  .site-head .logo{
+    order:1!important;
+    width:34px!important;
+    height:34px!important;
+    margin:0!important;
+  }
+  .role-switch{
+    order:2!important;
+    margin-left:auto!important;
+  }
+  .role-admin-button{
+    width:34px!important;
+    min-width:34px!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:0!important;
+    display:grid!important;
+    place-items:center!important;
+    font-size:0!important;
+    line-height:1!important;
+    border-radius:9px!important;
+  }
+  .role-admin-button::before{
+    content:"⚙";
+    font-size:16px!important;
+    line-height:1!important;
+    color:#475467!important;
+  }
+  body[data-app-role="admin"] .role-admin-button::before{
+    content:"↪";
+    font-size:17px!important;
+  }
+
+  /* Search/view is the first control row; pack filter follows immediately. */
+  .catalog-sticky-head{
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  .catalog-search-row{
+    order:1!important;
+    padding:7px 8px 4px!important;
+  }
+  .purchase-mode-row{
+    order:2!important;
+    padding:0 8px 6px!important;
+    gap:5px!important;
+  }
+
+  /* Search and view feel like one action group. */
+  .catalog-search-row .catalog-search input{
+    height:38px!important;
+    min-height:38px!important;
+    border-radius:11px!important;
+    background:#f7f8f9!important;
+  }
+  .view-switch{
+    height:38px!important;
+    min-height:38px!important;
+    border-radius:11px!important;
+  }
+  .view-button{
+    width:36px!important;
+    min-width:36px!important;
+    height:34px!important;
+  }
+
+  /* Pack is directly tied to search/view, with no extra panel spacing. */
+  .purchase-mode-row .catalog-pack-tabs{
+    width:min(100%,310px)!important;
+    margin:0 auto!important;
+    height:38px!important;
+    padding:3px!important;
+  }
+  .purchase-mode-row .catalog-pack-tabs .pack-chip{
+    height:32px!important;
+    min-height:32px!important;
+  }
+
+  /* Source rail: five equal cells, same rhythm as pack control. */
+  .purchase-mode-row .source-tabs-inline{
+    width:100%!important;
+    grid-template-columns:repeat(5,minmax(0,1fr))!important;
+    gap:3px!important;
+    min-height:40px!important;
+    padding:3px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip{
+    width:100%!important;
+    max-width:none!important;
+    min-width:0!important;
+    height:34px!important;
+    min-height:34px!important;
+    padding:2px 5px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-all .source-chip-label{
+    font-size:10px!important;
+  }
+
+  /* Balance visual logo size, compensating for transparent padding in each PNG. */
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only .source-logo-image{
+    width:100%!important;
+    height:100%!important;
+    max-width:none!important;
+    max-height:none!important;
+    object-fit:contain!important;
+    transform-origin:center!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-mine .source-logo-image{
+    transform:scale(1.12)!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-bhx .source-logo-image{
+    transform:scale(1.03)!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-wm .source-logo-image{
+    transform:scale(1.00)!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-go .source-logo-image{
+    transform:scale(1.25)!important;
+  }
+
+  /* Keep the source row visually separate but tight. */
+  .purchase-mode-row .filter-block-source{
+    margin-top:1px!important;
+  }
+}
+
+@media(max-width:390px){
+  .site-head{
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  .catalog-search-row{
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  .purchase-mode-row{
+    padding-left:6px!important;
+    padding-right:6px!important;
+  }
+  .purchase-mode-row .source-tabs-inline{
+    gap:2px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip{
+    padding-left:3px!important;
+    padding-right:3px!important;
+  }
+}

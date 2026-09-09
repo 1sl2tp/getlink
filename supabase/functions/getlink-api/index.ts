@@ -1993,7 +1993,17 @@ async function libraryRows(includeHidden=true){
     const groupKey=clean(group?.group_key||"chua-phan-loai");
     const groupName=clean(group?.name||"Chưa phân loại");
     const stockStatus=clean(s.stock_status||"no_price");
-    const current=Number(s.display_price_vnd||0)||null;
+    const carton=Number(s.carton_price_vnd||s.display_price_vnd||0)||null;
+    const retail=Number(s.retail_price_vnd||0)||null;
+    const primaryPackaging=clean(s.primary_packaging|| (clean(s.source_key)==="thuoc-la"?"1 cây":"Thùng"));
+    const retailPackaging=clean(s.retail_packaging||"");
+    const primaryMatch=primaryPackaging.match(/^\s*(\d+(?:[.,]\d+)?)\s*(.+)$/u);
+    const retailMatch=retailPackaging.match(/^\s*(\d+(?:[.,]\d+)?)\s*(.+)$/u);
+    const primaryQty=primaryMatch?Number(String(primaryMatch[1]).replace(",","."))||1:1;
+    const primaryLabel=primaryMatch?clean(primaryMatch[2]):primaryPackaging;
+    const retailQty=retailMatch?Number(String(retailMatch[1]).replace(",","."))||1:(retailPackaging?1:0);
+    const retailLabel=retailMatch?clean(retailMatch[2]):retailPackaging;
+    const current=carton||retail||null;
     const prefRow=pref.get(s.canonical_url)||{};
     const state=prefRow.state||"normal";
     if(!includeHidden&&state==="hidden")continue;
@@ -2005,7 +2015,7 @@ async function libraryRows(includeHidden=true){
       group_name:groupName,
       branch_name:"",
       brand_name:"",
-      packaging:"",
+      packaging:primaryPackaging,
       current_price:current,
       original_price:null,
       promotion_price:null,
@@ -2017,25 +2027,25 @@ async function libraryRows(includeHidden=true){
       auto_refresh:prefRow.auto_refresh?1:0,
       refresh_hours:Number(prefRow.refresh_hours)||24,
       image:"",
-      pack_kind:"",
-      pack_quantity:1,
-      pack_unit:"",
+      pack_kind:primaryLabel,
+      pack_quantity:primaryQty,
+      pack_unit:primaryLabel,
       size_value:null,
       size_unit:"",
-      regular_pack_price:current,
+      regular_pack_price:carton||retail,
       promo_pack_price:null,
-      regular_unit_price:null,
+      regular_unit_price:retail,
       promo_unit_price:null,
       promotion_active:0,
       has_promo:0,
-      pack_label_1:"",
-      pack_qty_1:0,
+      pack_label_1:primaryLabel,
+      pack_qty_1:primaryQty,
       pack_label_2:"",
       pack_qty_2:0,
-      pack_label_3:"",
-      pack_qty_3:0,
-      pack_evidence:"",
-      hierarchy_locked:0,
+      pack_label_3:retailLabel,
+      pack_qty_3:retailQty,
+      pack_evidence:"supplier-sheet",
+      hierarchy_locked:1,
       source_product_id:clean(s.source_key)+":"+String(s.source_row),
       source_code:clean(s.source_key),
       barcode:"",
@@ -2054,17 +2064,21 @@ async function libraryRows(includeHidden=true){
       bhx_match_url:"",
       bhx_match_name:"",
       source_root_name:clean(sourceMeta.source_name),
-      web_carton_price:null,
+      web_carton_price:carton,
       promo_carton_price:null,
       web_middle_price:null,
       promo_middle_price:null,
-      web_leaf_price:current,
+      web_leaf_price:retail,
       promo_leaf_price:null,
       unit_price:null,
       supplier_source_key:clean(s.source_key),
       supplier_source_name:clean(sourceMeta.source_name),
       supplier_input_price_vnd:Number(s.input_price_vnd||0)||null,
       supplier_margin_thousand:s.margin_thousand??null,
+      supplier_carton_price_vnd:carton,
+      supplier_retail_price_vnd:retail,
+      supplier_retail_packaging:retailPackaging,
+      supplier_primary_packaging:primaryPackaging,
       supplier_stock_status:stockStatus,
       supplier_stock_label:clean(s.stock_label||"")
     });

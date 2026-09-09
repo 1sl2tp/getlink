@@ -492,7 +492,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode"/);
+  assert.match(app,/function uiLibraryCacheKey\(\)/);
 }
 
 {
@@ -531,7 +531,23 @@ assert.equal(money(0),"—");
   assert.match(app,/supplier_applied_profit_vnd/);
   assert.match(app,/supplier_pricing_profit_mode/);
   assert.match(app,/supplier_input_price_basis/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode"/);
+  assert.match(app,/function uiLibraryCacheKey\(\)/);
+}
+
+
+{
+  // Admin / customer role boundary
+  assert.match(html,/id="roleAdminButton"/);
+  assert.match(html,/id="adminLoginPanel"/);
+  assert.match(html,/id="userTableHead"/);
+  assert.match(app,/let appRole="user"/);
+  assert.match(app,/function unlockAdminRole\(\)/);
+  assert.match(app,/if\(appRole==="user"\)return userTableRow\(row\)/);
+  assert.match(app,/\/api\/user-feedback/);
+  assert.match(edge,/if\(!\(await adminSessionAuthorized\(req\)\)\)return response\(req,\{error:"admin_locked"\},401\);/);
+  assert.match(edge,/function publicCatalogRow\(row:any\)/);
+  assert.match(edge,/getlink_user_product_feedback/);
+  assert.match(css,/Admin \/ customer roles v23/);
 }
 
 console.log("money and hierarchy UI tests passed");

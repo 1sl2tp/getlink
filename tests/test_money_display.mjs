@@ -71,10 +71,11 @@ assert.equal(money(0),"—");
 {
   const capMatch=app.match(/function capitalizeDisplayName\(value\)\{[\s\S]*?\n\}/);
   const stripMatch=app.match(/function stripCartonPackPhrase\(value\)\{[\s\S]*?\n\}/);
+  const stripLotMatch=app.match(/function stripLotPackPhrase\(value\)\{[\s\S]*?\n\}/);
   const compactMatch=app.match(/function compactCartonDisplayName\(name,hierarchy\)\{[\s\S]*?\n\}/);
-  assert.ok(capMatch&&stripMatch&&compactMatch,"carton display helpers not found");
+  assert.ok(capMatch&&stripMatch&&stripLotMatch&&compactMatch,"carton display helpers not found");
   const api=new Function(
-    capMatch[0]+"\n"+stripMatch[0]+"\n"+compactMatch[0]+"\nreturn {compactCartonDisplayName};"
+    capMatch[0]+"\n"+stripMatch[0]+"\n"+stripLotMatch[0]+"\n"+compactMatch[0]+"\nreturn {compactCartonDisplayName};"
   )();
   const h={label1:"Thùng"};
   assert.equal(
@@ -282,13 +283,13 @@ assert.equal(money(0),"—");
 
 
 {
-  assert.match(app,/const AUTO_UPDATE_CHECK_MS=30000/);
-  assert.match(app,/function checkUiVersion\(\)/);
-  assert.match(app,/cache:"no-store"/);
-  assert.match(app,/visibilitychange/);
-  assert.match(app,/location\.replace\(next\.toString\(\)\)/);
-  assert.match(app,/autoUpdateEditingActive\(\)/);
-  assert.match(app,/__getlink_v/);
+  // Frontend build refresh is owned by the head bootstrap in index.html.
+  // app.js must not run a second competing updater.
+  assert.equal(app.includes("AUTO_UPDATE_CHECK_MS"),false);
+  assert.equal(app.includes("function checkUiVersion()"),false);
+  assert.equal(app.includes("__getlink_v"),false);
+  assert.match(html,/const VERSION_URL="\.\/version\.json"/);
+  assert.match(html,/function safeToReload\(\)/);
 }
 
 

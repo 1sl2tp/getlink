@@ -491,7 +491,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code"/);
 }
 
 {
@@ -524,7 +524,7 @@ assert.equal(money(0),"—");
   assert.match(css,/Supplier spreadsheet v19/);
   assert.match(css,/Supplier input basis v21/);
   assert.match(app,/supplier_input_price_basis/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v11-price-basis"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code"/);
 }
 
 console.log("money and hierarchy UI tests passed");
@@ -532,3 +532,8 @@ console.log("money and hierarchy UI tests passed");
 
 // Masan supplier source must stay between Sữa and Hàng thường.
 assert.match(app,/\["sua",30\],[\s\S]*?\["masan",40\],[\s\S]*?\["hang-thuong",50\]/);
+
+
+// Stable supplier identity + retail-basis fallback.
+assert.match(app,/supplier_product_code/);
+assert.match(app,/inferredRetailBasis/);

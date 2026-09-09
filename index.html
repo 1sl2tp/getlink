@@ -284,13 +284,29 @@
               <button id="mobileMergeToggle" class="mobile-merge-toggle" type="button" aria-pressed="false">Hợp nhất</button>
             </div>
           </div>
-          <section id="mobileMergePanel" class="mobile-merge-panel mobile-merge-quick" hidden aria-label="Hợp nhất nhanh sản phẩm">
+          <section id="mobileMergePanel" class="mobile-merge-panel mobile-merge-quick" hidden aria-label="Xem trước hợp nhất sản phẩm">
             <div class="mobile-merge-summary">
               <div>
                 <strong id="mobileMergeTarget">Chọn hàng Tạp hóa làm sản phẩm đích</strong>
-                <small id="mobileMergeHint">Sau đó chạm các nguồn siêu thị liên quan để cập nhật ngay.</small>
+                <small id="mobileMergeHint">Chọn nguồn liên quan để tạo bản xem trước. Chưa ghi dữ liệu.</small>
               </div>
               <button id="mobileMergeCancel" type="button">Hủy</button>
+            </div>
+            <div id="mobileMergePreview" class="mobile-merge-preview" hidden>
+              <div class="mobile-merge-preview-head">
+                <strong>Bản xem trước</strong>
+                <small id="mobileMergePreviewSources">0 nguồn</small>
+              </div>
+              <div class="mobile-merge-preview-body">
+                <div id="mobileMergePreviewImage" class="mobile-merge-preview-image"><span>GL</span></div>
+                <dl class="mobile-merge-preview-fields">
+                  <div><dt>Nhãn hàng</dt><dd id="mobileMergePreviewBrand">—</dd></div>
+                  <div><dt>Dung tích</dt><dd id="mobileMergePreviewSize">—</dd></div>
+                  <div><dt>Quy cách</dt><dd id="mobileMergePreviewPack">—</dd></div>
+                  <div><dt>Barcode/QR</dt><dd id="mobileMergePreviewCode">—</dd></div>
+                </dl>
+              </div>
+              <button id="mobileMergeApply" class="mobile-merge-apply" type="button" disabled>Áp dụng</button>
             </div>
             <label id="mobileMergePasswordWrap" class="mobile-merge-password">Mật khẩu quản trị
               <input id="mobileMergePassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="Nhập một lần">

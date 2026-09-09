@@ -2578,6 +2578,10 @@ function cors(req:Request){
   return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 }
 function response(req:Request,data:any,status=200){return new Response(JSON.stringify(data),{status,headers:cors(req)});}
+function cachedResponse(req:Request,data:any,status=200,cacheControl="public, max-age=120, s-maxage=120, stale-while-revalidate=300"){
+  const headers={...cors(req),"cache-control":cacheControl,"x-getlink-storage":"ephemeral-cache"};
+  return new Response(JSON.stringify(data),{status,headers});
+}
 const INTERNAL_WRITE_KEY = clean(Deno.env.get("GETLINK_INTERNAL_WRITE_KEY") || "");
 function trustedOrigin(req:Request){
   const origin=req.headers.get("origin")||"";
@@ -2931,6 +2935,10 @@ function newsAllowedDetailHost(host:string){
   const key=String(host||"").toLowerCase().replace(/^www\./,"");
   return NEWS_SOURCES.some(source=>key===source.domain||key.endsWith("."+source.domain));
 }
+function newsAllowedDetailEntryHost(host:string){
+  const key=String(host||"").toLowerCase().replace(/^www\./,"");
+  return newsAllowedDetailHost(key)||key==="news.google.com";
+}
 function newsAbsoluteUrl(value:unknown,base:string){
   const raw=newsXmlText(value);
   if(!raw)return "";
@@ -2965,6 +2973,21 @@ function newsArticleParagraphs(html:string){
   }
   return out;
 }
+function newsMetaImageValues(html:string,base:string){
+  const values:string[]=[];
+  const add=(value:unknown)=>{
+    const url=newsAbsoluteUrl(value,base);
+    if(url&&!values.includes(url))values.push(url);
+  };
+  for(const meta of String(html||"").matchAll(/<meta\b[^>]*>/gi)){
+    const tag=meta[0];
+    const property=(tag.match(/\b(?:property|name)=["']([^"']+)["']/i)?.[1]||"").toLowerCase();
+    if(!["og:image","og:image:url","twitter:image","twitter:image:src"].includes(property))continue;
+    const content=tag.match(/\bcontent=["']([^"']+)["']/i)?.[1]||"";
+    if(content)add(content);
+  }
+  return values;
+}
 function newsArticleImages(html:string,base:string,jsonImages:string[]){
   const values:string[]=[];
   const add=(value:unknown)=>{
@@ -2972,15 +2995,19 @@ function newsArticleImages(html:string,base:string,jsonImages:string[]){
     if(url&&!values.includes(url))values.push(url);
   };
   for(const value of jsonImages)add(value);
-  for(const m of String(html||"").matchAll(/<meta\b[^>]*(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]*content=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  for(const value of newsMetaImageValues(html,base))add(value);
   const article=String(html||"").match(/<article\b[^>]*>([\s\S]*?)<\/article>/i)?.[1]||"";
-  for(const m of article.matchAll(/<img\b[^>]*(?:src|data-src)=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  for(const m of article.matchAll(/<img\b[^>]*(?:src|data-src)=["']([^"']+)["'][^>]*>/gi))add(m[1]);
+  for(const m of article.matchAll(/<img\b[^>]*(?:srcset|data-srcset)=["']([^"']+)["'][^>]*>/gi)){
+    const first=String(m[1]||"").split(",")[0]?.trim().split(/\s+/)[0]||"";
+    if(first)add(first);
+  }
   return values.slice(0,12);
 }
 async function newsArticleDetail(rawUrl:string){
   const requested=new URL(rawUrl);
   const requestedHost=requested.hostname.toLowerCase().replace(/^www\./,"");
-  if(!newsAllowedDetailHost(requestedHost))throw new Error("news_detail_host_not_allowed");
+  if(!newsAllowedDetailEntryHost(requestedHost))throw new Error("news_detail_host_not_allowed");
   const key=requested.toString();
   const cached=newsDetailCache.get(key);
   if(cached&&Date.now()-cached.at<NEWS_DETAIL_CACHE_MS)return {...cached.payload,cache_hit:true};
@@ -3038,7 +3065,7 @@ async function newsFetchSource(source:NewsSourceDef,topic:NewsTopicKey){
   }
   return {items:[] as NewsItem[],feed:candidates[0]||"",mode:"unavailable",error:lastError||"rss_unavailable"};
 }
-async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
+async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number,force=false){
   const topic=newsTopicDef(topicRaw).key;
   const requestedSource=clean(sourceRaw);
   const sources=requestedSource&&requestedSource!=="all"
@@ -3047,7 +3074,7 @@ async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
   const limit=Math.max(10,Math.min(100,Number(limitRaw)||60));
   const cacheKey=topic+"|"+(requestedSource||"all")+"|"+limit;
   const cached=newsMemoryCache.get(cacheKey);
-  if(cached&&Date.now()-cached.at<NEWS_CACHE_MS)return {...cached.payload,cache_hit:true};
+  if(!force&&cached&&Date.now()-cached.at<NEWS_CACHE_MS)return {...cached.payload,cache_hit:true,storage:"memory-cache"};
 
   const settled=await Promise.all(sources.map(async source=>{
     const result=await newsFetchSource(source,topic);
@@ -3070,7 +3097,8 @@ async function newsSnapshot(topicRaw:string,sourceRaw:string,limitRaw:number){
       count:x.result.items.length,
       mode:x.result.mode
     })),
-    errors
+    errors,
+    storage:"memory-cache"
   };
   newsMemoryCache.set(cacheKey,{at:Date.now(),payload});
   return payload;
@@ -3959,15 +3987,21 @@ Deno.serve(async(req:Request)=>{
       const topic=clean(url.searchParams.get("topic")||"latest");
       const source=clean(url.searchParams.get("source")||"all");
       const limit=Number(url.searchParams.get("limit")||60);
+      const force=url.searchParams.get("refresh")==="1";
       if(topic&&!NEWS_TOPICS.some(x=>x.key===topic))return response(req,{error:"invalid_news_topic"},400);
       if(source!=="all"&&!NEWS_SOURCES.some(x=>x.key===source))return response(req,{error:"invalid_news_source"},400);
-      return response(req,await newsSnapshot(topic,source,limit));
+      return cachedResponse(
+        req,
+        await newsSnapshot(topic,source,limit,force),
+        200,
+        force?"no-store":"public, max-age=120, s-maxage=120, stale-while-revalidate=300"
+      );
     }
     if(req.method==="GET"&&route==="/api/news-detail"){
       const raw=clean(url.searchParams.get("url")||"");
       if(!raw)return response(req,{error:"missing_news_url"},400);
       try{
-        return response(req,await newsArticleDetail(raw));
+        return cachedResponse(req,await newsArticleDetail(raw),200,"public, max-age=300, s-maxage=300, stale-while-revalidate=900");
       }catch(e){
         return response(req,{error:"news_detail_failed",detail:errorText(e).slice(0,220)},502);
       }

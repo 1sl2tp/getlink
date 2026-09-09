@@ -213,6 +213,8 @@ const NEWS_SOURCE_LABELS={
   laodong:"Lao Động"
 };
 const NEWS_CACHE_TTL=3*60*1000;
+const NEWS_BROWSER_CACHE_TTL=20*60*1000;
+const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v2";
 const newsCache=new Map();
 const newsDetailCache=new Map();
 let newsTopic="latest";
@@ -223,6 +225,9 @@ let newsLoading=false;
 let newsError="";
 let newsRequestSeq=0;
 let newsQuickRequest=0;
+let newsQuickCurrentId="";
+let newsQuickTouchX=0;
+let newsQuickTouchY=0;
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
@@ -378,6 +383,41 @@ function newsSourceButtons(){
 function newsSourceName(key){
   return NEWS_SOURCE_LABELS[key]||key||"Nguồn tin";
 }
+function readNewsBrowserCache(topic){
+  try{
+    const box=JSON.parse(localStorage.getItem(NEWS_BROWSER_CACHE_KEY)||"{}");
+    const row=box&&box[topic];
+    if(!row||!Array.isArray(row.items))return null;
+    const age=Date.now()-Number(row.at||0);
+    if(age<0||age>NEWS_BROWSER_CACHE_TTL)return null;
+    return {at:Number(row.at||0),items:row.items};
+  }catch{return null;}
+}
+function writeNewsBrowserCache(topic,items){
+  try{
+    const box=JSON.parse(localStorage.getItem(NEWS_BROWSER_CACHE_KEY)||"{}")||{};
+    const compact=(Array.isArray(items)?items:[]).slice(0,50).map(item=>({
+      id:item.id||"",
+      title:item.title||"",
+      summary:String(item.summary||"").slice(0,420),
+      content:"",
+      url:item.url||"",
+      image:item.image||"",
+      images:(item.images||[]).slice(0,3),
+      published_at:item.published_at||"",
+      source_key:item.source_key||"",
+      source_name:item.source_name||"",
+      topic:item.topic||topic,
+      duplicate_count:Number(item.duplicate_count||1),
+      also_sources:[]
+    }));
+    box[topic]={at:Date.now(),items:compact};
+    const keys=Object.keys(box).sort((x,y)=>Number(box[y]?.at||0)-Number(box[x]?.at||0));
+    for(const key of keys.slice(3))delete box[key];
+    localStorage.setItem(NEWS_BROWSER_CACHE_KEY,JSON.stringify(box));
+  }catch{}
+}
+
 function newsVisibleItems(){
   const q=searchKey(newsQuery);
   return newsItems.filter(item=>{
@@ -463,30 +503,43 @@ function applyNewsPayload(data){
 function ensureNewsLoaded(force=false){
   if(!API)return;
   const key=newsTopic;
-  const cached=newsCache.get(key);
-  if(!force&&cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL){
-    const changed=newsItems!==cached.items;
-    newsItems=cached.items||[];
-    if(changed)queueMicrotask(refreshNewsViews);
+  const memory=newsCache.get(key);
+  if(!force&&memory&&Date.now()-Number(memory.at||0)<NEWS_CACHE_TTL){
+    if(newsItems!==memory.items){
+      newsItems=memory.items||[];
+      queueMicrotask(refreshNewsViews);
+    }
     return;
   }
+
+  if(!force&&!newsItems.length){
+    const browser=readNewsBrowserCache(key);
+    if(browser){
+      newsItems=browser.items||[];
+      newsCache.set(key,{at:browser.at,items:newsItems});
+      queueMicrotask(refreshNewsViews);
+      if(Date.now()-browser.at<NEWS_CACHE_TTL)return;
+    }
+  }
+
   if(newsLoading)return;
   newsLoading=true;
   newsError="";
   const seq=++newsRequestSeq;
   refreshNewsViews();
-  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80",{cache:"no-store"})
+  const suffix=force?"&refresh=1":"";
+  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80"+suffix,{cache:force?"no-store":"default"})
     .then(async response=>{
       const data=await response.json().catch(()=>({}));
       if(!response.ok)throw new Error(data.error||"Không đọc được tin");
       if(seq!==newsRequestSeq||key!==newsTopic)return;
       applyNewsPayload(data);
       newsCache.set(key,{at:Date.now(),items:newsItems});
+      writeNewsBrowserCache(key,newsItems);
     })
     .catch(error=>{
       if(seq!==newsRequestSeq)return;
-      newsItems=[];
-      newsError="Chưa đọc được tin. Thử làm mới.";
+      if(!newsItems.length)newsError="Chưa đọc được tin. Thử làm mới.";
       console.debug("GETLINK news",error);
     })
     .finally(()=>{
@@ -524,20 +577,50 @@ function newsRenderQuickGallery(images){
   const host=$("#newsQuickGallery");
   if(!host)return;
   const list=(Array.isArray(images)?images:[])
-    .filter((url,index,all)=>url&&all.indexOf(url)===index)
-    .slice(0,8);
-  host.hidden=!list.length;
-  host.innerHTML=list.map((url,index)=>
-    '<div class="news-quick-photo '+(index===0?"primary":"")+'"><img src="'+escapeAttr(url)+'" alt="" loading="'+(index?"lazy":"eager")+'" decoding="async"></div>'
-  ).join("");
+    .filter((url,index,all)=>url&&all.indexOf(url)===index);
+  const hero=list[0]||"";
+  host.hidden=!hero;
+  host.innerHTML=hero
+    ?'<figure class="news-quick-hero"><img src="'+escapeAttr(hero)+'" alt="" decoding="async"></figure>'
+    :"";
 }
-function newsRenderQuickContent(value,fallback=""){
+function newsRenderQuickContent(value,fallback="",images=[]){
   const host=$("#newsQuickContent");
   if(!host)return;
   const paragraphs=newsContentParagraphs(value||fallback);
-  host.innerHTML=paragraphs.length
-    ?paragraphs.map(text=>'<p>'+escapeHtml(text)+'</p>').join("")
-    :'<p class="news-quick-empty">Tin này chưa có đủ nội dung trong nguồn đọc nhanh.</p>';
+  const extra=(Array.isArray(images)?images:[])
+    .filter((url,index,all)=>url&&all.indexOf(url)===index)
+    .slice(1,7);
+  if(!paragraphs.length){
+    host.innerHTML='<p class="news-quick-empty">Tin này chưa có đủ nội dung trong nguồn đọc nhanh.</p>';
+    return;
+  }
+  const parts=[];
+  let imageIndex=0;
+  paragraphs.forEach((text,index)=>{
+    parts.push('<p>'+escapeHtml(text)+'</p>');
+    const shouldInsert=(index===1||((index-1)%3===0&&index>1));
+    if(shouldInsert&&imageIndex<extra.length){
+      parts.push('<figure class="news-quick-inline"><img src="'+escapeAttr(extra[imageIndex++])+'" alt="" loading="lazy" decoding="async"></figure>');
+    }
+  });
+  while(imageIndex<extra.length){
+    parts.push('<figure class="news-quick-inline"><img src="'+escapeAttr(extra[imageIndex++])+'" alt="" loading="lazy" decoding="async"></figure>');
+  }
+  host.innerHTML=parts.join("");
+}
+function newsQuickItems(){
+  return newsVisibleItems();
+}
+function newsQuickMove(delta){
+  const list=newsQuickItems();
+  if(!list.length)return false;
+  let index=list.findIndex(item=>String(item.id||"")===String(newsQuickCurrentId||""));
+  if(index<0)index=0;
+  const next=index+Number(delta||0);
+  if(next<0||next>=list.length)return false;
+  openNewsQuickView(list[next],{keepOpen:true});
+  return true;
 }
 async function loadNewsQuickDetail(item,request){
   if(!item||!item.url)return;
@@ -546,35 +629,39 @@ async function loadNewsQuickDetail(item,request){
     if(request!==newsQuickRequest)return;
     const images=[...(cached.images||[]),...(item.images||[])];
     newsRenderQuickGallery(images);
-    newsRenderQuickContent(cached.content,item.content||item.summary);
+    newsRenderQuickContent(cached.content,item.content||item.summary,images);
     return;
   }
   const loading=$("#newsQuickLoading");
   if(loading)loading.hidden=false;
   try{
-    const response=await apiFetch("/api/news-detail?url="+encodeURIComponent(item.url),{cache:"no-store"});
+    const response=await apiFetch("/api/news-detail?url="+encodeURIComponent(item.url),{cache:"default"});
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"news_detail_failed");
     newsDetailCache.set(item.url,data);
     if(request!==newsQuickRequest)return;
-    newsRenderQuickGallery([...(data.images||[]),...(item.images||[])]);
-    newsRenderQuickContent(data.content,item.content||item.summary);
+    const images=[...(data.images||[]),...(item.images||[])];
+    newsRenderQuickGallery(images);
+    newsRenderQuickContent(data.content,item.content||item.summary,images);
   }catch(error){
     console.debug("GETLINK news detail",error);
   }finally{
     if(request===newsQuickRequest&&loading)loading.hidden=true;
   }
 }
-function openNewsQuickView(item){
+function openNewsQuickView(item,options={}){
   const modal=$("#newsQuickView");
+  const card=modal?.querySelector(".news-quick-card");
   if(!modal||!item)return;
   const loading=$("#newsQuickLoading");
   const original=$("#newsQuickOriginal");
   const request=++newsQuickRequest;
+  newsQuickCurrentId=String(item.id||"");
 
   if(loading)loading.hidden=true;
-  newsRenderQuickGallery(item.images&&item.images.length?item.images:(item.image?[item.image]:[]));
-  newsRenderQuickContent(item.content,item.summary);
+  const images=item.images&&item.images.length?item.images:(item.image?[item.image]:[]);
+  newsRenderQuickGallery(images);
+  newsRenderQuickContent(item.content,item.summary,images);
   if(original){
     original.href=item.url||"#";
     original.hidden=!item.url;
@@ -583,16 +670,38 @@ function openNewsQuickView(item){
   modal.hidden=false;
   modal.setAttribute("aria-hidden","false");
   document.body.classList.add("news-quick-open");
+  if(card)card.scrollTop=0;
   loadNewsQuickDetail(item,request);
 }
 function closeNewsQuickView(){
   newsQuickRequest++;
+  newsQuickCurrentId="";
   const modal=$("#newsQuickView");
   if(!modal)return;
   modal.hidden=true;
   modal.setAttribute("aria-hidden","true");
   document.body.classList.remove("news-quick-open");
 }
+function bindNewsQuickSwipe(){
+  const card=$("#newsQuickView")?.querySelector(".news-quick-card");
+  if(!card||card.dataset.swipeBound==="1")return;
+  card.dataset.swipeBound="1";
+  card.addEventListener("touchstart",event=>{
+    const touch=event.touches&&event.touches[0];
+    if(!touch)return;
+    newsQuickTouchX=touch.clientX;
+    newsQuickTouchY=touch.clientY;
+  },{passive:true});
+  card.addEventListener("touchend",event=>{
+    const touch=event.changedTouches&&event.changedTouches[0];
+    if(!touch)return;
+    const dx=touch.clientX-newsQuickTouchX;
+    const dy=touch.clientY-newsQuickTouchY;
+    if(Math.abs(dx)<55||Math.abs(dx)<=Math.abs(dy)*1.2)return;
+    newsQuickMove(dx<0?1:-1);
+  },{passive:true});
+}
+queueMicrotask(bindNewsQuickSwipe);
 
 
 function stripLotPackPhrase(value){
@@ -6178,6 +6287,9 @@ window.addEventListener("resize",()=>{
 (async()=>{
   await restoreAppRole();
   await refreshCatalog();
+  setTimeout(()=>{
+    if(API&&!newsItems.length)ensureNewsLoaded(false);
+  },800);
   if(requestId&&API&&appRole==="admin"){
     $("#importCard").hidden=false;
     setGetBusy(true);

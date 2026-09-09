@@ -24,7 +24,7 @@ class CanonicalSupplierUrlCaseContractTest(unittest.TestCase):
         self.assertRegex(body,r"canonicalMemberByUrl\.get\(canonical\(clean\(sourceUrl\)\)\)")
 
     def test_supplier_rows_still_keep_their_original_source_url(self):
-        self.assertIn("canonical_url:s.canonical_url",EDGE)
+        self.assertIn("canonical_url:clean(s.canonical_url)",EDGE)
         self.assertIn("...canonicalFields(clean(s.canonical_url))",EDGE)
 
     def test_mobile_own_card_reads_canonical_image_and_pack(self):

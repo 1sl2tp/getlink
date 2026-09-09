@@ -1200,6 +1200,28 @@ function writeOwnPrice(url,type,value){
   return n;
 }
 
+function rowOwnPriceParts(row){
+  const levels=rowPriceLevels(row);
+  return {
+    carton:levels.hasCarton?readOwnPrice(row.canonical_url,"carton"):0,
+    middle:levels.hasMiddle?readOwnPrice(row.canonical_url,"middle"):0,
+    retail:levels.hasLeaf?readOwnPrice(row.canonical_url,"retail"):0,
+    generic:Math.max(0,Number(row&&row.my_price||0))
+  };
+}
+
+function rowHasOwnPrice(row){
+  const own=rowOwnPriceParts(row);
+  return Boolean(own.carton||own.middle||own.retail||own.generic);
+}
+
+function rowPrimaryOwnPrice(row){
+  const own=rowOwnPriceParts(row);
+  if(activePackKind==="Thùng")return own.carton||own.generic||0;
+  if(activePackKind==="Lẻ")return own.retail||own.middle||own.generic||0;
+  return own.carton||own.middle||own.retail||own.generic||0;
+}
+
 function sheetDiffText(webValue,mineValue){
   if(!webValue||!mineValue)return "—";
   const d=Math.round(webValue-mineValue);
@@ -1414,6 +1436,13 @@ function sourceDisplayClass(row){
   return "";
 }
 
+function catalogSourceDisplayLabel(row){
+  return activeSourceFilter==="mine"?"Tạp hóa":sourceDisplayLabel(row);
+}
+function catalogSourceDisplayClass(row){
+  return activeSourceFilter==="mine"?" source-mine":sourceDisplayClass(row);
+}
+
 function rowPrimaryQc(row){
   const h=rowPackHierarchy(row);
   if(h.label1==="Thùng"){
@@ -1504,7 +1533,10 @@ function tableCompactQc(levels){
   return "—";
 }
 
-function tablePrimarySourcePrice(levels){
+function tablePrimarySourcePrice(levels,row){
+  if(activeSourceFilter==="mine"){
+    return xlsWebPrice(rowPrimaryOwnPrice(row),0);
+  }
   if(activePackKind==="Lẻ"){
     return xlsWebPrice(levels.leafPrice,levels.promoLeafPrice);
   }
@@ -1541,7 +1573,7 @@ function syncTableSourceSortHeader(){
   if(!head||!button)return;
   head.setAttribute("aria-sort","none");
   button.dataset.direction="";
-  const labels={"":"3 nguồn",bhx:"BHX",wm:"WM",go:"GO"};
+  const labels={"":"4 nguồn",mine:"Tạp hóa",bhx:"BHX",wm:"WM",go:"GO"};
   const next=nextTableSourceFilter();
   button.title="Đang xem "+labels[activeSourceFilter]+" · bấm chuyển sang "+labels[next];
 }
@@ -1564,7 +1596,7 @@ function productCard(row){
     :0;
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
-  return '<tr class="product-card xls-row'+sourceDisplayClass(row)+' '+(pref==="hidden"?"is-hidden ":"")+
+  return '<tr class="product-card xls-row'+catalogSourceDisplayClass(row)+' '+(pref==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" '+
     'data-url="'+escapeAttr(row.canonical_url)+'" '+
@@ -1573,7 +1605,7 @@ function productCard(row){
       '<td class="xls-name" title="'+escapeAttr(levels.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
-      '<td class="xls-source'+sourceDisplayClass(row)+'" title="'+escapeAttr(String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(sourceDisplayLabel(row))+'</td>'+
+      '<td class="xls-source'+catalogSourceDisplayClass(row)+'" title="'+escapeAttr(activeSourceFilter==="mine"?"Giá Tạp hóa":String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(catalogSourceDisplayLabel(row))+'</td>'+
       '<td class="xls-pack-level">'+
         '<span class="xls-desktop-only">'+
           (hierarchy.label1
@@ -1594,7 +1626,7 @@ function productCard(row){
       '</td>'+
       '<td class="xls-num">'+
         '<span class="xls-desktop-only">'+xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice)+'</span>'+
-        '<span class="xls-compact-only xls-price-compact">'+tablePrimarySourcePrice(levels)+'</span>'+
+        '<span class="xls-compact-only xls-price-compact">'+tablePrimarySourcePrice(levels,row)+'</span>'+
       '</td>'+
       '<td class="xls-num">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
       '<td class="xls-num">'+xlsWebPrice(levels.leafPrice,levels.promoLeafPrice)+'</td>'+
@@ -1728,7 +1760,7 @@ function renderCategoryMenu(){
     String(row.preference_state||"normal")!=="hidden"
   );
   if(activeSourceFilter){
-    visibleLibrary=visibleLibrary.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    visibleLibrary=visibleLibrary.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
   }
 
   const groups=new Map();
@@ -1794,7 +1826,7 @@ function renderCategoryMenu(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn"));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -1803,20 +1835,21 @@ function gridProductCard(row){
   const displayName=canonicalDisplayName(row);
   const hierarchy=levels.hierarchy;
   const rawWinmart=isWinmartRow(row);
-  const price=rawWinmart
+  const sourcePrice=rawWinmart
     ?Number(row.current_price||row.regular_pack_price||0)
     :(levels.hasCarton
       ?(levels.promoCartonPrice||levels.cartonPrice)
       :(levels.hasMiddle
         ?(levels.promoMiddlePrice||levels.middlePrice)
         :(levels.promoLeafPrice||levels.leafPrice)));
+  const price=activeSourceFilter==="mine"?rowPrimaryOwnPrice(row):sourcePrice;
   const image=String(row.image||"").trim();
   const cartonMeta=rowIsCarton(row)?rowCartonCardMeta(row,price):null;
   const qc=cartonMeta?cartonMeta.pack:rowPrimaryQc(row);
   const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
   const isWatch=String(row.preference_state||"normal")==="watch";
 
-  return '<article class="grid-product product-card'+sourceDisplayClass(row)+' '+
+  return '<article class="grid-product product-card'+catalogSourceDisplayClass(row)+' '+
     (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -1836,7 +1869,7 @@ function gridProductCard(row){
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
           '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+'">'+
-            '<strong class="grid-price'+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+money(price)+'</strong>'+
+            '<strong class="grid-price'+(activeSourceFilter==="mine"?" source-price-mine":(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":"")))+'">'+money(price)+'</strong>'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
           '</span>'+
         '</div>'+
@@ -2266,7 +2299,7 @@ function categoryBaseRows(){
   const key=["category-base",activeSourceFilter,activeRootGroup,activeGroupUrl].join("|");
   return memoBrowseRows(key,()=>{
     let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
-    if(activeSourceFilter)rows=rows.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    if(activeSourceFilter)rows=rows.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     if(activeRootGroup)rows=rows.filter(row=>rowBrowseGroupKey(row)===activeRootGroup);
     activeGroupUrl="";
     return rows;
@@ -2279,7 +2312,7 @@ function renderPackTabs(){
 
   let base=rowsBeforeSearch();
   if(activeSourceFilter){
-    base=base.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    base=base.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
   }
   const cartonCount=base.filter(row=>rowIsCarton(row)).length;
   const retailCount=base.filter(row=>rowIsRetail(row)).length;
@@ -2322,13 +2355,19 @@ function rowsAfterPackBeforeSource(){
   });
 }
 
-const TABLE_SOURCE_CYCLE=["","bhx","wm","go"];
+const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go"];
+
+function rowMatchesSourceFilter(row,source){
+  if(!source)return true;
+  if(source==="mine")return rowHasOwnPrice(row);
+  return rowSourceFilterKey(row)===source;
+}
 
 function sourceRowsForSelection(source){
   const key=["source-selection",source].join("|");
   return memoBrowseRows(key,()=>libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden" &&
-    (!source||rowSourceFilterKey(row)===source)
+    rowMatchesSourceFilter(row,source)
   ));
 }
 
@@ -2365,6 +2404,9 @@ function nextTableSourceFilter(){
 }
 
 function sourceLogoMark(key){
+  if(key==="mine"){
+    return '<span class="source-logo-mark source-logo-mine" aria-hidden="true"><b>TẠP HÓA</b></span>';
+  }
   const logos={
     bhx:"assets/logo-bhx.svg",
     wm:"assets/logo-winmart.svg",
@@ -2377,12 +2419,13 @@ function sourceLogoMark(key){
       '<b class="source-logo-fallback">'+fallback+'</b>'+
     '</span>';
   }
-  return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>3</b></span>';
+  return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>4</b></span>';
 }
 
 function sourceChipHtml(key,count,active,compact=false){
   const meta={
-    "":{full:"Tất cả",short:"Tất cả",title:"Xem đồng thời cả 3 nguồn"},
+    "":{full:"Tất cả",short:"Tất cả",title:"Xem tất cả nguồn giá"},
+    mine:{full:"Tạp hóa",short:"Tạp hóa",title:"Giá của mình · Tạp hóa"},
     bhx:{full:"Bách Hóa Xanh",short:"BHX",title:"Bách Hóa Xanh"},
     wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
     go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"}
@@ -2421,16 +2464,20 @@ function renderSourceTabs(){
     base=base.filter(row=>rowIsRetail(row));
   }
 
-  const counts={bhx:0,wm:0,go:0};
-  for(const row of base)counts[rowSourceFilterKey(row)]++;
+  const counts={mine:0,bhx:0,wm:0,go:0};
+  for(const row of base){
+    counts[rowSourceFilterKey(row)]++;
+    if(rowHasOwnPrice(row))counts.mine++;
+  }
 
-  if(!["","bhx","wm","go"].includes(activeSourceFilter)){
+  if(!["","mine","bhx","wm","go"].includes(activeSourceFilter)){
     activeSourceFilter="";
     localStorage.removeItem("getlink:filter-source");
   }
 
   const rows=[
     ["",base.length,!activeSourceFilter],
+    ["mine",counts.mine,activeSourceFilter==="mine"],
     ["bhx",counts.bhx,activeSourceFilter==="bhx"],
     ["wm",counts.wm,activeSourceFilter==="wm"],
     ["go",counts.go,activeSourceFilter==="go"]
@@ -2448,7 +2495,7 @@ function renderSourceTabs(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn"));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -2460,7 +2507,7 @@ function filteredLibraryProducts(){
     let products=rowsAfterPackBeforeSource();
 
     if(activeSourceFilter){
-      products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+      products=products.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     }
 
     return [...products].sort((a,b)=>{
@@ -2479,7 +2526,7 @@ function headerLibraryProducts(){
     products=products.filter(row=>rowIsRetail(row));
   }
   if(activeSourceFilter){
-    products=products.filter(row=>rowSourceFilterKey(row)===activeSourceFilter);
+    products=products.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
   }
   return products;
 }

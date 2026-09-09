@@ -1405,6 +1405,29 @@ async function resolveCanonicalProductBrands(products:Product[]):Promise<void>{
   }
 }
 
+async function upsertRowsChunked(
+  table:string,
+  rows:any[],
+  onConflict:string,
+  chunkSize=PERSIST_CHUNK_SIZE
+){
+  for(let i=0;i<rows.length;i+=chunkSize){
+    await must(
+      sb.from(table).upsert(rows.slice(i,i+chunkSize),{onConflict})
+    );
+  }
+}
+
+async function insertRowsChunked(
+  table:string,
+  rows:any[],
+  chunkSize=PERSIST_CHUNK_SIZE
+){
+  for(let i=0;i<rows.length;i+=chunkSize){
+    await must(sb.from(table).insert(rows.slice(i,i+chunkSize)));
+  }
+}
+
 async function persistPayload(payload:any, engine:string){
   const now=new Date().toISOString(), requestId=payload.request_id, input=payload.input_url, key=payload.source.key;
   const products:Product[]=filterGetlinkProducts(Array.isArray(payload.products)?payload.products:[]);
@@ -1447,17 +1470,17 @@ async function persistPayload(payload:any, engine:string){
     identities.push({link_url:p.url,source_name:sourceName(p.source.key),source_product_id:clean(si.source_product_id),source_code:clean(si.source_code),barcode:clean(si.barcode),sku:clean(si.sku),brand:clean(si.brand||p.branch),raw_brand:clean(si.raw_brand||si.brand||p.branch),category:clean(si.category||p.group),raw_category:clean(si.raw_category||si.category||p.group),bhx_group_name:clean(si.bhx_group_name),bhx_brand_name:clean(si.bhx_brand_name),bhx_match_url:clean(si.bhx_match_url),bhx_match_name:clean(si.bhx_match_name),raw_name:clean(si.raw_name||p.name),raw_description:clean(si.raw_description),size_value:cmp.size_value??null,size_unit:cmp.size_unit||"",pack_label_1:h.label1||"",pack_qty_1:Number(h.qty1)||0,pack_label_2:h.label2||"",pack_qty_2:Number(h.qty2)||0,pack_label_3:h.label3||"",pack_qty_3:Number(h.qty3)||0,match_name:clean(si.match_name),match_key:clean(si.match_key),match_basis:clean(si.match_basis),updated_at:now});
     snaps.push({link_id:id,request_id:requestId,checked_at:p.last_checked_at||payload.checked_at,current_price:p.price?.current||null,original_price:p.price?.original||null,promotion_price:p.promotion?.price||null,promotion_text:p.promotion?.text||"",result_json:p});
   }
-  await must(sb.from("getlink_links").upsert(rows,{onConflict:"canonical_url"}));
+  await upsertRowsChunked("getlink_links",rows,"canonical_url");
   await syncManualGroupsForProductRows(rows);
-  if(assets.length)await must(sb.from("getlink_link_assets").upsert(assets,{onConflict:"link_url"}));
-  if(comps.length)await must(sb.from("getlink_link_comparison").upsert(comps,{onConflict:"link_url"}));
-  if(hier.length)await must(sb.from("getlink_link_pack_hierarchy").upsert(hier,{onConflict:"link_url"}));
+  if(assets.length)await upsertRowsChunked("getlink_link_assets",assets,"link_url");
+  if(comps.length)await upsertRowsChunked("getlink_link_comparison",comps,"link_url");
+  if(hier.length)await upsertRowsChunked("getlink_link_pack_hierarchy",hier,"link_url");
   if(identities.length){
-    await must(sb.from("getlink_source_product_identity").upsert(identities,{onConflict:"link_url"}));
+    await upsertRowsChunked("getlink_source_product_identity",identities,"link_url");
     sourceManagerCache=null;
     sourceManagerCacheAt=0;
   }
-  if(snaps.length)await must(sb.from("getlink_price_snapshots").upsert(snaps,{onConflict:"link_id,request_id"}));
+  if(snaps.length)await upsertRowsChunked("getlink_price_snapshots",snaps,"link_id,request_id");
 
   await must(sb.from("getlink_jobs").update({link_type:payload.input_type,status:"complete",result_json:payload,error:null,updated_at:now}).eq("request_id",requestId));
   const {count}=await sb.from("getlink_links").select("*",{count:"exact",head:true});
@@ -1612,12 +1635,14 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
     .filter(Boolean);
 
   if(fallbackUrls.length){
-    const {error}=await sb
-      .from("getlink_manual_group_members")
-      .delete()
-      .eq("group_key",fallbackKey)
-      .in("link_url",fallbackUrls);
-    if(error)throw error;
+    for(let i=0;i<fallbackUrls.length;i+=PERSIST_CHUNK_SIZE){
+      const {error}=await sb
+        .from("getlink_manual_group_members")
+        .delete()
+        .eq("group_key",fallbackKey)
+        .in("link_url",fallbackUrls.slice(i,i+PERSIST_CHUNK_SIZE));
+      if(error)throw error;
+    }
   }
 
   const now=new Date().toISOString();
@@ -1649,10 +1674,7 @@ async function syncManualGroupsForProductRows(rows:any[]):Promise<void>{
     }
   }
   if(members.length){
-    const {error}=await sb
-      .from("getlink_manual_group_members")
-      .insert(members);
-    if(error)throw error;
+    await insertRowsChunked("getlink_manual_group_members",members);
   }
   sourceManagerCache=null;
   sourceManagerCacheAt=0;
@@ -2575,8 +2597,11 @@ function routePath(req:Request){
 const UPDATE_ADMIN_PIN_SHA256="fbdf2bdc4b2a45f3508c8ced68098f58375edbf2fe81ec8fe4b113185670939a";
 const UPDATE_SESSION_MS=2*60*60*1000;
 const UPDATE_AUTH_LOCK_MS=15*60*1000;
-const UPDATE_BATCH_SIZE=10;
-const UPDATE_BATCH_CONCURRENCY=3;
+// Scheduled supermarket refresh is intentionally conservative:
+ // one category at a time avoids DB contention across the normalization tables.
+const UPDATE_BATCH_SIZE=5;
+const UPDATE_BATCH_CONCURRENCY=1;
+const PERSIST_CHUNK_SIZE=60;
 
 function constantTimeEqual(a:unknown,b:unknown):boolean{
   const x=String(a||""),y=String(b||"");

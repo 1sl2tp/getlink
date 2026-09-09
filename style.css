@@ -10486,9 +10486,6 @@ body[data-app-role="user"] .catalog-search{
   body[data-app-role="user"] .workspace{
     grid-template-columns:minmax(0,1fr)!important;
   }
-  body[data-app-role="user"] #workspaceNav{
-    display:none!important;
-  }
   body[data-app-role="user"] .mobile-category-button{
     display:inline-flex!important;
   }

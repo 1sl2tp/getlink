@@ -2724,9 +2724,10 @@ async function syncOneSupplierSheet(source:any):Promise<SupplierSheetSyncSummary
       const profitMode=(plain(rawProfitMode)==="lai ap dung"&&appliedProfit!==null)
         ?"applied"
         :"expected";
-      const expectedProfit=(input!==null&&expectedPercent!==null)
+      const expectedProfitRaw=(input!==null&&expectedPercent!==null)
         ?input*expectedPercent/100
         :0;
+      const expectedProfit=Math.round(expectedProfitRaw);
       const selectedProfit=profitMode==="applied"
         ?Number(appliedProfit||0)
         :expectedProfit;

@@ -492,7 +492,7 @@ assert.equal(money(0),"—");
   assert.match(app,/function supplierBrowseGroupKey\(row\)/);
   assert.match(app,/function supplierBrowseGroupName\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode"/);
 }
 
 {
@@ -508,12 +508,14 @@ assert.equal(money(0),"—");
   assert.match(html,/>Tên sản phẩm</);
   assert.match(html,/>Giá nhập NCC</);
   assert.match(html,/>Giá nhập theo</);
+  assert.match(html,/>% lãi kỳ vọng</);
+  assert.match(html,/>Lãi kỳ vọng</);
+  assert.match(html,/>Lãi áp dụng</);
+  assert.match(html,/>Tính giá theo</);
   assert.match(html,/>Giá bán thùng</);
   assert.match(html,/>Giá bán lẻ</);
   assert.match(html,/>QC \/ thùng</);
   assert.match(html,/>Đơn vị lẻ</);
-  assert.match(html,/>Lãi thật</);
-  assert.match(html,/>Lãi kỳ vọng</);
   assert.match(html,/>Giá nhập trước</);
   assert.match(html,/>Biến động</);
   assert.match(html,/>Ngày đổi giá</);
@@ -524,8 +526,12 @@ assert.equal(money(0),"—");
   assert.match(app,/function syncSupplierTableMode\(\)/);
   assert.match(css,/Supplier spreadsheet v19/);
   assert.match(css,/Supplier input basis v21/);
+  assert.match(css,/Supplier profit mode v22/);
+  assert.match(app,/supplier_expected_profit_percent/);
+  assert.match(app,/supplier_applied_profit_vnd/);
+  assert.match(app,/supplier_pricing_profit_mode/);
   assert.match(app,/supplier_input_price_basis/);
-  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v12-stable-product-code"/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v13-profit-mode"/);
 }
 
 console.log("money and hierarchy UI tests passed");

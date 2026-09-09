@@ -10609,3 +10609,237 @@ body[data-app-role="user"] .product-grid{
     min-width:660px!important;
   }
 }
+
+
+/* Customer split columns v24 — never merge source / price / pack fields */
+.xls-price-table.user-table-mode{
+  min-width:855px!important;
+  table-layout:fixed!important;
+}
+.xls-price-table.user-table-mode #standardTableHead,
+.xls-price-table.user-table-mode #supplierTableHead{
+  display:none!important;
+}
+.xls-price-table.user-table-mode #userTableHead{
+  display:table-row!important;
+}
+.xls-price-table.user-table-mode #userTableHead th,
+.xls-price-table.user-table-mode .user-table-row td{
+  display:table-cell!important;
+  height:40px!important;
+  padding:7px 8px!important;
+  border-right:1px solid #e5e9ed!important;
+  border-bottom:1px solid #e9edf0!important;
+  vertical-align:middle!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+.xls-price-table.user-table-mode #userTableHead th{
+  position:sticky!important;
+  top:0!important;
+  z-index:14!important;
+  height:42px!important;
+  background:#f8fafc!important;
+  color:#475467!important;
+  font-size:9px!important;
+  font-weight:820!important;
+  line-height:1.1!important;
+  white-space:nowrap!important;
+  text-align:center!important;
+  box-shadow:0 1px 0 #dfe3e8!important;
+}
+
+/* 1 Tên */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(1),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+  width:245px!important;
+  min-width:245px!important;
+  max-width:245px!important;
+  text-align:left!important;
+}
+.xls-price-table.user-table-mode #userTableHead th:nth-child(1){
+  z-index:18!important;
+}
+.xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+  position:sticky!important;
+  left:0!important;
+  z-index:5!important;
+  background:#fff!important;
+}
+/* 2 Nguồn */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(2),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(2){
+  width:88px!important;
+  min-width:88px!important;
+  max-width:88px!important;
+  text-align:center!important;
+}
+/* 3 Giá thùng */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(3),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(3){
+  width:82px!important;
+  min-width:82px!important;
+  max-width:82px!important;
+  text-align:right!important;
+}
+/* 4 QC thùng */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(4),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(4){
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  text-align:center!important;
+}
+/* 5 Giá lẻ */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(5),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(5){
+  width:82px!important;
+  min-width:82px!important;
+  max-width:82px!important;
+  text-align:right!important;
+}
+/* 6 Đơn vị lẻ */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(6),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(6){
+  width:78px!important;
+  min-width:78px!important;
+  max-width:78px!important;
+  text-align:center!important;
+}
+/* 7 Mặc cả */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(7),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(7){
+  width:92px!important;
+  min-width:92px!important;
+  max-width:92px!important;
+  text-align:center!important;
+}
+/* 8 Đánh giá */
+.xls-price-table.user-table-mode #userTableHead th:nth-child(8),
+.xls-price-table.user-table-mode .user-table-row td:nth-child(8){
+  width:96px!important;
+  min-width:96px!important;
+  max-width:96px!important;
+  text-align:center!important;
+}
+
+.user-col-product{
+  position:static!important;
+  padding-right:8px!important;
+  color:#101828!important;
+  font-weight:760!important;
+  white-space:nowrap!important;
+  text-overflow:ellipsis!important;
+}
+.user-product-name,
+.user-product-source{
+  position:static!important;
+  display:inline!important;
+  transform:none!important;
+  max-width:none!important;
+  margin:0!important;
+}
+.user-col-source .user-source-cell{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  width:100%;
+}
+.user-col-source .source-logo-mark{
+  width:62px!important;
+  min-width:62px!important;
+  max-width:62px!important;
+  height:24px!important;
+  min-height:24px!important;
+  padding:2px 5px!important;
+  margin:0!important;
+  box-sizing:border-box!important;
+}
+.user-col-source .source-logo-image{
+  max-width:100%!important;
+  max-height:18px!important;
+}
+.user-price-main{
+  display:inline!important;
+  color:#176b45!important;
+  font-size:10px!important;
+  font-weight:880!important;
+  font-variant-numeric:tabular-nums!important;
+  white-space:nowrap!important;
+}
+.user-qc-text,
+.user-unit-text{
+  display:block;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  color:#475467;
+  font-size:9px;
+  font-weight:650;
+  white-space:nowrap;
+}
+.user-col-bargain .xls-input{
+  width:76px!important;
+  min-width:76px!important;
+  max-width:76px!important;
+  height:26px!important;
+  padding:0 6px!important;
+  text-align:right!important;
+  font-size:10px!important;
+  font-variant-numeric:tabular-nums!important;
+}
+
+/* Image view: each public field stays on its own row. */
+.user-grid-fields{
+  display:grid;
+  gap:4px;
+  margin-top:7px;
+}
+.user-grid-field{
+  display:grid;
+  grid-template-columns:72px minmax(0,1fr);
+  align-items:center;
+  min-height:27px;
+  padding:3px 0;
+  border-top:1px solid #eef1f4;
+}
+.user-grid-field>span{
+  color:#667085;
+  font-size:8px;
+  font-weight:750;
+}
+.user-grid-field>strong{
+  min-width:0;
+  color:#344054;
+  font-size:9px;
+  font-weight:760;
+  text-align:right;
+}
+.user-grid-field .user-source-cell{
+  display:flex;
+  justify-content:flex-end;
+  align-items:center;
+}
+.user-grid-field .source-logo-mark{
+  width:64px!important;
+  height:23px!important;
+  padding:2px 5px!important;
+  box-sizing:border-box!important;
+}
+.user-grid-field-bargain input{
+  justify-self:end;
+}
+.user-grid-field-rating .user-rating{
+  justify-self:end;
+}
+
+@media (max-width:760px){
+  .xls-price-table.user-table-mode{
+    min-width:810px!important;
+  }
+  .xls-price-table.user-table-mode #userTableHead th:nth-child(1),
+  .xls-price-table.user-table-mode .user-table-row td:nth-child(1){
+    width:205px!important;
+    min-width:205px!important;
+    max-width:205px!important;
+  }
+}

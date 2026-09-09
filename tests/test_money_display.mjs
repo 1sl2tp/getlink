@@ -551,9 +551,17 @@ assert.equal(money(0),"—");
   assert.match(edge,/getlink_user_product_feedback/);
   assert.match(app,/function userGridProductCard\(row\)/);
   assert.match(app,/function userPublicPackInfo\(row,levels\)/);
+  assert.match(html,/>Nguồn</);
   assert.match(html,/>Giá thùng</);
+  assert.match(html,/>QC thùng</);
   assert.match(html,/>Giá lẻ</);
-  assert.match(css,/Customer image cards keep the same 5 public fields/);
+  assert.match(html,/>Đơn vị lẻ</);
+  assert.match(html,/>Mặc cả</);
+  assert.match(html,/>Đánh giá</);
+  assert.match(css,/Customer split columns v24/);
+  assert.match(css,/\.xls-price-table\.user-table-mode #standardTableHead,[\s\S]*?#supplierTableHead\{[\s\S]*?display:none!important/);
+  assert.match(app,/function userSourceCell\(row\)/);
+  assert.match(app,/max="100000"/);
   assert.match(css,/Admin \/ customer roles v23/);
 }
 

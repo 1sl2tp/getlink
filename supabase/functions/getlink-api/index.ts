@@ -1924,7 +1924,7 @@ async function sourceManagerSnapshot(force=false){
 }
 
 async function libraryRows(includeHidden=true){
-  const [links,prefs,assets,comps,hier,ids,manualMembers,manualGroups,supplierSources,supplierProducts,supplierRules]=await Promise.all([
+  const [links,prefs,assets,comps,hier,ids,manualMembers,manualGroups,supplierSources,supplierProducts,supplierRules,canonicalProducts,canonicalMembers]=await Promise.all([
     fetchAll("getlink_links","*",(q:any)=>q.eq("link_type","product").neq("last_status","unlisted").order("name",{ascending:true})),
     fetchAll("getlink_link_preferences"),
     fetchAll("getlink_link_assets"),
@@ -1947,12 +1947,43 @@ async function libraryRows(includeHidden=true){
       "*",
       (q:any)=>q.eq("is_active",true).order("source_key",{ascending:true}).order("source_row",{ascending:true})
     ),
-    loadManualGroupRules()
+    loadManualGroupRules(),
+    fetchAll("getlink_canonical_products"),
+    fetchAll("getlink_canonical_product_members")
   ]);
   const pref=new Map(prefs.map((x:any)=>[x.link_url,x])), asset=new Map(assets.map((x:any)=>[x.link_url,x])),
     cmp=new Map(comps.map((x:any)=>[x.link_url,x])), hm=new Map(hier.map((x:any)=>[x.link_url,x])), im=new Map(ids.map((x:any)=>[x.link_url,x])),
     manualMemberByUrl=new Map(manualMembers.map((x:any)=>[x.link_url,x])),
-    manualGroupByKey=new Map(manualGroups.map((x:any)=>[x.group_key,x]));
+    manualGroupByKey=new Map(manualGroups.map((x:any)=>[x.group_key,x])),
+    canonicalProductById=new Map(canonicalProducts.map((x:any)=>[x.id,x])),
+    canonicalMemberByUrl=new Map(canonicalMembers.map((x:any)=>[x.source_url,x]));
+
+  const canonicalFields=(sourceUrl:string)=>{
+    const member=canonicalMemberByUrl.get(sourceUrl);
+    const product=member?canonicalProductById.get(member.canonical_product_id):null;
+    if(!member||!product)return {
+      canonical_product_id:"",
+      canonical_product_name:"",
+      canonical_product_image:"",
+      canonical_pack_label_1:"",
+      canonical_pack_qty_1:0,
+      canonical_pack_label_2:"",
+      canonical_pack_qty_2:0,
+      canonical_pack_label_3:"",
+      canonical_pack_qty_3:0
+    };
+    return {
+      canonical_product_id:clean(product.id),
+      canonical_product_name:clean(product.canonical_name),
+      canonical_product_image:clean(product.image_url||""),
+      canonical_pack_label_1:clean(product.pack_label_1||""),
+      canonical_pack_qty_1:Number(product.pack_qty_1)||0,
+      canonical_pack_label_2:clean(product.pack_label_2||""),
+      canonical_pack_qty_2:Number(product.pack_qty_2)||0,
+      canonical_pack_label_3:clean(product.pack_label_3||""),
+      canonical_pack_qty_3:Number(product.pack_qty_3)||0
+    };
+  };
   const categories=await fetchAll("getlink_links","canonical_url,name,source,last_request_id",(q:any)=>q.eq("link_type","category"));
   const rootByReq=new Map(categories.filter((x:any)=>String(x.source).includes("WinMart")).map((x:any)=>[x.last_request_id,x.name]));
   const rows:any[]=[];
@@ -1982,7 +2013,8 @@ async function libraryRows(includeHidden=true){
       web_carton_price:!isW&&isCarton?levelPrice:null,promo_carton_price:null,
       web_middle_price:!isW&&isMiddle?levelPrice:null,promo_middle_price:null,
       web_leaf_price:!isW&&!isCarton&&!isMiddle?levelPrice:null,promo_leaf_price:null,
-      unit_price:c.promo_unit_price||c.regular_unit_price||null
+      unit_price:c.promo_unit_price||c.regular_unit_price||null,
+      ...canonicalFields(l.canonical_url)
     });
   }
   const supplierSourceByKey=new Map(supplierSources.map((x:any)=>[clean(x.source_key),x]));
@@ -2129,7 +2161,8 @@ async function libraryRows(includeHidden=true){
       supplier_units_per_carton:unitsPerCarton||null,
       supplier_retail_unit:retailUnit,
       supplier_stock_status:stockStatus,
-      supplier_stock_label:clean(s.stock_label||"")
+      supplier_stock_label:clean(s.stock_label||""),
+      ...canonicalFields(clean(s.canonical_url))
     });
   }
 
@@ -2206,12 +2239,94 @@ function publicCatalogRow(row:any){
     supplier_units_per_carton:Number(row?.supplier_units_per_carton||0)||null,
     supplier_retail_unit:clean(row?.supplier_retail_unit||""),
     supplier_stock_status:clean(row?.supplier_stock_status||""),
-    supplier_stock_label:clean(row?.supplier_stock_label||"")
+    supplier_stock_label:clean(row?.supplier_stock_label||""),
+    canonical_product_id:clean(row?.canonical_product_id||""),
+    canonical_product_name:clean(row?.canonical_product_name||""),
+    canonical_product_image:clean(row?.canonical_product_image||""),
+    canonical_pack_label_1:clean(row?.canonical_pack_label_1||""),
+    canonical_pack_qty_1:Number(row?.canonical_pack_qty_1||0)||0,
+    canonical_pack_label_2:clean(row?.canonical_pack_label_2||""),
+    canonical_pack_qty_2:Number(row?.canonical_pack_qty_2||0)||0,
+    canonical_pack_label_3:clean(row?.canonical_pack_label_3||""),
+    canonical_pack_qty_3:Number(row?.canonical_pack_qty_3||0)||0
   };
 }
 
 function publicCatalogRows(rows:any[]){
   return rows.map(publicCatalogRow);
+}
+
+async function saveCanonicalProductMerge(body:any){
+  const requested=Array.isArray(body?.member_urls)?body.member_urls:[];
+  const memberUrls=[...new Set(requested.map((x:any)=>{
+    try{return canonical(clean(x));}catch{return "";}
+  }).filter(Boolean))];
+  if(memberUrls.length<2||memberUrls.length>12)throw new Error("merge_member_count");
+
+  const rows=await libraryRows(true);
+  const rowByUrl=new Map(rows.map((row:any)=>[canonical(clean(row.canonical_url)),row]));
+  const members=memberUrls.map(url=>rowByUrl.get(url)).filter(Boolean);
+  if(members.length!==memberUrls.length)throw new Error("merge_member_not_found");
+  if(members.some((row:any)=>clean(row.canonical_product_id)))throw new Error("merge_member_already_grouped");
+
+  const chosen=(raw:any)=>{
+    let url="";
+    try{url=canonical(clean(raw));}catch{}
+    if(!url||!memberUrls.includes(url))return null;
+    return rowByUrl.get(url)||null;
+  };
+
+  const nameRow=chosen(body?.name_source_url)||members.find((row:any)=>sourceKey(row.canonical_url)==="mine")||members[0];
+  const packRow=chosen(body?.pack_source_url)||[...members].sort((a:any,b:any)=>{
+    const ah=a.pack_label_1==="Thùng"?0:(a.pack_label_2?1:2);
+    const bh=b.pack_label_1==="Thùng"?0:(b.pack_label_2?1:2);
+    return ah-bh;
+  })[0];
+  const imageRow=chosen(body?.image_source_url)||members.find((row:any)=>clean(row.image))||null;
+
+  const canonicalName=clean(body?.canonical_name||nameRow?.source_name||nameRow?.name);
+  if(!canonicalName)throw new Error("merge_name_missing");
+
+  const productId="cp_"+crypto.randomUUID().replace(/-/g,"");
+  const now=new Date().toISOString();
+  const product={
+    id:productId,
+    canonical_name:canonicalName,
+    image_url:clean(imageRow?.image||"")||null,
+    pack_label_1:clean(packRow?.pack_label_1||""),
+    pack_qty_1:Number(packRow?.pack_qty_1)||0,
+    pack_label_2:clean(packRow?.pack_label_2||""),
+    pack_qty_2:Number(packRow?.pack_qty_2)||0,
+    pack_label_3:clean(packRow?.pack_label_3||""),
+    pack_qty_3:Number(packRow?.pack_qty_3)||0,
+    name_source_url:canonical(clean(nameRow.canonical_url)),
+    pack_source_url:canonical(clean(packRow.canonical_url)),
+    image_source_url:imageRow?canonical(clean(imageRow.canonical_url)):null,
+    created_at:now,
+    updated_at:now
+  };
+  const memberRows=members.map((row:any)=>({
+    source_url:canonical(clean(row.canonical_url)),
+    canonical_product_id:productId,
+    source_key:sourceKey(row.canonical_url),
+    added_at:now
+  }));
+
+  await must(sb.from("getlink_canonical_products").insert(product));
+  const {error:memberError}=await sb.from("getlink_canonical_product_members").insert(memberRows);
+  if(memberError){
+    await sb.from("getlink_canonical_products").delete().eq("id",productId);
+    throw memberError;
+  }
+
+  return {
+    product,
+    members:memberRows,
+    member_urls:memberRows.map((x:any)=>x.source_url),
+    canonical_name:product.canonical_name,
+    image_source_url:product.image_source_url,
+    pack_source_url:product.pack_source_url
+  };
 }
 
 async function saveUserFeedback(body:any){
@@ -3296,6 +3411,16 @@ Deno.serve(async(req:Request)=>{
         return response(req,{matches,match_group_count:matches.length,rule:"barcode exact; otherwise strict brand + size + normalized name"});
       }
       return response(req,{error:"invalid_view"},400);
+    }
+
+    if(req.method==="POST"&&route==="/api/product-merge"){
+      if(!(await adminSessionAuthorized(req)))return response(req,{error:"admin_locked"},401);
+      const body=await req.json().catch(()=>({}));
+      try{
+        return response(req,{merge:await saveCanonicalProductMerge(body)});
+      }catch(e){
+        return response(req,{error:"merge_invalid",detail:errorText(e).slice(0,300)},400);
+      }
     }
 
     if(req.method==="POST"&&route==="/api/user-feedback"){

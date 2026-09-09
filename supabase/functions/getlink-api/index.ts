@@ -2252,6 +2252,7 @@ function publicCatalogRow(row:any){
     supplier_source_key:clean(row?.supplier_source_key||""),
     supplier_source_name:clean(row?.supplier_source_name||""),
     supplier_product_code:clean(row?.supplier_product_code||""),
+    supplier_input_price_basis:clean(row?.supplier_input_price_basis||""),
     supplier_carton_price_vnd:Number(row?.supplier_carton_price_vnd||0)||null,
     supplier_retail_price_vnd:Number(row?.supplier_retail_price_vnd||0)||null,
     supplier_retail_packaging:clean(row?.supplier_retail_packaging||""),

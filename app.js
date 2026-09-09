@@ -3510,6 +3510,16 @@ function mobileMergeTargetMembers(){
   return libraryCache.filter(row=>String(row&&row.canonical_product_id||"").trim()===id);
 }
 
+function resetMobileMergeSelectionForTarget(){
+  mobileMergeSelected.clear();
+  const target=mobileMergeTargetRow();
+  if(!target)return;
+  for(const item of mobileMergeTargetMembers()){
+    mobileMergeSelected.add(canonical(item.canonical_url));
+  }
+  mobileMergeSelected.add(canonical(target.canonical_url));
+}
+
 function setMobileMergeTarget(row){
   if(!row)return false;
   const id=String(row.canonical_product_id||"").trim();
@@ -3522,8 +3532,23 @@ function setMobileMergeTarget(row){
   }
   if(!isMineRow(row))return false;
   mobileMergeTargetUrl=canonical(row.canonical_url);
+  resetMobileMergeSelectionForTarget();
   renderMobileMergePanel();
   return true;
+}
+
+function toggleMobileMergeSource(row){
+  const target=mobileMergeTargetRow();
+  if(!target||!row||isMineRow(row))return;
+  const targetId=String(target.canonical_product_id||"").trim();
+  const rowId=String(row.canonical_product_id||"").trim();
+  if(rowId&&rowId!==targetId)return;
+
+  const url=canonical(row.canonical_url);
+  if(mobileMergeSelected.has(url))mobileMergeSelected.delete(url);
+  else mobileMergeSelected.add(url);
+  mobileMergeSelected.add(canonical(target.canonical_url));
+  renderUserWorkHome();
 }
 
 function mobileMergeSelectButton(row){
@@ -3541,17 +3566,142 @@ function mobileMergeSelectButton(row){
     '</button>';
   }
 
-  const alreadyLinked=Boolean(targetId&&rowId===targetId);
-  const blocked=Boolean(rowId&&(!targetId||rowId!==targetId));
-  return '<button class="mobile-merge-select '+(alreadyLinked?"selected ":"")+(blocked?"blocked":"")+'" '+
+  const selected=mobileMergeSelected.has(url);
+  const blocked=Boolean(rowId&&rowId!==targetId);
+  return '<button class="mobile-merge-select '+(selected?"selected ":"")+(blocked?"blocked":"")+'" '+
     'data-mobile-merge-source="'+escapeAttr(url)+'" type="button" '+
-    ((alreadyLinked||blocked)?'disabled':'aria-pressed="false"')+'>'+
-    (alreadyLinked?"✓":"+")+
+    (blocked?'disabled title="Nguồn này đang thuộc sản phẩm chuẩn khác"':'aria-pressed="'+(selected?"true":"false")+'"')+'>'+
+    (selected?"✓":"+")+
   '</button>';
 }
 
 function mobileUserResultGroups(rows){
   return rows.map(row=>({key:"row:"+canonical(row.canonical_url),canonical:false,rows:[row]}));
+}
+
+function mobileMergePreviewRows(){
+  const target=mobileMergeTargetRow();
+  if(!target)return [];
+  const rows=[...mobileMergeSelected]
+    .map(url=>findLibraryRow(url))
+    .filter(Boolean);
+  const targetUrl=canonical(target.canonical_url);
+  if(!rows.some(row=>canonical(row.canonical_url)===targetUrl))rows.unshift(target);
+  return rows;
+}
+
+function mobileMergeIdentityCode(row){
+  const barcode=String(row&&row.barcode||"").trim();
+  const sku=String(row&&row.sku||"").trim();
+  const sourceCode=String(
+    row&&row.supplier_product_code||
+    row&&row.source_code||
+    ""
+  ).trim();
+  if(barcode)return {kind:"Barcode/QR",value:barcode,rank:3};
+  if(sku)return {kind:"SKU",value:sku,rank:2};
+  if(sourceCode)return {kind:"Mã nguồn",value:sourceCode,rank:1};
+  return {kind:"",value:"",rank:0};
+}
+
+function mobileMergeIdentityScore(row){
+  const code=mobileMergeIdentityCode(row);
+  const brand=rowCanonicalBrand(row);
+  const sizeValue=Number(row&&row.size_value)||0;
+  const sizeUnit=String(row&&row.size_unit||"").trim();
+  return code.rank*1000+(brand?100:0)+(sizeValue&&sizeUnit?100:0)+(row&&row.image?10:0);
+}
+
+function mobileMergePackScore(row){
+  let score=0;
+  if(String(row&&row.pack_label_1||"").trim()==="Thùng")score+=1000;
+  if(String(row&&row.pack_label_2||"").trim())score+=180;
+  if(Number(row&&row.pack_qty_2)>1)score+=120;
+  if(String(row&&row.pack_label_3||"").trim())score+=180;
+  if(Number(row&&row.pack_qty_3)>1)score+=220;
+  if(Number(row&&row.size_value)>0&&String(row&&row.size_unit||"").trim())score+=40;
+  return score;
+}
+
+function buildMobileMergePreview(){
+  const target=mobileMergeTargetRow();
+  const rows=mobileMergePreviewRows();
+  if(!target||rows.length<2)return null;
+
+  const identitySource=[...rows].sort((a,b)=>mobileMergeIdentityScore(b)-mobileMergeIdentityScore(a))[0]||target;
+  const packSource=[...rows].sort((a,b)=>mobileMergePackScore(b)-mobileMergePackScore(a))[0]||target;
+  const imageSource=(identitySource&&String(identitySource.image||"").trim())
+    ?identitySource
+    :(rows.find(row=>String(row&&row.image||"").trim())||null);
+
+  const brand=rowCanonicalBrand(identitySource)||"";
+  const sizeValue=Number(identitySource&&identitySource.size_value)||0;
+  const sizeUnit=String(identitySource&&identitySource.size_unit||"").trim();
+  const size=sizeValue&&sizeUnit
+    ?String(Number.isInteger(sizeValue)?sizeValue:Number(sizeValue.toFixed(2)))+" "+sizeUnit
+    :"";
+  const pack=rowPrimaryQc(packSource)==="—"?"":rowPrimaryQc(packSource);
+  const code=mobileMergeIdentityCode(identitySource);
+
+  return {
+    target,
+    rows,
+    identitySource,
+    packSource,
+    imageSource,
+    brand,
+    size,
+    pack,
+    code
+  };
+}
+
+function mobileMergePreviewValue(value,row){
+  const source=row?sourceDisplayLabel(row):"";
+  return '<span>'+escapeHtml(value||"—")+'</span>'+
+    (source?'<small>Nguồn: '+escapeHtml(source)+'</small>':'');
+}
+
+function renderMobileMergePreview(){
+  const host=$("#mobileMergePreview");
+  if(!host)return;
+  const preview=buildMobileMergePreview();
+  host.hidden=!preview;
+
+  const apply=$("#mobileMergeApply");
+  if(apply)apply.disabled=!preview||mobileMergeBusy;
+  if(!preview)return;
+
+  const sources=$("#mobileMergePreviewSources");
+  if(sources){
+    const labels=preview.rows.map(row=>sourceDisplayLabel(row));
+    sources.textContent=labels.join(" + ");
+  }
+
+  const imageHost=$("#mobileMergePreviewImage");
+  if(imageHost){
+    const image=String(preview.imageSource&&preview.imageSource.image||"").trim();
+    imageHost.innerHTML=image
+      ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">'
+      :'<span>GL</span>';
+    imageHost.title=preview.imageSource
+      ?("Ảnh từ "+sourceDisplayLabel(preview.imageSource))
+      :"Chưa có ảnh";
+  }
+
+  const brand=$("#mobileMergePreviewBrand");
+  if(brand)brand.innerHTML=mobileMergePreviewValue(preview.brand,preview.identitySource);
+  const size=$("#mobileMergePreviewSize");
+  if(size)size.innerHTML=mobileMergePreviewValue(preview.size,preview.identitySource);
+  const pack=$("#mobileMergePreviewPack");
+  if(pack)pack.innerHTML=mobileMergePreviewValue(preview.pack,preview.packSource);
+  const code=$("#mobileMergePreviewCode");
+  if(code){
+    const codeText=preview.code.value
+      ?preview.code.kind+" "+preview.code.value
+      :"";
+    code.innerHTML=mobileMergePreviewValue(codeText,preview.identitySource);
+  }
 }
 
 function mobileUserCanonicalMineCard(row){
@@ -3605,11 +3755,12 @@ function renderMobileMergePanel(){
   }
   if(hint){
     hint.textContent=target
-      ?"Chạm từng nguồn siêu thị liên quan để cập nhật ngay."
-      :"Sau đó chạm các nguồn siêu thị liên quan để cập nhật ngay.";
+      ?"Chọn/bỏ chọn nguồn bên dưới để kiểm tra bản xem trước. Chưa ghi dữ liệu."
+      :"Sau đó chọn các nguồn siêu thị liên quan để tạo bản xem trước.";
   }
   const passwordWrap=$("#mobileMergePasswordWrap");
   if(passwordWrap)passwordWrap.hidden=Boolean(updateAdminToken||mobileMergeAdminToken);
+  renderMobileMergePreview();
 }
 
 async function ensureMobileMergeAdmin(){
@@ -3628,38 +3779,42 @@ async function ensureMobileMergeAdmin(){
   return mobileMergeAdminToken;
 }
 
-async function quickAttachMobileMergeSource(row){
-  if(mobileMergeBusy||!row||isMineRow(row))return;
-  const target=mobileMergeTargetRow();
-  if(!target)return;
-  const targetId=String(target.canonical_product_id||"").trim();
-  const rowId=String(row.canonical_product_id||"").trim();
-  if(targetId&&rowId===targetId)return;
-  if(rowId&&rowId!==targetId)return;
+async function applyMobileMergePreview(){
+  if(mobileMergeBusy)return;
+  const preview=buildMobileMergePreview();
+  if(!preview)return;
 
   const status=$("#mobileMergeStatus");
   mobileMergeBusy=true;
-  if(status)status.textContent="Đang cập nhật...";
+  renderMobileMergePanel();
+  if(status)status.textContent="Đang áp dụng dữ liệu chuẩn...";
   try{
     const token=await ensureMobileMergeAdmin();
-    const members=mobileMergeTargetMembers();
-    const memberUrls=[...members.map(item=>item.canonical_url),row.canonical_url];
     const headers=new Headers({"content-type":"application/json"});
     if(API_KEY)headers.set("apikey",API_KEY);
     headers.set("x-getlink-admin",token);
+
     const res=await fetch(API+"/api/product-merge",{
       method:"POST",
       headers,
-      body:JSON.stringify({member_urls:memberUrls})
+      body:JSON.stringify({
+        member_urls:preview.rows.map(row=>row.canonical_url),
+        identity_source_url:preview.identitySource&&preview.identitySource.canonical_url||"",
+        pack_source_url:preview.packSource&&preview.packSource.canonical_url||"",
+        image_source_url:preview.imageSource&&preview.imageSource.canonical_url||"",
+        replace_members:true
+      })
     });
     const data=await res.json().catch(()=>({}));
     if(!res.ok){
       if(res.status===401)mobileMergeAdminToken="";
-      throw new Error(data.detail||data.error||"Chưa cập nhật được.");
+      throw new Error(data.detail||data.error||"Chưa áp dụng được.");
     }
+
     await fetchLibraryFromSupabase();
+    resetMobileMergeSelectionForTarget();
     renderUserWorkHome();
-    if(status)status.textContent="Đã thêm "+canonicalDisplayName(row);
+    if(status)status.textContent="Đã áp dụng. Bạn có thể tiếp tục chọn nguồn để chỉnh lại.";
   }catch(error){
     if(status)status.textContent=String(error&&error.message||error);
   }finally{

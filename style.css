@@ -10977,3 +10977,148 @@ body[data-app-role="user"] #userTableHead{
     font-size:12px!important;
   }
 }
+
+/* Excel / Google Sheets typography v32 */
+html,
+body,
+button,
+input,
+select,
+textarea{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  letter-spacing:0!important;
+}
+body{
+  font-size:13px!important;
+  line-height:1.35!important;
+  font-weight:400!important;
+}
+
+/* Main app text: familiar spreadsheet rhythm, less app-like boldness. */
+.site-brand-copy h1{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  font-size:26px!important;
+  font-weight:700!important;
+  letter-spacing:0!important;
+}
+.site-head p,
+.catalog-title-row,
+.catalog-title-row h2,
+#libraryCount,
+.filter-label,
+.category-chip,
+.pack-chip,
+.source-chip,
+.view-button,
+.role-badge,
+.role-admin-button,
+.catalog-search input{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+}
+.catalog-title-row h2{
+  font-weight:700!important;
+}
+#libraryCount,
+.filter-label{
+  font-size:11px!important;
+  font-weight:400!important;
+}
+.category-chip,
+.pack-chip,
+.source-chip,
+.view-button,
+.role-badge,
+.role-admin-button{
+  font-size:11px!important;
+  font-weight:600!important;
+}
+.catalog-search input{
+  font-size:12px!important;
+  font-weight:400!important;
+}
+
+/* Table typography: close to Google Sheets Arial 10 / Excel 11. */
+.xls-price-table,
+.xls-price-table th,
+.xls-price-table td,
+.xls-price-table input,
+.xls-price-table button{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  font-variant-numeric:tabular-nums;
+  letter-spacing:0!important;
+}
+.xls-price-table th,
+.xls-price-table.user-table-mode #userTableHead th,
+.xls-price-table.supplier-table-mode #supplierTableHead th,
+.xls-price-table #standardTableHead th{
+  font-size:10px!important;
+  line-height:1.2!important;
+  font-weight:700!important;
+  text-transform:none!important;
+  letter-spacing:0!important;
+}
+.xls-price-table td,
+.xls-price-table.user-table-mode .user-table-row td,
+.xls-price-table.supplier-table-mode .supplier-table-row td{
+  font-size:11px!important;
+  line-height:1.25!important;
+  font-weight:400!important;
+}
+
+/* Product names should read like spreadsheet cells, not card titles. */
+.user-product-name,
+.user-col-product,
+.supplier-product-name,
+.xls-product-name{
+  font-size:11px!important;
+  line-height:1.25!important;
+  font-weight:400!important;
+  color:#202124!important;
+}
+
+/* Numeric values: slightly stronger only where the eye needs them. */
+.user-price-main,
+.supplier-price-value,
+.xls-price-value{
+  font-size:11px!important;
+  line-height:1.2!important;
+  font-weight:600!important;
+}
+.user-qc-text,
+.user-unit-text{
+  font-size:10px!important;
+  line-height:1.2!important;
+  font-weight:400!important;
+}
+.user-col-bargain .xls-input,
+.user-grid-bargain,
+.xls-input{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  font-size:11px!important;
+  font-weight:400!important;
+}
+
+/* Keep small secondary labels readable without heavy condensed text. */
+.user-grid-field>span,
+.user-grid-field>strong,
+.user-grid-source,
+.user-grid-price-line small,
+.user-grid-price-line strong,
+.compact-meta,
+.compact-price small,
+.compact-price strong{
+  font-family:Arial,"Helvetica Neue",Helvetica,sans-serif!important;
+  letter-spacing:0!important;
+}
+.user-grid-field>span,
+.user-grid-source,
+.user-grid-price-line small,
+.compact-meta,
+.compact-price small{
+  font-weight:400!important;
+}
+.user-grid-field>strong,
+.user-grid-price-line strong,
+.compact-price strong{
+  font-weight:600!important;
+}

@@ -2312,8 +2312,7 @@ function renderCategoryMenu(){
         'data-root="'+escapeAttr(group.key)+'" data-group="" type="button">'+
         '<span>'+escapeHtml(group.name)+'</span><small>'+group.count+'</small>'+
       '</button>'
-    ).join("")+
-    '<div class="category-scroll-end-spacer" aria-hidden="true"></div>';
+    ).join("");
 
   const current=$("#mobileCategoryCurrent");
   if(current){
@@ -2896,6 +2895,11 @@ function normalizeBrowseCategoryForSource(source){
   activeGroupUrl="";
 }
 
+function resetActiveCatalogScroll(){
+  const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
+  if(activeScroller)activeScroller.scrollTop=0;
+}
+
 function setActiveSourceFilter(nextSource,{scroll=true}={}){
   const previousSource=activeSourceFilter;
   activeSourceFilter=TABLE_SOURCE_CYCLE.includes(nextSource)?nextSource:"";
@@ -2919,10 +2923,7 @@ function setActiveSourceFilter(nextSource,{scroll=true}={}){
   libraryPage=1;
   resetBrowseDetail();
 
-  if(scroll){
-    const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
-    if(activeScroller)activeScroller.scrollTop=0;
-  }
+  if(scroll)resetActiveCatalogScroll();
 
   renderLibraryProducts();
   scheduleCategoryMenuRefresh();
@@ -4606,6 +4607,7 @@ function selectCategoryChip(chip){
   $("#librarySearch").value="";
   resetBrowseDetail();
   closeMobileCategoryNav();
+  resetActiveCatalogScroll();
   renderCategoryMenu();
   renderLibraryProducts();
 }
@@ -4758,6 +4760,7 @@ $("#brandTabs").addEventListener("click",e=>{
   resetBrowseDetail();
   document.querySelectorAll(".brand-chip").forEach(x=>x.classList.remove("active"));
   chip.classList.add("active");
+  resetActiveCatalogScroll();
   renderLibraryProducts();
 });
 
@@ -4771,6 +4774,7 @@ $("#packTabs").addEventListener("click",e=>{
   if(activePackKind)localStorage.setItem("getlink:filter-pack",activePackKind);
   else localStorage.removeItem("getlink:filter-pack");
   resetBrowseDetail();
+  resetActiveCatalogScroll();
   renderLibraryProducts();
 });
 
@@ -4792,8 +4796,7 @@ function queueLibrarySearch(value){
     libraryQuery=next;
     libraryPage=1;
     resetBrowseDetail();
-    const activeScroller=libraryView==="table"?$("#tableView"):$("#productGrid");
-    if(activeScroller)activeScroller.scrollTop=0;
+    resetActiveCatalogScroll();
     renderLibraryProducts();
   });
 }
@@ -4831,11 +4834,13 @@ if(mobileUserSearch){
     libraryQuery=String(e.target.value||"").trim();
     mobileUserLimit=8;
     renderUserWorkHome();
+    resetMobileUserResultsScroll();
   });
   mobileUserSearch.addEventListener("compositionend",e=>{
     libraryQuery=String(e.target.value||"").trim();
     mobileUserLimit=8;
     renderUserWorkHome();
+    resetMobileUserResultsScroll();
   });
 }
 
@@ -5493,7 +5498,6 @@ $("#runUpdateNow")?.addEventListener("click",runProtectedUpdateNow);
 $("#toggleImport").addEventListener("click",()=>{
   if(appRole!=="admin"){openAdminLogin();return;}
   $("#importCard").hidden=false;
-  $("#importCard").scrollIntoView({behavior:"smooth",block:"center"});
 });
 
 $("#closeImport").addEventListener("click",()=>{

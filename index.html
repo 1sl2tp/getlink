@@ -4,7 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <meta name="app-build-id" content="0fe74c118395d9a2d3ffafeb29a771ee7cb6483fc75c3a3410289c850da0aa1e">
+  <meta name="app-build-id" content="30dcdbbd58798996d0a22261cf76b86a33524a16890263627f415a8d3da99268">
+  <link rel="stylesheet" href="./style.css?v=30dcdbbd58798996d0a22261cf76b86a33524a16890263627f415a8d3da99268">
   <script>
     (()=>{try{
       const p=new URL(location.href).searchParams;
@@ -33,13 +34,6 @@
       return url.toString();
     }
 
-    function loadStyle(build){
-      const link=document.createElement("link");
-      link.rel="stylesheet";
-      link.href=assetUrl("style.css",build);
-      link.dataset.getlinkBuild=build;
-      document.head.appendChild(link);
-    }
 
     function loadScript(path,build){
       return new Promise((resolve,reject)=>{
@@ -150,7 +144,6 @@
     }
 
     const activeBuild=currentBuild;
-    loadStyle(activeBuild);
 
     window.__GETLINK_BUILD_RUNTIME__={
       BUILD_PARAM,

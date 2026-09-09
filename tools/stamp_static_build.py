@@ -8,10 +8,24 @@ PLACEHOLDER='__GETLINK_BUILD_ID__'
 ASSETS=('app.js','style.css','config.js')
 
 def normalized_index(text):
-    pattern=r'(<meta name="app-build-id" content=")[^"]*(">)'
-    normalized,count=re.subn(pattern,lambda m:m.group(1)+PLACEHOLDER+m.group(2),text,count=1)
-    if count!=1:
+    meta_pattern=r'(<meta name="app-build-id" content=")[^"]*(">)'
+    normalized,meta_count=re.subn(
+        meta_pattern,
+        lambda m:m.group(1)+PLACEHOLDER+m.group(2),
+        text,
+        count=1
+    )
+    style_pattern=r'(<link rel="stylesheet" href="./style\.css\?v=)[^"]+(">)'
+    normalized,style_count=re.subn(
+        style_pattern,
+        lambda m:m.group(1)+PLACEHOLDER+m.group(2),
+        normalized,
+        count=1
+    )
+    if meta_count!=1:
         raise SystemExit('missing app-build-id meta')
+    if style_count!=1:
+        raise SystemExit('missing blocking style.css build link')
     return normalized
 
 def calculate():
@@ -25,7 +39,7 @@ def calculate():
         h.update(b'\0')
         h.update((ROOT/name).read_bytes())
     build_id=h.hexdigest()
-    stamped=normalized.replace(PLACEHOLDER,build_id,1)
+    stamped=normalized.replace(PLACEHOLDER,build_id)
     payload={
         'version':'GETLINK',
         'build_id':build_id,

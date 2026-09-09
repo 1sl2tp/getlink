@@ -125,6 +125,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('addEventListener("input"',body)
         self.assertNotIn("isComposing",body)
         self.assertIn("renderUserWorkHome()",body)
+        self.assertIn("resetMobileUserResultsScroll()",body)
 
 
 if __name__=="__main__":

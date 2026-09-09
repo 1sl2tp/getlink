@@ -465,7 +465,7 @@ assert.equal(money(0),"—");
   assert.match(app,/mine:\{full:"Tạp hóa",short:"Tạp hóa"/);
   assert.match(app,/function rowHasOwnPrice\(row\)/);
   assert.match(app,/function rowMatchesSourceFilter\(row,source\)/);
-  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)\|\|rowHasOwnPrice\(row\)/);
+  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)/);
   assert.match(app,/activeSourceFilter==="mine"\?rowPrimaryOwnPrice\(row\):sourcePrice/);
   assert.match(css,/Tạp hóa own-price source v13/);
   assert.match(css,/repeat\(3,minmax\(44px,1fr\)\)/);
@@ -479,6 +479,15 @@ assert.equal(money(0),"—");
   assert.match(app,/Đang hết/);
   assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)\|\|rowHasOwnPrice\(row\)/);
   assert.match(css,/Supplier stock status v14/);
+}
+
+{
+  // Tạp hóa category hierarchy = supplier sheets
+  assert.match(app,/const SUPPLIER_GROUP_PREFIX="supplier:"/);
+  assert.match(app,/function supplierBrowseGroupKey\(row\)/);
+  assert.match(app,/function supplierBrowseGroupName\(row\)/);
+  assert.match(app,/activeSourceFilter==="mine"&&isMineRow\(row\)/);
+  assert.match(app,/UI_LIBRARY_CACHE_KEY="library-data-v3-supplier"/);
 }
 
 console.log("money and hierarchy UI tests passed");

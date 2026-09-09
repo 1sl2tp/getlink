@@ -159,14 +159,15 @@ let userWorkDesktopScope="mine";
 let userWorkDesktopCategoryKey="";
 let userWorkDesktopAutoLoadObserver=null;
 let userWorkDesktopAutoLoadBusy=false;
-const MOBILE_USER_SCOPES=["mine","market"];
-const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị"};
+const MOBILE_USER_SCOPES=["mine","market","news"];
+const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị",news:"Tin tức"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
 const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
   "shopping-cart":'<path d="M4 4h2l2 10h9l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/>',
+  "news":'<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M15 13h1M8 16h8"/>',
   "package-export":'<path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/><path d="M8 5.25 16 9.75"/><path d="M16 16h5M19 13l3 3-3 3"/>',
   "category":'<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
   "beer":'<path d="M6 7h9v12H6z"/><path d="M15 9h2a3 3 0 0 1 0 6h-2"/><path d="M8 4h5v3H8z"/>',
@@ -190,6 +191,36 @@ function displayUpperFirst(value){
 let mobileUserScope="mine";
 let mobileUserCategoryKey="";
 let mobileUserLimit=8;
+
+const NEWS_TOPIC_LABELS={
+  "latest":"Mới nhất",
+  "thoi-su":"Thời sự",
+  "kinh-doanh":"Kinh doanh",
+  "cong-nghe":"Công nghệ",
+  "the-thao":"Thể thao",
+  "giai-tri":"Giải trí",
+  "suc-khoe":"Sức khỏe"
+};
+const NEWS_SOURCE_LABELS={
+  vnexpress:"VnExpress",
+  dantri:"Dân Trí",
+  tuoitre:"Tuổi Trẻ",
+  baomoi:"Báo Mới",
+  vietnamnet:"VietnamNet",
+  kenh14:"Kênh14",
+  zing:"Zing News",
+  thanhnien:"Báo Thanh Niên",
+  laodong:"Lao Động"
+};
+const NEWS_CACHE_TTL=3*60*1000;
+const newsCache=new Map();
+let newsTopic="latest";
+let newsSource="";
+let newsQuery="";
+let newsItems=[];
+let newsLoading=false;
+let newsError="";
+let newsRequestSeq=0;
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
@@ -322,6 +353,207 @@ function searchKey(value){
     .toLowerCase()
     .replace(/[^a-z0-9]+/g," ")
     .trim();
+}
+
+
+function newsTopicButtons(){
+  return Object.entries(NEWS_TOPIC_LABELS).map(([key,label])=>
+    '<button class="news-filter-chip '+(newsTopic===key?"active":"")+'" data-news-topic="'+escapeAttr(key)+'" type="button" aria-pressed="'+(newsTopic===key?"true":"false")+'">'+
+      escapeHtml(label)+
+    '</button>'
+  ).join("");
+}
+function newsSourceButtons(){
+  return [
+    '<button class="news-filter-chip '+(!newsSource?"active":"")+'" data-news-source="" type="button" aria-pressed="'+(!newsSource?"true":"false")+'">Tất cả nguồn</button>',
+    ...Object.entries(NEWS_SOURCE_LABELS).map(([key,label])=>
+      '<button class="news-filter-chip '+(newsSource===key?"active":"")+'" data-news-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(newsSource===key?"true":"false")+'">'+
+        escapeHtml(label)+
+      '</button>'
+    )
+  ].join("");
+}
+function newsSourceName(key){
+  return NEWS_SOURCE_LABELS[key]||key||"Nguồn tin";
+}
+function newsVisibleItems(){
+  const q=searchKey(newsQuery);
+  const selectedName=newsSource?newsSourceName(newsSource):"";
+  return newsItems.filter(item=>{
+    if(newsSource&&item.source_key!==newsSource&&!(item.also_sources||[]).includes(selectedName))return false;
+    if(!q)return true;
+    const haystack=searchKey([item.title,item.summary,item.source_name,(item.also_sources||[]).join(" ")].join(" "));
+    return q.split(/\s+/).filter(Boolean).every(token=>haystack.includes(token));
+  });
+}
+function newsAge(iso){
+  const age=formatAge(iso);
+  return age||"";
+}
+function newsCardHtml(item,compact=false){
+  const also=Array.isArray(item.also_sources)?item.also_sources:[];
+  const duplicate=Number(item.duplicate_count||1);
+  const sourceLine=[
+    escapeHtml(item.source_name||"Nguồn tin"),
+    newsAge(item.published_at)?escapeHtml(newsAge(item.published_at)):"",
+    duplicate>1?escapeHtml("+"+(duplicate-1)+" nguồn"):""
+  ].filter(Boolean).join(" · ");
+  return '<button class="news-card '+(compact?"news-card-compact ":"")+'" type="button" data-news-id="'+escapeAttr(item.id||"")+'">'+
+    (item.image?'<span class="news-card-image"><img src="'+escapeAttr(item.image)+'" alt="" loading="lazy" decoding="async"></span>':'')+
+    '<span class="news-card-copy">'+
+      '<small class="news-card-meta">'+sourceLine+'</small>'+
+      '<strong class="news-card-title">'+escapeHtml(item.title||"")+'</strong>'+
+      (item.summary?'<span class="news-card-summary">'+escapeHtml(item.summary)+'</span>':'')+
+    '</span>'+
+  '</button>';
+}
+function renderNewsDesktop(){
+  const section=$("#userWorkNews");
+  if(!section)return;
+  section.hidden=userWorkDesktopScope!=="news";
+  if(section.hidden)return;
+
+  const topicHost=$("#newsTopicTabs");
+  const sourceHost=$("#newsSourceTabs");
+  const results=$("#userWorkNewsResults");
+  const empty=$("#userWorkNewsEmpty");
+  if(topicHost)topicHost.innerHTML=newsTopicButtons();
+  if(sourceHost)sourceHost.innerHTML=newsSourceButtons();
+
+  const visible=newsVisibleItems();
+  if(results){
+    results.innerHTML=newsLoading&&!newsItems.length
+      ?'<div class="news-state">Đang đọc RSS từ các nguồn...</div>'
+      :visible.map(item=>newsCardHtml(item,false)).join("");
+  }
+  if(empty){
+    empty.hidden=newsLoading||visible.length>0;
+    empty.textContent=newsError||"Chưa có tin phù hợp.";
+  }
+  ensureNewsLoaded(false);
+}
+function renderMobileNews(){
+  const results=$("#mobileUserResults");
+  const empty=$("#mobileUserEmpty");
+  const visible=newsVisibleItems();
+  if(results){
+    results.innerHTML=newsLoading&&!newsItems.length
+      ?'<div class="news-state">Đang đọc RSS từ các nguồn...</div>'
+      :visible.map(item=>newsCardHtml(item,true)).join("");
+    results.dataset.hasMore="0";
+    results.hidden=false;
+  }
+  if(empty){
+    empty.hidden=newsLoading||visible.length>0;
+    empty.textContent=newsError||"Chưa có tin phù hợp.";
+  }
+  const orderBar=document.querySelector(".mobile-user-order-bar");
+  const orderStatus=$("#mobileUserOrderStatus");
+  if(orderBar)orderBar.hidden=true;
+  if(orderStatus)orderStatus.hidden=true;
+  ensureNewsLoaded(false);
+}
+function refreshNewsViews(){
+  if(isMobileUserWork()){
+    if(mobileUserScope==="news")renderMobileNews();
+  }else if(userWorkDesktopScope==="news"){
+    renderNewsDesktop();
+  }
+}
+function applyNewsPayload(data){
+  newsItems=Array.isArray(data&&data.items)?data.items:[];
+  newsError="";
+}
+function ensureNewsLoaded(force=false){
+  if(!API)return;
+  const key=newsTopic;
+  const cached=newsCache.get(key);
+  if(!force&&cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL){
+    if(newsItems!==cached.items)newsItems=cached.items;
+    return;
+  }
+  if(newsLoading)return;
+  newsLoading=true;
+  newsError="";
+  const seq=++newsRequestSeq;
+  refreshNewsViews();
+  apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80",{cache:"no-store"})
+    .then(async response=>{
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"Không đọc được RSS");
+      if(seq!==newsRequestSeq||key!==newsTopic)return;
+      applyNewsPayload(data);
+      newsCache.set(key,{at:Date.now(),items:newsItems});
+    })
+    .catch(error=>{
+      if(seq!==newsRequestSeq)return;
+      newsItems=[];
+      newsError="Chưa đọc được tin. Thử làm mới.";
+      console.debug("GETLINK news RSS",error);
+    })
+    .finally(()=>{
+      if(seq!==newsRequestSeq)return;
+      newsLoading=false;
+      refreshNewsViews();
+    });
+}
+function setNewsTopic(key){
+  if(!Object.prototype.hasOwnProperty.call(NEWS_TOPIC_LABELS,key))key="latest";
+  if(newsTopic===key&&newsItems.length)return;
+  newsTopic=key;
+  newsItems=[];
+  newsError="";
+  const cached=newsCache.get(key);
+  if(cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL)newsItems=cached.items||[];
+  refreshNewsViews();
+  ensureNewsLoaded(false);
+}
+function newsItemById(id){
+  return newsItems.find(item=>String(item.id||"")===String(id||""))||null;
+}
+function openNewsQuickView(item){
+  const modal=$("#newsQuickView");
+  if(!modal||!item)return;
+  const imageWrap=$("#newsQuickImageWrap");
+  const image=$("#newsQuickImage");
+  const title=$("#newsQuickTitle");
+  const summary=$("#newsQuickSummary");
+  const meta=$("#newsQuickMeta");
+  const duplicates=$("#newsQuickDuplicates");
+  const original=$("#newsQuickOriginal");
+
+  if(title)title.textContent=item.title||"";
+  if(summary)summary.textContent=item.summary||"RSS nguồn chưa cung cấp mô tả cho tin này.";
+  if(meta)meta.textContent=[item.source_name,newsAge(item.published_at)].filter(Boolean).join(" · ");
+  if(imageWrap&&image){
+    if(item.image){
+      image.src=item.image;
+      image.alt="";
+      imageWrap.hidden=false;
+    }else{
+      image.removeAttribute("src");
+      imageWrap.hidden=true;
+    }
+  }
+  const also=Array.isArray(item.also_sources)?item.also_sources:[];
+  if(duplicates){
+    duplicates.hidden=!also.length;
+    duplicates.textContent=also.length?"Cùng tin: "+also.join(", "):"";
+  }
+  if(original){
+    original.href=item.url||"#";
+    original.hidden=!item.url;
+  }
+  modal.hidden=false;
+  modal.setAttribute("aria-hidden","false");
+  document.body.classList.add("news-quick-open");
+}
+function closeNewsQuickView(){
+  const modal=$("#newsQuickView");
+  if(!modal)return;
+  modal.hidden=true;
+  modal.setAttribute("aria-hidden","true");
+  document.body.classList.remove("news-quick-open");
 }
 
 

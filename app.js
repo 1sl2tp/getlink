@@ -155,12 +155,14 @@ let classificationRefreshBusy=false;
 
 let userWorkMarketLimit=8;
 let userWorkMineLimit=12;
+let userWorkDesktopScope="mine";
+let userWorkDesktopCategoryKey="";
 const MOBILE_USER_SCOPES=["mine","market"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
 const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
-let mobileUserScope="";
-let mobileUserChildSource="";
+let mobileUserScope="mine";
+let mobileUserCategoryKey="";
 let mobileUserLimit=8;
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
@@ -3336,6 +3338,64 @@ function userWorkRows(){
     .map(item=>item.row);
 }
 
+function userWorkRowCategoryKey(row,scope){
+  if(scope==="mine"){
+    return supplierBrowseGroupKey(row)||UNCLASSIFIED_GROUP_KEY;
+  }
+  return rowManualGroupKey(row)||UNCLASSIFIED_GROUP_KEY;
+}
+
+function userWorkRowCategoryName(row,scope){
+  if(scope==="mine"){
+    return supplierBrowseGroupName(row)||"Chưa phân loại";
+  }
+  return rowManualGroupName(row)||"Chưa phân loại";
+}
+
+function userWorkRowCategorySort(row,scope){
+  if(scope==="mine")return supplierBrowseGroupSort(row);
+  return rowManualGroupKey(row)?rowManualGroupSort(row):9999999;
+}
+
+function userWorkCategories(scope){
+  const groups=new Map();
+  for(const row of libraryCache){
+    if(String(row.preference_state||"normal")==="hidden")continue;
+    if(scope==="mine"?!isMineRow(row):isMineRow(row))continue;
+    const key=userWorkRowCategoryKey(row,scope);
+    if(!key)continue;
+    const item={
+      key,
+      name:userWorkRowCategoryName(row,scope),
+      sort:userWorkRowCategorySort(row,scope)
+    };
+    const current=groups.get(key);
+    if(!current||item.sort<current.sort)groups.set(key,item);
+  }
+  return [...groups.values()].sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name,"vi"));
+}
+
+function userWorkRowsForScope(scope,categoryKey=""){
+  return userWorkRows().filter(row=>{
+    if(scope==="mine"?!isMineRow(row):isMineRow(row))return false;
+    if(categoryKey&&userWorkRowCategoryKey(row,scope)!==categoryKey)return false;
+    return true;
+  });
+}
+
+function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
+  if(!host)return;
+  const categories=userWorkCategories(scope);
+  host.innerHTML=[
+    '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">Tất cả</button>',
+    ...categories.map(item=>
+      '<button class="user-work-category-button '+(item.key===activeKey?"active":"")+'" '+
+      attribute+'="'+escapeAttr(item.key)+'" type="button" aria-pressed="'+(item.key===activeKey?"true":"false")+'">'+
+      escapeHtml(item.name)+'</button>'
+    )
+  ].join("");
+}
+
 function userWorkPrimaryMarketPrice(row){
   const levels=rowPriceLevels(row);
   const direct=Number(
@@ -3457,27 +3517,9 @@ function mobileSupplierSources(){
 }
 
 function mobileUserRows(){
-  const baseRows=userWorkRows();
+  const baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey);
   const profiles=mobileCanonicalProfiles(baseRows);
   let rows=baseRows.map((row,index)=>({row,index}));
-
-  if(mobileUserScope==="mine"){
-    rows=rows.filter(({row})=>isMineRow(row));
-  }else if(mobileUserScope==="market"){
-    rows=rows.filter(({row})=>!isMineRow(row));
-  }
-
-  if(mobileUserChildSource){
-    rows=rows.filter(({row})=>{
-      if(mobileUserScope==="mine"){
-        return mobileSupplierSourceKey(row)===mobileUserChildSource;
-      }
-      if(mobileUserScope==="market"){
-        return rowSourceFilterKey(row)===mobileUserChildSource;
-      }
-      return true;
-    });
-  }
 
   rows.sort((a,b)=>{
     if(!mobileUserScope){
@@ -3964,23 +4006,9 @@ function renderMobileUserSourceTabs(){
       ).join("")+
     '</div>';
 
-  let children=[];
-  if(mobileUserScope==="mine"){
-    children=mobileSupplierSources().map(item=>[item.key,item.label]);
-  }else if(mobileUserScope==="market"){
-    children=MOBILE_MARKET_SOURCES.map(key=>[key,MOBILE_MARKET_SOURCE_LABELS[key]||key]);
-  }
-
-  const child=children.length
-    ?'<div class="mobile-user-source-level child">'+
-      children.map(([key,label])=>
-        '<button class="mobile-user-source-chip '+(key===mobileUserChildSource?"active":"")+'" '+
-          'data-mobile-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserChildSource?"true":"false")+'">'+
-          escapeHtml(label)+
-        '</button>'
-      ).join("")+
-    '</div>'
-    :"";
+  const categoryHost=document.createElement("div");
+  renderUserWorkCategoryButtons(categoryHost,mobileUserScope,mobileUserCategoryKey,"data-mobile-category");
+  const child='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
 
   host.innerHTML=parent+child;
 }
@@ -4161,32 +4189,47 @@ function renderUserWorkHome(){
     return;
   }
 
-  const rows=userWorkRows();
-  const market=rows.filter(row=>!isMineRow(row));
-  const mine=rows.filter(isMineRow);
+  document.querySelectorAll(".user-work-jump-button").forEach(btn=>{
+    const active=btn.dataset.workTarget===userWorkDesktopScope;
+    btn.classList.toggle("active",active);
+    btn.setAttribute("aria-pressed",active?"true":"false");
+  });
 
+  const categoryHost=$("#userWorkDesktopCategories");
+  renderUserWorkCategoryButtons(
+    categoryHost,
+    userWorkDesktopScope,
+    userWorkDesktopCategoryKey,
+    "data-work-category"
+  );
+
+  const scoped=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey);
   const marketHost=$("#userWorkMarketGrid");
   const marketEmpty=$("#userWorkMarketEmpty");
-  if(marketHost){
-    marketHost.innerHTML=market.slice(0,userWorkMarketLimit).map(userWorkMarketCard).join("");
-  }
-  if(marketEmpty)marketEmpty.hidden=market.length!==0;
-  const marketMore=$("#userWorkMarketMore");
-  if(marketMore){
-    marketMore.hidden=market.length<=userWorkMarketLimit;
-    marketMore.textContent=market.length>userWorkMarketLimit?"Xem thêm →":"";
-  }
-
+  const marketSection=$("#userWorkMarket");
   const mineHost=$("#userWorkMineRows");
   const mineEmpty=$("#userWorkMineEmpty");
-  if(mineHost){
-    mineHost.innerHTML=mine.slice(0,userWorkMineLimit).map(userWorkMineRow).join("");
-  }
-  if(mineEmpty)mineEmpty.hidden=mine.length!==0;
-  const mineMore=$("#userWorkMineMore");
-  if(mineMore){
-    mineMore.hidden=mine.length<=userWorkMineLimit;
-    mineMore.textContent=mine.length>userWorkMineLimit?"Xem thêm →":"";
+  const mineSection=$("#userWorkMine");
+
+  if(marketSection)marketSection.hidden=userWorkDesktopScope!=="market";
+  if(mineSection)mineSection.hidden=userWorkDesktopScope!=="mine";
+
+  if(userWorkDesktopScope==="market"){
+    if(marketHost)marketHost.innerHTML=scoped.slice(0,userWorkMarketLimit).map(userWorkMarketCard).join("");
+    if(marketEmpty)marketEmpty.hidden=scoped.length!==0;
+    const marketMore=$("#userWorkMarketMore");
+    if(marketMore){
+      marketMore.hidden=scoped.length<=userWorkMarketLimit;
+      marketMore.textContent=scoped.length>userWorkMarketLimit?"Xem thêm →":"";
+    }
+  }else{
+    if(mineHost)mineHost.innerHTML=scoped.slice(0,userWorkMineLimit).map(userWorkMineRow).join("");
+    if(mineEmpty)mineEmpty.hidden=scoped.length!==0;
+    const mineMore=$("#userWorkMineMore");
+    if(mineMore){
+      mineMore.hidden=scoped.length<=userWorkMineLimit;
+      mineMore.textContent=scoped.length>userWorkMineLimit?"Xem thêm →":"";
+    }
   }
 
   updateUserWorkOrderSummary();
@@ -5396,9 +5439,22 @@ if(userWorkHome){
   userWorkHome.addEventListener("click",e=>{
     const jump=e.target.closest(".user-work-jump-button");
     if(jump){
-      const target=jump.dataset.workTarget==="mine"?$("#userWorkMine"):$("#userWorkMarket");
-      document.querySelectorAll(".user-work-jump-button").forEach(btn=>btn.classList.toggle("active",btn===jump));
-      if(target)target.scrollIntoView({behavior:"smooth",block:"start"});
+      userWorkDesktopScope=jump.dataset.workTarget==="market"?"market":"mine";
+      userWorkDesktopCategoryKey="";
+      userWorkMarketLimit=8;
+      userWorkMineLimit=12;
+      renderUserWorkHome();
+      return;
+    }
+
+    const desktopCategory=e.target.closest("[data-work-category]");
+    if(desktopCategory){
+      userWorkDesktopCategoryKey=String(desktopCategory.dataset.workCategory||"");
+      userWorkMarketLimit=8;
+      userWorkMineLimit=12;
+      renderUserWorkHome();
+      const scroller=userWorkDesktopScope==="market"?$("#userWorkMarketGrid"):$("#userWorkMineRows");
+      if(scroller)scroller.scrollTop=0;
       return;
     }
 
@@ -5456,24 +5512,18 @@ if(userWorkHome){
     if(mobileScope){
       const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)
         ?mobileScope.dataset.mobileScope
-        :"";
-      mobileUserScope=mobileUserScope===next?"":next;
-      mobileUserChildSource="";
+        :"mine";
+      mobileUserScope=next;
+      mobileUserCategoryKey="";
       mobileUserLimit=8;
       renderUserWorkHome();
       resetMobileUserResultsScroll();
       return;
     }
 
-    const mobileSource=e.target.closest("[data-mobile-source]");
-    if(mobileSource){
-      const next=String(mobileSource.dataset.mobileSource||"");
-      const allowed=mobileUserScope==="mine"
-        ?mobileSupplierSources().some(item=>item.key===next)
-        :MOBILE_MARKET_SOURCES.includes(next);
-      mobileUserChildSource=allowed
-        ?(mobileUserChildSource===next?"":next)
-        :"";
+    const mobileCategory=e.target.closest("[data-mobile-category]");
+    if(mobileCategory){
+      mobileUserCategoryKey=String(mobileCategory.dataset.mobileCategory||"");
       mobileUserLimit=8;
       renderUserWorkHome();
       resetMobileUserResultsScroll();

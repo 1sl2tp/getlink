@@ -471,4 +471,14 @@ assert.equal(money(0),"—");
   assert.match(css,/repeat\(3,minmax\(44px,1fr\)\)/);
 }
 
+{
+  // supplier sheet catalog contract
+  assert.match(app,/function isMineRow\(row\)/);
+  assert.match(app,/supplier_stock_status/);
+  assert.match(app,/function supplierAvailabilityText\(row\)/);
+  assert.match(app,/Đang hết/);
+  assert.match(app,/if\(source==="mine"\)return isMineRow\(row\)\|\|rowHasOwnPrice\(row\)/);
+  assert.match(css,/Supplier stock status v14/);
+}
+
 console.log("money and hierarchy UI tests passed");

@@ -34,7 +34,7 @@ function openUiCacheDb(){
     req.onerror=()=>reject(req.error);
   });
 }
-const UI_LIBRARY_CACHE_KEY="library-data-v6-supplier-price-history";
+const UI_LIBRARY_CACHE_KEY="library-data-v7-supplier-spreadsheet-layout";
 const UI_LIBRARY_CACHE_FALLBACK_KEYS=[];
 
 async function readUiLibraryCache(){
@@ -3046,7 +3046,7 @@ function renderLibraryProducts(){
 
 async function loadLibraryProducts(force=false){
   if(!API)return;
-  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?4:12)+'">Đang đọc thư viện Supabase...</td></tr>';
+  $("#libraryProducts").innerHTML='<tr class="catalog-loading-row"><td colspan="'+(activeSourceFilter==="mine"?11:12)+'">Đang đọc thư viện Supabase...</td></tr>';
   $("#productGrid").innerHTML='<div class="grid-loading">Đang đọc thư viện Supabase...</div>';
   $("#libraryEmpty").hidden=true;
   try{

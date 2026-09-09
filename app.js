@@ -1213,7 +1213,8 @@ function readOwnPrice(url,type){
 }
 
 function writeOwnPrice(url,type,value){
-  const n=Number(String(value||"").replace(/\D/g,""))||0;
+  let n=Number(String(value||"").replace(/\D/g,""))||0;
+  if(type==="bargain")n=Math.min(100000,n);
   const key=sheetOwnKey(url,type);
   if(n>0)localStorage.setItem(key,String(n));
   else localStorage.removeItem(key);
@@ -1859,11 +1860,24 @@ function userPublicPackInfo(row,levels){
   const supplierUnit=String(row&&row.supplier_retail_unit||"").trim();
   const leafLabel=String(h.label3||"").trim();
   const middleLabel=String(h.label2||"").trim();
-  const unit=supplierUnit||leafLabel||middleLabel||String(row&&row.pack_unit||"").trim()||"lẻ";
+  const packUnit=String(row&&row.pack_unit||"").trim();
+  const unit=supplierUnit||leafLabel||middleLabel||packUnit||"lẻ";
   const qty=supplierQty>1
     ?supplierQty
-    :(Number(h.qty3||0)>1?Number(h.qty3):(Number(h.qty2||0)>1?Number(h.qty2):0));
+    :(Number(h.qty3||0)>1
+      ?Number(h.qty3)
+      :(Number(h.qty2||0)>1
+        ?Number(h.qty2)
+        :(Number(row&&row.pack_quantity||0)>1?Number(row.pack_quantity):0)));
   return {unit,qty};
+}
+
+function userSourceCell(row){
+  const key=rowSourceFilterKey(row);
+  const logo=sourceLogoMark(key);
+  return '<span class="user-source-cell" title="'+escapeAttr(publicSourceCompactLabel(row))+'">'+
+    (logo||'<span class="user-source-text">'+escapeHtml(publicSourceCompactLabel(row))+'</span>')+
+  '</span>';
 }
 
 function userTableRow(row){
@@ -1875,31 +1889,36 @@ function userTableRow(row){
   const stock=supplierAvailabilityText(row);
   const carton=Number(levels.promoCartonPrice||levels.cartonPrice||0);
   const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
+  const hasCarton=Boolean(carton);
+  const hasRetail=Boolean(retail);
 
   const cartonHtml=stock
     ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
-    :(carton
-      ?'<strong class="user-price-main">'+money(carton)+'</strong><small class="user-price-unit">'+
-        (pack.qty>1?'thùng × '+pack.qty+' '+escapeHtml(pack.unit):'thùng')+'</small>'
-      :'<span class="xls-empty">—</span>');
+    :(hasCarton?'<strong class="user-price-main">'+money(carton)+'</strong>':'<span class="xls-empty">—</span>');
+  const qcCartonHtml=hasCarton&&pack.qty>1
+    ?'<span class="user-qc-text">'+pack.qty+' '+escapeHtml(pack.unit)+'</span>'
+    :'<span class="xls-empty">—</span>';
   const retailHtml=stock
     ?'<span class="xls-out-of-stock">'+escapeHtml(stock)+'</span>'
-    :(retail
-      ?'<strong class="user-price-main">'+money(retail)+'</strong><small class="user-price-unit">'+escapeHtml(pack.unit||"lẻ")+'</small>'
-      :'<span class="xls-empty">—</span>');
+    :(hasRetail?'<strong class="user-price-main">'+money(retail)+'</strong>':'<span class="xls-empty">—</span>');
+  const retailUnitHtml=hasRetail
+    ?'<span class="user-unit-text">'+escapeHtml(pack.unit||"lẻ")+'</span>'
+    :'<span class="xls-empty">—</span>';
 
   const stars=[1,2,3,4,5].map(n=>
-    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
+    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" '+
+      'data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" '+
+      'aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
   ).join("");
 
   return '<tr class="product-card xls-row user-table-row" data-url="'+escapeAttr(row.canonical_url)+'">'+
-    '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+
-      '<span class="user-product-name">'+escapeHtml(displayName)+'</span>'+
-      '<span class="user-product-source '+escapeAttr(rowSourceFilterKey(row))+'">'+escapeHtml(publicSourceCompactLabel(row))+'</span>'+
-    '</td>'+
+    '<td class="xls-name user-col-product" title="'+escapeAttr(String(row.source_name||row.name||""))+'">'+escapeHtml(displayName)+'</td>'+
+    '<td class="user-col-source">'+userSourceCell(row)+'</td>'+
     '<td class="user-col-carton-price">'+cartonHtml+'</td>'+
+    '<td class="user-col-carton-qc">'+qcCartonHtml+'</td>'+
     '<td class="user-col-retail-price">'+retailHtml+'</td>'+
-    '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
+    '<td class="user-col-retail-unit">'+retailUnitHtml+'</td>'+
+    '<td class="user-col-bargain"><input class="sheet-bargain xls-input" inputmode="numeric" max="100000" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></td>'+
     '<td class="user-col-rating"><span class="user-rating" role="group" aria-label="Đánh giá sản phẩm">'+stars+'</span></td>'+
   '</tr>';
 }
@@ -1915,28 +1934,25 @@ function userGridProductCard(row){
   const bargain=readOwnPrice(row.canonical_url,"bargain");
   const rating=readOwnRating(row.canonical_url);
   const stars=[1,2,3,4,5].map(n=>
-    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
+    '<button class="user-rating-button '+(n<=rating?"active":"")+'" type="button" '+
+      'data-url="'+escapeAttr(row.canonical_url)+'" data-rating="'+n+'" '+
+      'aria-label="Đánh giá '+n+' sao" aria-pressed="'+(n===rating?"true":"false")+'">★</button>'
   ).join("");
-  const priceLine=(label,price,unitText)=>
-    '<span class="user-grid-price-line"><small>'+label+'</small>'+
-      (stock?'<strong class="is-out-of-stock">'+escapeHtml(stock)+'</strong>':
-        (price?'<strong>'+money(price)+'</strong><em>'+escapeHtml(unitText)+'</em>':'<strong>—</strong>'))+
-    '</span>';
 
   return '<article class="grid-product product-card user-grid-product" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="grid-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span class="grid-product-fallback">GL</span>')+
     '</div>'+
     '<div class="grid-product-body">'+
-      '<div class="user-grid-source">'+escapeHtml(publicSourceCompactLabel(row))+'</div>'+
-      '<div class="grid-product-name user-grid-name">'+escapeHtml(displayName)+'</div>'+
-      '<div class="user-grid-prices">'+
-        priceLine("Thùng",carton,pack.qty>1?'thùng × '+pack.qty+' '+pack.unit:'thùng')+
-        priceLine("Lẻ",retail,pack.unit||"lẻ")+
-      '</div>'+
-      '<div class="user-grid-actions">'+
-        '<input class="sheet-bargain xls-input user-grid-bargain" inputmode="numeric" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Mặc cả">'+
-        '<span class="user-rating">'+stars+'</span>'+
+      '<div class="user-grid-name">'+escapeHtml(displayName)+'</div>'+
+      '<div class="user-grid-fields">'+
+        '<div class="user-grid-field"><span>Nguồn</span><strong>'+userSourceCell(row)+'</strong></div>'+
+        '<div class="user-grid-field"><span>Giá thùng</span><strong>'+(stock?escapeHtml(stock):(carton?money(carton):"—"))+'</strong></div>'+
+        '<div class="user-grid-field"><span>QC thùng</span><strong>'+(carton&&pack.qty>1?pack.qty+" "+escapeHtml(pack.unit):"—")+'</strong></div>'+
+        '<div class="user-grid-field"><span>Giá lẻ</span><strong>'+(stock?escapeHtml(stock):(retail?money(retail):"—"))+'</strong></div>'+
+        '<div class="user-grid-field"><span>Đơn vị lẻ</span><strong>'+(retail?escapeHtml(pack.unit||"lẻ"):"—")+'</strong></div>'+
+        '<div class="user-grid-field user-grid-field-bargain"><span>Mặc cả</span><input class="sheet-bargain xls-input user-grid-bargain" inputmode="numeric" max="100000" maxlength="6" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="Nhập giá"></div>'+
+        '<div class="user-grid-field user-grid-field-rating"><span>Đánh giá</span><strong class="user-rating">'+stars+'</strong></div>'+
       '</div>'+
     '</div>'+
   '</article>';
@@ -3665,7 +3681,8 @@ $("#productGrid").addEventListener("input",e=>{
   const bargain=e.target.closest(".user-grid-bargain");
   if(!bargain||appRole!=="user")return;
   const url=bargain.dataset.url||"";
-  writeOwnPrice(url,"bargain",bargain.value);
+  const saved=writeOwnPrice(url,"bargain",bargain.value);
+  bargain.value=saved?String(saved):"";
   queueUserFeedback(url);
 });
 
@@ -3736,8 +3753,11 @@ $("#libraryProducts").addEventListener("input",e=>{
 
   const type=carton?"carton":(middle?"middle":(retail?"retail":"bargain"));
   const url=input.dataset.url||"";
-  writeOwnPrice(url,type,input.value);
-  if(bargain&&appRole==="user")queueUserFeedback(url);
+  const saved=writeOwnPrice(url,type,input.value);
+  if(bargain&&appRole==="user"){
+    input.value=saved?String(saved):"";
+    queueUserFeedback(url);
+  }
   if(!bargain)updateSheetRow(input.closest(".product-card"));
 });
 

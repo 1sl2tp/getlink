@@ -20,9 +20,17 @@ const SOURCES=[
   {key:"hang-thuong",name:"Hàng thường",prefix:"HT-",ncc:"1i1ge5hOPmWi7oxjE5F5hD96f9Zvvp_0HQzwgawZiFgs",nccSheet:"1",mgrSheet:"Hàng thường",basis:"carton"}
 ] as const;
 
+// Integration lock:
+ // - Apps Script owns NCC <-> management-file synchronization.
+ // - This Edge Function only watches the management file and mirrors real file
+ //   changes into Supabase/Web.
+ // - Legacy NCC Drive/API sync code stays in this file for rollback, but is
+ //   deliberately not scheduled or reachable from the normal worker path.
+const LEGACY_NCC_DRIVE_SYNC_ENABLED=false;
+const MANAGER_CHANGE_SYNC_ENABLED=true;
+const LEGACY_NCC_WATCH_FILES=SOURCES.map(s=>({fileId:s.ncc,sourceKey:s.key,kind:"ncc" as const}));
 const WATCH_FILES=[
-  {fileId:MANAGER_ID,sourceKey:null,kind:"manager"},
-  ...SOURCES.map(s=>({fileId:s.ncc,sourceKey:s.key,kind:"ncc"}))
+  {fileId:MANAGER_ID,sourceKey:null,kind:"manager" as const}
 ] as const;
 
 type Pair={code:string,row:number,name:string,price:number|null,active:boolean};
@@ -461,6 +469,83 @@ async function refreshManagerDerived(source:any,managerRows:any[][]){
 }
 
 
+async function lockLegacyNccWatches(){
+  if(LEGACY_NCC_DRIVE_SYNC_ENABLED)return {locked:0};
+  const ids=LEGACY_NCC_WATCH_FILES.map(x=>x.fileId);
+  if(!ids.length)return {locked:0};
+  const {data,error}=await sb.from("getlink_sheet_watch_channels")
+    .select("*")
+    .eq("active",true)
+    .in("file_id",ids);
+  if(error)throw error;
+  const rows=Array.isArray(data)?data:[];
+  for(const old of rows){
+    await stopWatchChannel(clean(old.channel_id),clean(old.resource_id));
+    await sb.from("getlink_sheet_watch_channels")
+      .update({active:false,updated_at:new Date().toISOString()})
+      .eq("channel_id",old.channel_id);
+  }
+  return {locked:rows.length};
+}
+
+async function managerSyncState(){
+  const {data,error}=await sb.from("getlink_manager_sync_state")
+    .select("*").eq("id",1).maybeSingle();
+  if(error)throw error;
+  return data||null;
+}
+
+async function setManagerSyncState(patch:Record<string,unknown>){
+  const payload={id:1,file_id:MANAGER_ID,updated_at:new Date().toISOString(),...patch};
+  const {error}=await sb.from("getlink_manager_sync_state")
+    .upsert(payload,{onConflict:"id"});
+  if(error)throw error;
+}
+
+async function syncManagerToDatabase(reason="drive-change",force=false){
+  if(!MANAGER_CHANGE_SYNC_ENABLED)return {ok:true,status:"locked",reason};
+  const modifiedMs=await modified(MANAGER_ID);
+  const modifiedAt=modifiedMs?new Date(modifiedMs).toISOString():null;
+  const state=await managerSyncState();
+
+  if(!force&&modifiedAt&&state?.last_modified_at&&
+      new Date(modifiedAt).getTime()<=new Date(state.last_modified_at).getTime()){
+    return {ok:true,status:"unchanged",reason,modified_at:modifiedAt};
+  }
+
+  await setManagerSyncState({
+    last_status:"running",
+    last_trigger:reason,
+    last_error:null
+  });
+
+  try{
+    const results:any[]=[];
+    for(const source of SOURCES){
+      const rows=await readSheet(MANAGER_ID,source.mgrSheet,"A:P");
+      const db=await ingestManager(source,rows);
+      results.push({source:source.key,...db});
+    }
+    const now=new Date().toISOString();
+    await setManagerSyncState({
+      last_modified_at:modifiedAt,
+      last_synced_at:now,
+      last_trigger:reason,
+      last_status:"success",
+      last_error:null
+    });
+    return {ok:true,status:"synced",reason,modified_at:modifiedAt,synced_at:now,results};
+  }catch(e){
+    const detail=String((e as any)?.message||e).slice(0,1500);
+    await setManagerSyncState({
+      last_trigger:reason,
+      last_status:"error",
+      last_error:detail
+    }).catch(()=>{});
+    throw e;
+  }
+}
+
 function watchCallbackUrl(){
   return clean(Deno.env.get("SUPABASE_URL")).replace(/\/$/,"")+
     "/functions/v1/getlink-sheet-sync/webhook";
@@ -524,6 +609,9 @@ async function registerFileWatch(fileId:string,sourceKey:string|null){
 }
 
 async function ensureWatches(force=false){
+  // Keep only the management-file watch alive. Supplier/NCC watches are locked;
+  // Apps Script owns that side of the pipeline.
+  const legacy=await lockLegacyNccWatches();
   const renewBefore=new Date(Date.now()+2*60*60*1000).toISOString();
   const {data,error}=await sb.from("getlink_sheet_watch_channels")
     .select("*").eq("active",true);
@@ -555,7 +643,15 @@ async function ensureWatches(force=false){
     registered.push(await registerFileWatch(item.fileId,item.sourceKey));
   }
 
-  return {ok:true,registered,kept,total:registered.length+kept.length};
+  return {
+    ok:true,
+    mode:"manager-change-only",
+    legacy_ncc_sync_enabled:LEGACY_NCC_DRIVE_SYNC_ENABLED,
+    legacy_watches_locked:legacy.locked,
+    registered,
+    kept,
+    total:registered.length+kept.length
+  };
 }
 
 async function noteWebhook(
@@ -639,11 +735,13 @@ async function handleDriveWebhook(req:Request){
   if(!noted.ok)return new Response(null,{status:204});
   if(state==="sync")return new Response(null,{status:204});
 
-  const sourceKey=clean(noted.row.source_key);
-  const keys=sourceKey?[sourceKey]:SOURCES.map(s=>s.key);
+  // Only the management file is watched in normal operation.
+  // A Drive event is a cheap change signal; only then do we read the manager
+  // workbook and mirror it to Supabase. No NCC API sync and no write-back here,
+  // so this path cannot create a Drive -> DB -> Drive loop.
   EdgeRuntime.waitUntil(
-    runSources(keys,false).catch(e=>{
-      console.error("sheet_watch_sync_failed",String((e as any)?.message||e));
+    syncManagerToDatabase("drive-webhook",false).catch(e=>{
+      console.error("manager_sheet_change_sync_failed",String((e as any)?.message||e));
     })
   );
   return new Response(null,{status:204});
@@ -662,7 +760,10 @@ async function authorized(req:Request){
 }
 
 async function run(){
-  return await runSources(undefined,true);
+  // Default/manual worker path is intentionally manager-only.
+  // Legacy runSources() remains available in source for rollback, but is locked.
+  await ensureWatches(false);
+  return await syncManagerToDatabase("manual",true);
 }
 
 Deno.serve(async(req)=>{
@@ -678,11 +779,16 @@ Deno.serve(async(req)=>{
         .select("channel_id",{count:"exact",head:true})
         .eq("active",true)
         .gt("expires_at",new Date().toISOString());
+      const state=await managerSyncState().catch(()=>null);
       return json({
         ok:true,
         configured:Boolean(Deno.env.get("GOOGLE_SERVICE_ACCOUNT_JSON")),
         service:"getlink-sheet-sync",
-        active_watches:count||0
+        mode:"manager-change-only",
+        manager_file_id:MANAGER_ID,
+        active_watches:count||0,
+        legacy_ncc_sync_enabled:LEGACY_NCC_DRIVE_SYNC_ENABLED,
+        manager_sync_state:state
       });
     }
 

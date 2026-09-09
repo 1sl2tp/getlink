@@ -1993,31 +1993,26 @@ async function libraryRows(includeHidden=true){
     const groupKey=clean(group?.group_key||"chua-phan-loai");
     const groupName=clean(group?.name||"Chưa phân loại");
     const stockStatus=clean(s.stock_status||"no_price");
-    // Supplier spreadsheets only provide name + one price. The price level is
-    // our business rule: tobacco defaults to retail (1 cây); every other
-    // supplier source defaults to carton. units_per_carton is our own pack
-    // configuration and is never inferred from the supplier sheet.
-    const supplierRetailDefault=clean(s.source_key)==="thuoc-la";
-    // input_price_vnd is the supplier's raw column B (cost).
-    // display_price_vnd is our selling price = supplier cost + our expected profit.
+    // XLS owns the input price level per product: carton or retail.
+    // Changing the level does not count as a supplier price increase/decrease.
+    const inputPriceBasis=clean(s.input_price_basis)==="retail"?"retail":"carton";
+    const supplierRetailBasis=inputPriceBasis==="retail";
     const supplierCost=Number(s.input_price_vnd||0)||null;
     const expectedProfit=Number(s.expected_profit_vnd||0)||0;
     const sellPrice=Number(s.display_price_vnd||0)||
       (supplierCost?Math.round(supplierCost+expectedProfit):null);
     const unitsPerCarton=Math.max(0,Number(s.units_per_carton||0)||0);
-    const retailUnit=clean(s.retail_unit||(supplierRetailDefault?"cây":""));
+    const retailUnit=clean(s.retail_unit||(clean(s.source_key)==="thuoc-la"?"cây":""));
     const storedCarton=Number(s.carton_price_vnd||0)||null;
     const storedRetail=Number(s.retail_price_vnd||0)||null;
-    const carton=supplierRetailDefault
-      ?(unitsPerCarton>1
-        ?(storedCarton||(sellPrice?Math.round(sellPrice*unitsPerCarton):null))
-        :null)
-      :(storedCarton||sellPrice);
-    const retail=supplierRetailDefault
-      ?(storedRetail||sellPrice)
-      :(storedRetail||(unitsPerCarton>1&&sellPrice
-        ?Math.round(sellPrice/unitsPerCarton)
-        :null));
+    const carton=storedCarton||
+      (!supplierRetailBasis
+        ?sellPrice
+        :(unitsPerCarton>1&&sellPrice?Math.round(sellPrice*unitsPerCarton):null));
+    const retail=storedRetail||
+      (supplierRetailBasis
+        ?sellPrice
+        :(unitsPerCarton>1&&sellPrice?Math.round(sellPrice/unitsPerCarton):null));
     const hasCarton=Boolean(carton);
     const hasRetail=Boolean(retail);
     const retailLabel=retailUnit||(hasRetail?"Lẻ":"");
@@ -2030,7 +2025,7 @@ async function libraryRows(includeHidden=true){
         ?("Thùng · "+unitsPerCarton+" "+retailLabel)
         :"Thùng")
       :(retailPackaging||clean(s.primary_packaging||""));
-    const current=supplierRetailDefault
+    const current=supplierRetailBasis
       ?(retail||carton||null)
       :(carton||retail||null);
     const prefRow=pref.get(s.canonical_url)||{};
@@ -2073,7 +2068,7 @@ async function libraryRows(includeHidden=true){
       pack_qty_2:0,
       pack_label_3:hasRetail?retailLabel:"",
       pack_qty_3:hasRetail?(hasCarton&&unitsPerCarton>1?unitsPerCarton:1):0,
-      pack_evidence:"supplier-sheet",
+      pack_evidence:"supplier-sheet:"+inputPriceBasis,
       hierarchy_locked:1,
       source_product_id:clean(s.source_key)+":"+String(s.source_row),
       source_code:clean(s.source_key),
@@ -2103,6 +2098,7 @@ async function libraryRows(includeHidden=true){
       supplier_source_key:clean(s.source_key),
       supplier_source_name:clean(sourceMeta.source_name),
       supplier_input_price_vnd:supplierCost,
+      supplier_input_price_basis:inputPriceBasis,
       supplier_sell_price_vnd:sellPrice,
       supplier_margin_thousand:s.margin_thousand??null,
       supplier_actual_profit_vnd:Number(s.actual_profit_vnd??(sellPrice&&supplierCost?sellPrice-supplierCost:0))||0,

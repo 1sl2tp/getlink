@@ -2201,6 +2201,7 @@ function publicCatalogRow(row:any){
     promo_leaf_price:null,
     unit_price:Number(row?.supplier_retail_price_vnd||row?.unit_price||0)||null,
     supplier_source_key:clean(row?.supplier_source_key||""),
+    supplier_source_name:clean(row?.supplier_source_name||""),
     supplier_product_code:clean(row?.supplier_product_code||""),
     supplier_carton_price_vnd:Number(row?.supplier_carton_price_vnd||0)||null,
     supplier_retail_price_vnd:Number(row?.supplier_retail_price_vnd||0)||null,

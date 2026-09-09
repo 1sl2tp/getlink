@@ -1761,11 +1761,11 @@ function productCard(row){
     'data-url="'+escapeAttr(row.canonical_url)+'" '+
     'data-middle-qty="'+(Number(hierarchy.qty2)||1)+'" '+
     'data-leaf-qty="'+(Number(hierarchy.qty3)||1)+'">'+
-      '<td class="xls-name" title="'+escapeAttr(levels.rawName)+'">'+
+      '<td class="xls-name standard-col-product" title="'+escapeAttr(levels.rawName)+'">'+
         '<button class="xls-open-detail" type="button" data-url="'+escapeAttr(row.canonical_url)+'">'+escapeHtml(displayName)+'</button>'+
       '</td>'+
-      '<td class="xls-source'+catalogSourceDisplayClass(row)+'" title="'+escapeAttr(activeSourceFilter==="mine"?"Giá Tạp hóa":String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(catalogSourceDisplayLabel(row))+'</td>'+
-      '<td class="xls-pack-level">'+
+      '<td class="xls-source standard-col-source'+catalogSourceDisplayClass(row)+'" title="'+escapeAttr(activeSourceFilter==="mine"?"Giá Tạp hóa":String(row.source||"Bách Hóa XANH"))+'">'+escapeHtml(catalogSourceDisplayLabel(row))+'</td>'+
+      '<td class="xls-pack-level standard-col-pack">'+
         '<span class="xls-desktop-only">'+
           (hierarchy.label1
             ?escapeHtml(packHierarchyText(hierarchy.qty1,hierarchy.label1))
@@ -1773,38 +1773,38 @@ function productCard(row){
         '</span>'+
         '<span class="xls-compact-only xls-qc-compact">'+escapeHtml(tableCompactQc(levels))+'</span>'+
       '</td>'+
-      '<td class="xls-pack-level">'+
+      '<td class="xls-pack-level standard-col-pack">'+
         (hierarchy.label2
           ?escapeHtml(packHierarchyText(hierarchy.qty2,hierarchy.label2))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-pack-level">'+
+      '<td class="xls-pack-level standard-col-pack">'+
         (hierarchy.label3
           ?escapeHtml(packHierarchyText(hierarchy.qty3,hierarchy.label3))
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td class="xls-num">'+
+      '<td class="xls-num standard-col-source-price">'+
         '<span class="xls-desktop-only">'+xlsWebPrice(levels.cartonPrice,levels.promoCartonPrice)+'</span>'+
         '<span class="xls-compact-only xls-price-compact">'+tablePrimarySourcePrice(levels,row)+'</span>'+
       '</td>'+
-      '<td class="xls-num">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
-      '<td class="xls-num">'+(supplierStock?'<span class="xls-out-of-stock">'+supplierStock+'</span>':xlsWebPrice(levels.leafPrice,levels.promoLeafPrice))+'</td>'+
-      '<td>'+
+      '<td class="xls-num standard-col-source-price">'+xlsWebPrice(levels.middlePrice,levels.promoMiddlePrice)+'</td>'+
+      '<td class="xls-num standard-col-source-price">'+(supplierStock?'<span class="xls-out-of-stock">'+supplierStock+'</span>':xlsWebPrice(levels.leafPrice,levels.promoLeafPrice))+'</td>'+
+      '<td class="standard-col-sale">'+
         (levels.hasCarton
           ?'<input class="sheet-my-carton xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineCarton||"")+'" placeholder="—">'
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td>'+
+      '<td class="standard-col-sale">'+
         (levels.hasMiddle
           ?'<input class="sheet-my-middle xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineMiddle||"")+'" placeholder="—">'
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td>'+
+      '<td class="standard-col-sale">'+
         (levels.hasLeaf
           ?'<input class="sheet-my-retail xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(mineRetail||"")+'" placeholder="—">'
           :'<span class="xls-empty">—</span>')+
       '</td>'+
-      '<td>'+
+      '<td class="standard-col-bargain">'+
         '<input class="sheet-bargain xls-input" inputmode="numeric" data-url="'+escapeAttr(row.canonical_url)+'" value="'+(bargain||"")+'" placeholder="—">'+
       '</td>'+
     '</tr>';

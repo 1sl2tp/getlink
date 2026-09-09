@@ -2314,6 +2314,17 @@ function canonicalIdentityRowScore(row:any){
   return score;
 }
 
+function canonicalPackRowScore(row:any){
+  let score=0;
+  if(clean(row?.pack_label_1)==="Thùng")score+=1000;
+  if(clean(row?.pack_label_2))score+=180;
+  if(Number(row?.pack_qty_2)>1)score+=120;
+  if(clean(row?.pack_label_3))score+=180;
+  if(Number(row?.pack_qty_3)>1)score+=220;
+  if(row?.size_value&&clean(row?.size_unit))score+=40;
+  return score;
+}
+
 async function saveCanonicalProductMerge(body:any){
   const requested=Array.isArray(body?.member_urls)?body.member_urls:[];
   const memberUrls:string[]=[...new Set<string>(requested.map((x:any):string=>{
@@ -2359,14 +2370,18 @@ async function saveCanonicalProductMerge(body:any){
   const nameRow=requestedNameRow||ownRow||identityRow||members[0];
 
   const existingPackRow=existingProduct?.pack_source_url?chosen(existingProduct.pack_source_url):null;
-  const packRow=chosen(body?.pack_source_url)||existingPackRow||[...members].sort((a:any,b:any)=>{
-    const ah=a.pack_label_1==="Thùng"?0:(a.pack_label_2?1:2);
-    const bh=b.pack_label_1==="Thùng"?0:(b.pack_label_2?1:2);
-    return ah-bh;
-  })[0];
+  const packRow=chosen(body?.pack_source_url)||
+    [...members].sort((a:any,b:any)=>canonicalPackRowScore(b)-canonicalPackRowScore(a))[0]||
+    existingPackRow||
+    members[0];
 
   const existingImageRow=existingProduct?.image_source_url?chosen(existingProduct.image_source_url):null;
-  const imageRow=chosen(body?.image_source_url)||existingImageRow||members.find((row:any)=>clean(row.image))||null;
+  const identityImageRow=clean(identityRow?.image)?identityRow:null;
+  const imageRow=chosen(body?.image_source_url)||
+    identityImageRow||
+    existingImageRow||
+    members.find((row:any)=>clean(row.image))||
+    null;
 
   const canonicalName=clean(
     body?.canonical_name||

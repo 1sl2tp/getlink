@@ -60,12 +60,14 @@ class CanonicalProductMergeContractTest(unittest.TestCase):
             self.assertIn(token,HTML)
         self.assertNotIn('id="mobileMergeConfirm"',HTML)
 
-    def test_mobile_merge_posts_members_immediately_and_backend_auto_standardizes(self):
+    def test_mobile_merge_previews_then_posts_only_on_apply(self):
         for token in [
             "mobileMergeMode",
             "mobileMergeTargetUrl",
             "renderMobileMergePanel",
-            "quickAttachMobileMergeSource",
+            "toggleMobileMergeSource",
+            "renderMobileMergePreview",
+            "applyMobileMergePreview",
             '"/api/product-merge"',
             "member_urls",
         ]:

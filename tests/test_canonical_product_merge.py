@@ -49,39 +49,37 @@ class CanonicalProductMergeContractTest(unittest.TestCase):
             self.assertIn(token,EDGE)
         self.assertIn("current_price:Number(row?.current_price",EDGE)
 
-    def test_mobile_has_merge_mode_and_inline_confirmation_panel(self):
+    def test_mobile_has_quick_merge_mode(self):
         for token in [
             'id="mobileMergeToggle"',
             'id="mobileMergePanel"',
-            'id="mobileMergeNameSource"',
-            'id="mobileMergePackSource"',
-            'id="mobileMergeImageSource"',
+            'id="mobileMergeTarget"',
             'id="mobileMergePassword"',
-            'id="mobileMergeConfirm"',
+            'id="mobileMergeStatus"',
         ]:
             self.assertIn(token,HTML)
+        self.assertNotIn('id="mobileMergeConfirm"',HTML)
 
-    def test_mobile_merge_selects_sources_and_posts_selected_standard_fields(self):
+    def test_mobile_merge_posts_members_immediately_and_backend_auto_standardizes(self):
         for token in [
             "mobileMergeMode",
-            "mobileMergeSelected",
+            "mobileMergeTargetUrl",
             "renderMobileMergePanel",
-            "saveMobileCanonicalMerge",
+            "quickAttachMobileMergeSource",
             '"/api/product-merge"',
             "member_urls",
-            "name_source_url",
-            "pack_source_url",
-            "image_source_url",
         ]:
             self.assertIn(token,APP)
+        self.assertIn("canonicalIdentityRowScore",EDGE)
+        self.assertIn("canonicalPackRowScore",EDGE)
 
-    def test_merged_members_render_as_one_canonical_card(self):
-        self.assertIn("function mobileUserResultGroups",APP)
-        self.assertIn("function mobileUserMergedCard",APP)
-        self.assertIn("canonical_product_id",APP)
-        self.assertIn("canonical_product_name",APP)
-        self.assertIn("canonical_product_image",APP)
-        self.assertIn("mobile-user-source-price",APP)
+    def test_source_rows_stay_separate_and_only_own_row_uses_canonical_enrichment(self):
+        self.assertIn("function mobileUserCanonicalMineCard",APP)
+        self.assertIn("function mobileUserMarketCard",APP)
+        market=re.search(r"function\s+mobileUserMarketCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(market)
+        self.assertNotIn("canonical_product_name",market.group(1))
+        self.assertNotIn("canonicalProductQc",market.group(1))
 
 
 if __name__=="__main__":

@@ -19,13 +19,13 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Patch news image quality rules
         run: python .github/scripts/fix_news_images_once.py
 
-      - name: Install Python test dependencies
-        run: python -m pip install --disable-pip-version-check beautifulsoup4 feedparser requests
+      - name: Install project test dependencies
+        run: pip install -r scraper/requirements.txt
 
       - name: Regression test
         run: python -m unittest tests.test_news_image_quality
@@ -34,7 +34,7 @@ jobs:
         run: python tools/stamp_static_build.py
 
       - name: Full unit suite
-        run: python -m unittest discover -s tests -p "test_*.py"
+        run: python -m unittest discover -s tests -v
 
       - name: Static build check
         run: python tools/stamp_static_build.py --check
@@ -54,6 +54,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm .github/workflows/fix-news-images-once.yml .github/scripts/fix_news_images_once.py
-          git add app.js index.html version.json .github/scripts/build_news_snapshot.py supabase/functions/getlink-api/index.ts
+          git add app.js index.html version.json .github/scripts/build_news_snapshot.py supabase/functions/getlink-api/index.ts tests/test_news_image_quality.py
           git commit -m "Filter generic images from news cards and reader"
           git push

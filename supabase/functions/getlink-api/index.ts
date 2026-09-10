@@ -2579,7 +2579,7 @@ async function reconstructItem(url:string){
 function cors(req:Request){
   const origin=req.headers.get("origin")||"";
   const allow=[...ALLOWED_ORIGINS].some(x=>origin===x||origin.startsWith(x+":"))?origin:"https://get.taphoa.xyz";
-  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
+  return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,apikey,authorization,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};
 }
 function response(req:Request,data:any,status=200){return new Response(JSON.stringify(data),{status,headers:cors(req)});}
 function cachedResponse(req:Request,data:any,status=200,cacheControl="public, max-age=120, s-maxage=120, stale-while-revalidate=300"){
@@ -4223,6 +4223,165 @@ async function expireStaleJobs():Promise<number>{
   return Array.isArray(data)?data.length:0;
 }
 
+type SalesAccountRow={
+  id:string;auth_user_id:string;username:string;display_name:string;role:"admin"|"user";
+  avatar_url?:string|null;avatar_path?:string|null;locked_at?:string|null;deleted_at?:string|null;
+};
+type SalesAccountAuth=
+  | {ok:true;account:SalesAccountRow;accessToken:string}
+  | {ok:false;res:Response};
+
+async function salesAccount(req:Request):Promise<SalesAccountAuth>{
+  const header=clean(req.headers.get("authorization")||"");
+  const match=header.match(/^Bearer\s+(.+)$/i);
+  if(!match)return {ok:false,res:response(req,{error:"sales_auth_required"},401)};
+  const accessToken=clean(match[1]);
+  const {data:userData,error:userError}=await sb.auth.getUser(accessToken);
+  const authUser=userData?.user||null;
+  if(userError||!authUser?.id)return {ok:false,res:response(req,{error:"sales_auth_invalid"},401)};
+  const {data:account,error}=await sb.from("v21_accounts")
+    .select("id,auth_user_id,username,display_name,role,avatar_url,avatar_path,locked_at,deleted_at")
+    .eq("auth_user_id",authUser.id)
+    .maybeSingle();
+  if(error||!account||account.deleted_at||account.locked_at||!(account.role==="admin"||account.role==="user")){
+    return {ok:false,res:response(req,{error:"sales_account_unavailable"},403)};
+  }
+  return {ok:true,account:account as SalesAccountRow,accessToken};
+}
+function salesAdminRequired(account:SalesAccountRow){return account.role==="admin";}
+function salesPublicAccount(account:any){
+  return {
+    id:clean(account?.id),username:clean(account?.username),display_name:clean(account?.display_name),
+    role:account?.role==="admin"?"admin":"user",avatar_url:clean(account?.avatar_url||""),avatar_path:clean(account?.avatar_path||"")
+  };
+}
+async function salesOrderCustomer(account:SalesAccountRow,requestedId:unknown):Promise<string>{
+  if(account.role==="user")return account.id;
+  const id=clean(requestedId);
+  if(!id)throw new Error("sales_customer_required");
+  const {data,error}=await sb.from("v21_accounts")
+    .select("id,role,locked_at,deleted_at")
+    .eq("id",id).eq("role","user").is("locked_at",null).is("deleted_at",null).maybeSingle();
+  if(error||!data)throw new Error("sales_customer_invalid");
+  return clean(data.id);
+}
+function salesProductUrl(value:unknown):string{
+  const raw=clean(value);
+  let u:URL;
+  try{u=new URL(raw);}catch{throw new Error("sales_product_invalid");}
+  if(u.protocol!=="https:"||u.hostname.toLowerCase()!=="get.taphoa.xyz"||!u.pathname.startsWith("/nguon-hang/")){
+    throw new Error("sales_product_invalid");
+  }
+  return u.origin+u.pathname;
+}
+async function salesValidatedItems(rawItems:unknown):Promise<any[]>{
+  const incoming=Array.isArray(rawItems)?rawItems:[];
+  if(!incoming.length||incoming.length>100)throw new Error("sales_items_invalid");
+  const wanted=new Map<string,{url:string,qty:number}>();
+  for(const raw of incoming){
+    const url=salesProductUrl((raw as any)?.product_url||(raw as any)?.url);
+    const qty=Math.round(Number((raw as any)?.qty)||0);
+    if(qty<1||qty>999)throw new Error("sales_qty_invalid");
+    const key=url.toLowerCase();
+    const prior=wanted.get(key);
+    const total=(prior?.qty||0)+qty;
+    if(total>999)throw new Error("sales_qty_invalid");
+    wanted.set(key,{url,qty:total});
+  }
+  const urls=[...wanted.values()].map(x=>x.url);
+  const {data,error}=await sb.from("getlink_supplier_products")
+    .select("product_code,product_name,canonical_url,display_price_vnd,is_active,deleted_at")
+    .in("canonical_url",urls).eq("is_active",true).is("deleted_at",null);
+  if(error)throw error;
+  const products=new Map((data||[]).map((row:any)=>[clean(row.canonical_url).toLowerCase(),row]));
+  return [...wanted.entries()].map(([key,w])=>{
+    const row:any=products.get(key);
+    const price=Math.round(Number(row?.display_price_vnd)||0);
+    if(!row||price<=0)throw new Error("sales_product_unavailable");
+    return {
+      product_url:clean(row.canonical_url),product_code:clean(row.product_code),
+      product_name_snapshot:clean(row.product_name)||"Sản phẩm",qty:w.qty,unit_price_vnd:price,note:""
+    };
+  });
+}
+async function handleSalesRequest(req:Request,url:URL,route:string):Promise<Response>{
+  const auth=await salesAccount(req);
+  if(!auth.ok)return auth.res;
+  const account=auth.account;
+
+  if(req.method==="GET"&&route==="/api/sales/bootstrap"){
+    let customers:any[]=[];
+    if(account.role==="admin"){
+      const {data,error}=await sb.from("v21_accounts")
+        .select("id,username,display_name,role,avatar_url,avatar_path")
+        .eq("role","user").is("locked_at",null).is("deleted_at",null)
+        .order("display_name",{ascending:true}).order("username",{ascending:true});
+      if(error)throw error;
+      customers=(data||[]).map(salesPublicAccount);
+    }else{
+      customers=[salesPublicAccount(account)];
+    }
+    return response(req,{
+      account:salesPublicAccount(account),customers,
+      permissions:{can_select_customer:account.role==="admin",can_deliver:account.role==="admin",can_reverse:account.role==="admin"}
+    });
+  }
+
+  if(req.method==="GET"&&route==="/api/sales/orders"){
+    const requested=clean(url.searchParams.get("status")||"pending");
+    const status=["pending","delivered","reversed"].includes(requested)?requested:"pending";
+    let query=sb.from("getlink_sales_orders")
+      .select("id,order_no,customer_account_id,created_by_account_id,status,note,total_vnd,delivered_at,reversed_at,created_at,updated_at")
+      .eq("status",status).order("created_at",{ascending:false}).limit(100);
+    if(account.role==="user")query=query.eq("customer_account_id",account.id);
+    const {data,error}=await query;
+    if(error)throw error;
+    return response(req,{account:salesPublicAccount(account),status,orders:data||[]});
+  }
+
+  if(req.method==="POST"&&route==="/api/sales/orders"){
+    const body=await req.json().catch(()=>({}));
+    const customer_account_id=await salesOrderCustomer(account,body?.customer_account_id);
+    const items=await salesValidatedItems(body?.items);
+    const note=clean(body?.note||"").slice(0,500);
+    const {data,error}=await sb.rpc("getlink_sales_create_order",{
+      p_customer_account_id:customer_account_id,
+      p_created_by_account_id:account.id,
+      p_note:note,
+      p_items:items
+    });
+    if(error)throw error;
+    return response(req,{order:{...data,status:"pending"},items});
+  }
+
+  const deliverRoute=route.endsWith("/deliver");
+  const reverseRoute=route.endsWith("/reverse");
+  if(req.method==="POST"&&(deliverRoute||reverseRoute)){
+    if(!salesAdminRequired(account))return response(req,{error:"sales_admin_required"},403);
+    const parts=route.split("/").filter(Boolean);
+    const orderId=clean(parts[parts.length-2]);
+    if(!/^[0-9a-f-]{36}$/i.test(orderId))return response(req,{error:"sales_order_invalid"},400);
+    if(deliverRoute){
+      const {data,error}=await sb.rpc("getlink_sales_deliver_order",{p_order_id:orderId,p_actor_account_id:account.id});
+      if(error)throw error;
+      return response(req,{order:{...data,status:"delivered"},debt:{kind:"sale",amount_vnd:Number(data?.total_vnd||0)}});
+    }
+    const {data,error}=await sb.rpc("getlink_sales_reverse_order",{p_order_id:orderId,p_actor_account_id:account.id});
+    if(error)throw error;
+    return response(req,{order:{...data,status:"reversed"},debt:{kind:"reversal",amount_vnd:-Number(data?.total_vnd||0)}});
+  }
+
+  if(req.method==="DELETE"&&route.startsWith("/api/sales/orders/")){
+    if(!salesAdminRequired(account))return response(req,{error:"sales_admin_required"},403);
+    const orderId=clean(route.split("/").filter(Boolean).at(-1)||"");
+    if(!/^[0-9a-f-]{36}$/i.test(orderId))return response(req,{error:"sales_order_invalid"},400);
+    const {data,error}=await sb.rpc("getlink_sales_delete_pending_order",{p_order_id:orderId});
+    if(error)throw error;
+    return response(req,{deleted_id:data});
+  }
+  return response(req,{error:"sales_route_not_found"},404);
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   const url=new URL(req.url), route=routePath(req);
@@ -4242,6 +4401,15 @@ Deno.serve(async(req:Request)=>{
       return response(req,await processAutoUpdateBatch(true));
     }catch(e){
       return response(req,{error:"auto_update_worker_failed",detail:errorText(e).slice(0,1500)},500);
+    }
+  }
+
+  if(route.startsWith("/api/sales/")){
+    try{return await handleSalesRequest(req,url,route);}
+    catch(e){
+      const code=errorText(e);
+      const status=code.includes("required")||code.includes("invalid")||code.includes("unavailable")?400:409;
+      return response(req,{error:code.slice(0,180)||"sales_failed"},status);
     }
   }
 

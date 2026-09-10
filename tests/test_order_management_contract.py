@@ -7,7 +7,7 @@ EDGE = ROOT / "supabase/functions/getlink-orders/index.ts"
 JS = ROOT / "order-management.js"
 CSS = ROOT / "order-management.css"
 PICKER_CSS = ROOT / "order-customer-picker.css"
-CONFIG = ROOT / "config.js"
+INDEX = ROOT / "index.html"
 
 
 class OrderBackendContractTests(unittest.TestCase):
@@ -68,11 +68,11 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertTrue(JS.exists(), "order-management.js must exist")
         return JS.read_text(encoding="utf-8")
 
-    def test_config_loads_order_module_and_customer_picker(self):
-        text = CONFIG.read_text(encoding="utf-8")
-        self.assertIn("order-management.js", text)
-        self.assertIn("order-management.css", text)
-        self.assertIn("order-customer-picker.css", text)
+    def test_bootstrap_loads_order_module_and_customer_picker(self):
+        text = INDEX.read_text(encoding="utf-8")
+        self.assertIn('runtime.assetUrl("order-management.js",build)', text)
+        self.assertIn('runtime.assetUrl("order-management.css",build)', text)
+        self.assertIn('runtime.assetUrl("order-customer-picker.css",build)', text)
 
     def test_send_buttons_are_intercepted_before_other_handlers(self):
         text = self.js_text()

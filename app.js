@@ -757,7 +757,7 @@ async function loadNewsQuickDetail(item,request){
   const loading=$("#newsQuickLoading");
   if(loading)loading.hidden=false;
   try{
-    const response=await apiFetch("/api/news-detail?url="+encodeURIComponent(item.url),{cache:"default"});
+    const response=await apiFetch("/api/news-detail?reader=2&url="+encodeURIComponent(item.url),{cache:"default"});
     const data=await response.json().catch(()=>({}));
     if(!response.ok)throw new Error(data.error||"news_detail_failed");
     newsDetailCache.set(item.url,data);

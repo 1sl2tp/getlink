@@ -8,23 +8,27 @@ BHX_FN = ROOT / "supabase/functions/getlink-bhx-proxy/index.ts"
 
 
 class ChatAuthDetachedContract(unittest.TestCase):
-    def test_getlink_client_drops_old_chat_auth_cache_and_has_no_bridge_listener(self):
+    def test_getlink_client_clears_cached_chat_token_and_hard_gates_bridge(self):
         text = ORDER_UI.read_text(encoding="utf-8")
+        self.assertIn("const CHAT_AUTH_DETACHED=true;", text)
         self.assertIn('sessionStorage.removeItem("getlink:chat-order-auth")', text)
-        self.assertNotIn('taphoa-chat-auth', text)
-        self.assertNotIn('taphoa-getlink-auth-request', text)
-        self.assertNotIn('CHAT_ORIGIN', text)
+        self.assertIn("if(CHAT_AUTH_DETACHED)", text)
+        self.assertIn("function requestChatAuth()", text)
+        self.assertIn("async function requireChatAuth", text)
 
-    def test_orders_endpoint_no_longer_accepts_chat_bearer_tokens(self):
+    def test_orders_endpoint_hard_rejects_before_chat_identity_use(self):
         text = ORDERS_FN.read_text(encoding="utf-8")
-        self.assertIn('chat_auth_detached', text)
-        self.assertNotIn('db.auth.getUser(token)', text)
-        self.assertNotIn('https://chat.taphoa.xyz', text)
+        self.assertIn("const CHAT_AUTH_DETACHED=true;", text)
+        gate = 'if(CHAT_AUTH_DETACHED)return json(req,{error:"chat_auth_detached"},410);'
+        self.assertIn(gate, text)
+        self.assertLess(text.index(gate), text.index("const actor=await chatIdentity(req);"))
 
-    def test_bhx_proxy_is_closed_to_chat_jwt_use(self):
+    def test_bhx_proxy_is_versioned_as_closed_endpoint(self):
+        self.assertTrue(BHX_FN.exists(), "closed BHX proxy source must be versioned")
         text = BHX_FN.read_text(encoding="utf-8")
-        self.assertIn('chat_auth_detached', text)
-        self.assertIn('Deno.serve', text)
+        self.assertIn('error:"chat_auth_detached"', text)
+        self.assertIn(",410", text)
+        self.assertIn("Deno.serve", text)
 
 
 if __name__ == "__main__":

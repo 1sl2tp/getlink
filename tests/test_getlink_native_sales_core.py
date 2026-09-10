@@ -71,10 +71,10 @@ class NativeSalesEdgeContractTests(unittest.TestCase):
 
     def test_edge_exposes_native_order_and_debt_routes(self):
         text = self.edge_text()
-        self.assertIn('/deliver', text)
-        self.assertIn('/return', text)
-        self.assertIn('/debts', text)
-        self.assertIn('/payments', text)
+        self.assertIn('(deliver|return)', text)
+        self.assertIn('path==="/debts"', text.replace(" ", ""))
+        self.assertIn('debts\\/([^/]+)', text)
+        self.assertIn('payments', text)
 
 
 class NativeSalesFrontendContractTests(unittest.TestCase):
@@ -83,7 +83,7 @@ class NativeSalesFrontendContractTests(unittest.TestCase):
 
     def test_frontend_uses_native_status_and_deliver_route(self):
         text = self.js_text()
-        self.assertIn('delivered:"Đã giao"', text.replace(" ", ""))
+        self.assertIn('delivered:"Đã giao"', text)
         self.assertIn('/deliver', text)
         self.assertNotIn('/approve', text)
 

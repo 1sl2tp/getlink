@@ -65,14 +65,21 @@ class OrderFrontendContractTests(unittest.TestCase):
     def test_send_buttons_are_intercepted_before_legacy_draft_handler(self):
         text = self.js_text()
         self.assertIn("#userWorkSendOrder,#mobileUserSendOrder", text)
-        self.assertRegex(text, r'addEventListener\(\s*["\']click["\'][\s\S]{0,120}true\s*\)')
-        self.assertIn("stopImmediatePropagation", text)
+        capture_listener = re.search(
+            r'document\.addEventListener\("click",async event=>\{[\s\S]*?'
+            r'#userWorkSendOrder,#mobileUserSendOrder[\s\S]*?'
+            r'stopImmediatePropagation\(\);[\s\S]*?'
+            r'\},true\);',
+            text,
+        )
+        self.assertIsNotNone(capture_listener, "send-order click must be intercepted in capture phase")
 
     def test_frontend_sends_only_product_locator_and_quantity(self):
         text = self.js_text()
-        self.assertRegex(text, r'items\s*:\s*selected\.map')
+        self.assertRegex(text, r'const\s+items\s*=\s*selected\.map')
         self.assertRegex(text, r'url\s*:\s*item\.row\.canonical_url')
         self.assertRegex(text, r'qty\s*:\s*item\.qty')
+        self.assertIn('JSON.stringify({items})', text)
         forbidden = ["customer_id:", "maKH:", "unit_price:", "gia:", "cost:", "von:"]
         for token in forbidden:
             self.assertNotIn(token, text)

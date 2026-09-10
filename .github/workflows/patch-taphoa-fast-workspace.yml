@@ -1,0 +1,48 @@
+name: Patch TAPHOA Fast Workspace
+
+on:
+  push:
+    branches:
+      - feature/taphoa-fast-workspace-flow
+    paths:
+      - .github/workflows/patch-taphoa-fast-workspace.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-fast-workspace-flow
+          fetch-depth: 0
+      - name: Patch runtime
+        run: python tools/patch_taphoa_fast_workspace.py
+      - name: Focused RED to GREEN contracts
+        run: |
+          python -m unittest \
+            tests.test_taphoa_fast_workspace_flow \
+            tests.test_order_submit_single_owner \
+            tests.test_order_manager_work_nav \
+            tests.test_getlink_native_sales_core -v
+          node --check app.js
+          node --check order-management.js
+          node tests/test_money_display.mjs
+      - name: Stamp static build
+        run: |
+          python tools/stamp_static_build.py
+          python tools/stamp_static_build.py --check
+      - name: Commit GREEN runtime
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app.js style.css order-management.js order-management.css order-customer-picker.css index.html version.json service-worker.js
+          git commit -m "feat: make Tạp hóa a fast inline workspace"
+          git push origin HEAD:feature/taphoa-fast-workspace-flow
+      - name: Remove one-shot helpers
+        run: |
+          git rm .github/workflows/patch-taphoa-fast-workspace.yml tools/patch_taphoa_fast_workspace.py
+          git commit -m "chore: remove one-shot workspace patcher"
+          git push origin HEAD:feature/taphoa-fast-workspace-flow

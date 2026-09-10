@@ -1,0 +1,335 @@
+name: Fix news image ownership once v3
+
+on:
+  push:
+    branches: [fix-news-image-ownership]
+    paths:
+      - ".github/workflows/fix-news-image-ownership-once-v3.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix-news-image-ownership
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Patch snapshot image ownership
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          path=Path('.github/scripts/build_news_snapshot.py')
+          text=path.read_text(encoding='utf-8')
+
+          start=text.index('GLOBAL_ARTICLE_REMOVE=[')
+          end=text.index('\n]',start)
+          segment=text[start:end]
+          if "[class*='author']" not in segment:
+              addition=dedent('''
+               ,"[class*='author']","[id*='author']","[class*='avatar']","[id*='avatar']"
+               ,"[class*='profile']","[id*='profile']","[class*='logo']","[id*='logo']"
+               ,"[class*='placeholder']","[id*='placeholder']","[class*='icon']","[id*='icon']"
+              ''').strip('\n')
+              text=text[:end]+addition+text[end:]
+
+          start=text.index('def entry_images(entry):')
+          end=text.index('\ndef fetch_google_query',start)
+          new=dedent('''
+          def entry_images(entry,trust_html=True):
+              out=[]
+              def add(v):
+                  u=ready_image_url(str(v or "").strip())
+                  if u and u not in out:out.append(u)
+              for key in ("media_content","media_thumbnail"):
+                  for item in entry.get(key) or []:
+                      if isinstance(item,dict):add(item.get("url"))
+              for item in entry.get("enclosures") or []:
+                  if isinstance(item,dict):add(item.get("href") or item.get("url"))
+              if trust_html:
+                  raw=str(entry.get("summary") or entry.get("description") or "")
+                  for m in re.finditer(r'<img\\b[^>]*\\bsrc=["\\\']([^"\\\']+)["\\\']',raw,re.I):add(html.unescape(m.group(1)))
+              return out[:8]
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+          call='images=entry_images(e); published=parse_time(e)'
+          if call not in text: raise SystemExit('Google entry image call not found')
+          text=text.replace(call,'images=entry_images(e,trust_html=False); published=parse_time(e)',1)
+
+          start=text.index('def merge(a,b):')
+          end=text.index('\ndef dedupe(items):',start)
+          new=dedent('''
+          def merge(a,b):
+              p,o=(b,a) if quality(b)>quality(a) else (a,b)
+              images=[]
+              for raw in [*(p.get("images") or []),p.get("image")]:
+                  u=ready_image_url(raw)
+                  if u and u not in images:images.append(u)
+              out=dict(p); out["images"]=images[:8]; out["image"]=images[0] if images else ""
+              out["content"]=p.get("content") or o.get("content") or ""; out["summary"]=p.get("summary") or o.get("summary") or ""
+              out["duplicate_count"]=int(a.get("duplicate_count") or 1)+int(b.get("duplicate_count") or 1)
+              out["also_sources"]=[]; return out
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          start=text.index('def meta_images(text,base):')
+          end=text.index('\ndef article_host(base):',start)
+          new=dedent('''
+          def meta_images(text,base):
+              out=[]
+              def add(value):
+                  u=ready_image_url(urllib.parse.urljoin(base,html.unescape(str(value or ""))))
+                  if u and u not in out:out.append(u)
+              for tag in re.findall(r"<meta\\b[^>]*>",text,re.I):
+                  km=re.search(r'\\b(?:property|name|itemprop)=["\\\']([^"\\\']+)["\\\']',tag,re.I)
+                  cm=re.search(r'\\bcontent=["\\\']([^"\\\']+)["\\\']',tag,re.I)
+                  key=km.group(1).lower() if km else ""
+                  if key not in {"og:image","og:image:url","og:image:secure_url","twitter:image","twitter:image:src","image","thumbnail","thumbnailurl"} or not cm:continue
+                  add(cm.group(1))
+              for tag in re.findall(r"<link\\b[^>]*>",text,re.I):
+                  if not re.search(r'\\brel=["\\\'][^"\\\']*(?:image_src|preload)[^"\\\']*["\\\']',tag,re.I):continue
+                  hm=re.search(r'\\bhref=["\\\']([^"\\\']+)["\\\']',tag,re.I)
+                  if hm:add(hm.group(1))
+              return out
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          start=text.index('def jsonld(text):')
+          end=text.index('\ndef article_text(text):',start)
+          new=dedent('''
+          ARTICLE_JSONLD_TYPES={
+              "article","newsarticle","reportagenewsarticle","analysisnewsarticle",
+              "blogposting","liveblogposting"
+          }
+          def jsonld_types(value):
+              raw=value.get("@type") if isinstance(value,dict) else None
+              values=raw if isinstance(raw,list) else [raw]
+              out=[]
+              for item in values:
+                  name=re.split(r"[/#]",str(item or ""))[-1].strip().lower()
+                  if name:out.append(name)
+              return out
+          def jsonld_is_article(value):
+              return any(name in ARTICLE_JSONLD_TYPES for name in jsonld_types(value))
+          def jsonld(text):
+              body=""; images=[]
+              def add_image(value):
+                  u=ready_image_url(value)
+                  if u and u not in images:images.append(u)
+              def walk(v):
+                  nonlocal body
+                  if isinstance(v,list):
+                      for x in v:walk(x)
+                  elif isinstance(v,dict):
+                      is_article=jsonld_is_article(v)
+                      if is_article and not body and isinstance(v.get("articleBody"),str):body=plain(v["articleBody"])
+                      if is_article:
+                          img=v.get("image"); vals=img if isinstance(img,list) else [img]
+                          for x in vals:
+                              if isinstance(x,str):u=x
+                              elif isinstance(x,dict):u=x.get("url") or x.get("contentUrl") or ""
+                              else:u=""
+                              add_image(u)
+                      if isinstance(v.get("@graph"),list):walk(v["@graph"])
+              for m in re.finditer(r'<script\\b[^>]*type=["\\\']application/ld\\+json["\\\'][^>]*>([\\s\\S]*?)</script>',text,re.I):
+                  try:walk(json.loads(html.unescape(m.group(1))))
+                  except:pass
+              return body,images
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          enrich=text.index('def enrich_article(item):')
+          start=text.index('    _,ji=jsonld(text); images=[]',enrich)
+          end=text.index('    for u in ordered:',start)
+          new=dedent('''
+              _,ji=jsonld(text); images=[]
+              ordered=[
+                *ji,
+                *page_images(text,final),
+                *meta_images(text,final),
+              ]
+          ''').strip('\n')+'\n'
+          text=text[:start]+new+text[end:]
+          path.write_text(text,encoding='utf-8')
+          PY
+
+      - name: Patch Edge reader image ownership
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          path=Path('supabase/functions/getlink-api/index.ts')
+          text=path.read_text(encoding='utf-8')
+
+          start=text.index('function newsImagesFromItem(block:string,description:string,content:string){')
+          end=text.index('\nfunction newsRemoveLeadingTitle',start)
+          new=dedent('''
+          function newsImagesFromItem(block:string,description:string,content:string,trustHtml=false){
+            const values:string[]=[];
+            const add=(value:unknown)=>{
+              const url=newsUsableImageUrl(value);
+              if(url&&!values.includes(url))values.push(url);
+            };
+            for(const tag of ["media:content","media:thumbnail"]){
+              const esc=newsEscapeRe(tag);
+              const re=new RegExp("<"+esc+"\\\\b[^>]*\\\\burl=[\\"\\\']([^\\"\\\']+)[\\"\\\'][^>]*>","gi");
+              for(const m of block.matchAll(re))add(m[1]);
+            }
+            for(const m of block.matchAll(/<enclosure\\b[^>]*\\burl=["\\\']([^"\\\']+)["\\\'][^>]*>/gi))add(m[1]);
+            if(trustHtml){
+              for(const rawHtml of [description,content]){
+                for(const m of String(rawHtml||"").matchAll(/<img\\b[^>]*\\bsrc=["\\\']([^"\\\']+)["\\\'][^>]*>/gi))add(m[1]);
+              }
+            }
+            return values.slice(0,10);
+          }
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+          call='const images=newsImagesFromItem(block,descriptionRaw,contentRaw);'
+          if call not in text: raise SystemExit('Google newsImagesFromItem call not found')
+          text=text.replace(call,'const images=newsImagesFromItem(block,descriptionRaw,contentRaw,false);',1)
+
+          start=text.index('function newsMergeDuplicate(existing:NewsItem,item:NewsItem){')
+          end=text.index('\nfunction newsDeduplicate',start)
+          new=dedent('''
+          function newsMergeDuplicate(existing:NewsItem,item:NewsItem){
+            const preferred=newsItemQuality(item)>newsItemQuality(existing)?item:existing;
+            const other=preferred===item?existing:item;
+            const sources=new Set([existing.source_name,...(existing.also_sources||[]),item.source_name,...(item.also_sources||[])]);
+            const images=[...(preferred.images||[]),preferred.image]
+              .map(url=>newsUsableImageUrl(url))
+              .filter((url,index,list)=>url&&list.indexOf(url)===index)
+              .slice(0,10);
+            return {
+              ...preferred,
+              image:images[0]||"",
+              images,
+              content:preferred.content||other.content||"",
+              summary:preferred.summary||other.summary||"",
+              duplicate_count:Math.max(1,Number(existing.duplicate_count||1))+Math.max(1,Number(item.duplicate_count||1)),
+              also_sources:[...sources].filter(Boolean).filter(x=>x!==preferred.source_name)
+            };
+          }
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          start=text.index('function newsJsonLdCollect(value:any,out:{bodies:string[];images:string[]}){')
+          end=text.index('\ntype NewsArticleRule=',start)
+          new=dedent('''
+          const NEWS_JSONLD_ARTICLE_TYPES=new Set([
+            "article","newsarticle","reportagenewsarticle","analysisnewsarticle","blogposting","liveblogposting"
+          ]);
+          function newsJsonLdTypes(value:any){
+            const raw=value&&typeof value==="object"?value["@type"]:null;
+            const values=Array.isArray(raw)?raw:[raw];
+            return values.map(item=>String(item||"").split(/[\\/#]/).pop()?.toLowerCase()||"").filter(Boolean);
+          }
+          function newsJsonLdIsArticle(value:any){
+            return newsJsonLdTypes(value).some(type=>NEWS_JSONLD_ARTICLE_TYPES.has(type));
+          }
+          function newsJsonLdCollect(value:any,out:{bodies:string[];images:string[]},base=""){
+            if(!value)return;
+            if(Array.isArray(value)){for(const item of value)newsJsonLdCollect(item,out,base);return;}
+            if(typeof value!=="object")return;
+            const isArticle=newsJsonLdIsArticle(value);
+            if(isArticle&&typeof value.articleBody==="string"&&clean(value.articleBody))out.bodies.push(clean(value.articleBody));
+            if(isArticle){
+              const add=(value:unknown)=>{
+                const url=newsUsableImageUrl(value,base);
+                if(url&&!out.images.includes(url))out.images.push(url);
+              };
+              const image=value.image;
+              if(typeof image==="string")add(image);
+              else if(Array.isArray(image)){
+                for(const x of image){
+                  if(typeof x==="string")add(x);
+                  else if(x&&typeof x==="object")add(x.url||x.contentUrl||"");
+                }
+              }else if(image&&typeof image==="object")add(image.url||image.contentUrl||"");
+            }
+            if(Array.isArray(value["@graph"]))newsJsonLdCollect(value["@graph"],out,base);
+          }
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          start=text.index('const NEWS_ARTICLE_REMOVE=[')
+          end=text.index('\n];',start)
+          segment=text[start:end]
+          if '[class*="author"]' not in segment:
+              addition=dedent('''
+                ,'[class*="author"]','[id*="author"]','[class*="avatar"]','[id*="avatar"]'
+                ,'[class*="profile"]','[id*="profile"]','[class*="logo"]','[id*="logo"]'
+                ,'[class*="placeholder"]','[id*="placeholder"]','[class*="icon"]','[id*="icon"]'
+              ''').strip('\n')
+              text=text[:end]+addition+text[end:]
+
+          start=text.index('function newsMetaImageValues(html:string,base:string){')
+          end=text.index('\nfunction newsArticleNoiseText',start)
+          segment=text[start:end]
+          if 'const url=newsAbsoluteUrl(value,base);' not in segment: raise SystemExit('newsMetaImageValues URL anchor not found')
+          segment=segment.replace('const url=newsAbsoluteUrl(value,base);','const url=newsUsableImageUrl(value,base);',1)
+          text=text[:start]+segment+text[end:]
+
+          start=text.index('function newsArticleImages(html:string,base:string,_jsonImages:string[]){')
+          end=text.index('\nfunction newsGoogleArticleId',start)
+          new=dedent('''
+          function newsArticleImages(html:string,base:string,jsonImages:string[]){
+            const values:string[]=[];
+            const add=(value:unknown)=>{
+              const url=newsUsableImageUrl(value,base);
+              if(url&&!values.includes(url))values.push(url);
+            };
+            for(const value of jsonImages||[])add(value);
+            for(const block of newsArticleBlocks(html,base)){
+              if(block.type==="image"&&block.url)add(block.url);
+            }
+            for(const value of newsMetaImageValues(html,base))add(value);
+            return values.slice(0,12);
+          }
+          ''').strip('\n')
+          text=text[:start]+new+text[end:]
+
+          call='try{newsJsonLdCollect(JSON.parse(m[1]),collected);}catch{}'
+          if call not in text: raise SystemExit('newsJsonLdCollect detail call not found')
+          text=text.replace(call,'try{newsJsonLdCollect(JSON.parse(m[1]),collected,finalUrl);}catch{}',1)
+
+          detail=text.index('async function newsArticleDetail(rawUrl:string){')
+          start=text.index('    const blocks=orderedBlocks.length',detail)
+          end=text.index('    const payload={',start)
+          new=dedent('''
+              let blocks=orderedBlocks.length
+                ?orderedBlocks
+                :paragraphs.filter(text=>!newsArticleNoiseText(text)).slice(0,40).map(text=>({type:"text" as const,text}));
+              if(images[0]&&!blocks.some(block=>block.type==="image")){
+                const at=Math.min(1,blocks.length);
+                blocks=[...blocks.slice(0,at),{type:"image" as const,url:images[0]},...blocks.slice(at)];
+              }
+          ''').strip('\n')+'\n'
+          text=text[:start]+new+text[end:]
+          path.write_text(text,encoding='utf-8')
+          PY
+
+      - name: GREEN targeted regression
+        run: |
+          python tests/test_news_image_ownership.py
+          python -m py_compile .github/scripts/build_news_snapshot.py
+
+      - name: Commit implementation
+        run: |
+          git config user.name "GETLINK News Runtime"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-news-image-ownership-once.yml .github/workflows/fix-news-image-ownership-once-v2.yml .github/workflows/fix-news-image-ownership-once-v3.yml
+          git add .github/scripts/build_news_snapshot.py supabase/functions/getlink-api/index.ts tests/test_news_image_ownership.py
+          git commit -m "Fix news image ownership and article media filtering"
+          git push origin HEAD:fix-news-image-ownership

@@ -259,14 +259,14 @@ async function createOrder(req:Request,actor:Identity){
   // Read the inserted row back so the submit response is immediately usable by
   // both the purchase confirmation and order manager without falling back to UUID.
   const {data:created,error:createdError}=await db.from("getlink_sales_orders")
-    .select("order_no,status,total_amount_vnd,total_cost_vnd,submitted_at")
+    .select("order_no,total_amount_vnd,total_cost_vnd,submitted_at")
     .eq("id",id)
     .single();
   if(createdError||!created)throw createdError||fail("Không đọc được đơn vừa tạo",500);
 
   return {
     id,orderNo:Number(created.order_no||0),customerId:customer.id,customerName:customer.name,
-    orderedAt:created.submitted_at||submittedAt,status:String(created.status||"pending"),
+    orderedAt:created.submitted_at||submittedAt,status:"pending",
     total:Number(created.total_amount_vnd||total),totalCost:Number(created.total_cost_vnd||totalCost),
     items:items.map((item:any)=>({
       productId:item.productCode,name:item.productName,qty:item.quantity,price:item.unitPriceVnd,

@@ -201,17 +201,6 @@ const NEWS_TOPIC_LABELS={
   "giai-tri":"Giải trí",
   "suc-khoe":"Sức khỏe"
 };
-const NEWS_SOURCE_LABELS={
-  vnexpress:"VnExpress",
-  dantri:"Dân Trí",
-  tuoitre:"Tuổi Trẻ",
-  baomoi:"Báo Mới",
-  vietnamnet:"VietnamNet",
-  kenh14:"Kênh14",
-  zing:"Zing News",
-  thanhnien:"Báo Thanh Niên",
-  laodong:"Lao Động"
-};
 const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
 const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v3";
@@ -222,7 +211,6 @@ const NEWS_THUMB_WIDTH=360;
 const newsCache=new Map();
 const newsDetailCache=new Map();
 let newsTopic="latest";
-let newsSource="";
 let newsQuery="";
 let newsItems=[];
 let newsLoading=false;
@@ -375,19 +363,6 @@ function newsTopicButtons(){
       escapeHtml(label)+
     '</button>'
   ).join("");
-}
-function newsSourceButtons(){
-  return [
-    '<button class="news-filter-chip '+(!newsSource?"active":"")+'" data-news-source="" type="button" aria-pressed="'+(!newsSource?"true":"false")+'">Tất cả nguồn</button>',
-    ...Object.entries(NEWS_SOURCE_LABELS).map(([key,label])=>
-      '<button class="news-filter-chip '+(newsSource===key?"active":"")+'" data-news-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(newsSource===key?"true":"false")+'">'+
-        escapeHtml(label)+
-      '</button>'
-    )
-  ].join("");
-}
-function newsSourceName(key){
-  return NEWS_SOURCE_LABELS[key]||key||"Nguồn tin";
 }
 function readNewsBrowserCache(topic){
   try{
@@ -6240,15 +6215,6 @@ if(userWorkHome){
     const topicButton=e.target.closest("[data-news-topic]");
     if(topicButton){
       setNewsTopic(topicButton.dataset.newsTopic||"latest");
-      if(isMobileUserWork())resetMobileUserResultsScroll();
-      else resetUserWorkDesktopScroll();
-      return;
-    }
-
-    const sourceButton=e.target.closest("[data-news-source]");
-    if(sourceButton){
-      newsSource=String(sourceButton.dataset.newsSource||"");
-      refreshNewsViews();
       if(isMobileUserWork())resetMobileUserResultsScroll();
       else resetUserWorkDesktopScroll();
       return;

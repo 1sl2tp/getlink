@@ -3,8 +3,14 @@ from __future__ import annotations
 import argparse, concurrent.futures, datetime as dt, html, json, pathlib, re, time, unicodedata, urllib.parse, urllib.request
 import feedparser
 
+try:
+    from googlenewsdecoder import gnewsdecoder
+except Exception:
+    gnewsdecoder=None
+
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
+RICH_DETAIL_LIMIT=50
 FEED_TIMEOUT=10
 DETAIL_TIMEOUT=10
 SOURCES=[
@@ -233,9 +239,25 @@ def article_text(text):
         if sum(map(len,out))>10000:break
     return "\n\n".join(out)
 
-def enrich_article(item):
+def decode_google_url(url):
+    value=str(url or "").strip()
+    if not value or "news.google.com/" not in value or gnewsdecoder is None:
+        return value
     try:
-        body,final=http_get(str(item.get("url") or ""),DETAIL_TIMEOUT,"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
+        decoded=gnewsdecoder(value,interval=0)
+        if isinstance(decoded,dict) and decoded.get("status") and decoded.get("decoded_url"):
+            out=str(decoded["decoded_url"]).strip()
+            if out.startswith(("http://","https://")):
+                return out
+    except Exception as exc:
+        print("WARN decode",str(exc)[:120])
+    return value
+
+def enrich_article(item):
+    original=str(item.get("url") or "").strip()
+    target=decode_google_url(original)
+    try:
+        body,final=http_get(target,DETAIL_TIMEOUT,"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
         text=body.decode("utf-8",errors="ignore")
     except:return item
     jb,ji=jsonld(text); images=[]
@@ -245,7 +267,11 @@ def enrich_article(item):
     if images:out["images"]=images[:8];out["image"]=images[0]
     detail=jb or article_text(text)
     if len(detail)>len(str(out.get("content") or "")):out["content"]=detail[:10000]
-    out["url"]=final;return out
+    if final and "news.google.com/" not in final:
+        out["url"]=final
+    elif target and "news.google.com/" not in target:
+        out["url"]=target
+    return out
 
 def iso(v):
     try:
@@ -270,10 +296,8 @@ def compact(item,now):
     }
 
 def build_snapshot(limit=DEFAULT_LIMIT):
-    # Google News is the primary hot-news discovery layer, matching the
-    # previous Inoreader setup: one Google RSS feed per watched phrase plus
-    # the Vietnamese top-stories feed. Publisher RSS runs in parallel as a
-    # secondary layer so matching stories can contribute original URLs/images.
+    # Fast discovery only. Do not scrape article pages here: the workflow
+    # publishes this snapshot first so users see new Google News items quickly.
     google_queries=["__top__",*GOOGLE_HOT_QUERIES]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         google_batches=list(pool.map(fetch_google_query,google_queries))
@@ -281,29 +305,55 @@ def build_snapshot(limit=DEFAULT_LIMIT):
         source_batches=list(pool.map(fetch_source,SOURCES))
     items=dedupe([x for batch in [*google_batches,*source_batches] for x in batch]);now=dt.datetime.now(dt.timezone.utc)
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
-    candidates=[x for x in items[:DETAIL_LIMIT] if not x.get("images") or len(str(x.get("content") or ""))<450]
+    rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
+    newest=max((iso(x.get("published_at")) for x in rows),default=now)
+    return {"version":3,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
+      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-primary-hot-snapshot",
+      "phase":"fast","storage":"git-ephemeral-branch","database":False,"source_count":len(SOURCES),"items":rows}
+
+def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
+    data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
+    items=list(data.get("items") or [])[:limit]
+    candidates=[
+      x for x in items[:RICH_DETAIL_LIMIT]
+      if len(x.get("images") or [])<2 or len(str(x.get("content") or ""))<450
+    ]
     if candidates:
         pos={str(x.get("id") or ""):i for i,x in enumerate(items)}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
             jobs={pool.submit(enrich_article,x):str(x.get("id") or "") for x in candidates}
             for future in concurrent.futures.as_completed(jobs):
                 try:enriched=future.result()
-                except:continue
+                except Exception as exc:
+                    print("WARN enrich",str(exc)[:120]);continue
                 i=pos.get(jobs[future])
                 if i is not None:items[i]=enriched
+    now=dt.datetime.now(dt.timezone.utc)
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
-    rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
-    newest=max((iso(x.get("published_at")) for x in rows),default=now)
-    return {"version":2,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
-      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-primary-hot-snapshot",
-      "storage":"git-ephemeral-branch","database":False,"source_count":len(SOURCES),"items":rows}
+    data["items"]=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
+    data["phase"]="rich"
+    data["enriched_at"]=now.isoformat().replace("+00:00","Z")
+    data["image_count"]=sum(1 for x in data["items"] if x.get("image"))
+    data["multi_image_count"]=sum(1 for x in data["items"] if len(x.get("images") or [])>=2)
+    pathlib.Path(output_path).write_text(json.dumps(data,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")
+    print("GETLINK rich-news snapshot",f"items={len(data['items'])}",f"images={data['image_count']}",f"multi={data['multi_image_count']}")
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument("--output",required=True);p.add_argument("--limit",type=int,default=DEFAULT_LIMIT);a=p.parse_args()
-    snap=build_snapshot(max(20,min(100,a.limit)))
+    p=argparse.ArgumentParser()
+    p.add_argument("--output",required=True)
+    p.add_argument("--input")
+    p.add_argument("--enrich-only",action="store_true")
+    p.add_argument("--limit",type=int,default=DEFAULT_LIMIT)
+    a=p.parse_args()
+    limit=max(20,min(100,a.limit))
+    if a.enrich_only:
+        if not a.input:raise SystemExit("--input is required with --enrich-only")
+        enrich_snapshot(a.input,a.output,limit)
+        return
+    snap=build_snapshot(limit)
     if not snap["items"]:raise SystemExit("No news items fetched; keep previous snapshot")
     out=pathlib.Path(a.output);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(snap,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")
-    print("GETLINK hot-news snapshot",f"items={len(snap['items'])}",f"newest_age_seconds={snap['newest_age_seconds']}")
+    print("GETLINK hot-news snapshot",f"items={len(snap['items'])}",f"newest_age_seconds={snap['newest_age_seconds']}",f"phase={snap['phase']}")
 
 if __name__=="__main__":main()

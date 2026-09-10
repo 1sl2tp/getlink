@@ -70,6 +70,10 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertNotIn("newsSourceButtons",APP)
         self.assertNotIn("data-news-source",APP)
 
+    def test_news_hides_product_category_panel(self):
+        self.assertIn('categoryHost.hidden=newsMode',APP)
+        self.assertIn('.user-work-category-panel[hidden]{display:none!important}',CSS)
+
     def test_news_prefers_richer_images_and_deduplicates_title_or_content(self):
         self.assertIn("images:string[]",EDGE)
         self.assertIn("content:string",EDGE)

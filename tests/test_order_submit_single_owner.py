@@ -24,7 +24,7 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
             "app.js must not save a local draft when the real order runtime owns Gửi đơn",
         )
 
-    def test_send_buttons_are_clickable_even_if_cart_summary_was_stale(self):
+    def test_send_buttons_start_clickable_even_if_cart_summary_was_stale(self):
         html = INDEX.read_text(encoding="utf-8")
         for button_id in ("userWorkSendOrder", "mobileUserSendOrder"):
             match = re.search(rf'<button\b[^>]*\bid="{button_id}"[^>]*>', html)
@@ -32,7 +32,7 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
             self.assertNotRegex(
                 match.group(0),
                 r"\sdisabled(?:\s|=|>)",
-                f"{button_id} must not use native disabled because a stale cart render swallows clicks",
+                f"{button_id} must not be born disabled from stale cart render state",
             )
 
     def test_app_is_single_owner_for_cart_clear_and_cache_refresh(self):
@@ -61,7 +61,7 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
             "cached Tạp hóa rows must not keep old quantities after +/- changes",
         )
 
-    def test_summary_never_native_disables_send_button(self):
+    def test_summary_does_not_own_business_submit_lock(self):
         text = APP.read_text(encoding="utf-8")
         start = text.index("function updateUserWorkOrderSummary(){")
         end = text.index("\n}", start) + 2
@@ -69,16 +69,16 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
         self.assertNotIn(".disabled=", block)
         self.assertIn('setAttribute("aria-disabled"', block)
 
-    def test_successful_submit_asks_cart_owner_to_clear_then_opens_pending_order(self):
+    def test_successful_submit_clears_through_cart_owner_and_stays_in_sales(self):
         text = ORDER.read_text(encoding="utf-8")
         start = text.index("async function submitSelectedOrder()")
         end = text.index("async function performAdminAction", start)
         submit = text[start:end]
 
-        self.assertIn(
+        self.assertNotIn(
             "openManager();",
             submit,
-            "successful Gửi đơn must immediately open the pending-order manager",
+            "fast sales flow must not auto-open management after Gửi đơn",
         )
         self.assertNotIn(
             "localStorage.removeItem(QTY_KEY)",
@@ -86,15 +86,14 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
             "order-management must not mutate app.js cart storage directly",
         )
         self.assertIn("window.clearUserWorkOrderSelection();", submit)
+        self.assertIn('taphoaWorkView="sales"', submit)
+        self.assertIn("syncTaphoaWorkspace()", submit)
 
         post = submit.index('await orderFetch("/orders",{method:"POST",body})')
         clear = submit.index("window.clearUserWorkOrderSelection();")
-        pending = submit.index('activeView="orders";activeStatus="pending"')
-        open_manager = submit.index("openManager();")
-
+        sales = submit.index('taphoaWorkView="sales"')
         self.assertLess(post, clear)
-        self.assertLess(clear, pending)
-        self.assertLess(pending, open_manager)
+        self.assertLess(clear, sales)
         self.assertNotIn("clearUserWorkOrderSelection", submit[:post])
 
 

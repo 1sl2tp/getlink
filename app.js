@@ -217,6 +217,8 @@ const NEWS_BROWSER_CACHE_TTL=20*60*1000;
 const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v2";
 const NEWS_HOT_SNAPSHOT_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/latest.json";
 const NEWS_HOT_SNAPSHOT_MAX_AGE=8*60*1000;
+const NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000;
+const NEWS_THUMB_WIDTH=360;
 const newsCache=new Map();
 const newsDetailCache=new Map();
 let newsTopic="latest";
@@ -230,6 +232,8 @@ let newsQuickRequest=0;
 let newsQuickCurrentId="";
 let newsQuickTouchX=0;
 let newsQuickTouchY=0;
+let newsHotSnapshotPromise=null;
+let newsHotSnapshotBucket=-1;
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
@@ -432,12 +436,60 @@ function newsAge(iso){
   const age=formatAge(iso);
   return age||"";
 }
-function newsCardHtml(item,compact=false){
+function newsImageCandidates(item){
+  const out=[];
+  for(const value of [item&&item.image,...((item&&item.images)||[])]){
+    const url=String(value||"").trim();
+    if(/^https?:\/\//i.test(url)&&!out.includes(url))out.push(url);
+  }
+  return out.slice(0,3);
+}
+function newsThumbUrl(value,width=NEWS_THUMB_WIDTH){
+  const raw=String(value||"").trim();
+  if(!/^https?:\/\//i.test(raw))return "";
+  const w=Math.max(240,Math.min(480,Number(width)||NEWS_THUMB_WIDTH));
+  return "https://wsrv.nl/?url="+encodeURIComponent(raw)+"&w="+w+"&h=240&fit=cover&output=webp&q=72";
+}
+function bindNewsCardImages(root){
+  if(!root)return;
+  root.querySelectorAll('img[data-news-fallbacks]').forEach(img=>{
+    if(img.dataset.newsFallbackBound==="1")return;
+    img.dataset.newsFallbackBound="1";
+    img.addEventListener("error",()=>{
+      let list=[];
+      try{list=JSON.parse(img.dataset.newsFallbacks||"[]");}catch{}
+      let index=Math.max(0,Number(img.dataset.newsFallbackIndex||0)||0);
+      const direct=img.dataset.newsFallbackDirect==="1";
+      if(!direct&&list[index]){
+        img.dataset.newsFallbackDirect="1";
+        img.src=list[index];
+        return;
+      }
+      index+=1;
+      if(index<list.length){
+        img.dataset.newsFallbackIndex=String(index);
+        img.dataset.newsFallbackDirect="0";
+        img.src=newsThumbUrl(list[index],Number(img.dataset.newsThumbWidth||NEWS_THUMB_WIDTH));
+        return;
+      }
+      const box=img.closest(".news-card-image");
+      if(box){
+        box.classList.add("news-card-image-empty");
+        box.innerHTML=workIconSvg("news","ui-icon");
+      }
+    });
+  });
+}
+function newsCardHtml(item,compact=false,index=0){
   const age=newsAge(item.published_at);
-  const image=item.image||((item.images||[])[0]||"");
+  const images=newsImageCandidates(item);
+  const image=images[0]||"";
+  const eager=index<(compact?6:12);
+  const priority=index<3?"high":"auto";
+  const thumbWidth=compact?320:NEWS_THUMB_WIDTH;
   return '<button class="news-card '+(compact?"news-card-compact ":"")+'" type="button" data-news-id="'+escapeAttr(item.id||"")+'">'+
     (image
-      ?'<span class="news-card-image"><img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async"></span>'
+      ?'<span class="news-card-image"><img src="'+escapeAttr(newsThumbUrl(image,thumbWidth))+'" data-news-fallbacks="'+escapeAttr(JSON.stringify(images))+'" data-news-fallback-index="0" data-news-fallback-direct="0" data-news-thumb-width="'+thumbWidth+'" alt="" loading="'+(eager?"eager":"lazy")+'" fetchpriority="'+priority+'" decoding="async" referrerpolicy="no-referrer"></span>'
       :'<span class="news-card-image news-card-image-empty">'+workIconSvg("news","ui-icon")+'</span>')+
     '<span class="news-card-copy">'+
       '<strong class="news-card-title">'+escapeHtml(item.title||"")+'</strong>'+
@@ -461,7 +513,8 @@ function renderNewsDesktop(){
   if(results){
     results.innerHTML=newsLoading&&!newsItems.length
       ?'<div class="news-state">Đang đọc tin...</div>'
-      :visible.map(item=>newsCardHtml(item,false)).join("");
+      :visible.map((item,index)=>newsCardHtml(item,false,index)).join("");
+    bindNewsCardImages(results);
   }
   if(empty){
     empty.hidden=newsLoading||visible.length>0;
@@ -477,7 +530,8 @@ function renderMobileNews(){
     results.classList.add("news-results");
     results.innerHTML=newsLoading&&!newsItems.length
       ?'<div class="news-state">Đang đọc tin...</div>'
-      :visible.map(item=>newsCardHtml(item,true)).join("");
+      :visible.map((item,index)=>newsCardHtml(item,true,index)).join("");
+    bindNewsCardImages(results);
     results.dataset.hasMore="0";
     results.hidden=false;
   }
@@ -507,16 +561,45 @@ function newsSnapshotAge(data){
   return Number.isFinite(t)?Math.max(0,Date.now()-t):Infinity;
 }
 async function fetchNewsHotSnapshot(){
-  const bucket=Math.floor(Date.now()/60000);
-  const response=await fetch(NEWS_HOT_SNAPSHOT_URL+"?m="+bucket,{
-    cache:"no-store",
+  const bucket=Math.floor(Date.now()/NEWS_HOT_SNAPSHOT_BUCKET_MS);
+  if(newsHotSnapshotPromise&&newsHotSnapshotBucket===bucket)return newsHotSnapshotPromise;
+  newsHotSnapshotBucket=bucket;
+  newsHotSnapshotPromise=fetch(NEWS_HOT_SNAPSHOT_URL+"?v="+bucket,{
+    cache:"force-cache",
     mode:"cors",
     credentials:"omit"
+  }).then(async response=>{
+    if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
+    const data=await response.json();
+    if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
+    return data;
+  }).catch(error=>{
+    if(newsHotSnapshotBucket===bucket)newsHotSnapshotPromise=null;
+    throw error;
   });
-  if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
-  const data=await response.json();
-  if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
-  return data;
+  return newsHotSnapshotPromise;
+}
+function prewarmLatestNews(){
+  const browser=readNewsBrowserCache("latest");
+  if(browser&&browser.items.length){
+    newsCache.set("latest",{at:browser.at,items:browser.items});
+    if(newsTopic==="latest"&&!newsItems.length)newsItems=browser.items;
+  }
+  fetchNewsHotSnapshot()
+    .then(data=>{
+      const items=Array.isArray(data&&data.items)?data.items:[];
+      if(!items.length)return;
+      newsCache.set("latest",{at:Date.now(),items});
+      writeNewsBrowserCache("latest",items);
+      if(newsTopic==="latest"){
+        newsItems=items;
+        newsError="";
+        const visible=(isMobileUserWork()&&mobileUserScope==="news")||(!isMobileUserWork()&&userWorkDesktopScope==="news");
+        if(visible)refreshNewsViews();
+      }
+      if(newsSnapshotAge(data)>NEWS_HOT_SNAPSHOT_MAX_AGE)queueMicrotask(backgroundRefreshLatestNews);
+    })
+    .catch(error=>console.debug("GETLINK news prewarm",error));
 }
 function backgroundRefreshLatestNews(){
   if(!API)return;
@@ -6349,6 +6432,7 @@ window.addEventListener("resize",()=>{
 
 (async()=>{
   await restoreAppRole();
+  prewarmLatestNews();
   await refreshCatalog();
   setTimeout(()=>{
     if(API&&!newsItems.length)ensureNewsLoaded(false);

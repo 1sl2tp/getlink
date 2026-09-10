@@ -1,0 +1,174 @@
+name: Fix news quality rules once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-news-quality-rules-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch news quality rules at the snapshot processor
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path=Path('.github/scripts/build_news_snapshot.py')
+          text=path.read_text(encoding='utf-8')
+
+          old='''def is_noise_item(item):
+              title=norm(item.get("title"))
+              if len(title)<12:return True
+              if re.match(r"^tin [a-z0-9 ]+ tin tuc\\b",title):return True
+              if title in {"tin moi","tin nong","tin hot","tin tuc","the thao","kinh doanh","giai tri"}:return True
+              raw=str(item.get("url") or "")
+              if "news.google.com/" not in raw:
+                  try:
+                      u=urllib.parse.urlparse(raw)
+                      path=(u.path or "").lower()
+                      query=(u.query or "").lower()
+                      if "/tag/" in path or "/tags/" in path or "page=" in query:return True
+                  except Exception:pass
+              return False
+          '''.replace('          ','')
+
+          new='''def is_noise_item(item):
+              title=norm(item.get("title"))
+              source=norm(item.get("source_name"))
+              if len(title)<12:return True
+              # Video/clip cards are not article evidence for the fast reader.
+              if re.match(r"^(?:video|clip|livestream|truc tiep)\\b",title):return True
+              # Google can surface local landing-page digests as if they were articles.
+              if re.match(r"^trang dia phuong\\b",title):return True
+              if re.match(r"^tin [a-z0-9 ]+ tin tuc\\b",title):return True
+              if title in {"tin moi","tin nong","tin hot","tin tuc","the thao","kinh doanh","giai tri"}:return True
+              raw=str(item.get("url") or "")
+              if "news.google.com/" not in raw:
+                  try:
+                      u=urllib.parse.urlparse(raw)
+                      host=(u.hostname or "").lower().removeprefix("www.")
+                      path=(u.path or "").lower()
+                      query=(u.query or "").lower()
+                      if "/tag/" in path or "/tags/" in path or "page=" in query:return True
+                      # Provincial police portals are institutional/local activity feeds,
+                      # not the national hot-news stream. Keep national reporting about
+                      # provinces; reject only the publisher itself here.
+                      if re.match(r"^congan\\.[^.]+\\.gov\\.vn$",host):return True
+                  except Exception:pass
+              if re.match(r"^(?:cong an tinh|cong an thanh pho|cong an tp)\\b",source):return True
+              return False
+          '''.replace('          ','')
+
+          if old not in text:
+              raise SystemExit('is_noise_item anchor not found')
+          text=text.replace(old,new,1)
+
+          anchor='''def process_items(items):
+              return [x for x in dedupe(items) if not is_noise_item(x)]
+          '''.replace('          ','')
+          helpers='''def _news_image_key(value):
+              value=ready_image_url(value)
+              if not value:return ""
+              try:
+                  u=urllib.parse.urlparse(value)
+                  return (u.scheme.lower()+"://"+(u.hostname or "").lower()+(u.path or ""))
+              except Exception:return value
+
+          def suppress_reused_news_images(items,min_reuse=3):
+              # A template/section image often appears on many unrelated articles and
+              # still returns HTTP 200, so onerror cannot detect it. Frequency across
+              # distinct articles is the reliable signal; demote it to the next image.
+              counts={}
+              for item in items:
+                  seen=set()
+                  for raw in [item.get("image"),*(item.get("images") or [])]:
+                      key=_news_image_key(raw)
+                      if key and key not in seen:
+                          seen.add(key);counts[key]=counts.get(key,0)+1
+              repeated={key for key,count in counts.items() if count>=max(2,int(min_reuse or 3))}
+              out=[]
+              for item in items:
+                  row=dict(item);images=[]
+                  for raw in [*(item.get("images") or []),item.get("image")]:
+                      url=ready_image_url(raw);key=_news_image_key(url)
+                      if url and key not in repeated and url not in images:images.append(url)
+                  row["images"]=images[:8]
+                  row["image"]=images[0] if images else ""
+                  out.append(row)
+              return out
+
+          def diversify_news_sources(items,limit,max_per_source=2):
+              limit=max(0,int(limit or 0)); cap=max(1,int(max_per_source or 1))
+              counts={};out=[]
+              for item in items:
+                  key=norm(item.get("source_key") or item.get("source_name"))
+                  if not key:
+                      try:key=(urllib.parse.urlparse(str(item.get("url") or "")).hostname or "").lower()
+                      except Exception:key=""
+                  if key and counts.get(key,0)>=cap:continue
+                  if key:counts[key]=counts.get(key,0)+1
+                  out.append(item)
+                  if len(out)>=limit:break
+              return out
+
+          def process_items(items):
+              return [x for x in dedupe(items) if not is_noise_item(x)]
+          '''.replace('          ','')
+          if anchor not in text:
+              raise SystemExit('process_items anchor not found')
+          text=text.replace(anchor,helpers,1)
+
+          old_ready='''    items=process_items(items)
+              rejected_title=sum(1 for x in items if not title_is_clean(x.get("title")))
+          '''.replace('          ','')
+          new_ready='''    items=process_items(items)
+              items=suppress_reused_news_images(items)
+              rejected_title=sum(1 for x in items if not title_is_clean(x.get("title")))
+          '''.replace('          ','')
+          if old_ready not in text:
+              raise SystemExit('enrich process anchor not found')
+          text=text.replace(old_ready,new_ready,1)
+
+          old_select='''    ready.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
+              ready=ready[:limit]
+          '''.replace('          ','')
+          new_select='''    ready.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
+              ready=diversify_news_sources(ready,limit=limit,max_per_source=2)
+          '''.replace('          ','')
+          if old_select not in text:
+              raise SystemExit('ready selection anchor not found')
+          text=text.replace(old_select,new_select,1)
+
+          # Reject non-image service URLs that occasionally leak through metadata.
+          text=text.replace(
+              '"avatar-author","author-default","no-image","no_image","image-not-found"',
+              '"avatar-author","author-default","no-image","no_image","image-not-found",\n      "googletagmanager.com","fonts.googleapis.com"',
+              1
+          )
+
+          path.write_text(text,encoding='utf-8')
+          PY
+
+      - name: Verify quality regressions
+        run: |
+          python -m unittest discover -s tests -p 'test_news_snapshot_quality_rules.py' -v
+          python -m py_compile .github/scripts/build_news_snapshot.py
+
+      - name: Commit production fix and remove one-time workflow
+        run: |
+          git config user.name "GETLINK News Quality"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-news-quality-rules-once.yml
+          git add .github/scripts/build_news_snapshot.py
+          git commit -m "Filter video and local noise from news snapshots"
+          git push origin HEAD:main

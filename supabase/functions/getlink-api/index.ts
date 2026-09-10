@@ -2599,12 +2599,6 @@ function routePath(req:Request){
 
 
 type NewsTopicKey="latest"|"thoi-su"|"kinh-doanh"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
-type NewsSourceDef={
-  key:string;
-  name:string;
-  domain:string;
-  feeds:Partial<Record<NewsTopicKey,string>>;
-};
 type NewsItem={
   id:string;
   title:string;
@@ -2631,68 +2625,6 @@ const NEWS_TOPICS:{key:NewsTopicKey;name:string;query:string}[]=[
   {key:"suc-khoe",name:"Sức khỏe",query:"\"sức khỏe\" OR \"y tế\""}
 ];
 
-const NEWS_SOURCES:NewsSourceDef[]=[
-  {
-    key:"vnexpress",name:"VnExpress",domain:"vnexpress.net",
-    feeds:{
-      "latest":"https://vnexpress.net/rss/tin-moi-nhat.rss",
-      "thoi-su":"https://vnexpress.net/rss/thoi-su.rss",
-      "kinh-doanh":"https://vnexpress.net/rss/kinh-doanh.rss",
-      "cong-nghe":"https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss",
-      "the-thao":"https://vnexpress.net/rss/the-thao.rss",
-      "giai-tri":"https://vnexpress.net/rss/giai-tri.rss",
-      "suc-khoe":"https://vnexpress.net/rss/suc-khoe.rss"
-    }
-  },
-  {
-    key:"dantri",name:"Dân Trí",domain:"dantri.com.vn",
-    feeds:{
-      "latest":"https://dantri.com.vn/rss/home.rss",
-      "thoi-su":"https://dantri.com.vn/rss/thoi-su.rss",
-      "kinh-doanh":"https://dantri.com.vn/rss/kinh-doanh.rss",
-      "cong-nghe":"https://dantri.com.vn/rss/cong-nghe.rss",
-      "the-thao":"https://dantri.com.vn/rss/the-thao.rss",
-      "giai-tri":"https://dantri.com.vn/rss/giai-tri.rss",
-      "suc-khoe":"https://dantri.com.vn/rss/suc-khoe.rss"
-    }
-  },
-  {
-    key:"tuoitre",name:"Tuổi Trẻ",domain:"tuoitre.vn",
-    feeds:{
-      "latest":"https://tuoitre.vn/home.rss",
-      "thoi-su":"https://tuoitre.vn/thoi-su.rss",
-      "kinh-doanh":"https://tuoitre.vn/kinh-doanh.rss",
-      "cong-nghe":"https://tuoitre.vn/nhip-song-so.rss",
-      "the-thao":"https://tuoitre.vn/the-thao.rss",
-      "giai-tri":"https://tuoitre.vn/giai-tri.rss",
-      "suc-khoe":"https://tuoitre.vn/suc-khoe.rss"
-    }
-  },
-  {key:"baomoi",name:"Báo Mới",domain:"baomoi.com",feeds:{}},
-  {key:"vietnamnet",name:"VietnamNet",domain:"vietnamnet.vn",feeds:{}},
-  {
-    key:"kenh14",name:"Kênh14",domain:"kenh14.vn",
-    feeds:{
-      "latest":"https://kenh14.vn/rss/home.rss",
-      "thoi-su":"https://kenh14.vn/xa-hoi.rss",
-      "kinh-doanh":"https://kenh14.vn/money14.rss",
-      "cong-nghe":"https://kenh14.vn/tek-life.rss",
-      "the-thao":"https://kenh14.vn/sport.rss",
-      "giai-tri":"https://kenh14.vn/star.rss",
-      "suc-khoe":"https://kenh14.vn/suc-khoe.rss"
-    }
-  },
-  {key:"zing",name:"Zing News",domain:"znews.vn",feeds:{}},
-  {
-    key:"thanhnien",name:"Báo Thanh Niên",domain:"thanhnien.vn",
-    feeds:{
-      "latest":"https://thanhnien.vn/rss/home.rss",
-      "thoi-su":"https://thanhnien.vn/rss/thoi-su.rss"
-    }
-  },
-  {key:"laodong",name:"Lao Động",domain:"laodong.vn",feeds:{}}
-];
-
 const NEWS_CACHE_MS=3*60*1000;
 const NEWS_FETCH_TIMEOUT_MS=5500;
 const newsMemoryCache=new Map<string,{at:number;payload:any}>();
@@ -2703,12 +2635,6 @@ const NEWS_TITLE_STOP=new Set([
 
 function newsTopicDef(key:string){
   return NEWS_TOPICS.find(x=>x.key===key)||NEWS_TOPICS[0];
-}
-function newsGoogleFeed(source:NewsSourceDef,topic:NewsTopicKey){
-  const topicDef=newsTopicDef(topic);
-  const query=["site:"+source.domain,topicDef.query,"when:2d"].filter(Boolean).join(" ");
-  return "https://news.google.com/rss/search?q="+encodeURIComponent(query)+
-    "&hl=vi&gl=VN&ceid=VN:vi";
 }
 function newsGoogleTopFeed(){
   return "https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi";
@@ -2910,38 +2836,6 @@ function newsDeduplicate(items:NewsItem[]){
   }
   return out;
 }
-async function newsParseItems(xml:string,source:NewsSourceDef,topic:NewsTopicKey){
-  const blocks=[...String(xml||"").matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(x=>x[0]).slice(0,35);
-  const items=await Promise.all(blocks.map(async block=>{
-    const title=newsStripHtml(newsTag(block,["title"])).replace(/\s+-\s+[^-]{2,60}$/,"").trim();
-    const descriptionRaw=newsTag(block,["description"]);
-    const contentRaw=newsTag(block,["content:encoded","content"]);
-    let content=newsPlainContent(contentRaw||descriptionRaw).slice(0,9000);
-    content=newsRemoveLeadingTitle(content,title);
-    const summary=newsStripHtml(descriptionRaw||contentRaw).slice(0,520);
-    const link=newsSafeUrl(newsTag(block,["link","guid"]));
-    if(!title||!link)return null;
-    const images=newsImagesFromItem(block,descriptionRaw,contentRaw);
-    const published_at=newsPublished(newsTag(block,["pubDate","published","updated","dc:date"]));
-    return {
-      id:await idFor("news:"+source.key+":"+link+":"+title),
-      title,
-      summary,
-      content,
-      url:link,
-      image:images[0]||"",
-      images,
-      published_at,
-      source_key:source.key,
-      source_name:source.name,
-      topic,
-      duplicate_count:1,
-      also_sources:[]
-    } as NewsItem;
-  }));
-  return items.filter((x):x is NewsItem=>Boolean(x));
-}
-
 async function newsParseGoogleItems(xml:string,topic:NewsTopicKey){
   const blocks=[...String(xml||"").matchAll(/<item\b[\s\S]*?<\/item>/gi)].map(x=>x[0]).slice(0,50);
   const items=await Promise.all(blocks.map(async block=>{

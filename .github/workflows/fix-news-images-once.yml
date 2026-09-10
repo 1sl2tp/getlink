@@ -39,14 +39,24 @@ jobs:
       - name: Static build check
         run: python tools/stamp_static_build.py --check
 
-      - name: JavaScript syntax check
-        run: node --check app.js
+      - name: JavaScript syntax checks
+        run: |
+          node --check app.js
+          node --check relay/src/index.js
 
-      - name: HTML script check
-        run: node tools/check-script.js index.html
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
 
-      - name: Runtime TypeScript check
-        run: node tools/check-runtime-ts.js supabase/functions/getlink-api/index.ts
+      - name: Edge TypeScript check
+        run: deno check supabase/functions/getlink-api/index.ts
+
+      - name: Runtime contract checks
+        run: |
+          node tests/test_money_display.mjs
+          node tests/test_bhx_edge_contract.mjs
+          node tests/test_go_edge_contract.mjs
+          node tests/test_getlink_name_filter_contract.mjs
 
       - name: Commit verified patch
         shell: bash

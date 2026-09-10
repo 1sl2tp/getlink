@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 INDEX=ROOT/'index.html'
 VERSION=ROOT/'version.json'
 PLACEHOLDER='__GETLINK_BUILD_ID__'
-ASSETS=('app.js','style.css','config.js')
+ASSETS=('app.js','style.css','config.js','order-management.js','order-management.css')
 
 def normalized_index(text):
     meta_pattern=r'(<meta name="app-build-id" content=")[^"]*(">)'
@@ -45,7 +45,7 @@ def calculate():
         'build_id':build_id,
         'update_policy':'auto-when-safe',
         'published_from':'github-main',
-        'assets':['index.html','style.css','config.js','app.js'],
+        'assets':['index.html','style.css','config.js','app.js','order-management.js','order-management.css'],
     }
     version_text=json.dumps(payload,ensure_ascii=False,indent=2)+'\n'
     return build_id,stamped,version_text

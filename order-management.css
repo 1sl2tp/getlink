@@ -1,0 +1,66 @@
+.order-manager-entry{height:34px;padding:0 11px;border:1px solid #d7dce3;border-radius:9px;background:#fff;color:#273142;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
+.order-manager-entry:hover{background:#f6f8fa}
+.order-manager[hidden]{display:none!important}
+.order-manager{position:fixed;inset:0;z-index:12000;background:rgba(18,24,33,.28);display:flex;justify-content:flex-end;align-items:stretch}
+.order-manager-panel{width:min(560px,100%);height:100%;background:#fff;box-shadow:-10px 0 34px rgba(25,33,45,.16);display:flex;flex-direction:column;overflow:hidden}
+.order-manager-head{min-height:64px;padding:11px 14px 10px 16px;border-bottom:1px solid #e5e8ec;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.order-manager-head h2{margin:0;font-size:18px;line-height:1.25;color:#18202b}
+.order-manager-head small{display:block;margin-top:3px;color:#707987;font-size:12px}
+#orderManagerClose{width:38px;height:38px;border:0;border-radius:10px;background:transparent;color:#5a6472;font-size:29px;line-height:36px;cursor:pointer}
+#orderManagerClose:hover{background:#f2f4f7}
+.order-manager-body{min-height:0;display:flex;flex:1;flex-direction:column}
+.order-manager-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:10px 12px 8px;border-bottom:1px solid #edf0f3;background:#fff}
+.order-manager-tabs button{height:38px;border:1px solid #dfe3e8;border-radius:9px;background:#f8f9fb;color:#4f5968;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
+.order-manager-tabs button.active{background:#eef5ff;border-color:#b7cff3;color:#1f5ca8}
+.order-manager-tabs small{display:inline-flex;min-width:18px;height:18px;align-items:center;justify-content:center;margin-left:3px;padding:0 4px;border-radius:9px;background:rgba(0,0,0,.055);font-size:10px}
+.order-manager-tools{min-height:36px;padding:7px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #edf0f3;color:#697383;font-size:12px}
+#orderCustomerLogout{border:0;background:transparent;color:#3569a7;font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.order-manager-list{min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px 20px;display:grid;align-content:start;gap:9px;background:#f6f7f9}
+.order-card{border:1px solid #e2e5e9;border-radius:12px;background:#fff;overflow:hidden}
+.order-card-head{padding:11px 12px 9px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid #f0f1f3}
+.order-card-head>div{min-width:0}
+.order-card-head strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#202936;font-size:14px;line-height:1.3}
+.order-card-head small{display:block;margin-top:3px;color:#7a8491;font-size:11px;line-height:1.25}
+.order-card-head>b{flex:0 0 auto;color:#1e2733;font-size:14px;line-height:1.3;font-variant-numeric:tabular-nums}
+.order-card-items{padding:6px 12px}
+.order-card-items>div{min-height:32px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border-bottom:1px dashed #eceef1}
+.order-card-items>div:last-child{border-bottom:0}
+.order-card-items span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#404a58;font-size:12px}
+.order-card-items small{color:#747e8b;font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.order-card-actions{padding:8px 10px;border-top:1px solid #eef0f2;display:flex;justify-content:flex-end;gap:7px}
+.order-card-actions button{min-height:34px;padding:0 11px;border-radius:8px;font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+.order-action-primary{border:1px solid #b6d1b8;background:#f1f8f2;color:#286334}
+.order-action-danger{border:1px solid #e1c3c3;background:#fff7f7;color:#9a3a3a}
+.order-manager-empty,.order-manager-message{margin:16px 12px;padding:18px;border:1px dashed #d8dde3;border-radius:11px;background:#fff;color:#737d8a;text-align:center;font-size:13px}
+.order-manager-login{margin:auto;width:min(360px,calc(100% - 28px));padding:18px;border:1px solid #e0e4e8;border-radius:14px;background:#fff;display:grid;gap:10px;box-shadow:0 8px 30px rgba(32,42,55,.08)}
+.order-manager-login[hidden]{display:none!important}
+.order-manager-login strong{font-size:16px;color:#1e2732}
+.order-manager-login small{margin-top:-5px;color:#737d89;font-size:12px}
+.order-manager-login input{width:100%;height:42px;box-sizing:border-box;padding:0 11px;border:1px solid #cfd5dc;border-radius:9px;background:#fff;color:#202833;font-size:14px;outline:0}
+.order-manager-login input:focus{border-color:#93b8e9;box-shadow:0 0 0 2px rgba(71,133,210,.10)}
+#orderLoginSubmit{height:42px;border:0;border-radius:9px;background:#2f6db0;color:#fff;font:700 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
+#orderLoginStatus{min-height:16px;color:#a14343;font-size:12px}
+
+@media(max-width:639px){
+  .order-manager{align-items:flex-end;background:rgba(18,24,33,.24)}
+  .order-manager-panel{width:100%;height:min(88dvh,760px);border-radius:16px 16px 0 0;box-shadow:0 -10px 32px rgba(25,33,45,.16)}
+  .order-manager-head{min-height:56px;padding:9px 11px 8px 13px}
+  .order-manager-head h2{font-size:16px}
+  .order-manager-tabs{padding:8px;gap:5px}
+  .order-manager-tabs button{height:36px;padding:0 5px;font-size:12px}
+  .order-manager-list{padding:8px 8px 16px;gap:7px}
+  .order-card{border-radius:10px}
+  .order-card-head{padding:9px 10px 8px}
+  .order-card-items{padding:5px 10px}
+  .order-card-items>div{min-height:30px}
+  .order-card-actions{padding:7px 8px}
+  .order-manager-entry{height:32px;padding:0 9px;font-size:12px}
+}
+
+@media(max-width:360px){
+  .order-manager-tabs button{font-size:11px}
+  .order-manager-tabs small{display:none}
+  .order-card-head{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .order-card-head strong{font-size:13px}
+  .order-card-head>b{font-size:13px}
+}

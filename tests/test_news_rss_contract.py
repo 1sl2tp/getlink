@@ -123,6 +123,9 @@ class NewsRssContractTest(unittest.TestCase):
     def test_browser_keeps_ready_snapshot_while_refreshing(self):
         self.assertIn('NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v5"',APP)
         self.assertIn('readNewsBrowserCache',APP)
+        self.assertNotIn("NEWS_BROWSER_CACHE_TTL",APP)
+        self.assertIn("Last READY package is always usable as the instant first paint.",APP)
+        self.assertIn("prewarmOtherNewsTopics();",APP)
         self.assertIn('writeNewsBrowserCache',APP)
         self.assertIn('if(!newsItems.length)ensureNewsLoaded(false)',APP)
         self.assertIn('prewarmLatestNews();',APP)

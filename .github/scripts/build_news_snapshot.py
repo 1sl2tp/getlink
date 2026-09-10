@@ -21,8 +21,9 @@ except Exception:
 
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
-RICH_IMAGE_LIMIT=100
-RICH_WORKERS=12
+DISCOVERY_CANDIDATE_LIMIT=180
+RICH_IMAGE_LIMIT=180
+RICH_WORKERS=16
 FEED_TIMEOUT=10
 DETAIL_TIMEOUT=6
 GOOGLE_HOT_QUERIES=[
@@ -69,11 +70,41 @@ def google_top_feed():
     return "https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"
 
 def clean_text(v):
-    value=html.unescape(str(v or ""))
+    value=str(v or "")
+    # RSS titles can arrive with nested HTML entities. Decode repeatedly before
+    # fixing mojibake so READY JSON never asks the UI to repair text.
+    for _ in range(3):
+        decoded=html.unescape(value)
+        if decoded==value:break
+        value=decoded
     if ftfy_fix_text is not None:
         try:value=ftfy_fix_text(value)
         except Exception:pass
     return unicodedata.normalize("NFC",value).replace("\ufffd","").strip()
+
+def title_is_clean(v):
+    value=clean_text(v)
+    if len(value)<12:return False
+    low=value.lower()
+    if re.search(r"&(?:#\d+|#x[0-9a-f]+|[a-z]{2,12});",low,re.I):return False
+    if any(x in value for x in ("Ã","Â","â€","â€™","â€œ","â€˜","á»","áº","ðŸ","�")):return False
+    if any(ord(ch)<32 and ch not in "\t\n\r" for ch in value):return False
+    return True
+
+def ready_image_url(v):
+    value=str(v or "").strip()
+    if not value.startswith(("http://","https://")):return ""
+    low=value.lower()
+    if any(x in low for x in ("logo","favicon","sprite","tracking","pixel","placeholder","loading","blank")):return ""
+    if re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
+    return value
+
+def ready_item(item):
+    title=clean_text(item.get("title"))
+    url=str(item.get("url") or "").strip()
+    images=item.get("images") or []
+    image=ready_image_url(item.get("image") or (images[0] if images else ""))
+    return bool(title_is_clean(title) and url.startswith(("http://","https://")) and "news.google.com/" not in url and image)
 
 def plain(v):
     return re.sub(r"\s+"," ",clean_text(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
@@ -391,32 +422,39 @@ def hot_score(item,now):
 def compact(item,now):
     images=[]
     for u in item.get("images") or []:
+        u=ready_image_url(u)
         if u and u not in images:images.append(u)
+    fallback=ready_image_url(item.get("image"))
+    if fallback and fallback not in images:images.insert(0,fallback)
     return {
-      "id":str(item.get("id") or ""),"title":str(item.get("title") or "").strip(),"summary":str(item.get("summary") or "")[:420],
-      "content":"","url":str(item.get("url") or ""),"image":images[0] if images else str(item.get("image") or ""),
+      "id":str(item.get("id") or ""),"title":clean_text(item.get("title")),"summary":clean_text(str(item.get("summary") or ""))[:420],
+      "content":"","url":str(item.get("url") or ""),"image":images[0] if images else "",
       "images":images[:3],"published_at":str(item.get("published_at") or ""),"source_key":str(item.get("source_key") or ""),
       "source_name":str(item.get("source_name") or ""),"topic":"latest","duplicate_count":max(1,int(item.get("duplicate_count") or 1)),
       "also_sources":[],"hot_score":hot_score(item,now)
     }
 
-def build_snapshot(limit=DEFAULT_LIMIT):
-    # Fast discovery only. Article URLs and thumbnails are enriched in the
-    # second phase before the canonical snapshot is published atomically.
+def build_snapshot(limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT):
+    # Discovery deliberately over-fetches. The UI target is limit, while the
+    # processor keeps a larger candidate pool so missing thumbnails/bad titles
+    # can be rejected and replaced before a READY snapshot is published.
     google_queries=["__top__",*GOOGLE_HOT_QUERIES]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         google_batches=list(pool.map(fetch_google_query,google_queries))
     items=process_items([x for batch in google_batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
+    items=[x for x in items if title_is_clean(x.get("title"))]
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
-    rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
+    pool_limit=max(limit,min(candidate_limit,len(items)))
+    rows=[compact(x,now) for x in items[:pool_limit] if x.get("title") and x.get("url")]
     newest=max((iso(x.get("published_at")) for x in rows),default=now)
-    return {"version":4,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
+    return {"version":5,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
       "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-rss-only-snapshot",
-      "phase":"fast","storage":"git-ephemeral-branch","database":False,"query_count":len(google_queries),"items":rows}
+      "phase":"candidate","storage":"git-ephemeral-branch","database":False,"query_count":len(google_queries),
+      "target_count":limit,"candidate_count":len(rows),"items":rows}
 
-def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
+def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT):
     data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
-    items=list(data.get("items") or [])[:limit]
+    items=list(data.get("items") or [])[:candidate_limit]
     candidates=list(items[:RICH_IMAGE_LIMIT])
     if candidates:
         pos={str(x.get("id") or ""):i for i,x in enumerate(items)}
@@ -430,14 +468,32 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
                 if i is not None:items[i]=enriched
     now=dt.datetime.now(dt.timezone.utc)
     items=process_items(items)
-    items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
-    data["items"]=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
+    rejected_title=sum(1 for x in items if not title_is_clean(x.get("title")))
+    rejected_url=sum(1 for x in items if title_is_clean(x.get("title")) and "news.google.com/" in str(x.get("url") or ""))
+    rejected_image=0
+    for x in items:
+        if not title_is_clean(x.get("title")) or "news.google.com/" in str(x.get("url") or ""):continue
+        images=x.get("images") or []
+        image=ready_image_url(x.get("image") or (images[0] if images else ""))
+        if not image:rejected_image+=1
+    ready=[x for x in items if ready_item(x)]
+    ready.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
+    ready=ready[:limit]
+    if not ready:
+        raise SystemExit("No READY news items; keep previous snapshot")
+    data["items"]=[compact(x,now) for x in ready]
+    data["version"]=5
     data["phase"]="rich"
+    data["ready"]=True
     data["enriched_at"]=now.isoformat().replace("+00:00","Z")
-    data["image_count"]=sum(1 for x in data["items"] if x.get("image"))
+    data["target_count"]=limit
+    data["candidate_count"]=len(items)
+    data["ready_count"]=len(data["items"])
+    data["image_count"]=len(data["items"])
     data["multi_image_count"]=sum(1 for x in data["items"] if len(x.get("images") or [])>=2)
+    data["rejected"]={"title":rejected_title,"url":rejected_url,"image":rejected_image}
     pathlib.Path(output_path).write_text(json.dumps(data,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")
-    print("GETLINK rich-news snapshot",f"items={len(data['items'])}",f"images={data['image_count']}",f"multi={data['multi_image_count']}")
+    print("GETLINK READY news snapshot",f"ready={data['ready_count']}/{limit}",f"candidates={data['candidate_count']}",f"rejected={data['rejected']}")
 
 def main():
     p=argparse.ArgumentParser()
@@ -445,16 +501,18 @@ def main():
     p.add_argument("--input")
     p.add_argument("--enrich-only",action="store_true")
     p.add_argument("--limit",type=int,default=DEFAULT_LIMIT)
+    p.add_argument("--candidate-limit",type=int,default=DISCOVERY_CANDIDATE_LIMIT)
     a=p.parse_args()
     limit=max(20,min(100,a.limit))
+    candidate_limit=max(limit,min(240,a.candidate_limit))
     if a.enrich_only:
         if not a.input:raise SystemExit("--input is required with --enrich-only")
-        enrich_snapshot(a.input,a.output,limit)
+        enrich_snapshot(a.input,a.output,limit,candidate_limit)
         return
-    snap=build_snapshot(limit)
+    snap=build_snapshot(limit,candidate_limit)
     if not snap["items"]:raise SystemExit("No news items fetched; keep previous snapshot")
     out=pathlib.Path(a.output);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(snap,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")
-    print("GETLINK hot-news snapshot",f"items={len(snap['items'])}",f"newest_age_seconds={snap['newest_age_seconds']}",f"phase={snap['phase']}")
+    print("GETLINK news candidates",f"items={len(snap['items'])}",f"target={limit}",f"newest_age_seconds={snap['newest_age_seconds']}",f"phase={snap['phase']}")
 
 if __name__=="__main__":main()

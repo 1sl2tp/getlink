@@ -1,0 +1,12 @@
+GETLINK native sales implementation checkpoint
+
+RED contract confirmed: 161 tests ran with exactly 8 new native-core failures while previous tests passed.
+Implemented on feature/getlink-native-sales-core:
+- Four logical data-domain architecture lock.
+- GETLINK-native sales orders, immutable order items and debt ledger schema/RPCs.
+- getlink-orders rewired to v21_accounts + getlink_supplier_products + native sales tables only.
+- Order UI moved to pending/delivered/returned and full-VND values.
+- Công nợ UI added for admin/user scope, timeline and payment entry.
+- Static build stamped after JS/CSS changes.
+
+Next gate: full Verify GETLINK must pass before any production migration/deploy.

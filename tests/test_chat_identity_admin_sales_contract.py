@@ -5,41 +5,25 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 EDGE = ROOT / "supabase/functions/getlink-orders/index.ts"
 JS = ROOT / "order-management.js"
-MIGRATION = ROOT / "supabase/migrations/20260910092000_v21_order_identity.sql"
+LEGACY_TRANSITION_MIGRATION = ROOT / "supabase/migrations/20260910092000_v21_order_identity.sql"
+NATIVE_MIGRATION = ROOT / "supabase/migrations/20260910113000_getlink_native_sales_core.sql"
 
 
-class ChatIdentityOrderMigrationContract(unittest.TestCase):
-    def text(self):
-        self.assertTrue(MIGRATION.exists(), "v21 order identity migration must exist")
-        return MIGRATION.read_text(encoding="utf-8")
-
-    def test_migration_is_additive_for_historical_orders(self):
-        text = self.text().lower()
+class ChatIdentityHistoricalMigrationContract(unittest.TestCase):
+    def test_old_transition_migration_remains_historical_only(self):
+        self.assertTrue(LEGACY_TRANSITION_MIGRATION.exists())
+        text = LEGACY_TRANSITION_MIGRATION.read_text(encoding="utf-8").lower()
         self.assertIn("add column if not exists chat_account_id uuid", text)
-        self.assertIn("references public.v21_accounts", text)
-        # A targeted DELETE with a WHERE clause is part of cancelling one pending order.
-        # The migration itself must never contain a mass DELETE of historical orders/debts.
         self.assertNotRegex(text, r"delete\s+from\s+public\.(?:orders|debts)\s*;")
         self.assertNotRegex(text, r"truncate\s+(?:table\s+)?public\.(?:orders|debts)")
-        self.assertNotIn("insert into public.accounts", text)
 
-    def test_v21_orders_have_their_own_atomic_order_debt_rpcs(self):
-        text = self.text()
-        for name in (
-            "getlink_create_v21_order",
-            "getlink_approve_v21_order",
-            "getlink_cancel_v21_order",
-        ):
-            self.assertIn(name, text)
-        self.assertIn("chat_account_id", text)
-        self.assertIn("order_debt", text)
-        self.assertIn("order_return_reversal", text)
-
-    def test_legacy_debt_identity_is_preserved_without_shadow_accounts(self):
-        text = self.text().lower()
-        self.assertIn("debts_customer_fkey_safety", text)
-        self.assertIn("getlink_validate_debt_customer_identity", text)
-        self.assertIn("v21:", text)
+    def test_native_migration_does_not_copy_legacy_business_rows(self):
+        self.assertTrue(NATIVE_MIGRATION.exists())
+        text = NATIVE_MIGRATION.read_text(encoding="utf-8").lower()
+        self.assertIn("getlink_sales_orders", text)
+        self.assertIn("references public.v21_accounts", text)
+        self.assertNotRegex(text, r"insert\s+into\s+public\.getlink_sales_orders[\s\S]{0,300}\bfrom\s+public\.orders\b")
+        self.assertNotRegex(text, r"insert\s+into\s+public\.getlink_debt_ledger[\s\S]{0,300}\bfrom\s+public\.debts\b")
         self.assertNotIn("insert into public.accounts", text)
 
 
@@ -50,7 +34,7 @@ class ChatIdentityOrderBackendContract(unittest.TestCase):
     def test_chat_jwt_is_the_primary_order_identity(self):
         text = self.text()
         self.assertIn('db.auth.getUser(token)', text)
-        self.assertIn('.from("v21_accounts")', text)
+        self.assertIn('db.from("v21_accounts")', text)
         self.assertIn('.eq("auth_user_id",', text)
         self.assertRegex(text, r'role\s*===\s*"admin"|role\s*!==\s*"admin"')
         self.assertRegex(text, r'role\s*===\s*"user"|role\s*!==\s*"user"')
@@ -69,17 +53,19 @@ class ChatIdentityOrderBackendContract(unittest.TestCase):
         self.assertIn('selectedCustomer', text)
         self.assertRegex(text, r'actor\.kind\s*===\s*"admin"')
         self.assertIn('Chưa chọn khách hàng', text)
-        self.assertIn('trangThai:"pending"', text.replace(" ", ""))
+        self.assertIn('status:"pending"', text.replace(" ", ""))
 
-    def test_normal_user_can_only_create_order_for_self(self):
+    def test_normal_user_can_only_create_and_read_for_self(self):
         text = self.text()
         self.assertRegex(text, r'actor\.kind\s*===\s*"customer"')
-        self.assertRegex(text, r'\.eq\("chat_account_id",\s*actor\.id\)')
-        self.assertRegex(text, r'actor\.kind\s*===\s*"customer"[\s\S]{0,300}selectedCustomer')
+        self.assertRegex(text, r'\.eq\("customer_account_id",\s*actor\.id\)')
+        self.assertRegex(text, r'actor\.kind\s*===\s*"customer"[\s\S]{0,200}selectedCustomer\(actor\.id\)')
 
-    def test_v21_manager_does_not_mix_legacy_orders(self):
+    def test_manager_reads_only_native_getlink_orders(self):
         text = self.text()
-        self.assertIn('.not("chat_account_id","is",null)', text.replace(" ", ""))
+        self.assertIn('db.from("getlink_sales_orders")', text)
+        self.assertNotIn('db.from("orders")', text)
+        self.assertNotIn('chat_account_id', text)
 
 
 class ChatIdentityOrderFrontendContract(unittest.TestCase):

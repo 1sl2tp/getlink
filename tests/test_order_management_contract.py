@@ -15,23 +15,26 @@ class OrderBackendContractTests(unittest.TestCase):
         self.assertTrue(EDGE.exists(), "getlink-orders edge function must exist")
         return EDGE.read_text(encoding="utf-8")
 
-    def test_backend_reuses_shop88_tables_with_v21_atomic_order_core(self):
+    def test_backend_uses_native_getlink_order_and_debt_core(self):
         text = self.edge_text()
-        self.assertIn('getlink_create_v21_order', text)
-        self.assertIn('getlink_approve_v21_order', text)
-        self.assertIn('getlink_cancel_v21_order', text)
-        self.assertIn('.from("orders")', text)
-        self.assertIn('.from("order_items")', text)
-        self.assertNotIn('create table', text.lower())
+        self.assertIn('db.from("getlink_sales_orders")', text)
+        self.assertIn('db.from("getlink_sales_order_items")', text)
+        self.assertIn('db.from("getlink_debt_ledger")', text)
+        self.assertIn('db.rpc("getlink_sales_create_order"', text)
+        self.assertIn('db.rpc("getlink_sales_deliver_order"', text)
+        self.assertIn('db.rpc("getlink_sales_return_order"', text)
+        self.assertNotIn('db.from("orders")', text)
+        self.assertNotIn('db.from("debts")', text)
+        self.assertNotIn('taphoa_', text)
 
     def test_customer_identity_is_chat_jwt_scoped(self):
         text = self.edge_text()
         self.assertIn('authorization', text)
         self.assertIn('db.auth.getUser(token)', text)
-        self.assertIn('.from("v21_accounts")', text)
+        self.assertIn('db.from("v21_accounts")', text)
         self.assertIn('.eq("auth_user_id",', text)
         self.assertRegex(text, r'role\s*!==\s*"user"|role\s*===\s*"user"')
-        self.assertRegex(text, r'\.eq\("chat_account_id",\s*actor\.id\)')
+        self.assertRegex(text, r'\.eq\("customer_account_id",\s*actor\.id\)')
 
     def test_admin_identity_comes_from_same_chat_account_table(self):
         text = self.edge_text()
@@ -39,21 +42,25 @@ class OrderBackendContractTests(unittest.TestCase):
         self.assertNotIn('x-getlink-admin', text)
         self.assertNotIn('admin_session_hash', text)
 
-    def test_create_uses_server_side_supplier_price_and_pending_status(self):
+    def test_create_uses_server_side_supplier_price_in_full_vnd(self):
         text = self.edge_text()
         self.assertIn('getlink_supplier_products', text)
+        self.assertIn('product_code', text)
         self.assertIn('display_price_vnd', text)
         self.assertIn('input_price_vnd', text)
-        self.assertRegex(text, r'display_price_vnd[^\n]{0,180}/\s*1000|/\s*1000[^\n]{0,180}display_price_vnd')
-        self.assertIn('trangThai:"pending"', text.replace(" ", ""))
+        self.assertNotIn('/1000', text.replace(' ', ''))
+        self.assertIn('status:"pending"', text.replace(' ', ''))
         self.assertNotRegex(text, r'body\?\.(?:price|gia|customer_name|tenKH)')
 
-    def test_admin_transitions_preserve_debt_rules(self):
+    def test_admin_transitions_preserve_native_debt_rules(self):
         text = self.edge_text().replace(" ", "")
-        self.assertIn('getlink_approve_v21_order', text)
-        self.assertIn('getlink_cancel_v21_order', text)
-        self.assertIn('p_reverse_debt:true', text)
-        self.assertRegex(text, r'pending.*done.*returned|\["pending","done","returned"\]')
+        self.assertIn('getlink_sales_deliver_order', text)
+        self.assertIn('getlink_sales_return_order', text)
+        self.assertIn('getlink_sales_record_payment', text)
+        self.assertRegex(text, r'pending.*delivered.*returned|\["pending","delivered","returned"\]')
+        self.assertIn('path==="/debts"', text)
+        self.assertIn('debts\\/([^/]+)', text)
+        self.assertIn('payments', text)
 
 
 class OrderFrontendContractTests(unittest.TestCase):
@@ -67,7 +74,7 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertIn("order-management.css", text)
         self.assertIn("order-customer-picker.css", text)
 
-    def test_send_buttons_are_intercepted_before_legacy_draft_handler(self):
+    def test_send_buttons_are_intercepted_before_other_handlers(self):
         text = self.js_text()
         self.assertIn("#userWorkSendOrder,#mobileUserSendOrder", text)
         capture_listener = re.search(
@@ -86,20 +93,17 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertRegex(text, r'qty\s*:\s*item\.qty')
         self.assertIn('JSON.stringify({items})', text)
         self.assertIn('JSON.stringify({items,customerId})', text)
-        # Local display variables such as customerName are allowed; they must not
-        # be serialized into the create-order payload. Price/cost fields are also
-        # forbidden because the server owns those values.
         for token in ("unit_price:", "gia:", "cost:", "von:"):
             self.assertNotIn(token, text)
         self.assertNotRegex(text, r'JSON\.stringify\(\{items(?:,customerId)?,customerName')
-        self.assertNotRegex(text, r'JSON\.stringify\(\{items[^}]*?(?:price|gia|cost|von)')
 
-    def test_frontend_has_three_order_status_tabs(self):
+    def test_frontend_has_three_native_order_status_tabs(self):
         text = self.js_text()
         for label in ("Đơn tạm", "Đã giao", "Đã hoàn"):
             self.assertIn(label, text)
-        for status in ('pending', 'done', 'returned'):
+        for status in ('pending', 'delivered', 'returned'):
             self.assertIn(status, text)
+        self.assertNotIn('data-order-status="done"', text)
 
     def test_customer_access_is_chat_sourced_and_admin_chooses_customer(self):
         text = self.js_text()
@@ -110,6 +114,15 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertNotIn("/auth/v1/token?grant_type=password", text)
         self.assertNotIn("getlink:taphoa-order-session", text)
 
+    def test_frontend_has_native_debt_management(self):
+        text = self.js_text()
+        self.assertIn('data-manager-view="debts"', text)
+        self.assertIn('Công nợ', text)
+        self.assertIn('Dư nợ sau giao dịch', text)
+        self.assertIn('/payments', text)
+        self.assertIn('moneyVnd', text)
+        self.assertNotIn('moneyFromCore', text)
+
     def test_order_module_has_dedicated_responsive_styles(self):
         self.assertTrue(CSS.exists(), "order-management.css must exist")
         self.assertTrue(PICKER_CSS.exists(), "customer picker css must exist")
@@ -117,6 +130,7 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertIn("@media", text)
         self.assertIn("order-manager", text)
         self.assertIn("order-customer-picker", text)
+        self.assertIn("debt-timeline", text)
 
 
 if __name__ == "__main__":

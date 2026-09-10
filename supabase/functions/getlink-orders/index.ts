@@ -6,7 +6,7 @@ const PUBLISHABLES=(()=>{try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABL
 const PUBLIC_KEY=String(PUBLISHABLES.default||Deno.env.get("SUPABASE_ANON_KEY")||"");
 const db=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});
 const enc=new TextEncoder();
-const ORDER_STATUSES=["pending","done","returned"] as const;
+const ORDER_STATUSES=["pending","delivered","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
 type Identity={kind:"customer"|"admin";id:string;name:string;username:string;role:"user"|"admin"};
@@ -41,11 +41,6 @@ function publicKeyAuthorized(req:Request){
   const supplied=clean(req.headers.get("apikey"));
   return Boolean(PUBLIC_KEY&&supplied&&constantTimeEqual(supplied,PUBLIC_KEY));
 }
-function newId(prefix:string){
-  const bytes=crypto.getRandomValues(new Uint8Array(12));
-  return prefix+Array.from(bytes,b=>(b%10).toString()).join("");
-}
-function normalizedName(value:unknown){return clean(value).toLocaleLowerCase("vi-VN")}
 function routePath(req:Request){
   const parts=new URL(req.url).pathname.split("/").filter(Boolean);
   const at=parts.lastIndexOf("getlink-orders");
@@ -125,50 +120,64 @@ async function selectedCustomer(customerId:string):Promise<ChatCustomer>{
   return customerView(data);
 }
 
+async function accountNameMap(ids:string[]){
+  const unique=Array.from(new Set(ids.filter(Boolean)));
+  const map=new Map<string,string>();
+  for(let i=0;i<unique.length;i+=100){
+    const batch=unique.slice(i,i+100);
+    const {data,error}=await db.from("v21_accounts")
+      .select("id,username,display_name")
+      .in("id",batch);
+    if(error)throw error;
+    for(const row of data||[])map.set(String(row.id),clean(row.display_name)||clean(row.username)||"Khách hàng");
+  }
+  return map;
+}
+
 function itemView(row:any,includeCost:boolean){
   const out:any={
-    productId:row.product_id||"",
+    productId:clean(row.product_code),
     name:clean(row.product_name),
-    qty:Number(row.qty||0),
-    price:Number(row.unit_price||0),
-    sourceId:row.source_id||"",
-    group:clean(row.group_name),
-    note:clean(row.note)
+    qty:Number(row.quantity||0),
+    price:Number(row.unit_price_vnd||0),
+    sourceId:clean(row.source_key),
+    url:clean(row.product_url)
   };
-  if(includeCost)out.cost=Number(row.unit_cost||0);
+  if(includeCost)out.cost=Number(row.unit_cost_vnd||0);
   return out;
 }
-function orderView(order:any,items:any[],includeCost:boolean){
+function orderView(order:any,items:any[],customerName:string,includeCost:boolean){
   const out:any={
     id:String(order.id),
-    customerId:String(order.chat_account_id||""),
-    customerName:clean(order.customer_name),
-    orderedAt:order.ordered_at,
+    orderNo:Number(order.order_no||0),
+    customerId:String(order.customer_account_id||""),
+    customerName,
+    orderedAt:order.submitted_at,
+    deliveredAt:order.delivered_at||null,
     returnedAt:order.returned_at||null,
     status:String(order.status) as OrderStatus,
-    total:Number(order.total_amount||0),
+    total:Number(order.total_amount_vnd||0),
     items:items.map(row=>itemView(row,includeCost))
   };
-  if(includeCost)out.totalCost=Number(order.total_cost||0);
+  if(includeCost)out.totalCost=Number(order.total_cost_vnd||0);
   return out;
 }
 
 async function listOrders(actor:Identity){
-  let query=db.from("orders")
-    .select("id,customer_id,customer_name,chat_account_id,ordered_at,returned_at,status,total_amount,total_cost")
-    .not("chat_account_id","is",null)
-    .in("status",["pending","done","returned"])
-    .order("ordered_at",{ascending:false})
-    .order("id",{ascending:false});
-  if(actor.kind==="customer")query=query.eq("chat_account_id",actor.id);
+  let query=db.from("getlink_sales_orders")
+    .select("id,order_no,customer_account_id,created_by_account_id,created_by_role,status,total_amount_vnd,total_cost_vnd,submitted_at,delivered_at,returned_at")
+    .in("status",["pending","delivered","returned"])
+    .order("submitted_at",{ascending:false})
+    .order("order_no",{ascending:false});
+  if(actor.kind==="customer")query=query.eq("customer_account_id",actor.id);
   const orderRows=await fetchAll(()=>query);
   const ids=orderRows.map((row:any)=>String(row.id));
   const items:any[]=[];
   for(let i=0;i<ids.length;i+=100){
     const batch=ids.slice(i,i+100);
     if(!batch.length)continue;
-    const rows=await fetchAll(()=>db.from("order_items")
-      .select("id,order_id,product_id,product_name,qty,unit_price,unit_cost,source_id,group_name,note,line_no")
+    const rows=await fetchAll(()=>db.from("getlink_sales_order_items")
+      .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,unit_cost_vnd,source_key")
       .in("order_id",batch)
       .order("line_no")
       .order("id"));
@@ -180,37 +189,13 @@ async function listOrders(actor:Identity){
     const bucket=grouped.get(key)||[];
     bucket.push(row);grouped.set(key,bucket);
   }
-  return orderRows.map((row:any)=>orderView(row,grouped.get(String(row.id))||[],actor.kind==="admin"));
-}
-
-async function requireAdminOrder(id:string,status:OrderStatus){
-  const {data,error}=await db.from("orders")
-    .select("id,status,chat_account_id")
-    .eq("id",id)
-    .not("chat_account_id","is",null)
-    .maybeSingle();
-  if(error)throw error;
-  if(!data)throw fail("Không tìm thấy đơn",404);
-  if(data.status!==status)throw fail("Trạng thái đơn không còn phù hợp",409);
-  return data;
-}
-
-async function uniqueShopProductMap(names:string[]){
-  const needed=new Set(names.map(normalizedName).filter(Boolean));
-  const rows=await fetchAll(()=>db.from("products")
-    .select("id,name,source_id,group_name")
-    .eq("active",true)
-    .order("id"));
-  const grouped=new Map<string,any[]>();
-  for(const row of rows){
-    const key=normalizedName(row.name);
-    if(!needed.has(key))continue;
-    const bucket=grouped.get(key)||[];
-    bucket.push(row);grouped.set(key,bucket);
-  }
-  const out=new Map<string,any>();
-  for(const [key,bucket] of grouped){if(bucket.length===1)out.set(key,bucket[0]);}
-  return out;
+  const names=await accountNameMap(orderRows.map((row:any)=>String(row.customer_account_id||"")));
+  return orderRows.map((row:any)=>orderView(
+    row,
+    grouped.get(String(row.id))||[],
+    names.get(String(row.customer_account_id))||"Khách hàng",
+    actor.kind==="admin"
+  ));
 }
 
 async function resolveCreateItems(raw:unknown){
@@ -219,86 +204,159 @@ async function resolveCreateItems(raw:unknown){
   const requested:CreateInput[]=[];
   const seen=new Set<string>();
   for(const entry of raw){
-    const url=clean(entry?.url).toLowerCase();
+    const url=clean(entry?.url);
     const qty=Number(entry?.qty);
-    if(!url||!Number.isFinite(qty)||qty<=0||qty>999)throw fail("Sản phẩm hoặc số lượng không hợp lệ");
-    if(seen.has(url))throw fail("Sản phẩm bị trùng trong đơn");
-    seen.add(url);requested.push({url,qty});
+    const key=url.toLowerCase();
+    if(!url||!Number.isInteger(qty)||qty<=0||qty>999)throw fail("Sản phẩm hoặc số lượng không hợp lệ");
+    if(seen.has(key))throw fail("Sản phẩm bị trùng trong đơn");
+    seen.add(key);requested.push({url,qty});
   }
   const urls=requested.map(x=>x.url);
   const {data,error}=await db.from("getlink_supplier_products")
-    .select("canonical_url,product_name,source_key,display_price_vnd,input_price_vnd,stock_status,is_active")
+    .select("product_code,canonical_url,product_name,source_key,display_price_vnd,input_price_vnd,stock_status,is_active")
     .in("canonical_url",urls)
     .eq("is_active",true);
   if(error)throw error;
   const rows=data||[];
   const byUrl=new Map(rows.map((row:any)=>[clean(row.canonical_url).toLowerCase(),row]));
   if(byUrl.size!==urls.length)throw fail("Có sản phẩm không còn tồn tại");
-  const shopMap=await uniqueShopProductMap(rows.map((row:any)=>clean(row.product_name)));
   return requested.map(request=>{
-    const row:any=byUrl.get(request.url);
-    const price=Number(row.display_price_vnd||0)/1000;
-    const cost=Number(row.input_price_vnd||0)/1000;
+    const row:any=byUrl.get(request.url.toLowerCase());
+    const price=Math.round(Number(row.display_price_vnd||0));
+    const cost=Math.max(0,Math.round(Number(row.input_price_vnd||0)));
     if(!Number.isFinite(price)||price<=0)throw fail("Có sản phẩm chưa có giá bán");
     if(clean(row.stock_status)==="out_of_stock")throw fail("Có sản phẩm đang hết hàng");
-    const shop=shopMap.get(normalizedName(row.product_name));
-    const item:any={
-      ten:clean(row.product_name),
-      sourceId:clean(shop?.source_id||""),
-      nhom:clean(shop?.group_name||row.source_key||"Tạp hóa"),
-      sl:request.qty,
-      gia:price,
-      von:Number.isFinite(cost)&&cost>0?cost:0,
-      ghiChu:""
+    return {
+      productCode:clean(row.product_code),
+      productName:clean(row.product_name),
+      productUrl:clean(row.canonical_url),
+      quantity:request.qty,
+      unitPriceVnd:price,
+      unitCostVnd:Number.isFinite(cost)?cost:0,
+      sourceKey:clean(row.source_key)
     };
-    if(shop?.id)item.maSP=String(shop.id);
-    return item;
   });
 }
 
 async function createOrder(req:Request,actor:Identity){
   const body=await req.json().catch(()=>({}));
-  let customer:ChatCustomer;
-  if(actor.kind==="customer"){
-    customer=await selectedCustomer(actor.id);
-  }else{
-    const customerId=clean(body?.customerId);
-    if(!customerId)throw fail("Chưa chọn khách hàng");
-    customer=await selectedCustomer(customerId);
-  }
+  const customer=actor.kind==="customer"
+    ?await selectedCustomer(actor.id)
+    :await selectedCustomer(clean(body?.customerId));
+  if(actor.kind==="admin"&&!clean(body?.customerId))throw fail("Chưa chọn khách hàng");
   const items=await resolveCreateItems(body?.items);
-  const total=items.reduce((sum:number,item:any)=>sum+Number(item.gia||0)*Number(item.sl||0),0);
-  const totalCost=items.reduce((sum:number,item:any)=>sum+Number(item.von||0)*Number(item.sl||0),0);
-  const now=new Date().toISOString();
-  const order={
-    id:newId("DH"),chatAccountId:customer.id,maKH:"v21:"+customer.id,tenKH:customer.name,
-    ngay:now,trangThai:"pending",tongTien:total,tongVon:totalCost,items
-  };
-  const {error}=await db.rpc("getlink_create_v21_order",{p_order:order,p_items:items});
+  const id=crypto.randomUUID();
+  const submittedAt=new Date().toISOString();
+  const total=items.reduce((sum:number,item:any)=>sum+item.unitPriceVnd*item.quantity,0);
+  const totalCost=items.reduce((sum:number,item:any)=>sum+item.unitCostVnd*item.quantity,0);
+  const {error}=await db.rpc("getlink_sales_create_order",{
+    p_order:{id,customerAccountId:customer.id,createdByAccountId:actor.id,submittedAt},
+    p_items:items
+  });
   if(error)throw error;
-  return order;
+  return {
+    id,customerId:customer.id,customerName:customer.name,orderedAt:submittedAt,status:"pending",
+    total,totalCost,items:items.map((item:any)=>({
+      productId:item.productCode,name:item.productName,qty:item.quantity,price:item.unitPriceVnd,
+      cost:item.unitCostVnd,sourceId:item.sourceKey,url:item.productUrl
+    }))
+  };
 }
 
-async function approveOrder(id:string){
-  await requireAdminOrder(id,"pending");
-  const {error}=await db.rpc("getlink_approve_v21_order",{
-    p_id:id,p_ngay:new Date().toISOString(),p_debt_id:newId("CN")
-  });
+async function deliverOrder(id:string,actor:Identity){
+  const {error}=await db.rpc("getlink_sales_deliver_order",{p_id:id,p_actor_id:actor.id});
   if(error)throw error;
 }
-async function returnOrder(id:string){
-  await requireAdminOrder(id,"done");
-  const {error}=await db.rpc("getlink_cancel_v21_order",{
-    p_id:id,p_reverse_debt:true,p_debt_id:newId("CN")
-  });
+async function returnOrder(id:string,actor:Identity){
+  const {error}=await db.rpc("getlink_sales_return_order",{p_id:id,p_actor_id:actor.id});
   if(error)throw error;
 }
-async function deletePendingOrder(id:string){
-  await requireAdminOrder(id,"pending");
-  const {error}=await db.rpc("getlink_cancel_v21_order",{
-    p_id:id,p_reverse_debt:false,p_debt_id:newId("CN")
+async function deletePendingOrder(id:string,actor:Identity){
+  const {data,error}=await db.from("getlink_sales_orders")
+    .select("id,status")
+    .eq("id",id)
+    .maybeSingle();
+  if(error)throw error;
+  if(!data)throw fail("Không tìm thấy đơn",404);
+  if(data.status!=="pending")throw fail("Chỉ xóa được Đơn tạm",409);
+  await returnOrder(id,actor);
+}
+
+function signedDebt(row:any){
+  const amount=Number(row.amount_vnd||0);
+  return row.direction==="decrease"?-amount:amount;
+}
+
+async function listDebtSummaries(actor:Identity){
+  const customerRows=actor.kind==="admin"?await listCustomers():[await selectedCustomer(actor.id)];
+  const ids=customerRows.map(row=>row.id);
+  const ledger:any[]=[];
+  for(let i=0;i<ids.length;i+=100){
+    const batch=ids.slice(i,i+100);
+    if(!batch.length)continue;
+    const rows=await fetchAll(()=>db.from("getlink_debt_ledger")
+      .select("id,customer_account_id,amount_vnd,direction,occurred_at")
+      .in("customer_account_id",batch)
+      .order("occurred_at")
+      .order("id"));
+    ledger.push(...rows);
+  }
+  const balances=new Map<string,number>();
+  const lastAt=new Map<string,string>();
+  for(const row of ledger){
+    const id=String(row.customer_account_id);
+    balances.set(id,(balances.get(id)||0)+signedDebt(row));
+    lastAt.set(id,String(row.occurred_at||""));
+  }
+  const debts=customerRows.map(row=>({
+    customerId:row.id,customerName:row.name,username:row.username,
+    balanceVnd:balances.get(row.id)||0,lastOccurredAt:lastAt.get(row.id)||null
+  }));
+  if(actor.kind==="admin")debts.sort((a,b)=>b.balanceVnd-a.balanceVnd||a.customerName.localeCompare(b.customerName,"vi"));
+  return debts;
+}
+
+async function debtTimeline(actor:Identity,customerId:string){
+  const id=actor.kind==="customer"?actor.id:customerId;
+  if(actor.kind==="customer"&&customerId&&customerId!==actor.id)throw fail("forbidden",403);
+  const customer=await selectedCustomer(id);
+  const rows=await fetchAll(()=>db.from("getlink_debt_ledger")
+    .select("id,customer_account_id,order_id,event_type,amount_vnd,direction,note,occurred_at,created_by_account_id")
+    .eq("customer_account_id",id)
+    .order("occurred_at")
+    .order("id"));
+  const orderIds=Array.from(new Set(rows.map((row:any)=>String(row.order_id||"")).filter(Boolean)));
+  const orderNos=new Map<string,number>();
+  for(let i=0;i<orderIds.length;i+=100){
+    const batch=orderIds.slice(i,i+100);
+    const {data,error}=await db.from("getlink_sales_orders").select("id,order_no").in("id",batch);
+    if(error)throw error;
+    for(const row of data||[])orderNos.set(String(row.id),Number(row.order_no||0));
+  }
+  let balance=0;
+  const timeline=rows.map((row:any)=>{
+    balance+=signedDebt(row);
+    return {
+      id:String(row.id),eventType:String(row.event_type),direction:String(row.direction),
+      amountVnd:Number(row.amount_vnd||0),orderId:row.order_id?String(row.order_id):null,
+      orderNo:row.order_id?(orderNos.get(String(row.order_id))||null):null,
+      note:clean(row.note),occurredAt:row.occurred_at,balanceAfterVnd:balance
+    };
+  });
+  return {customer,balanceVnd:balance,timeline};
+}
+
+async function recordPayment(req:Request,actor:Identity,customerId:string){
+  const customer=await selectedCustomer(customerId);
+  const body=await req.json().catch(()=>({}));
+  const amountVnd=Math.round(Number(body?.amountVnd||0));
+  if(!Number.isFinite(amountVnd)||amountVnd<=0)throw fail("Số tiền thanh toán không hợp lệ");
+  const note=clean(body?.note);
+  const {data,error}=await db.rpc("getlink_sales_record_payment",{
+    p_customer_id:customer.id,p_amount_vnd:amountVnd,p_actor_id:actor.id,p_note:note
   });
   if(error)throw error;
+  return {id:String(data||""),customerId:customer.id,amountVnd};
 }
 
 Deno.serve(async(req:Request)=>{
@@ -323,18 +381,33 @@ Deno.serve(async(req:Request)=>{
       const order=await createOrder(req,actor);
       return json(req,{ok:true,order},201);
     }
+    if(req.method==="GET"&&path==="/debts"){
+      return json(req,{ok:true,role:actor.kind,debts:await listDebtSummaries(actor)});
+    }
 
-    const match=path.match(/^\/orders\/([^/]+)\/(approve|return)$/);
+    const debtMatch=path.match(/^\/debts\/([^/]+)$/);
+    if(req.method==="GET"&&debtMatch){
+      const customerId=decodeURIComponent(debtMatch[1]);
+      return json(req,{ok:true,...await debtTimeline(actor,customerId)});
+    }
+    const paymentMatch=path.match(/^\/debts\/([^/]+)\/payments$/);
+    if(req.method==="POST"&&paymentMatch){
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+      const payment=await recordPayment(req,actor,decodeURIComponent(paymentMatch[1]));
+      return json(req,{ok:true,payment},201);
+    }
+
+    const match=path.match(/^\/orders\/([^/]+)\/(deliver|return)$/);
     if(req.method==="POST"&&match){
       if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
       const id=decodeURIComponent(match[1]);
-      if(match[2]==="approve")await approveOrder(id);else await returnOrder(id);
+      if(match[2]==="deliver")await deliverOrder(id,actor);else await returnOrder(id,actor);
       return json(req,{ok:true});
     }
     const deleteMatch=path.match(/^\/orders\/([^/]+)$/);
     if(req.method==="DELETE"&&deleteMatch){
       if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
-      await deletePendingOrder(decodeURIComponent(deleteMatch[1]));
+      await deletePendingOrder(decodeURIComponent(deleteMatch[1]),actor);
       return json(req,{ok:true});
     }
     return json(req,{error:"not_found"},404);

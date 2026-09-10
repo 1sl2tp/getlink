@@ -8,10 +8,21 @@
   const API_KEY=String(window.GETLINK_API_KEY||"");
   const CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
   const ORDER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
-  const STATUS_LABELS={pending:"Đơn tạm",done:"Đã giao",returned:"Đã hoàn"};
+  const STATUS_LABELS={pending:"Đơn tạm",delivered:"Đã giao",returned:"Đã hoàn"};
+  const DEBT_EVENT_LABELS={
+    order_debt:"Đã giao",
+    payment:"Thanh toán",
+    order_return_reversal:"Hoàn đơn",
+    manual_adjustment:"Điều chỉnh"
+  };
+
+  let activeView="orders";
   let activeStatus="pending";
   let orders=[];
   let customers=[];
+  let debtSummaries=[];
+  let debtDetail=null;
+  let debtCustomerId="";
   let selectedCustomerId=String(sessionStorage.getItem(SELECTED_CUSTOMER_KEY)||"");
   let busy=false;
   let pickerBusy=false;
@@ -20,8 +31,8 @@
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   }
-  function moneyFromCore(value){
-    const n=Number(value||0)*1000;
+  function moneyVnd(value){
+    const n=Number(value||0);
     return Number.isFinite(n)?Math.round(n).toLocaleString("vi-VN")+" ₫":"—";
   }
   function dateTime(value){
@@ -60,6 +71,9 @@
     sessionStorage.removeItem(AUTH_KEY);
     customers=[];
     orders=[];
+    debtSummaries=[];
+    debtDetail=null;
+    debtCustomerId="";
     clearSelectedCustomer();
     syncCustomerControls();
   }
@@ -74,9 +88,7 @@
     if(token)h.set("authorization","Bearer "+token);
     return h;
   }
-  function headers(jsonBody=false){
-    return authHeaders(String(readAuth()?.accessToken||""),jsonBody);
-  }
+  function headers(jsonBody=false){return authHeaders(String(readAuth()?.accessToken||""),jsonBody)}
   async function orderFetch(path,options={}){
     const request={...options,headers:headers(Boolean(options.body))};
     const res=await fetch(ORDER_API+path,request);
@@ -142,9 +154,7 @@
       return true;
     }catch{return false;}
   }
-  function goToChat(){
-    window.location.assign(CHAT_ORIGIN+"/");
-  }
+  function goToChat(){window.location.assign(CHAT_ORIGIN+"/")}
   async function waitForChatAuth(timeoutMs=1200){
     if(readAuth())return true;
     if(!isEmbeddedInChat())return false;
@@ -165,10 +175,7 @@
     setMainStatus(message);
     setManagerGate(message);
     const ok=await waitForChatAuth();
-    if(ok){
-      clearManagerGate();
-      return true;
-    }
+    if(ok){clearManagerGate();return true;}
     setManagerGate("Cần đăng nhập Chat để tiếp tục.");
     return false;
   }
@@ -188,24 +195,29 @@
       <div id="orderManager" class="order-manager" hidden aria-hidden="true">
         <section class="order-manager-panel" role="dialog" aria-modal="true" aria-labelledby="orderManagerTitle">
           <header class="order-manager-head">
-            <div><h2 id="orderManagerTitle">Quản lý đơn</h2><small id="orderManagerIdentity"></small></div>
+            <div><h2 id="orderManagerTitle">Bán hàng</h2><small id="orderManagerIdentity"></small></div>
             <button id="orderManagerClose" type="button" aria-label="Đóng">×</button>
           </header>
           <div id="orderManagerGate" class="order-manager-message" hidden></div>
           <div id="orderManagerBody" class="order-manager-body">
+            <nav class="order-manager-modes" aria-label="Quản lý bán hàng">
+              <button type="button" data-manager-view="orders" class="active">Đơn hàng</button>
+              <button type="button" data-manager-view="debts">Công nợ</button>
+            </nav>
             <nav id="orderManagerTabs" class="order-manager-tabs" aria-label="Trạng thái đơn">
               <button type="button" data-order-status="pending" class="active">Đơn tạm <small>0</small></button>
-              <button type="button" data-order-status="done">Đã giao <small>0</small></button>
+              <button type="button" data-order-status="delivered">Đã giao <small>0</small></button>
               <button type="button" data-order-status="returned">Đã hoàn <small>0</small></button>
             </nav>
             <div class="order-manager-tools">
               <span id="orderManagerSummary"></span>
               <div class="order-manager-tool-actions">
+                <button id="debtBackButton" type="button" hidden>Khách hàng</button>
                 <button id="orderCustomerPickerButton" type="button" hidden>Chọn khách hàng</button>
               </div>
             </div>
             <div id="orderManagerList" class="order-manager-list"></div>
-            <div id="orderManagerEmpty" class="order-manager-empty" hidden>Chưa có đơn ở trạng thái này.</div>
+            <div id="orderManagerEmpty" class="order-manager-empty" hidden></div>
           </div>
           <div id="orderCustomerPicker" class="order-customer-picker" hidden aria-hidden="true">
             <div class="order-customer-picker-head">
@@ -220,6 +232,7 @@
         </section>
       </div>`);
     syncCustomerControls();
+    syncManagerView();
   }
 
   function ensureInlineCustomerButtons(){
@@ -246,9 +259,21 @@
     }
     const picker=document.getElementById("orderCustomerPickerButton");
     if(picker){
-      picker.hidden=!admin;
+      picker.hidden=!(admin&&activeView==="orders");
       picker.textContent=customer?"Khách · "+customer.name:"Chọn khách hàng";
     }
+  }
+  function syncManagerView(){
+    document.querySelectorAll("[data-manager-view]").forEach(button=>{
+      const on=String(button.dataset.managerView)===activeView;
+      button.classList.toggle("active",on);
+      button.setAttribute("aria-pressed",on?"true":"false");
+    });
+    const tabs=document.getElementById("orderManagerTabs");
+    if(tabs)tabs.hidden=activeView!=="orders";
+    const back=document.getElementById("debtBackButton");
+    if(back)back.hidden=activeView!=="debts"||currentRole()!=="admin"||!debtCustomerId;
+    syncCustomerControls();
   }
 
   function setMainStatus(message){
@@ -290,8 +315,8 @@
     if(!auth){if(node)node.textContent="Chưa xác thực qua Chat";return;}
     if(node)node.textContent=currentRole()==="admin"
       ?"Admin · tất cả khách hàng"
-      :(String(auth.account?.name||auth.account?.username||"Khách hàng"));
-    syncCustomerControls();
+      :String(auth.account?.name||auth.account?.username||"Khách hàng");
+    syncManagerView();
   }
 
   async function loadCustomers(force=false){
@@ -307,10 +332,7 @@
     const list=document.getElementById("orderCustomerList");
     if(!list)return;
     const query=normalizedSearch(document.getElementById("orderCustomerSearch")?.value||"");
-    const rows=customers.filter(row=>{
-      if(!query)return true;
-      return normalizedSearch((row.name||"")+" "+(row.username||"")).includes(query);
-    });
+    const rows=customers.filter(row=>!query||normalizedSearch((row.name||"")+" "+(row.username||"")).includes(query));
     list.innerHTML=rows.length?rows.map(row=>`
       <button type="button" class="order-customer-option ${String(row.id)===String(selectedCustomerId)?"selected":""}" data-order-customer-id="${escapeHtml(row.id)}">
         <span>${escapeHtml(row.name||row.username||"Khách hàng")}</span>
@@ -336,10 +358,7 @@
       setTimeout(()=>document.getElementById("orderCustomerSearch")?.focus(),0);
       return true;
     }catch(error){
-      if(error?.status===401){
-        clearAuth();
-        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
-      }
+      handleAuthError(error);
       if(list)list.innerHTML='<div class="order-customer-empty">'+escapeHtml(error?.message||error)+'</div>';
       return false;
     }finally{pickerBusy=false;}
@@ -380,15 +399,16 @@
     if(currentRole()!=="admin")return "";
     if(order.status==="pending")return `
       <div class="order-card-actions">
-        <button type="button" class="order-action-primary" data-order-action="approve" data-order-id="${escapeHtml(order.id)}">Đã giao</button>
+        <button type="button" class="order-action-primary" data-order-action="deliver" data-order-id="${escapeHtml(order.id)}">Đã giao</button>
         <button type="button" class="order-action-danger" data-order-action="delete" data-order-id="${escapeHtml(order.id)}">Xóa đơn tạm</button>
       </div>`;
-    if(order.status==="done")return `
+    if(order.status==="delivered")return `
       <div class="order-card-actions">
         <button type="button" class="order-action-danger" data-order-action="return" data-order-id="${escapeHtml(order.id)}">Đã hoàn</button>
       </div>`;
     return "";
   }
+  function orderRef(order){return order.orderNo?"#"+order.orderNo:String(order.id||"")}
   function renderOrders(){
     renderTabs();
     const visible=orders.filter(order=>order.status===activeStatus);
@@ -396,49 +416,125 @@
     const empty=document.getElementById("orderManagerEmpty");
     const summary=document.getElementById("orderManagerSummary");
     if(summary)summary.textContent=(STATUS_LABELS[activeStatus]||activeStatus)+" · "+visible.length+" đơn";
-    if(empty)empty.hidden=visible.length!==0;
+    if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn ở trạng thái này.";}
     if(!list)return;
     list.innerHTML=visible.map(order=>{
       const items=Array.isArray(order.items)?order.items:[];
       return `<article class="order-card" data-order-id="${escapeHtml(order.id)}">
         <div class="order-card-head">
-          <div><strong>${currentRole()==="admin"?escapeHtml(order.customerName||"Khách hàng"):escapeHtml(STATUS_LABELS[order.status]||order.status)}</strong><small>${escapeHtml(dateTime(order.orderedAt))} · ${escapeHtml(order.id)}</small></div>
-          <b>${escapeHtml(moneyFromCore(order.total))}</b>
+          <div><strong>${currentRole()==="admin"?escapeHtml(order.customerName||"Khách hàng"):escapeHtml(STATUS_LABELS[order.status]||order.status)}</strong><small>${escapeHtml(dateTime(order.orderedAt))} · ${escapeHtml(orderRef(order))}</small></div>
+          <b>${escapeHtml(moneyVnd(order.total))}</b>
         </div>
-        <div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyFromCore(item.price))}</small></div>`).join("")}</div>
+        <div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</small></div>`).join("")}</div>
         ${orderActions(order)}
       </article>`;
     }).join("");
+  }
+
+  async function loadDebtSummaries(){
+    const data=await orderFetch("/debts",{method:"GET"});
+    debtSummaries=Array.isArray(data.debts)?data.debts:[];
+    return debtSummaries;
+  }
+  async function loadDebtDetail(customerId){
+    const data=await orderFetch("/debts/"+encodeURIComponent(customerId),{method:"GET"});
+    debtCustomerId=String(data?.customer?.id||customerId||"");
+    debtDetail=data;
+    return data;
+  }
+  function debtEventSign(row){return row.direction==="decrease"?"−":"+"}
+  function renderDebtSummaries(){
+    const list=document.getElementById("orderManagerList");
+    const empty=document.getElementById("orderManagerEmpty");
+    const summary=document.getElementById("orderManagerSummary");
+    const total=debtSummaries.reduce((sum,row)=>sum+Number(row.balanceVnd||0),0);
+    if(summary)summary.textContent="Công nợ · "+debtSummaries.length+" khách · "+moneyVnd(total);
+    if(empty){empty.hidden=debtSummaries.length!==0;empty.textContent="Chưa có khách hàng hoặc công nợ.";}
+    if(!list)return;
+    list.innerHTML=debtSummaries.map(row=>`
+      <button type="button" class="debt-customer-card" data-debt-customer-id="${escapeHtml(row.customerId)}">
+        <span><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.username?"@"+escapeHtml(row.username):""}${row.lastOccurredAt?" · "+escapeHtml(dateTime(row.lastOccurredAt)):""}</small></span>
+        <b>${escapeHtml(moneyVnd(row.balanceVnd))}</b>
+      </button>`).join("");
+  }
+  function paymentForm(customerId){
+    if(currentRole()!=="admin")return "";
+    return `<form class="debt-payment-form" data-debt-payment-form data-customer-id="${escapeHtml(customerId)}">
+      <input name="amountVnd" inputmode="numeric" autocomplete="off" placeholder="Số tiền khách trả" aria-label="Số tiền khách trả">
+      <input name="note" autocomplete="off" placeholder="Ghi chú (không bắt buộc)" aria-label="Ghi chú">
+      <button type="submit">Ghi nhận thanh toán</button>
+    </form>`;
+  }
+  function renderDebtDetail(){
+    const list=document.getElementById("orderManagerList");
+    const empty=document.getElementById("orderManagerEmpty");
+    const summary=document.getElementById("orderManagerSummary");
+    if(!debtDetail){renderDebtSummaries();return;}
+    const customer=debtDetail.customer||{};
+    const timeline=Array.isArray(debtDetail.timeline)?debtDetail.timeline:[];
+    if(summary)summary.textContent=(customer.name||"Khách hàng")+" · Dư nợ "+moneyVnd(debtDetail.balanceVnd);
+    if(empty)empty.hidden=true;
+    if(!list)return;
+    list.innerHTML=`
+      <section class="debt-detail-head">
+        <div><strong>${escapeHtml(customer.name||customer.username||"Khách hàng")}</strong><small>${customer.username?"@"+escapeHtml(customer.username):""}</small></div>
+        <b>${escapeHtml(moneyVnd(debtDetail.balanceVnd))}</b>
+      </section>
+      ${paymentForm(customer.id||debtCustomerId)}
+      <div class="debt-timeline">${timeline.length?timeline.map(row=>`
+        <article class="debt-txn ${row.direction==="decrease"?"decrease":"increase"}">
+          <div class="debt-txn-main">
+            <span><strong>${escapeHtml(DEBT_EVENT_LABELS[row.eventType]||row.eventType)}</strong><small>${escapeHtml(dateTime(row.occurredAt))}${row.orderNo?" · Đơn #"+escapeHtml(row.orderNo):""}</small></span>
+            <b>${debtEventSign(row)}${escapeHtml(moneyVnd(row.amountVnd))}</b>
+          </div>
+          ${row.note?`<div class="debt-txn-note">${escapeHtml(row.note)}</div>`:""}
+          <div class="debt-balance-after">Dư nợ sau giao dịch <strong>${escapeHtml(moneyVnd(row.balanceAfterVnd))}</strong></div>
+        </article>`).join(""):'<div class="order-manager-message">Chưa có giao dịch công nợ.</div>'}</div>`;
+  }
+  async function refreshDebts(){
+    const list=document.getElementById("orderManagerList");
+    if(list)list.innerHTML='<div class="order-manager-message">Đang tải công nợ...</div>';
+    if(currentRole()==="user"){
+      const id=String(currentAccount()?.id||"");
+      await loadDebtDetail(id);
+      renderDebtDetail();
+      return;
+    }
+    if(debtCustomerId){
+      await loadDebtDetail(debtCustomerId);
+      renderDebtDetail();
+      return;
+    }
+    await loadDebtSummaries();
+    renderDebtSummaries();
+  }
+
+  function handleAuthError(error){
+    if(error?.status!==401)return false;
+    clearAuth();
+    void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
+    return true;
   }
   async function refreshManager(){
     injectUi();
     updateIdentity();
     if(!readAuth()){
-      if(!isEmbeddedInChat()){
-        goToChat();
-        return;
-      }
+      if(!isEmbeddedInChat()){goToChat();return;}
       setManagerGate("Đang xác thực qua Chat...");
-      if(!(await waitForChatAuth())){
-        setManagerGate("Cần đăng nhập Chat để tiếp tục.");
-        return;
-      }
+      if(!(await waitForChatAuth())){setManagerGate("Cần đăng nhập Chat để tiếp tục.");return;}
     }
     clearManagerGate();
     updateIdentity();
     if(currentRole()==="admin")void loadCustomers().catch(()=>{});
-    const list=document.getElementById("orderManagerList");
-    if(list)list.innerHTML='<div class="order-manager-message">Đang tải đơn...</div>';
+    syncManagerView();
     try{
-      await loadOrders();renderOrders();
+      if(activeView==="debts")await refreshDebts();
+      else {await loadOrders();renderOrders();}
     }catch(error){
-      if(error?.status===401){
-        clearAuth();
-        if(isEmbeddedInChat()){
-          setManagerGate("Phiên Chat đã hết hạn. Đang xác thực lại...");
-          requestChatAuth();
-        }else goToChat();
-      }else if(list)list.innerHTML='<div class="order-manager-message">'+escapeHtml(error?.message||error)+'</div>';
+      if(!handleAuthError(error)){
+        const list=document.getElementById("orderManagerList");
+        if(list)list.innerHTML='<div class="order-manager-message">'+escapeHtml(error?.message||error)+'</div>';
+      }
     }
   }
 
@@ -457,9 +553,8 @@
       }
       const customerId=selectedCustomerId;
       body=JSON.stringify({items,customerId});
-    }else{
-      body=JSON.stringify({items});
-    }
+    }else body=JSON.stringify({items});
+
     busy=true;setMainStatus("Đang gửi đơn...");
     try{
       const data=await orderFetch("/orders",{method:"POST",body});
@@ -467,15 +562,13 @@
       if(typeof window.renderUserWorkHome==="function")window.renderUserWorkHome();
       if(typeof window.updateUserWorkOrderSummary==="function")window.updateUserWorkOrderSummary();
       const customerName=currentRole()==="admin"?(selectedCustomer()?.name||""):"";
-      setMainStatus("Đã gửi đơn "+String(data?.order?.id||"")+(customerName?" · "+customerName:"")+" · Đơn tạm.");
-      activeStatus="pending";
+      const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
+      setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");
+      activeView="orders";activeStatus="pending";
       if(currentRole()==="admin")clearSelectedCustomer();
       if(!document.getElementById("orderManager")?.hidden)await refreshManager();
     }catch(error){
-      if(error?.status===401){
-        clearAuth();
-        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
-      }
+      handleAuthError(error);
       setMainStatus(String(error?.message||error));
     }finally{busy=false;}
   }
@@ -486,15 +579,37 @@
     if(action==="return"&&!confirm("Hoàn đơn này và đảo lại công nợ?"))return;
     busy=true;
     try{
-      if(action==="approve")await orderFetch("/orders/"+encodeURIComponent(id)+"/approve",{method:"POST"});
+      if(action==="deliver")await orderFetch("/orders/"+encodeURIComponent(id)+"/deliver",{method:"POST"});
       else if(action==="return")await orderFetch("/orders/"+encodeURIComponent(id)+"/return",{method:"POST"});
       else if(action==="delete")await orderFetch("/orders/"+encodeURIComponent(id),{method:"DELETE"});
       await refreshManager();
     }catch(error){
-      if(error?.status===401){
-        clearAuth();
-        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
-      }else alert(String(error?.message||error));
+      if(!handleAuthError(error))alert(String(error?.message||error));
+    }finally{busy=false;}
+  }
+
+  async function openDebtCustomer(id){
+    debtCustomerId=String(id||"");
+    debtDetail=null;
+    syncManagerView();
+    await refreshDebts();
+  }
+  async function submitPayment(form){
+    if(busy||currentRole()!=="admin")return;
+    const customerId=String(form.dataset.customerId||"");
+    const amountText=String(form.elements.amountVnd?.value||"").replace(/[^0-9]/g,"");
+    const amountVnd=Number(amountText||0);
+    const note=String(form.elements.note?.value||"").trim();
+    if(!Number.isFinite(amountVnd)||amountVnd<=0){alert("Nhập số tiền khách trả.");return;}
+    busy=true;
+    try{
+      await orderFetch("/debts/"+encodeURIComponent(customerId)+"/payments",{
+        method:"POST",body:JSON.stringify({amountVnd:Math.round(amountVnd),note})
+      });
+      await loadDebtDetail(customerId);
+      renderDebtDetail();
+    }catch(error){
+      if(!handleAuthError(error))alert(String(error?.message||error));
     }finally{busy=false;}
   }
 
@@ -508,22 +623,37 @@
 
   document.addEventListener("click",async event=>{
     const target=event.target;
-    if(target.closest?.("#orderManagerButton")){
-      if(await requireChatAuth())openManager();
-      return;
-    }
+    if(target.closest?.("#orderManagerButton")){if(await requireChatAuth())openManager();return;}
     if(target.closest?.("#orderManagerClose")){closeManager();return;}
     if(target.id==="orderManager"){closeManager();return;}
     if(target.closest?.("#orderCustomerPickerClose")){closeCustomerPicker();return;}
     if(target.closest?.("#orderCustomerPickerButton,[data-order-customer-select]")){await openCustomerPicker();return;}
+    if(target.closest?.("#debtBackButton")){
+      debtCustomerId="";debtDetail=null;syncManagerView();await refreshDebts();return;
+    }
+    const mode=target.closest?.("[data-manager-view]");
+    if(mode){
+      activeView=String(mode.dataset.managerView||"orders");
+      if(activeView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
+      else if(activeView==="orders")debtCustomerId="";
+      debtDetail=null;syncManagerView();await refreshManager();return;
+    }
+    const debtCustomer=target.closest?.("[data-debt-customer-id]");
+    if(debtCustomer){await openDebtCustomer(String(debtCustomer.dataset.debtCustomerId||""));return;}
     const customerOption=target.closest?.("[data-order-customer-id]");
     if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
     const tab=target.closest?.("[data-order-status]");
     if(tab){activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
     const action=target.closest?.("[data-order-action]");
-    if(action){await performAdminAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));}
+    if(action)await performAdminAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));
   });
 
+  document.addEventListener("submit",async event=>{
+    const form=event.target.closest?.("[data-debt-payment-form]");
+    if(!form)return;
+    event.preventDefault();
+    await submitPayment(form);
+  });
   document.addEventListener("input",event=>{
     if(event.target?.id==="orderCustomerSearch"&&!pickerBusy)renderCustomerList();
   });

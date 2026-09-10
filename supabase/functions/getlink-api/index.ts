@@ -2747,7 +2747,7 @@ function newsUsableImageUrl(value:unknown,base=""){
   if(/\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)/i.test(low))return "";
   return url;
 }
-function newsImagesFromItem(block:string,description:string,content:string){
+function newsImagesFromItem(block:string,description:string,content:string,trustHtml=false){
   const values:string[]=[];
   const add=(value:unknown)=>{
     const url=newsUsableImageUrl(value);
@@ -2759,8 +2759,10 @@ function newsImagesFromItem(block:string,description:string,content:string){
     for(const m of block.matchAll(re))add(m[1]);
   }
   for(const m of block.matchAll(/<enclosure\b[^>]*\burl=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
-  for(const html of [description,content]){
-    for(const m of String(html||"").matchAll(/<img\b[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+  if(trustHtml){
+    for(const rawHtml of [description,content]){
+      for(const m of String(rawHtml||"").matchAll(/<img\b[^>]*\bsrc=["\']([^"\']+)["\'][^>]*>/gi))add(m[1]);
+    }
   }
   return values.slice(0,10);
 }
@@ -2822,10 +2824,13 @@ function newsMergeDuplicate(existing:NewsItem,item:NewsItem){
   const preferred=newsItemQuality(item)>newsItemQuality(existing)?item:existing;
   const other=preferred===item?existing:item;
   const sources=new Set([existing.source_name,...(existing.also_sources||[]),item.source_name,...(item.also_sources||[])]);
-  const images=[...(preferred.images||[]),...(other.images||[])].filter((url,index,list)=>url&&list.indexOf(url)===index).slice(0,10);
+  const images=[...(preferred.images||[]),preferred.image]
+    .map(url=>newsUsableImageUrl(url))
+    .filter((url,index,list)=>url&&list.indexOf(url)===index)
+    .slice(0,10);
   return {
     ...preferred,
-    image:images[0]||preferred.image||other.image||"",
+    image:images[0]||"",
     images,
     content:preferred.content||other.content||"",
     summary:preferred.summary||other.summary||"",
@@ -2863,7 +2868,7 @@ async function newsParseGoogleItems(xml:string,topic:NewsTopicKey){
     if(!title||!link)return null;
     const descriptionRaw=newsTag(block,["description"]);
     const contentRaw=newsTag(block,["content:encoded","content"]);
-    const images=newsImagesFromItem(block,descriptionRaw,contentRaw);
+    const images=newsImagesFromItem(block,descriptionRaw,contentRaw,false);
     const published_at=newsPublished(newsTag(block,["pubDate","published","updated","dc:date"]));
     const sourceKey=plain(sourceName).replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,48)||"google-news";
     return {
@@ -2922,20 +2927,38 @@ function newsAbsoluteUrl(value:unknown,base:string){
     return /^https?:$/.test(u.protocol)?u.toString():"";
   }catch{return "";}
 }
-function newsJsonLdCollect(value:any,out:{bodies:string[];images:string[]}){
+const NEWS_JSONLD_ARTICLE_TYPES=new Set([
+  "article","newsarticle","reportagenewsarticle","analysisnewsarticle","blogposting","liveblogposting"
+]);
+function newsJsonLdTypes(value:any){
+  const raw=value&&typeof value==="object"?value["@type"]:null;
+  const values=Array.isArray(raw)?raw:[raw];
+  return values.map(item=>String(item||"").split(/[\/#]/).pop()?.toLowerCase()||"").filter(Boolean);
+}
+function newsJsonLdIsArticle(value:any){
+  return newsJsonLdTypes(value).some(type=>NEWS_JSONLD_ARTICLE_TYPES.has(type));
+}
+function newsJsonLdCollect(value:any,out:{bodies:string[];images:string[]},base=""){
   if(!value)return;
-  if(Array.isArray(value)){for(const item of value)newsJsonLdCollect(item,out);return;}
+  if(Array.isArray(value)){for(const item of value)newsJsonLdCollect(item,out,base);return;}
   if(typeof value!=="object")return;
-  if(typeof value.articleBody==="string"&&clean(value.articleBody))out.bodies.push(clean(value.articleBody));
-  const image=value.image;
-  if(typeof image==="string")out.images.push(image);
-  else if(Array.isArray(image)){
-    for(const x of image){
-      if(typeof x==="string")out.images.push(x);
-      else if(x&&typeof x==="object"&&typeof x.url==="string")out.images.push(x.url);
-    }
-  }else if(image&&typeof image==="object"&&typeof image.url==="string")out.images.push(image.url);
-  if(Array.isArray(value["@graph"]))newsJsonLdCollect(value["@graph"],out);
+  const isArticle=newsJsonLdIsArticle(value);
+  if(isArticle&&typeof value.articleBody==="string"&&clean(value.articleBody))out.bodies.push(clean(value.articleBody));
+  if(isArticle){
+    const add=(value:unknown)=>{
+      const url=newsUsableImageUrl(value,base);
+      if(url&&!out.images.includes(url))out.images.push(url);
+    };
+    const image=value.image;
+    if(typeof image==="string")add(image);
+    else if(Array.isArray(image)){
+      for(const x of image){
+        if(typeof x==="string")add(x);
+        else if(x&&typeof x==="object")add(x.url||x.contentUrl||"");
+      }
+    }else if(image&&typeof image==="object")add(image.url||image.contentUrl||"");
+  }
+  if(Array.isArray(value["@graph"]))newsJsonLdCollect(value["@graph"],out,base);
 }
 type NewsArticleRule={article:string[];remove:string[]};
 const NEWS_ARTICLE_RULES:Record<string,NewsArticleRule>={
@@ -2996,7 +3019,9 @@ const NEWS_ARTICLE_REMOVE=[
   '[class*="social"]','[class*="share"]','[class*="comment"]','[id*="comment"]',
   '[class*="newsletter"]','[class*="subscription"]','[class*="most-read"]',
   '[class*="popular"]','[class*="breadcrumb"]','[class*="tags"]','[class*="keyword"]',
-  '[data-component*="related"]','[data-component*="recommend"]','[data-testid*="related"]'
+  '[data-component*="related"]','[data-component*="recommend"]','[data-testid*="related"]','[class*="author"]','[id*="author"]','[class*="avatar"]','[id*="avatar"]'
+,'[class*="profile"]','[id*="profile"]','[class*="logo"]','[id*="logo"]'
+,'[class*="placeholder"]','[id*="placeholder"]','[class*="icon"]','[id*="icon"]'
 ];
 function newsArticleHost(base:string){
   try{return new URL(base).hostname.toLowerCase().replace(/^www\./,"");}
@@ -3120,7 +3145,7 @@ function newsArticleParagraphs(html:string,base=""){
 function newsMetaImageValues(html:string,base:string){
   const values:string[]=[];
   const add=(value:unknown)=>{
-    const url=newsAbsoluteUrl(value,base);
+    const url=newsUsableImageUrl(value,base);
     if(url&&!values.includes(url))values.push(url);
   };
   const doc=newsArticleDocument(html);
@@ -3176,12 +3201,17 @@ function newsArticleBlocks(html:string,base:string){
   }
   return blocks;
 }
-function newsArticleImages(html:string,base:string,_jsonImages:string[]){
+function newsArticleImages(html:string,base:string,jsonImages:string[]){
   const values:string[]=[];
+  const add=(value:unknown)=>{
+    const url=newsUsableImageUrl(value,base);
+    if(url&&!values.includes(url))values.push(url);
+  };
+  for(const value of jsonImages||[])add(value);
   for(const block of newsArticleBlocks(html,base)){
-    if(block.type!=="image"||!block.url||values.includes(block.url))continue;
-    values.push(block.url);
+    if(block.type==="image"&&block.url)add(block.url);
   }
+  for(const value of newsMetaImageValues(html,base))add(value);
   return values.slice(0,12);
 }
 function newsGoogleArticleId(value:string){
@@ -3302,7 +3332,7 @@ async function newsArticleDetail(rawUrl:string){
     const html=await res.text();
     const collected={bodies:[] as string[],images:[] as string[]};
     for(const m of html.matchAll(/<script\b[^>]*type=["\']application\/ld\+json["\'][^>]*>([\s\S]*?)<\/script>/gi)){
-      try{newsJsonLdCollect(JSON.parse(m[1]),collected);}catch{}
+      try{newsJsonLdCollect(JSON.parse(m[1]),collected,finalUrl);}catch{}
     }
     const body=collected.bodies.sort((a,b)=>b.length-a.length)[0]||"";
     const orderedBlocks=newsArticleBlocks(html,finalUrl);
@@ -3313,9 +3343,13 @@ async function newsArticleDetail(rawUrl:string){
         ?body.split(/\n{2,}|(?<=[.!?])\s+(?=[A-ZÀ-ỸĐ])/u).map(x=>newsRepairText(clean(x))).filter(x=>x.length>=30)
         :newsArticleParagraphs(html,finalUrl).map(x=>newsRepairText(x)));
     const images=newsArticleImages(html,finalUrl,collected.images);
-    const blocks=orderedBlocks.length
+    let blocks=orderedBlocks.length
       ?orderedBlocks
       :paragraphs.filter(text=>!newsArticleNoiseText(text)).slice(0,40).map(text=>({type:"text" as const,text}));
+    if(images[0]&&!blocks.some(block=>block.type==="image")){
+      const at=Math.min(1,blocks.length);
+      blocks=[...blocks.slice(0,at),{type:"image" as const,url:images[0]},...blocks.slice(at)];
+    }
     const payload={
       title:newsArticleTitle(html),
       content:paragraphs.join("\n\n").slice(0,16000),

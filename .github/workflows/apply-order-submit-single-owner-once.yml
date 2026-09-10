@@ -1,0 +1,29 @@
+name: Apply order submit single owner once
+on:
+  push:
+    branches:
+      - fix/order-submit-single-owner
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/order-submit-single-owner
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply order submit fix
+        run: |
+          python tools/apply_order_submit_single_owner_once.py
+          python tools/stamp_static_build.py
+      - name: Commit runtime fix
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add app.js order-management.js index.html version.json
+          git diff --cached --quiet && exit 0
+          git commit -m "fix: make Gửi đơn create and open Đơn tạm"
+          git push origin HEAD:fix/order-submit-single-owner

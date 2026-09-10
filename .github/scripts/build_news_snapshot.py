@@ -13,6 +13,12 @@ try:
 except Exception:
     ftfy_fix_text=None
 
+try:
+    from bs4 import BeautifulSoup, UnicodeDammit
+except Exception:
+    BeautifulSoup=None
+    UnicodeDammit=None
+
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
 RICH_IMAGE_LIMIT=100
@@ -196,7 +202,7 @@ def meta_images(text,base):
         km=re.search(r'\b(?:property|name|itemprop)=["\']([^"\']+)["\']',tag,re.I)
         cm=re.search(r'\bcontent=["\']([^"\']+)["\']',tag,re.I)
         key=km.group(1).lower() if km else ""
-        if key not in {"og:image","og:image:url","twitter:image","twitter:image:src","image","thumbnailurl"} or not cm:continue
+        if key not in {"og:image","og:image:url","og:image:secure_url","twitter:image","twitter:image:src","image","thumbnail","thumbnailurl"} or not cm:continue
         u=urllib.parse.urljoin(base,html.unescape(cm.group(1)))
         if u.startswith(("http://","https://")) and u not in out:out.append(u)
     for tag in re.findall(r"<link\b[^>]*>",text,re.I):
@@ -207,25 +213,92 @@ def meta_images(text,base):
         if u.startswith(("http://","https://")) and u not in out:out.append(u)
     return out
 
+def article_soup(text):
+    if BeautifulSoup is None:return None
+    try:soup=BeautifulSoup(text,"html.parser")
+    except Exception:return None
+    selectors=[
+      "article","[itemprop='articleBody']",
+      "[class*='article-body']","[class*='article__body']","[class*='article-content']",
+      "[class*='detail-content']","[class*='detail__content']","[class*='content-detail']",
+      "[class*='post-content']","[class*='entry-content']","[class*='fck_detail']",
+      "[class*='singular-content']","[class*='the-article-body']","[class*='news-content']",
+      "[class*='content-body']","[id*='article-body']","[id*='article-content']",
+      "[id*='detail-content']","main"
+    ]
+    seen=set(); candidates=[]
+    for selector in selectors:
+        try:nodes=soup.select(selector)
+        except Exception:nodes=[]
+        for node in nodes:
+            key=id(node)
+            if key not in seen:
+                seen.add(key); candidates.append(node)
+    if not candidates:return soup.body or soup
+    def score(node):
+        try:
+            text_len=len(plain(node.get_text(" ",strip=True)))
+            p_count=len(node.find_all("p"))
+            img_count=len(node.find_all("img"))
+            link_count=len(node.find_all("a"))
+            return min(30000,text_len)+min(50,p_count)*220+min(20,img_count)*45-min(80,link_count)*8
+        except Exception:return 0
+    return max(candidates,key=score)
+
+def image_from_tag(tag,base):
+    if tag is None:return ""
+    target=tag
+    name=str(getattr(tag,"name","") or "").lower()
+    if name!="img":
+        try:target=tag.find("img") or tag.find("source")
+        except Exception:target=None
+    if target is None:return ""
+    try:
+        width=int(re.sub(r"\D","",str(target.get("width") or "")) or 0)
+        height=int(re.sub(r"\D","",str(target.get("height") or "")) or 0)
+    except Exception:width=height=0
+    if width and height and max(width,height)<180:return ""
+    raw=""
+    for attr in ("src","data-src","data-original","data-lazy-src","data-original-src","data-url","data-image","srcset","data-srcset"):
+        value=str(target.get(attr) or "").strip()
+        if not value:continue
+        if "srcset" in attr:
+            parts=[x.strip() for x in value.split(",") if x.strip()]
+            raw=(parts[-1].split()[0] if parts else "")
+        else:raw=value
+        if raw:break
+    if not raw:return ""
+    u=urllib.parse.urljoin(base,html.unescape(raw))
+    low=u.lower()
+    if not u.startswith(("http://","https://")):return ""
+    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert","placeholder","loading","blank")
+    if any(x in low for x in bad) or re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
+    return u
+
 def page_images(text,base):
-    article=re.search(r"<article\b[^>]*>([\s\S]*?)</article>",text,re.I)
-    scope=article.group(1) if article else text[:350000]
     out=[]
-    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","ads","advert")
-    def add(raw):
-        value=html.unescape(str(raw or "").strip())
-        if not value:return
-        if "," in value and " " in value:
-            value=value.split(",")[-1].strip().split()[0]
-        u=urllib.parse.urljoin(base,value)
-        low=u.lower()
-        if not u.startswith(("http://","https://")):return
-        if any(x in low for x in bad) or low.endswith((".svg",".ico")):return
-        if u not in out:out.append(u)
-    for tag in re.findall(r"<img\b[^>]*>",scope,re.I):
-        for attr in ("src","data-src","data-original","data-lazy-src","srcset"):
-            m=re.search(r'\b'+re.escape(attr)+r'=["\']([^"\']+)["\']',tag,re.I)
-            if m:add(m.group(1))
+    root=article_soup(text)
+    if root is not None:
+        try:
+            for selector in ("script","style","noscript","svg","nav","aside","footer","form","iframe"):
+                for node in root.select(selector):node.decompose()
+        except Exception:pass
+        try:nodes=root.select("figure,picture,img")
+        except Exception:nodes=[]
+        for tag in nodes:
+            u=image_from_tag(tag,base)
+            if u and u not in out:out.append(u)
+            if len(out)>=8:break
+    if out:return out[:8]
+    # Last fallback for malformed pages that lack a recognizable article container.
+    scope=text[:450000]
+    for tag_text in re.findall(r"<img\b[^>]*>",scope,re.I):
+        fake=None
+        if BeautifulSoup is not None:
+            try:fake=BeautifulSoup(tag_text,"html.parser").find("img")
+            except Exception:fake=None
+        u=image_from_tag(fake,base) if fake is not None else ""
+        if u and u not in out:out.append(u)
         if len(out)>=8:break
     return out[:8]
 
@@ -277,7 +350,11 @@ def enrich_article(item):
         out["url"]=target
     try:
         body,final=http_get(target,DETAIL_TIMEOUT,"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
-        text=body.decode("utf-8",errors="ignore")
+        if UnicodeDammit is not None:
+            try:text=UnicodeDammit(body,is_html=True).unicode_markup or body.decode("utf-8",errors="replace")
+            except Exception:text=body.decode("utf-8",errors="replace")
+        else:
+            text=body.decode("utf-8",errors="replace")
     except:
         return out
     _,ji=jsonld(text); images=[]
@@ -311,8 +388,8 @@ def compact(item,now):
     }
 
 def build_snapshot(limit=DEFAULT_LIMIT):
-    # Fast discovery only. Do not scrape article pages here: the workflow
-    # publishes this snapshot first so users see new Google News items quickly.
+    # Fast discovery only. Article URLs and thumbnails are enriched in the
+    # second phase before the canonical snapshot is published atomically.
     google_queries=["__top__",*GOOGLE_HOT_QUERIES]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         google_batches=list(pool.map(fetch_google_query,google_queries))

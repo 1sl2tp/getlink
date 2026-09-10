@@ -15,9 +15,10 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('id="userWorkNews"',HTML)
         self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
         self.assertIn('news:"Tin tức"',APP)
+        self.assertIn('"tap-hoa":"Tạp hóa"',APP)
 
     def test_google_news_rss_is_the_only_runtime_discovery_path(self):
-        for key in ["latest","thoi-su","kinh-doanh","cong-nghe","the-thao","giai-tri","suc-khoe"]:
+        for key in ["latest","thoi-su","kinh-doanh","tap-hoa","cong-nghe","the-thao","giai-tri","suc-khoe"]:
             self.assertIn('key:"'+key+'"',EDGE)
         self.assertIn("newsGoogleTopFeed",EDGE)
         self.assertIn("newsGoogleQueryFeed",EDGE)

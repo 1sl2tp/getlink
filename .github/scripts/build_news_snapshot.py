@@ -8,6 +8,11 @@ try:
 except Exception:
     gnewsdecoder=None
 
+try:
+    from ftfy import fix_text as ftfy_fix_text
+except Exception:
+    ftfy_fix_text=None
+
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
 RICH_IMAGE_LIMIT=100
@@ -15,18 +20,9 @@ RICH_CONTENT_LIMIT=24
 RICH_WORKERS=12
 FEED_TIMEOUT=10
 DETAIL_TIMEOUT=6
-SOURCES=[
- {"key":"vnexpress","name":"VnExpress","domain":"vnexpress.net","feed":"https://vnexpress.net/rss/tin-moi-nhat.rss"},
- {"key":"dantri","name":"Dân Trí","domain":"dantri.com.vn","feed":"https://dantri.com.vn/rss/home.rss"},
- {"key":"tuoitre","name":"Tuổi Trẻ","domain":"tuoitre.vn","feed":"https://tuoitre.vn/home.rss"},
- {"key":"baomoi","name":"Báo Mới","domain":"baomoi.com","feed":""},
- {"key":"vietnamnet","name":"VietnamNet","domain":"vietnamnet.vn","feed":""},
- {"key":"kenh14","name":"Kênh14","domain":"kenh14.vn","feed":"https://kenh14.vn/rss/home.rss"},
- {"key":"zing","name":"Zing News","domain":"znews.vn","feed":""},
- {"key":"thanhnien","name":"Báo Thanh Niên","domain":"thanhnien.vn","feed":"https://thanhnien.vn/rss/home.rss"},
- {"key":"laodong","name":"Lao Động","domain":"laodong.vn","feed":""},
-]
 GOOGLE_HOT_QUERIES=[
+ "Tin nóng",
+ "Tin hot",
  "Tăng giá",
  "Chiến tranh",
  "công an",
@@ -58,10 +54,6 @@ def http_get(url,timeout,accept="*/*"):
     with urllib.request.urlopen(req,timeout=timeout) as res:
         return res.read(),res.geturl()
 
-def google_feed(domain):
-    q=urllib.parse.quote(f"site:{domain} when:2d")
-    return f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi"
-
 def google_query_feed(query):
     q=urllib.parse.quote(f'"{query}" when:1d')
     return f"https://news.google.com/rss/search?q={q}&hl=vi&gl=VN&ceid=VN:vi"
@@ -69,8 +61,15 @@ def google_query_feed(query):
 def google_top_feed():
     return "https://news.google.com/rss?hl=vi&gl=VN&ceid=VN:vi"
 
+def clean_text(v):
+    value=html.unescape(str(v or ""))
+    if ftfy_fix_text is not None:
+        try:value=ftfy_fix_text(value)
+        except Exception:pass
+    return unicodedata.normalize("NFC",value).replace("\ufffd","").strip()
+
 def plain(v):
-    return re.sub(r"\s+"," ",html.unescape(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
+    return re.sub(r"\s+"," ",clean_text(re.sub(r"<[^>]+>"," ",str(v or "")))).strip()
 
 def norm(v):
     s=unicodedata.normalize("NFD",str(v or "").lower())
@@ -108,36 +107,6 @@ def entry_images(entry):
     raw=str(entry.get("summary") or entry.get("description") or "")
     for m in re.finditer(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']',raw,re.I):add(html.unescape(m.group(1)))
     return out[:8]
-
-def fetch_source(source):
-    candidates=[source.get("feed") or "",google_feed(source["domain"])]
-    for feed_url in [x for i,x in enumerate(candidates) if x and x not in candidates[:i]]:
-        try:
-            body,_=http_get(feed_url,FEED_TIMEOUT,"application/rss+xml, application/xml, text/xml, */*;q=0.8")
-            feed=feedparser.parse(body); rows=[]
-            for e in list(feed.entries)[:40]:
-                title=plain(e.get("title"))
-                suffix=" - "+source["name"]
-                if title.lower().endswith(suffix.lower()):title=title[:-len(suffix)].strip()
-                url=str(e.get("link") or "").strip()
-                if not title or not url:continue
-                summary=plain(e.get("summary") or e.get("description") or "")[:650]
-                content=""
-                parts=e.get("content") or []
-                if parts and isinstance(parts[0],dict):content=plain(parts[0].get("value"))[:6000]
-                images=entry_images(e); published=parse_time(e)
-                rows.append({
-                  "id":f"{source['key']}:{norm(title)[:96]}:{published.timestamp():.0f}",
-                  "title":title,"summary":summary,"content":content,"url":url,
-                  "image":images[0] if images else "","images":images,
-                  "published_at":published.isoformat().replace("+00:00","Z"),
-                  "source_key":source["key"],"source_name":source["name"],
-                  "duplicate_count":1,"also_sources":[]
-                })
-            if rows:return rows
-        except Exception as exc:
-            print("WARN",source["key"],feed_url,str(exc)[:160])
-    return []
 
 def fetch_google_query(query):
     feed_url=google_top_feed() if query=="__top__" else google_query_feed(query)
@@ -203,6 +172,24 @@ def dedupe(items):
         if idx<0:out.append(item)
         else:out[idx]=merge(out[idx],item)
     return out
+
+def is_noise_item(item):
+    title=norm(item.get("title"))
+    if len(title)<12:return True
+    if re.match(r"^tin [a-z0-9 ]+ tin tuc\b",title):return True
+    if title in {"tin moi","tin nong","tin hot","tin tuc","the thao","kinh doanh","giai tri"}:return True
+    raw=str(item.get("url") or "")
+    if "news.google.com/" not in raw:
+        try:
+            u=urllib.parse.urlparse(raw)
+            path=(u.path or "").lower()
+            query=(u.query or "").lower()
+            if "/tag/" in path or "/tags/" in path or "page=" in query:return True
+        except Exception:pass
+    return False
+
+def process_items(items):
+    return [x for x in dedupe(items) if not is_noise_item(x)]
 
 def meta_images(text,base):
     out=[]
@@ -332,15 +319,13 @@ def build_snapshot(limit=DEFAULT_LIMIT):
     google_queries=["__top__",*GOOGLE_HOT_QUERIES]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         google_batches=list(pool.map(fetch_google_query,google_queries))
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCES)) as pool:
-        source_batches=list(pool.map(fetch_source,SOURCES))
-    items=dedupe([x for batch in [*google_batches,*source_batches] for x in batch]);now=dt.datetime.now(dt.timezone.utc)
+    items=process_items([x for batch in google_batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
     newest=max((iso(x.get("published_at")) for x in rows),default=now)
     return {"version":4,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
-      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-primary-hot-snapshot",
-      "phase":"fast","storage":"git-ephemeral-branch","database":False,"source_count":len(SOURCES),"items":rows}
+      "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-rss-only-snapshot",
+      "phase":"fast","storage":"git-ephemeral-branch","database":False,"query_count":len(google_queries),"items":rows}
 
 def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
     data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
@@ -361,6 +346,7 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
                 i=pos.get(jobs[future])
                 if i is not None:items[i]=enriched
     now=dt.datetime.now(dt.timezone.utc)
+    items=process_items(items)
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     data["items"]=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
     data["phase"]="rich"

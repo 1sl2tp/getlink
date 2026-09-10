@@ -762,6 +762,8 @@ async function loadNewsQuickDetail(item,request){
     if(!response.ok)throw new Error(data.error||"news_detail_failed");
     newsDetailCache.set(item.url,data);
     if(request!==newsQuickRequest)return;
+    const title=$("#newsQuickTitle");
+    if(title&&String(data.title||"").trim())title.textContent=String(data.title).trim();
     const images=[...(data.images||[]),...(item.images||[])];
     newsRenderQuickContent(data.content,item.content||item.summary,images,data.blocks||[]);
   }catch(error){

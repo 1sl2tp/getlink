@@ -53,6 +53,7 @@ TOPIC_QUERIES={
  "latest":["__top__",*GOOGLE_HOT_QUERIES],
  "thoi-su":["thời sự","xã hội","chính trị"],
  "kinh-doanh":["kinh doanh","thị trường","tài chính"],
+ "tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"],
  "cong-nghe":["công nghệ","AI","điện thoại"],
  "the-thao":["thể thao","bóng đá","V-League"],
  "giai-tri":["giải trí","âm nhạc","điện ảnh"],

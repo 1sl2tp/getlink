@@ -6506,12 +6506,6 @@ if(userWorkHome){
       return;
     }
 
-    const send=e.target.closest("#userWorkSendOrder,#mobileUserSendOrder");
-    if(send&&!send.disabled){
-      saveUserWorkOrderDraft();
-      return;
-    }
-
     const mobileCard=e.target.closest(".mobile-user-product-card[data-url]");
     if(mobileMergeMode&&mobileCard&&!e.target.closest("[data-work-qty]")){
       const row=findLibraryRow(mobileCard.dataset.url||"");

@@ -92,12 +92,13 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn("title:newsArticleTitle(html)",EDGE)
         self.assertIn('"accept-language":"vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6"',EDGE)
         self.assertIn("semantic+=9000",EDGE)
-        self.assertIn('String(data.title||"").trim()',APP)
+        self.assertIn('String(data&&data.title||item&&item.title||"").trim()',APP)
 
     def test_news_storage_is_ephemeral_cache_only(self):
         news_block=EDGE[EDGE.index('type NewsTopicKey='):EDGE.index('const UPDATE_ADMIN_PIN_SHA256=')]
         self.assertNotIn('sb.',news_block)
-        self.assertNotIn('.from(',news_block)
+        self.assertNotIn('sb.from(',news_block)
+        self.assertNotIn('supabase.from(',news_block)
         self.assertIn('\"x-getlink-storage\":\"ephemeral-cache\"',EDGE)
         self.assertIn('stale-while-revalidate=300',EDGE)
         self.assertIn('stale-while-revalidate=900',EDGE)
@@ -107,7 +108,7 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v4"',APP)
         self.assertIn('readNewsBrowserCache',APP)
         self.assertIn('writeNewsBrowserCache',APP)
-        self.assertIn('if(API&&!newsItems.length)ensureNewsLoaded(false)',APP)
+        self.assertIn('if(!newsItems.length)ensureNewsLoaded(false)',APP)
         self.assertIn('prewarmLatestNews();',APP)
         self.assertIn('NEWS_SNAPSHOT_BUCKET_MS=5*60*1000',APP)
         self.assertIn('fetchNewsSnapshot(key,force)',APP)

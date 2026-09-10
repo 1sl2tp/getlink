@@ -1,5 +1,9 @@
 name: Refresh READY news snapshots
 
+# READY snapshots are rebuilt only after the producer's image-quality gate has
+# rejected publisher boilerplate (logos, author avatars, Google News badges,
+# placeholders) so the first image is a real article image.
+
 on:
   schedule:
     - cron: "*/5 * * * *"

@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -8,7 +9,8 @@ MIGRATION = ROOT / "supabase/migrations/20260910093500_lock_v21_order_rpc_permis
 class V21OrderRpcPermissionContract(unittest.TestCase):
     def text(self):
         self.assertTrue(MIGRATION.exists(), "v21 order RPC permission migration must exist")
-        return MIGRATION.read_text(encoding="utf-8").lower()
+        raw = MIGRATION.read_text(encoding="utf-8").lower()
+        return re.sub(r"\s+", " ", raw).strip()
 
     def test_mutation_rpcs_are_not_directly_callable_by_browser_roles(self):
         text = self.text()

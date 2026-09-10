@@ -4,6 +4,13 @@ const API_KEY=String(window.GETLINK_API_KEY||"");
 const UPDATE_ADMIN_TOKEN_KEY="getlink:update-admin-session";
 let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";
 let appRole="user";
+const GETLINK_CHAT_ORIGINS=new Set(["https://chat.taphoa.xyz","https://1sl2tp.github.io"]);
+let sharedAccessToken="";
+let sharedAccountContext=null;
+let salesBootstrap=null;
+let salesSelectedCustomerId="";
+let salesBootstrapPending=null;
+let salesSubmitBusy=false;
 const USER_CLIENT_ID_KEY="getlink:user-client-id";
 const userFeedbackTimers=new Map();
 
@@ -34,8 +41,112 @@ function apiFetch(path,options={}){
   const headers=new Headers(options.headers||{});
   if(API_KEY)headers.set("apikey",API_KEY);
   if(updateAdminToken)headers.set("x-getlink-admin",updateAdminToken);
+  if(sharedAccessToken)headers.set("Authorization","Bearer "+sharedAccessToken);
   return fetch(API+path,{...options,headers});
 }
+
+function salesAccountLabel(account){
+  if(!account)return "Chưa đăng nhập Chat";
+  return String(account.display_name||account.username||"Khách hàng").trim()||"Khách hàng";
+}
+function salesControlContainers(){
+  return [
+    [document.querySelector(".mobile-user-order-bar"),"mobile"],
+    [document.querySelector(".user-work-order-foot"),"desktop"]
+  ].filter(([node])=>Boolean(node));
+}
+function renderSalesAccountControls(){
+  const account=salesBootstrap?.account||sharedAccountContext;
+  const customers=Array.isArray(salesBootstrap?.customers)?salesBootstrap.customers:[];
+  const isAdmin=account?.role==="admin";
+  for(const [container,key] of salesControlContainers()){
+    let control=container.querySelector('[data-sales-account-control="'+key+'"]');
+    if(!control){
+      control=document.createElement("label");
+      control.className="sales-account-control";
+      control.dataset.salesAccountControl=key;
+      container.insertBefore(control,container.firstChild);
+    }
+    control.replaceChildren();
+    const caption=document.createElement("span");
+    caption.className="sales-account-caption";
+    caption.textContent=isAdmin?"Khách hàng":"Khách";
+    control.appendChild(caption);
+    if(isAdmin){
+      const select=document.createElement("select");
+      select.className="sales-customer-select";
+      select.id=key==="mobile"?"mobileSalesCustomer":"desktopSalesCustomer";
+      const empty=document.createElement("option");
+      empty.value="";
+      empty.textContent="Chọn khách hàng";
+      select.appendChild(empty);
+      for(const customer of customers){
+        const option=document.createElement("option");
+        option.value=String(customer.id||"");
+        option.textContent=salesAccountLabel(customer);
+        select.appendChild(option);
+      }
+      select.value=salesSelectedCustomerId;
+      select.addEventListener("change",()=>{
+        salesSelectedCustomerId=select.value;
+        document.querySelectorAll(".sales-customer-select").forEach(other=>{
+          if(other!==select)other.value=salesSelectedCustomerId;
+        });
+        updateUserWorkOrderSummary();
+      });
+      control.appendChild(select);
+    }else{
+      const value=document.createElement("strong");
+      value.className="sales-account-value";
+      value.textContent=salesAccountLabel(account);
+      control.appendChild(value);
+    }
+  }
+}
+async function loadSalesBootstrap(force=false){
+  if(!sharedAccessToken||!sharedAccountContext){
+    salesBootstrap=null;
+    salesSelectedCustomerId="";
+    renderSalesAccountControls();
+    updateUserWorkOrderSummary();
+    return null;
+  }
+  if(salesBootstrapPending&&!force)return salesBootstrapPending;
+  const promise=apiFetch("/api/sales/bootstrap",{cache:"no-store"})
+    .then(async res=>{
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok)throw new Error(data.error||"sales_bootstrap_failed");
+      salesBootstrap=data;
+      sharedAccountContext=data.account||sharedAccountContext;
+      if(sharedAccountContext?.role==="user")salesSelectedCustomerId=String(sharedAccountContext.id||"");
+      else if(!Array.isArray(data.customers)||!data.customers.some(x=>String(x.id)===salesSelectedCustomerId))salesSelectedCustomerId="";
+      renderSalesAccountControls();
+      updateUserWorkOrderSummary();
+      return data;
+    })
+    .catch(error=>{
+      console.debug("GETLINK sales bootstrap",error);
+      salesBootstrap=null;
+      renderSalesAccountControls();
+      updateUserWorkOrderSummary();
+      return null;
+    })
+    .finally(()=>{if(salesBootstrapPending===promise)salesBootstrapPending=null;});
+  salesBootstrapPending=promise;
+  return promise;
+}
+window.addEventListener("message",event=>{
+  if(!GETLINK_CHAT_ORIGINS.has(event.origin))return;
+  const data=event.data;
+  if(!data||data.type!=="taphoa-auth-context")return;
+  sharedAccessToken=data.authenticated?String(data.accessToken||""):"";
+  sharedAccountContext=data.authenticated&&data.account?{...data.account}:null;
+  salesBootstrap=null;
+  salesSelectedCustomerId=sharedAccountContext?.role==="user"?String(sharedAccountContext.id||""):"";
+  renderSalesAccountControls();
+  updateUserWorkOrderSummary();
+  void loadSalesBootstrap(true);
+});
 
 function openUiCacheDb(){
   return new Promise((resolve,reject)=>{
@@ -5013,26 +5124,63 @@ function updateUserWorkOrderSummary(){
   const mobileCount=$("#mobileUserSelectedCount");
   const send=$("#userWorkSendOrder");
   const mobileSend=$("#mobileUserSendOrder");
+  const account=salesBootstrap?.account||sharedAccountContext;
+  const customerReady=account?.role==="user"?Boolean(account?.id):Boolean(salesSelectedCustomerId);
+  const ready=Boolean(sharedAccessToken&&salesBootstrap&&customerReady&&selected.length&&!salesSubmitBusy);
   if(countHost)countHost.textContent=text;
   if(mobileCount)mobileCount.textContent=text;
-  if(send)send.disabled=selected.length===0;
-  if(mobileSend)mobileSend.disabled=selected.length===0;
+  if(send)send.disabled=!ready;
+  if(mobileSend)mobileSend.disabled=!ready;
+  renderSalesAccountControls();
 }
 
-function saveUserWorkOrderDraft(){
-  const selected=userWorkSelectedItems().map(item=>({
-    url:item.row.canonical_url,
-    name:canonicalDisplayName(item.row),
-    qty:item.qty,
-    bargain:readOwnPrice(item.row.canonical_url,"bargain")
-  }));
-  try{localStorage.setItem("getlink:work-order-draft",JSON.stringify(selected));}catch{}
-  const message="Đã giữ đơn tạm "+selected.length+" sản phẩm · bước sau sẽ nối sang Chat.";
+async function saveUserWorkOrderDraft(){
+  const picked=userWorkSelectedItems();
   const status=$("#userWorkOrderStatus");
   const mobileStatus=$("#mobileUserOrderStatus");
-  if(status)status.textContent=message;
-  if(mobileStatus)mobileStatus.textContent=message;
-  return selected;
+  const setMessage=message=>{
+    if(status)status.textContent=message;
+    if(mobileStatus)mobileStatus.textContent=message;
+  };
+  if(!picked.length)return null;
+  if(!salesBootstrap)await loadSalesBootstrap(true);
+  const account=salesBootstrap?.account||sharedAccountContext;
+  if(!sharedAccessToken||!account){
+    setMessage("Đăng nhập Chat để gửi đơn.");
+    return null;
+  }
+  const customer_account_id=account.role==="user"?String(account.id||""):String(salesSelectedCustomerId||"");
+  if(!customer_account_id){
+    setMessage("Chọn khách hàng trước khi gửi đơn.");
+    return null;
+  }
+  const items=picked.map(item=>({product_url:item.row.canonical_url,qty:item.qty}));
+  salesSubmitBusy=true;
+  updateUserWorkOrderSummary();
+  setMessage("Đang tạo đơn tạm...");
+  try{
+    const res=await apiFetch("/api/sales/orders",{
+      method:"POST",
+      headers:{"content-type":"application/json"},
+      body:JSON.stringify({customer_account_id,status:"pending",items})
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.error||"sales_order_failed");
+    for(const item of picked){
+      setUserWorkQty(item.row.canonical_url,0);
+      document.querySelectorAll('[data-work-url="'+CSS.escape(item.row.canonical_url)+'"] b').forEach(node=>node.textContent="0");
+    }
+    const order=data.order||{};
+    const code=order.order_no?" #"+order.order_no:"";
+    setMessage("Đã tạo đơn tạm"+code+" · Admin sẽ xác nhận giao.");
+    return order;
+  }catch(error){
+    setMessage("Chưa gửi được đơn · "+String(error&&error.message||error));
+    return null;
+  }finally{
+    salesSubmitBusy=false;
+    updateUserWorkOrderSummary();
+  }
 }
 
 function userWorkDesktopScrollRoot(){

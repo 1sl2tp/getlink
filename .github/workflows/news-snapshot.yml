@@ -36,6 +36,9 @@ jobs:
           - topic: kinh-doanh
             limit: 60
             candidates: 90
+          - topic: tap-hoa
+            limit: 60
+            candidates: 100
           - topic: cong-nghe
             limit: 60
             candidates: 90
@@ -114,7 +117,7 @@ jobs:
         run: |
           python - <<'PY'
           import json, pathlib
-          topics=["latest","thoi-su","kinh-doanh","cong-nghe","the-thao","giai-tri","suc-khoe"]
+          topics=["latest","thoi-su","kinh-doanh","tap-hoa","cong-nghe","the-thao","giai-tri","suc-khoe"]
           root=pathlib.Path("/tmp/getlink-ready")
           for topic in topics:
               path=root/f"{topic}.json"
@@ -135,7 +138,7 @@ jobs:
           git rm -rf .
           mkdir -p news
           cp /tmp/getlink-ready/*.json news/
-          echo "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"topics\":7,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
+          echo "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"topics\":8,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
           git add news/*.json
           git commit -m "Refresh READY Google News snapshots"
           git push --force origin HEAD:news-cache

@@ -2,6 +2,7 @@ from pathlib import Path
 import re
 import unittest
 
+# Regression contract: cart rendering and Gửi đơn must share one live cart owner.
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app.js"
 ORDER = ROOT / "order-management.js"

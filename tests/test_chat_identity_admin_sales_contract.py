@@ -98,11 +98,11 @@ class ChatIdentityOrderFrontendContract(unittest.TestCase):
         text = self.text()
         self.assertRegex(text, r'authorization["\']?\s*,\s*["\']Bearer ')
 
-    def test_direct_login_uses_same_chat_supabase_account(self):
+    def test_getlink_does_not_own_chat_password_login(self):
         text = self.text()
-        self.assertIn('/auth/v1/token?grant_type=password', text)
-        self.assertIn('@taphoa.chat', text)
-        self.assertNotIn('replace(/\\/getlink-api$/,"/taphoa-api")', text)
+        self.assertNotIn('/auth/v1/token?grant_type=password', text)
+        self.assertNotIn('function chatLogin(', text)
+        self.assertNotIn('orderLoginPassword', text)
 
     def test_admin_send_requires_customer_picker(self):
         text = self.text()

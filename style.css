@@ -15379,3 +15379,21 @@ body.news-quick-open{overflow:hidden!important}
   .news-quick-position{font-size:9px}
 }
 
+/* News QA v61 — temporarily expose publication time */
+.news-card-time{
+  display:block!important;
+  margin-top:auto!important;
+  padding-top:5px!important;
+  color:#8a9390!important;
+  font-size:9.5px!important;
+  font-weight:500!important;
+  line-height:1.15!important;
+  white-space:nowrap!important;
+}
+@media(max-width:520px){
+  .mobile-user-results.news-results .news-card-time{
+    padding-top:3px!important;
+    font-size:9px!important;
+  }
+}
+

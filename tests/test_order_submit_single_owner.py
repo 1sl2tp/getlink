@@ -27,6 +27,12 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
         end = text.index("async function performAdminAction", start)
         submit = text[start:end]
 
+        self.assertIn(
+            "openManager();",
+            submit,
+            "successful Gửi đơn must immediately open the pending-order manager",
+        )
+
         post = submit.index('await orderFetch("/orders",{method:"POST",body})')
         clear = submit.index("localStorage.removeItem(QTY_KEY)")
         pending = submit.index('activeView="orders";activeStatus="pending"')

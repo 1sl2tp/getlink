@@ -58,6 +58,68 @@ TOPIC_QUERIES={
  "giai-tri":["giải trí","âm nhạc","điện ảnh"],
  "suc-khoe":["sức khỏe","y tế","bệnh viện"],
 }
+
+# FreshRSS/RSSHub-style per-publisher rules: locate the article first, then
+# remove known non-article DOM. Generic scoring is only the fallback.
+NEWS_DOMAIN_RULES={
+ "vnexpress.net":{
+   "article":[".fck_detail","[itemprop='articleBody']","article"],
+   "remove":[".box-tinlienquan",".box-category",".banner-ads",".ads",".social"]
+ },
+ "vietnamnet.vn":{
+   "article":[".maincontent",".content-detail",".ArticleContent","[itemprop='articleBody']","article"],
+   "remove":[".related-news",".box-tin-lien-quan",".advertisement",".vnn-ads",".social-share"]
+ },
+ "dantri.com.vn":{
+   "article":[".singular-content",".e-magazine__body","[data-module='article-content']","[itemprop='articleBody']","article"],
+   "remove":[".article-related",".related-news",".ads-wrapper",".dt-news__ads",".social"]
+ },
+ "tuoitre.vn":{
+   "article":["#main-detail-body",".detail-content",".detail__content","[itemprop='articleBody']","article"],
+   "remove":[".box-relate",".box-related",".ads",".banner",".social"]
+ },
+ "thanhnien.vn":{
+   "article":[".detail-content-body",".cms-body",".detail-content","[itemprop='articleBody']","article"],
+   "remove":[".box-related",".detail__related",".advertisement",".banner",".social"]
+ },
+ "laodong.vn":{
+   "article":[".article-content",".article__body",".detail-content","[itemprop='articleBody']","article"],
+   "remove":[".article-related",".related-news",".ads",".banner",".social"]
+ },
+ "24h.com.vn":{
+   "article":[".text-conent",".article_body",".article-content","[itemprop='articleBody']","article"],
+   "remove":[".cate-24h-foot-arti-deta",".box_tinlienquan",".banner-ads",".adsbygoogle",".social"]
+ },
+ "nguonluc.com.vn":{
+   "article":[".article-content",".detail-content",".content-detail","[itemprop='articleBody']","article"],
+   "remove":[".related-news",".tin-lien-quan",".box-related",".advertisement",".social"]
+ },
+ "vovgiaothong.vn":{
+   "article":[".article-content",".detail-content",".the-article-body","[itemprop='articleBody']","article"],
+   "remove":[".related-news",".news-related",".advertisement",".banner",".social"]
+ },
+ "cafef.vn":{
+   "article":[".detail-content",".contentdetail",".article-content","[itemprop='articleBody']","article"],
+   "remove":[".tin-lien-quan",".box-related",".banner-ad",".ads",".social"]
+ },
+ "nld.com.vn":{
+   "article":[".detail-content",".content-news-detail",".article-content","[itemprop='articleBody']","article"],
+   "remove":[".related-news",".box-related",".advertisement",".banner",".social"]
+ },
+ "vietnamplus.vn":{
+   "article":[".article-body",".article-content","[itemprop='articleBody']","article"],
+   "remove":[".related-news",".box-related",".advertisement",".banner",".social"]
+ },
+}
+GLOBAL_ARTICLE_REMOVE=[
+ "script","style","noscript","svg","nav","aside","footer","form","iframe",
+ "[class*='advert']","[id*='advert']","[class*='quang-cao']","[id*='quang-cao']",
+ "[class*='related']","[id*='related']","[class*='recommend']","[id*='recommend']",
+ "[class*='suggest']","[id*='suggest']","[class*='read-more']","[class*='readmore']",
+ "[class*='social']","[class*='share']","[class*='comment']","[id*='comment']",
+ "[class*='newsletter']","[class*='subscription']","[class*='most-read']",
+ "[class*='popular']","[class*='breadcrumb']","[class*='tags']","[class*='keyword']"
+]
 STOP={"va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi","la","mot","nhung","cac","co","duoc","se","da","dang","ve","noi","theo","nay","hom","ngay","moi","nhat","vi","o"}
 
 def http_get(url,timeout,accept="*/*"):
@@ -296,11 +358,23 @@ def meta_images(text,base):
         if u.startswith(("http://","https://")) and u not in out:out.append(u)
     return out
 
-def article_soup(text):
+def article_host(base):
+    try:return (urllib.parse.urlparse(str(base or "")).hostname or "").lower().removeprefix("www.")
+    except Exception:return ""
+
+def article_rule(base):
+    host=article_host(base)
+    for domain,rule in NEWS_DOMAIN_RULES.items():
+        if host==domain or host.endswith("."+domain):return rule
+    return None
+
+def article_soup(text,base=""):
     if BeautifulSoup is None:return None
     try:soup=BeautifulSoup(text,"html.parser")
     except Exception:return None
-    selectors=[
+    rule=article_rule(base)
+    domain_selectors=list((rule or {}).get("article") or [])
+    generic_selectors=[
       "article","[itemprop='articleBody']",
       "[class*='article-body']","[class*='article__body']","[class*='article-content']",
       "[class*='detail-content']","[class*='detail__content']","[class*='content-detail']",
@@ -309,20 +383,24 @@ def article_soup(text):
       "[class*='content-body']","[id*='article-body']","[id*='article-content']",
       "[id*='detail-content']"
     ]
-    seen=set(); candidates=[]
-    for selector in selectors:
-        try:nodes=soup.select(selector)
-        except Exception:nodes=[]
-        for node in nodes:
-            key=id(node)
-            if key not in seen:
-                seen.add(key); candidates.append(node)
+    def collect(selectors):
+        seen=set(); out=[]
+        for selector in selectors:
+            try:nodes=soup.select(selector)
+            except Exception:nodes=[]
+            for node in nodes:
+                key=id(node)
+                if key not in seen:
+                    seen.add(key);out.append(node)
+        return out
+    candidates=collect(domain_selectors)
+    if not candidates:candidates=collect(generic_selectors)
     if not candidates:return None
     def score(node):
         try:
             text_len=len(plain(node.get_text(" ",strip=True)))
             p_count=len(node.find_all("p"))
-            img_count=len(node.find_all("img"))
+            img_count=len(node.find_all(["img","amp-img"]))
             link_count=len(node.find_all("a"))
             tag=str(getattr(node,"name","") or "").lower()
             marker=" ".join([
@@ -334,10 +412,18 @@ def article_soup(text):
             if "articlebody" in marker:semantic+=9000
             if tag=="article":semantic+=7000
             if re.search(r"article[-_ ]?(body|content)|detail[-_ ]?content|content[-_ ]?detail|fck_detail|entry[-_ ]?content|post[-_ ]?content|news[-_ ]?content|content[-_ ]?body",marker):semantic+=6000
-            if tag=="main":semantic-=2500
             return semantic+min(30000,text_len)+min(50,p_count)*240+min(20,img_count)*45-min(100,link_count)*14
         except Exception:return 0
     return max(candidates,key=score)
+
+def strip_article_noise(root,base=""):
+    if root is None:return
+    rule=article_rule(base)
+    selectors=[*GLOBAL_ARTICLE_REMOVE,*((rule or {}).get("remove") or [])]
+    for selector in selectors:
+        try:
+            for node in root.select(selector):node.decompose()
+        except Exception:pass
 
 def image_from_tag(tag,base):
     if tag is None:return ""
@@ -371,12 +457,9 @@ def image_from_tag(tag,base):
 
 def page_images(text,base):
     out=[]
-    root=article_soup(text)
+    root=article_soup(text,base)
     if root is not None:
-        try:
-            for selector in ("script","style","noscript","svg","nav","aside","footer","form","iframe"):
-                for node in root.select(selector):node.decompose()
-        except Exception:pass
+        strip_article_noise(root,base)
         try:nodes=root.select("figure,picture,img,amp-img")
         except Exception:nodes=[]
         for tag in nodes:

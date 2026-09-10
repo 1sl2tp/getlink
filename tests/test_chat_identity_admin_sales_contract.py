@@ -5,6 +5,40 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 EDGE = ROOT / "supabase/functions/getlink-orders/index.ts"
 JS = ROOT / "order-management.js"
+MIGRATION = ROOT / "supabase/migrations/20260910092000_v21_order_identity.sql"
+
+
+class ChatIdentityOrderMigrationContract(unittest.TestCase):
+    def text(self):
+        self.assertTrue(MIGRATION.exists(), "v21 order identity migration must exist")
+        return MIGRATION.read_text(encoding="utf-8")
+
+    def test_migration_is_additive_for_historical_orders(self):
+        text = self.text().lower()
+        self.assertIn("add column if not exists chat_account_id uuid", text)
+        self.assertIn("references public.v21_accounts", text)
+        self.assertNotRegex(text, r"delete\s+from\s+public\.(?:orders|debts)")
+        self.assertNotRegex(text, r"truncate\s+(?:table\s+)?public\.(?:orders|debts)")
+        self.assertNotIn("insert into public.accounts", text)
+
+    def test_v21_orders_have_their_own_atomic_order_debt_rpcs(self):
+        text = self.text()
+        for name in (
+            "getlink_create_v21_order",
+            "getlink_approve_v21_order",
+            "getlink_cancel_v21_order",
+        ):
+            self.assertIn(name, text)
+        self.assertIn("chat_account_id", text)
+        self.assertIn("order_debt", text)
+        self.assertIn("order_return_reversal", text)
+
+    def test_legacy_debt_identity_is_preserved_without_shadow_accounts(self):
+        text = self.text().lower()
+        self.assertIn("debts_customer_fkey_safety", text)
+        self.assertIn("getlink_validate_debt_customer_identity", text)
+        self.assertIn("v21:", text)
+        self.assertNotIn("insert into public.accounts", text)
 
 
 class ChatIdentityOrderBackendContract(unittest.TestCase):
@@ -38,7 +72,8 @@ class ChatIdentityOrderBackendContract(unittest.TestCase):
     def test_normal_user_can_only_create_order_for_self(self):
         text = self.text()
         self.assertRegex(text, r'actor\.kind\s*===\s*"customer"')
-        self.assertRegex(text, r'customer_id",\s*actor\.id|customer_id",\s*identity\.id')
+        self.assertRegex(text, r'\.eq\("chat_account_id",\s*actor\.id\)')
+        self.assertRegex(text, r'actor\.kind\s*===\s*"customer"[\s\S]{0,300}selectedCustomer')
 
 
 class ChatIdentityOrderFrontendContract(unittest.TestCase):

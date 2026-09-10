@@ -172,3 +172,5 @@ jobs:
           git add .github/scripts/build_news_snapshot.py
           git commit -m "Filter video and local noise from news snapshots"
           git push origin HEAD:main
+
+# trigger: 2026-09-10

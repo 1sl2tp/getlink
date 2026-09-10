@@ -8,11 +8,12 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
     url.searchParams.set("v",build);
     return url.toString();
   };
-  if(!document.getElementById("getlinkOrderCss")){
+  for(const [id,name] of [["getlinkOrderCss","order-management.css"],["getlinkOrderCustomerCss","order-customer-picker.css"]]){
+    if(document.getElementById(id))continue;
     const link=document.createElement("link");
-    link.id="getlinkOrderCss";
+    link.id=id;
     link.rel="stylesheet";
-    link.href=asset("order-management.css");
+    link.href=asset(name);
     document.head.appendChild(link);
   }
   if(!document.getElementById("getlinkOrderJs")){

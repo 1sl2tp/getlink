@@ -103,15 +103,19 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('stale-while-revalidate=900',EDGE)
         self.assertIn('storage:\"memory-cache\"',EDGE)
 
-    def test_browser_reads_cached_news_before_background_refresh(self):
-        self.assertIn('NEWS_BROWSER_CACHE_KEY=\"getlink:news-cache:v3\"',APP)
+    def test_browser_keeps_ready_snapshot_while_refreshing(self):
+        self.assertIn('NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v3"',APP)
         self.assertIn('readNewsBrowserCache',APP)
         self.assertIn('writeNewsBrowserCache',APP)
-        self.assertIn('cache:force?\"no-store\":\"default\"',APP)
         self.assertIn('if(API&&!newsItems.length)ensureNewsLoaded(false)',APP)
         self.assertIn('prewarmLatestNews();',APP)
         self.assertIn('NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000',APP)
-        self.assertIn('cache:"force-cache"',APP)
+        self.assertIn('fetchNewsHotSnapshot(force)',APP)
+        self.assertIn('cache:force?"no-store":"force-cache"',APP)
+        self.assertIn('news_snapshot_not_ready',APP)
+        self.assertNotIn('backgroundRefreshLatestNews',APP)
+        self.assertNotIn('/api/news?topic=latest&source=all&limit=80&refresh=1',APP)
+        self.assertNotIn('newsCache.delete(newsTopic);',APP)
         self.assertIn('https://wsrv.nl/',APP)
         self.assertIn('const eager=index<(compact?6:12);',APP)
 

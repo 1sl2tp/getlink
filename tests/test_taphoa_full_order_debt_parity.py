@@ -69,6 +69,7 @@ class TapHoaFullOrderDebtParity(unittest.TestCase):
         self.assertIn("returnFilteredDeliveredOrders", order)
         self.assertIn('data-order-action="edit"', order)
         self.assertIn('data-order-action="return"', order)
+        # The guard must refuse batch return outside the Delivered tab.
         self.assertIn('activeStatus!=="delivered"', order)
         self.assertIn('method:"POST",body:JSON.stringify({ids})', order)
         self.assertIn('"/orders/return-batch"', order)

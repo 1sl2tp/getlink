@@ -1,7 +1,7 @@
 # TAPHOA Fast Workspace Flow — GETLINK Tạp hóa
 
 Date: 2026-09-11
-Status: DESIGN LOCK — awaiting implementation
+Status: DESIGN LOCK — approved for implementation
 Base: `main` at `74820efb9573d6e21253f8219751cca3697c552a`
 Scope: GETLINK Tạp hóa only. No Chat/Call auth change, no Siêu thị/Tin tức business UI, no backend table redesign.
 
@@ -50,16 +50,18 @@ Three regions:
 The right panel is the single owner of sales actions. Do not duplicate `Chọn khách`, `Xóa`, `Bán nhanh`, `Gửi đơn`, `Hủy`, or `Cập nhật` elsewhere.
 
 ### Đơn
-Two regions:
-1. **Left/main:** filter, date range, source summary, newest-first order list.
-2. **Right:** selected order detail and lifecycle actions.
+Use the width according to the task rather than force a permanent three-column layout:
+1. **Main:** date/search filters, source summary and newest-first order list.
+2. **Detail:** selecting an order opens its detail inline at the right on wide desktop; the list remains visible.
 
-No modal for ordinary order inspection. Clicking an order changes the right detail panel immediately.
+No modal for ordinary order inspection. Clicking an order changes the detail region immediately. If no order is selected, the main list may consume the extra width.
 
 ### Công nợ
-Two regions:
-1. **Left/main:** debt customer list, default sorted by most recent debt transaction first.
-2. **Right:** selected customer debt timeline; clicking a linked transaction opens its order detail in the same right panel.
+Two regions when width allows:
+1. **Main:** debt customer list, default sorted by most recent debt transaction first.
+2. **Detail:** selected customer timeline; clicking a linked transaction shows its order detail in this same detail region.
+
+Do not create nested overlays for customer → transaction → order.
 
 ## 4. Mobile geometry
 
@@ -92,13 +94,13 @@ There must be exactly one customer selector in Sales. Orders/Debt may display cu
 ## 6. Sales action state machine
 
 ### Normal state
-Right action region:
+Single Sales action region:
 - `Xóa` — clear current cart only.
 - `Bán nhanh` — Admin only; create delivered order immediately.
 - `Gửi đơn` — create pending order.
 
 ### Editing state
-Same region changes to:
+The same region changes to:
 - `Hủy`
 - `Cập nhật`
 
@@ -126,6 +128,8 @@ After successful Gửi/Bán, do **not** automatically open a management overlay.
 - Order edit loads the same order back into Sales on the same `order_id` / `#mã đơn`.
 - Normal task should need one obvious tap per state transition; avoid confirmation except destructive actions.
 - Destructive meaning remains locked: pending `Xóa` deletes pending; delivered `Xóa` means return/reversal, not physical deletion.
+
+The 14-screen TAPHOA reference document confirms the interaction tree to preserve: Delivered/Pending overview → source summary → source detail → combined product summary/share → order detail → edit back in Sales; and Debt summary → customer ledger → linked order detail → edit back in Sales. GETLINK should reproduce this task sequence with its own data/state, not reproduce the old visual styling literally.
 
 ## 8. Ordering / recency
 
@@ -170,7 +174,23 @@ The following current patterns must be removed or converted, not hidden behind a
 
 No parallel replacement state tree is allowed. Existing order/debt functions are reused underneath the new inline surfaces.
 
-## 11. Files / boundaries
+## 11. UI/UX skill constraints
+
+Implementation follows both referenced skills as design constraints, not as permission to redesign unrelated areas.
+
+### UI UX Pro Max
+Priority for this task:
+1. Accessibility: visible focus, semantic labels, keyboard usable controls.
+2. Touch & Interaction: meaningful controls ~44×44px with ~8px separation where practical; primary behavior must work by tap, not hover; busy/loading feedback must be visible.
+3. Performance: no layout thrash or full-app re-render for a local state change; preserve list space to avoid avoidable CLS.
+4. Layout & Responsive: mobile-first, no horizontal overflow, desktop uses available width intentionally.
+5. Typography/Data: body text is not made tiny to gain density; money/quantity use tabular figures.
+6. Navigation: predictable back/context preservation and no overloaded duplicate navigation.
+
+### Taste Redesign
+Use `Scan → Diagnose → Fix` on the current vanilla JS/CSS implementation. Do not rewrite the app or import a new framework. Prefer inline detail/progressive disclosure over a modal for ordinary management tasks; cards/borders exist only when they express hierarchy. Preserve the existing restrained green/neutral visual language, use one accent family, and add hover/pressed/focus/loading/empty/error states without decorative motion. Data-heavy density is intentional, so do not apply marketing-page whitespace rules mechanically.
+
+## 12. Files / boundaries
 
 Expected frontend scope:
 - `app.js` — expose/host Tạp hóa workspace mode and Sales context hooks if needed.
@@ -181,7 +201,7 @@ Expected frontend scope:
 
 Backend changes are not expected unless implementation proves a missing server contract. Do not modify Chat/Call/session model, product crawler, Siêu thị or Tin tức logic.
 
-## 12. Verification gates
+## 13. Verification gates
 
 RED contracts before production edits:
 1. Tạp hóa-only `Bán | Đơn | Công nợ` ownership.
@@ -191,7 +211,9 @@ RED contracts before production edits:
 5. successful send/quick remains in Sales and preserves customer.
 6. newest-first order + debt customer + debt timeline rendering.
 7. compact money formatter examples and absence of `₫`/` đ` in business surfaces.
-8. existing business/auth contracts still pass.
+8. one owner for Sales actions and no duplicate customer selector.
+9. touch/focus states remain present on the new workspace controls.
+10. existing business/auth contracts still pass.
 
 Then JS syntax, full Python suite, Deno/backend contracts, Supabase-only gates, exact-SHA CI, PR diff review, merge only verified head, and post-merge Verify + Pages/Smoke.
 

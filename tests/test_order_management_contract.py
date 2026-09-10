@@ -6,6 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 EDGE = ROOT / "supabase/functions/getlink-orders/index.ts"
 JS = ROOT / "order-management.js"
 CSS = ROOT / "order-management.css"
+PICKER_CSS = ROOT / "order-customer-picker.css"
 CONFIG = ROOT / "config.js"
 
 
@@ -14,26 +15,29 @@ class OrderBackendContractTests(unittest.TestCase):
         self.assertTrue(EDGE.exists(), "getlink-orders edge function must exist")
         return EDGE.read_text(encoding="utf-8")
 
-    def test_backend_reuses_shop88_order_core(self):
+    def test_backend_reuses_shop88_tables_with_v21_atomic_order_core(self):
         text = self.edge_text()
-        self.assertIn('taphoa_create_order_with_debt', text)
-        self.assertIn('taphoa_approve_order_with_debt', text)
-        self.assertIn('taphoa_cancel_order', text)
+        self.assertIn('getlink_create_v21_order', text)
+        self.assertIn('getlink_approve_v21_order', text)
+        self.assertIn('getlink_cancel_v21_order', text)
+        self.assertIn('.from("orders")', text)
+        self.assertIn('.from("order_items")', text)
         self.assertNotIn('create table', text.lower())
 
-    def test_customer_identity_is_session_scoped(self):
+    def test_customer_identity_is_chat_jwt_scoped(self):
         text = self.edge_text()
-        self.assertIn('x-taphoa-session', text)
-        self.assertIn('.from("sessions")', text)
-        self.assertIn('.from("accounts")', text)
-        self.assertRegex(text, r'role\s*!==\s*"customer"|role\s*===\s*"customer"')
-        self.assertRegex(text, r'\.eq\("customer_id",\s*account\.id\)|\.eq\("customer_id",\s*identity\.id\)')
+        self.assertIn('authorization', text)
+        self.assertIn('db.auth.getUser(token)', text)
+        self.assertIn('.from("v21_accounts")', text)
+        self.assertIn('.eq("auth_user_id",', text)
+        self.assertRegex(text, r'role\s*!==\s*"user"|role\s*===\s*"user"')
+        self.assertRegex(text, r'\.eq\("chat_account_id",\s*actor\.id\)')
 
-    def test_admin_identity_uses_existing_getlink_admin_session(self):
+    def test_admin_identity_comes_from_same_chat_account_table(self):
         text = self.edge_text()
-        self.assertIn('x-getlink-admin', text)
-        self.assertIn('admin_session_hash', text)
-        self.assertIn('admin_session_expires_at', text)
+        self.assertRegex(text, r'role\s*!==\s*"admin"|role\s*===\s*"admin"')
+        self.assertNotIn('x-getlink-admin', text)
+        self.assertNotIn('admin_session_hash', text)
 
     def test_create_uses_server_side_supplier_price_and_pending_status(self):
         text = self.edge_text()
@@ -42,12 +46,12 @@ class OrderBackendContractTests(unittest.TestCase):
         self.assertIn('input_price_vnd', text)
         self.assertRegex(text, r'display_price_vnd[^\n]{0,180}/\s*1000|/\s*1000[^\n]{0,180}display_price_vnd')
         self.assertIn('trangThai:"pending"', text.replace(" ", ""))
-        self.assertNotRegex(text, r'body\?\.(?:price|gia|customer_id|maKH)')
+        self.assertNotRegex(text, r'body\?\.(?:price|gia|customer_name|tenKH)')
 
     def test_admin_transitions_preserve_debt_rules(self):
         text = self.edge_text().replace(" ", "")
-        self.assertIn('taphoa_approve_order_with_debt', text)
-        self.assertIn('taphoa_cancel_order', text)
+        self.assertIn('getlink_approve_v21_order', text)
+        self.assertIn('getlink_cancel_v21_order', text)
         self.assertIn('p_reverse_debt:true', text)
         self.assertRegex(text, r'pending.*done.*returned|\["pending","done","returned"\]')
 
@@ -57,10 +61,11 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertTrue(JS.exists(), "order-management.js must exist")
         return JS.read_text(encoding="utf-8")
 
-    def test_config_loads_order_module(self):
+    def test_config_loads_order_module_and_customer_picker(self):
         text = CONFIG.read_text(encoding="utf-8")
         self.assertIn("order-management.js", text)
         self.assertIn("order-management.css", text)
+        self.assertIn("order-customer-picker.css", text)
 
     def test_send_buttons_are_intercepted_before_legacy_draft_handler(self):
         text = self.js_text()
@@ -74,13 +79,14 @@ class OrderFrontendContractTests(unittest.TestCase):
         )
         self.assertIsNotNone(capture_listener, "send-order click must be intercepted in capture phase")
 
-    def test_frontend_sends_only_product_locator_and_quantity(self):
+    def test_frontend_sends_server_trusted_product_locator_and_quantity(self):
         text = self.js_text()
         self.assertRegex(text, r'const\s+items\s*=\s*selected\.map')
         self.assertRegex(text, r'url\s*:\s*item\.row\.canonical_url')
         self.assertRegex(text, r'qty\s*:\s*item\.qty')
         self.assertIn('JSON.stringify({items})', text)
-        forbidden = ["customer_id:", "maKH:", "unit_price:", "gia:", "cost:", "von:"]
+        self.assertIn('JSON.stringify({items,customerId})', text)
+        forbidden = ["unit_price:", "gia:", "cost:", "von:", "customerName:"]
         for token in forbidden:
             self.assertNotIn(token, text)
 
@@ -91,18 +97,22 @@ class OrderFrontendContractTests(unittest.TestCase):
         for status in ('pending', 'done', 'returned'):
             self.assertIn(status, text)
 
-    def test_customer_login_is_demand_driven_and_admin_reuses_getlink_session(self):
+    def test_customer_login_is_shared_chat_identity_and_admin_chooses_customer(self):
         text = self.js_text()
-        self.assertIn("taphoa-api", text)
-        self.assertIn("getlink:update-admin-session", text)
-        self.assertIn("getlink:taphoa-order-session", text)
-        self.assertIn("Đăng nhập", text)
+        self.assertIn("@taphoa.chat", text)
+        self.assertIn("taphoa-chat-auth", text)
+        self.assertIn("authorization", text)
+        self.assertIn("orderCustomerPicker", text)
+        self.assertNotIn("taphoa-api", text)
+        self.assertNotIn("getlink:taphoa-order-session", text)
 
     def test_order_module_has_dedicated_responsive_styles(self):
         self.assertTrue(CSS.exists(), "order-management.css must exist")
-        text = CSS.read_text(encoding="utf-8")
+        self.assertTrue(PICKER_CSS.exists(), "customer picker css must exist")
+        text = CSS.read_text(encoding="utf-8") + PICKER_CSS.read_text(encoding="utf-8")
         self.assertIn("@media", text)
         self.assertIn("order-manager", text)
+        self.assertIn("order-customer-picker", text)
 
 
 if __name__ == "__main__":

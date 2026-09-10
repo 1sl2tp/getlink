@@ -95,6 +95,7 @@
     };
   }
   function emitAccessChange(){
+    syncWorkManagerNav();
     document.dispatchEvent(new CustomEvent("getlink-access-change",{detail:accessSnapshot()}));
   }
   function currentRole(){return currentAccessState()}
@@ -199,7 +200,41 @@
     return false;
   }
 
+  function workManagerNavMarkup(kind){
+    return '<nav class="order-work-nav '+kind+'" aria-label="Quản lý mua hàng">'+
+      '<span class="order-work-nav-label">Quản lý</span>'+
+      '<button type="button" data-order-work-view="orders">Đơn của tôi</button>'+
+      '<button type="button" data-order-work-view="debts">Công nợ</button>'+
+    '</nav>';
+  }
+  function syncWorkManagerNav(){
+    const admin=currentRole()==="admin";
+    document.querySelectorAll('[data-order-work-view="orders"]').forEach(button=>{
+      button.textContent=admin?"Đơn hàng":"Đơn của tôi";
+    });
+    document.querySelectorAll("[data-order-work-view]").forEach(button=>{
+      const on=String(button.dataset.orderWorkView)===activeView;
+      button.classList.toggle("active",on);
+      button.setAttribute("aria-pressed",on?"true":"false");
+    });
+  }
+  function ensureWorkManagerNav(){
+    const desktopJump=document.querySelector(".user-work-jump");
+    if(desktopJump){
+      const desktopTop=desktopJump.closest(".user-work-top");
+      if(desktopTop&&!desktopTop.parentElement?.querySelector(".order-work-nav.desktop")){
+        desktopTop.insertAdjacentHTML("afterend",workManagerNavMarkup("desktop"));
+      }
+    }
+    const mobileSource=document.querySelector(".mobile-user-source-row");
+    if(mobileSource&&!mobileSource.parentElement?.querySelector(".order-work-nav.mobile")){
+      mobileSource.insertAdjacentHTML("afterend",workManagerNavMarkup("mobile"));
+    }
+    syncWorkManagerNav();
+  }
+
   function injectUi(){
+    ensureWorkManagerNav();
     if(document.getElementById("orderManager"))return;
     const roleSwitch=document.querySelector(".role-switch");
     if(roleSwitch){
@@ -292,6 +327,7 @@
     if(tabs)tabs.hidden=activeView!=="orders";
     const back=document.getElementById("debtBackButton");
     if(back)back.hidden=activeView!=="debts"||currentRole()!=="admin"||!debtCustomerId;
+    syncWorkManagerNav();
     syncCustomerControls();
   }
 
@@ -642,6 +678,16 @@
 
   document.addEventListener("click",async event=>{
     const target=event.target;
+    const workView=target.closest?.("[data-order-work-view]");
+    if(workView){
+      activeView=String(workView.dataset.orderWorkView||"orders");
+      if(activeView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
+      else debtCustomerId="";
+      debtDetail=null;
+      syncManagerView();
+      if(await requireChatAuth())openManager();
+      return;
+    }
     if(target.closest?.("#orderManagerButton")){if(await requireChatAuth())openManager();return;}
     if(target.closest?.("#orderManagerClose")){closeManager();return;}
     if(target.id==="orderManager"){closeManager();return;}
@@ -685,5 +731,5 @@
   injectUi();
   emitAccessChange();
   requestChatAuth();
-  window.setInterval(()=>{ensureInlineCustomerButtons();syncCustomerControls();},1500);
+  window.setInterval(()=>{ensureWorkManagerNav();ensureInlineCustomerButtons();syncCustomerControls();},1500);
 })();

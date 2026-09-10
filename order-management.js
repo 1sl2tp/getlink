@@ -648,6 +648,7 @@
     try{
       if(activeView==="debts")await refreshDebts();
       else {await loadOrders();renderOrders();}
+      if(!syncBusy)await checkRemoteRevision(true);
     }catch(error){
       if(!handleAuthError(error)){
         const list=document.getElementById("orderManagerList");

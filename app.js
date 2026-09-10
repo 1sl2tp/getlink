@@ -5021,7 +5021,8 @@ function loadUserWorkOrderSelection(order){
   for(const item of Array.isArray(order?.items)?order.items:[]){
     const url=String(item?.url||"").trim();
     const qty=Math.max(0,Math.round(Number(item?.qty||0)));
-    if(url&&qty>0)map[url]=qty;
+    const key=canonical(url);
+    if(key&&qty>0)map[key]=qty;
   }
   writeUserWorkQtyMap(map);
   mobileUserScope="mine";

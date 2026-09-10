@@ -210,6 +210,7 @@ const NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000;
 const NEWS_THUMB_WIDTH=360;
 const newsCache=new Map();
 const newsDetailCache=new Map();
+const newsDetailPending=new Map();
 let newsTopic="latest";
 let newsQuery="";
 let newsItems=[];
@@ -735,62 +736,117 @@ function newsRenderQuickContent(value,fallback="",images=[],blocks=[]){
 function newsQuickItems(){
   return newsVisibleItems();
 }
+function newsQuickIndex(){
+  const list=newsQuickItems();
+  return list.findIndex(item=>String(item.id||"")===String(newsQuickCurrentId||""));
+}
+function newsUpdateQuickNav(){
+  const list=newsQuickItems();
+  const index=newsQuickIndex();
+  const position=$("#newsQuickPosition");
+  const prev=$("#newsQuickPrev");
+  const next=$("#newsQuickNext");
+  if(position)position.textContent=index>=0?(index+1)+" / "+list.length:"";
+  if(prev)prev.disabled=index<=0;
+  if(next)next.disabled=index<0||index>=list.length-1;
+}
 function newsQuickMove(delta){
   const list=newsQuickItems();
   if(!list.length)return false;
-  let index=list.findIndex(item=>String(item.id||"")===String(newsQuickCurrentId||""));
+  let index=newsQuickIndex();
   if(index<0)index=0;
   const next=index+Number(delta||0);
   if(next<0||next>=list.length)return false;
   openNewsQuickView(list[next],{keepOpen:true});
   return true;
 }
+async function newsFetchQuickDetail(item){
+  if(!item||!item.url)throw new Error("news_detail_url_missing");
+  const cached=newsDetailCache.get(item.url);
+  if(cached)return cached;
+  const pending=newsDetailPending.get(item.url);
+  if(pending)return pending;
+  const request=apiFetch("/api/news-detail?reader=3&url="+encodeURIComponent(item.url),{cache:"default"})
+    .then(async response=>{
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.error||"news_detail_failed");
+      newsDetailCache.set(item.url,data);
+      return data;
+    })
+    .finally(()=>newsDetailPending.delete(item.url));
+  newsDetailPending.set(item.url,request);
+  return request;
+}
+function newsApplyQuickDetail(item,data,request){
+  if(request!==newsQuickRequest)return;
+  const title=$("#newsQuickTitle");
+  const loading=$("#newsQuickLoading");
+  requestAnimationFrame(()=>{
+    if(request!==newsQuickRequest)return;
+    if(title)title.textContent=String(data&&data.title||item&&item.title||"").trim();
+    newsRenderQuickContent(data&&data.content||"","",data&&data.images||[],data&&data.blocks||[]);
+    if(loading)loading.hidden=true;
+    const card=$("#newsQuickView")?.querySelector(".news-quick-card");
+    if(card)card.scrollTop=0;
+    newsUpdateQuickNav();
+  });
+}
+function newsQuickLoadingShell(item){
+  const title=$("#newsQuickTitle");
+  const loading=$("#newsQuickLoading");
+  const content=$("#newsQuickContent");
+  if(title)title.textContent=item&&item.title||"";
+  if(loading)loading.hidden=false;
+  if(content)content.innerHTML=
+    '<div class="news-quick-shell" aria-hidden="true">'+
+      '<span></span><span></span><span></span><span></span>'+
+    '</div>';
+}
+function newsPreloadAdjacent(){
+  const list=newsQuickItems();
+  const index=newsQuickIndex();
+  if(index<0)return;
+  for(const i of [index-1,index+1]){
+    const item=list[i];
+    if(!item||newsDetailCache.has(item.url)||newsDetailPending.has(item.url))continue;
+    setTimeout(()=>newsFetchQuickDetail(item).catch(()=>{}),120);
+  }
+}
 async function loadNewsQuickDetail(item,request){
   if(!item||!item.url)return;
-  const cached=newsDetailCache.get(item.url);
-  if(cached){
-    if(request!==newsQuickRequest)return;
-    const images=[...(cached.images||[]),...(item.images||[])];
-    newsRenderQuickContent(cached.content,item.content||item.summary,images,cached.blocks||[]);
-    return;
-  }
-  const loading=$("#newsQuickLoading");
-  if(loading)loading.hidden=false;
   try{
-    const response=await apiFetch("/api/news-detail?reader=2&url="+encodeURIComponent(item.url),{cache:"default"});
-    const data=await response.json().catch(()=>({}));
-    if(!response.ok)throw new Error(data.error||"news_detail_failed");
-    newsDetailCache.set(item.url,data);
-    if(request!==newsQuickRequest)return;
-    const title=$("#newsQuickTitle");
-    if(title&&String(data.title||"").trim())title.textContent=String(data.title).trim();
-    const images=[...(data.images||[]),...(item.images||[])];
-    newsRenderQuickContent(data.content,item.content||item.summary,images,data.blocks||[]);
+    const data=await newsFetchQuickDetail(item);
+    newsApplyQuickDetail(item,data,request);
+    if(request===newsQuickRequest)newsPreloadAdjacent();
   }catch(error){
+    if(request!==newsQuickRequest)return;
     console.debug("GETLINK news detail",error);
-  }finally{
-    if(request===newsQuickRequest&&loading)loading.hidden=true;
+    const loading=$("#newsQuickLoading");
+    const content=$("#newsQuickContent");
+    if(loading)loading.hidden=true;
+    if(content)content.innerHTML='<p class="news-quick-empty">Chưa lấy được nội dung bài viết sạch.</p>';
   }
 }
 function openNewsQuickView(item,options={}){
   const modal=$("#newsQuickView");
   const card=modal?.querySelector(".news-quick-card");
   if(!modal||!item)return;
-  const loading=$("#newsQuickLoading");
-  const title=$("#newsQuickTitle");
   const request=++newsQuickRequest;
   newsQuickCurrentId=String(item.id||"");
-
-  if(loading)loading.hidden=true;
-  if(title)title.textContent=item.title||"";
-  const images=item.images&&item.images.length?item.images:(item.image?[item.image]:[]);
-  newsRenderQuickContent(item.content,item.summary,images);
 
   modal.hidden=false;
   modal.setAttribute("aria-hidden","false");
   document.body.classList.add("news-quick-open");
-  if(card)card.scrollTop=0;
-  loadNewsQuickDetail(item,request);
+  newsUpdateQuickNav();
+
+  const cached=newsDetailCache.get(item.url);
+  if(cached){
+    newsApplyQuickDetail(item,cached,request);
+  }else{
+    newsQuickLoadingShell(item);
+    if(card)card.scrollTop=0;
+    loadNewsQuickDetail(item,request);
+  }
 }
 function closeNewsQuickView(){
   newsQuickRequest++;
@@ -820,6 +876,9 @@ function bindNewsQuickSwipe(){
     newsQuickMove(dx<0?1:-1);
   },{passive:true});
 }
+$("#newsQuickBack")?.addEventListener("click",closeNewsQuickView);
+$("#newsQuickPrev")?.addEventListener("click",()=>newsQuickMove(-1));
+$("#newsQuickNext")?.addEventListener("click",()=>newsQuickMove(1));
 queueMicrotask(bindNewsQuickSwipe);
 
 

@@ -10,9 +10,11 @@ except Exception:
 
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
-RICH_DETAIL_LIMIT=50
+RICH_IMAGE_LIMIT=100
+RICH_CONTENT_LIMIT=24
+RICH_WORKERS=12
 FEED_TIMEOUT=10
-DETAIL_TIMEOUT=10
+DETAIL_TIMEOUT=6
 SOURCES=[
  {"key":"vnexpress","name":"VnExpress","domain":"vnexpress.net","feed":"https://vnexpress.net/rss/tin-moi-nhat.rss"},
  {"key":"dantri","name":"Dân Trí","domain":"dantri.com.vn","feed":"https://dantri.com.vn/rss/home.rss"},
@@ -205,13 +207,41 @@ def dedupe(items):
 def meta_images(text,base):
     out=[]
     for tag in re.findall(r"<meta\b[^>]*>",text,re.I):
-        km=re.search(r'\b(?:property|name)=["\']([^"\']+)["\']',tag,re.I)
+        km=re.search(r'\b(?:property|name|itemprop)=["\']([^"\']+)["\']',tag,re.I)
         cm=re.search(r'\bcontent=["\']([^"\']+)["\']',tag,re.I)
         key=km.group(1).lower() if km else ""
-        if key not in {"og:image","og:image:url","twitter:image","twitter:image:src"} or not cm:continue
+        if key not in {"og:image","og:image:url","twitter:image","twitter:image:src","image","thumbnailurl"} or not cm:continue
         u=urllib.parse.urljoin(base,html.unescape(cm.group(1)))
         if u.startswith(("http://","https://")) and u not in out:out.append(u)
+    for tag in re.findall(r"<link\b[^>]*>",text,re.I):
+        if not re.search(r'\brel=["\'][^"\']*(?:image_src|preload)[^"\']*["\']',tag,re.I):continue
+        hm=re.search(r'\bhref=["\']([^"\']+)["\']',tag,re.I)
+        if not hm:continue
+        u=urllib.parse.urljoin(base,html.unescape(hm.group(1)))
+        if u.startswith(("http://","https://")) and u not in out:out.append(u)
     return out
+
+def page_images(text,base):
+    article=re.search(r"<article\b[^>]*>([\s\S]*?)</article>",text,re.I)
+    scope=article.group(1) if article else text[:350000]
+    out=[]
+    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","ads","advert")
+    def add(raw):
+        value=html.unescape(str(raw or "").strip())
+        if not value:return
+        if "," in value and " " in value:
+            value=value.split(",")[-1].strip().split()[0]
+        u=urllib.parse.urljoin(base,value)
+        low=u.lower()
+        if not u.startswith(("http://","https://")):return
+        if any(x in low for x in bad) or low.endswith((".svg",".ico")):return
+        if u not in out:out.append(u)
+    for tag in re.findall(r"<img\b[^>]*>",scope,re.I):
+        for attr in ("src","data-src","data-original","data-lazy-src","srcset"):
+            m=re.search(r'\b'+re.escape(attr)+r'=["\']([^"\']+)["\']',tag,re.I)
+            if m:add(m.group(1))
+        if len(out)>=8:break
+    return out[:8]
 
 def jsonld(text):
     body=""; images=[]
@@ -253,7 +283,7 @@ def decode_google_url(url):
         print("WARN decode",str(exc)[:120])
     return value
 
-def enrich_article(item):
+def enrich_article(item,include_content=True):
     original=str(item.get("url") or "").strip()
     target=decode_google_url(original)
     try:
@@ -261,12 +291,13 @@ def enrich_article(item):
         text=body.decode("utf-8",errors="ignore")
     except:return item
     jb,ji=jsonld(text); images=[]
-    for u in [*ji,*meta_images(text,final),*(item.get("images") or [])]:
+    for u in [*ji,*meta_images(text,final),*page_images(text,final),*(item.get("images") or [])]:
         if u and u not in images:images.append(u)
     out=dict(item)
     if images:out["images"]=images[:8];out["image"]=images[0]
-    detail=jb or article_text(text)
-    if len(detail)>len(str(out.get("content") or "")):out["content"]=detail[:10000]
+    if include_content:
+        detail=jb or article_text(text)
+        if len(detail)>len(str(out.get("content") or "")):out["content"]=detail[:10000]
     if final and "news.google.com/" not in final:
         out["url"]=final
     elif target and "news.google.com/" not in target:
@@ -288,9 +319,9 @@ def compact(item,now):
     for u in item.get("images") or []:
         if u and u not in images:images.append(u)
     return {
-      "id":str(item.get("id") or ""),"title":str(item.get("title") or "").strip(),"summary":str(item.get("summary") or "")[:600],
-      "content":str(item.get("content") or "")[:10000],"url":str(item.get("url") or ""),"image":images[0] if images else str(item.get("image") or ""),
-      "images":images[:8],"published_at":str(item.get("published_at") or ""),"source_key":str(item.get("source_key") or ""),
+      "id":str(item.get("id") or ""),"title":str(item.get("title") or "").strip(),"summary":str(item.get("summary") or "")[:420],
+      "content":"","url":str(item.get("url") or ""),"image":images[0] if images else str(item.get("image") or ""),
+      "images":images[:3],"published_at":str(item.get("published_at") or ""),"source_key":str(item.get("source_key") or ""),
       "source_name":str(item.get("source_name") or ""),"topic":"latest","duplicate_count":max(1,int(item.get("duplicate_count") or 1)),
       "also_sources":[],"hot_score":hot_score(item,now)
     }
@@ -307,7 +338,7 @@ def build_snapshot(limit=DEFAULT_LIMIT):
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     rows=[compact(x,now) for x in items[:limit] if x.get("title") and x.get("url")]
     newest=max((iso(x.get("published_at")) for x in rows),default=now)
-    return {"version":3,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
+    return {"version":4,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
       "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-primary-hot-snapshot",
       "phase":"fast","storage":"git-ephemeral-branch","database":False,"source_count":len(SOURCES),"items":rows}
 
@@ -315,13 +346,14 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
     data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
     items=list(data.get("items") or [])[:limit]
     candidates=[
-      x for x in items[:RICH_DETAIL_LIMIT]
-      if len(x.get("images") or [])<2 or len(str(x.get("content") or ""))<450
+      (x,i<RICH_CONTENT_LIMIT)
+      for i,x in enumerate(items[:RICH_IMAGE_LIMIT])
+      if not (x.get("image") or x.get("images")) or (i<RICH_CONTENT_LIMIT and len(str(x.get("content") or ""))<450)
     ]
     if candidates:
         pos={str(x.get("id") or ""):i for i,x in enumerate(items)}
-        with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
-            jobs={pool.submit(enrich_article,x):str(x.get("id") or "") for x in candidates}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=RICH_WORKERS) as pool:
+            jobs={pool.submit(enrich_article,x,include_content):str(x.get("id") or "") for x,include_content in candidates}
             for future in concurrent.futures.as_completed(jobs):
                 try:enriched=future.result()
                 except Exception as exc:

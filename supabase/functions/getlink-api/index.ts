@@ -2602,7 +2602,7 @@ function routePath(req:Request){
 }
 
 
-type NewsTopicKey="latest"|"thoi-su"|"kinh-doanh"|"tap-hoa"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
+type NewsTopicKey="latest"|"chinh-tri"|"phap-luat"|"kinh-te"|"tap-hoa"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
 type NewsItem={
   id:string;
   title:string;
@@ -2621,8 +2621,9 @@ type NewsItem={
 
 const NEWS_TOPICS:{key:NewsTopicKey;name:string;query:string}[]=[
   {key:"latest",name:"Mới nhất",query:""},
-  {key:"thoi-su",name:"Thời sự",query:"\"thời sự\" OR \"xã hội\" OR \"chính trị\""},
-  {key:"kinh-doanh",name:"Kinh doanh",query:"\"kinh doanh\" OR \"thị trường\" OR \"tài chính\""},
+  {key:"chinh-tri",name:"Chính trị",query:"\"chính trị\" OR \"chiến tranh\" OR \"tổng thống\" OR \"thủ tướng\" OR \"chủ tịch\" OR \"bãi nhiệm\" OR \"cách chức\" OR \"bổ nhiệm\""},
+  {key:"phap-luat",name:"Pháp luật",query:"\"pháp luật\" OR \"công an\" OR \"xét xử\" OR \"tạm giam\" OR \"khởi tố\" OR \"khám xét\" OR \"lừa đảo\""},
+  {key:"kinh-te",name:"Kinh tế",query:"\"kinh tế\" OR \"tăng giá\" OR \"vĩ mô\" OR \"lãi suất\" OR \"chứng khoán\" OR \"tỷ phú\" OR \"thị trường\" OR \"tài chính\""},
   {key:"tap-hoa",name:"Tạp hóa",query:"\"thuế\" OR \"an toàn vệ sinh thực phẩm\" OR \"hàng giả\" OR \"hàng nhái\" OR \"hộ kinh doanh\""},
   {key:"cong-nghe",name:"Công nghệ",query:"\"công nghệ\" OR \"AI\" OR \"điện thoại\""},
   {key:"the-thao",name:"Thể thao",query:"\"thể thao\" OR \"bóng đá\""},

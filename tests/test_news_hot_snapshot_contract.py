@@ -28,8 +28,9 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("Resolve URLs, clean titles and require thumbnails",WORKFLOW)
         self.assertIn("Publish complete READY set atomically",WORKFLOW)
         self.assertIn("matrix:",WORKFLOW)
-        self.assertIn("topic: thoi-su",WORKFLOW)
-        self.assertIn("topic: kinh-doanh",WORKFLOW)
+        self.assertIn("topic: chinh-tri",WORKFLOW)
+        self.assertIn("topic: phap-luat",WORKFLOW)
+        self.assertIn("topic: kinh-te",WORKFLOW)
         self.assertIn("topic: tap-hoa",WORKFLOW)
         self.assertIn("topic: cong-nghe",WORKFLOW)
         self.assertIn("topic: the-thao",WORKFLOW)
@@ -82,6 +83,9 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("fetch_google_query",SCRIPT)
         self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
         self.assertIn('GOOGLE_GENERIC_QUERIES=["Tin nóng","Tin hot"]',SCRIPT)
+        self.assertIn('"chinh-tri":["chính trị","chiến tranh","tổng thống","thủ tướng","chủ tịch","bãi nhiệm","cách chức","bổ nhiệm"]',SCRIPT)
+        self.assertIn('"phap-luat":["pháp luật","công an","xét xử","tạm giam","khởi tố","khám xét","lừa đảo"]',SCRIPT)
+        self.assertIn('"kinh-te":["kinh tế","tăng giá","vĩ mô","lãi suất","chứng khoán","tỷ phú","thị trường","tài chính"]',SCRIPT)
         self.assertIn('"tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"]',SCRIPT)
         ordered=["Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","bãi nhiệm","cách chức","bổ nhiệm","tạm giam","khởi tố","khám xét","tổng thống","lãi","thuế","thủ tướng","chứng khoán","chủ tịch","tỷ phú","lừa đảo"]
         hot=SCRIPT[SCRIPT.index('GOOGLE_HOT_QUERIES=['):SCRIPT.index('GOOGLE_GENERIC_QUERIES=')]

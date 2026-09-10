@@ -30,6 +30,7 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("matrix:",WORKFLOW)
         self.assertIn("topic: thoi-su",WORKFLOW)
         self.assertIn("topic: kinh-doanh",WORKFLOW)
+        self.assertIn("topic: tap-hoa",WORKFLOW)
         self.assertIn("topic: cong-nghe",WORKFLOW)
         self.assertIn("topic: the-thao",WORKFLOW)
         self.assertIn("topic: giai-tri",WORKFLOW)
@@ -80,6 +81,7 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("google_top_feed",SCRIPT)
         self.assertIn("fetch_google_query",SCRIPT)
         self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
+        self.assertIn('"tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"]',SCRIPT)
         for phrase in ["Tin nóng","Tin hot","Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
             self.assertIn(f'"{phrase}"',SCRIPT)
         self.assertIn("feedparser.parse",SCRIPT)

@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install test requirements
+        run: pip install -r scraper/requirements.txt
       - name: Apply compatibility patch
         run: python tools/apply_taphoa_compat_once.py
       - name: Stamp static build

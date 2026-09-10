@@ -9,31 +9,29 @@ const enc=new TextEncoder();
 const ORDER_STATUSES=["pending","done","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
-type Identity={kind:"customer"|"admin";id:string;name:string};
+type Identity={kind:"customer"|"admin";id:string;name:string;username:string;role:"user"|"admin"};
 type CreateInput={url:string;qty:number};
+type ChatCustomer={id:string;name:string;username:string;avatarPath:string};
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim()}
 function json(req:Request,body:unknown,status=200){return new Response(JSON.stringify(body),{status,headers:cors(req)})}
 function cors(req:Request){
   const origin=clean(req.headers.get("origin"));
-  const allowed=origin==="https://get.taphoa.xyz"||origin==="https://1sl2tp.github.io"||origin.startsWith("http://localhost")||origin.startsWith("http://127.0.0.1");
+  const allowed=origin==="https://get.taphoa.xyz"||origin==="https://chat.taphoa.xyz"||origin==="https://1sl2tp.github.io"||origin.startsWith("http://localhost")||origin.startsWith("http://127.0.0.1");
   return {
     "content-type":"application/json; charset=utf-8",
     "access-control-allow-origin":allowed?origin:"https://get.taphoa.xyz",
     "access-control-allow-methods":"GET,POST,DELETE,OPTIONS",
-    "access-control-allow-headers":"apikey, authorization, content-type, x-getlink-admin, x-taphoa-session",
+    "access-control-allow-headers":"apikey, authorization, content-type",
     "access-control-max-age":"86400",
     "vary":"Origin"
   };
 }
 function fail(message:string,status=400){return Object.assign(new Error(message),{status})}
 function errorText(e:unknown){return e instanceof Error?e.message:String(e||"Lỗi hệ thống")}
-async function sha256(value:string){
-  const bytes=new Uint8Array(await crypto.subtle.digest("SHA-256",enc.encode(value)));
-  return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
-}
 function constantTimeEqual(a:string,b:string){
   const x=enc.encode(a),y=enc.encode(b);
+  if(!x.length||!y.length)return false;
   let diff=x.length^y.length;
   const n=Math.max(x.length,y.length);
   for(let i=0;i<n;i++)diff|=(x[i%x.length]||0)^(y[i%y.length]||0);
@@ -58,46 +56,27 @@ function bearer(req:Request){
   return auth.toLowerCase().startsWith("bearer ")?clean(auth.slice(7)):"";
 }
 
-async function customerIdentity(req:Request):Promise<Identity|null>{
-  const token=clean(req.headers.get("x-taphoa-session"))||bearer(req);
+async function chatIdentity(req:Request):Promise<Identity|null>{
+  const token=bearer(req);
   if(!token)return null;
-  const tokenHash=await sha256(token);
-  const now=new Date().toISOString();
-  const {data:session,error:sessionError}=await db.from("sessions")
-    .select("account_id,expires_at")
-    .eq("token_hash",tokenHash)
-    .gt("expires_at",now)
-    .maybeSingle();
-  if(sessionError)throw sessionError;
-  if(!session)return null;
-  const {data:account,error:accountError}=await db.from("accounts")
-    .select("id,name,role,active")
-    .eq("id",session.account_id)
-    .eq("active",true)
-    .maybeSingle();
-  if(accountError)throw accountError;
-  if(!account||account.role!=="customer")return null;
-  await db.from("sessions").update({last_seen_at:now}).eq("token_hash",tokenHash);
-  return {kind:"customer",id:String(account.id),name:clean(account.name)};
-}
-
-async function adminAuthorized(req:Request):Promise<boolean>{
-  const token=clean(req.headers.get("x-getlink-admin"));
-  if(!token)return false;
-  const {data,error}=await db.from("getlink_update_settings")
-    .select("admin_session_hash,admin_session_expires_at")
-    .eq("id",1)
+  const {data:userData,error:userError}=await db.auth.getUser(token);
+  if(userError||!userData?.user?.id)return null;
+  const {data:account,error}=await db.from("v21_accounts")
+    .select("id,username,display_name,role,deleted_at,locked_at")
+    .eq("auth_user_id",userData.user.id)
+    .is("deleted_at",null)
+    .is("locked_at",null)
     .maybeSingle();
   if(error)throw error;
-  const expected=clean(data?.admin_session_hash);
-  const expires=Date.parse(String(data?.admin_session_expires_at||""));
-  if(!expected||!Number.isFinite(expires)||expires<=Date.now())return false;
-  return constantTimeEqual(await sha256(token),expected);
-}
-
-async function identity(req:Request):Promise<Identity|null>{
-  if(await adminAuthorized(req))return {kind:"admin",id:"admin",name:"Admin"};
-  return await customerIdentity(req);
+  if(!account||(account.role!=="user"&&account.role!=="admin"))return null;
+  const role=account.role as "user"|"admin";
+  return {
+    kind:role==="admin"?"admin":"customer",
+    id:String(account.id),
+    name:clean(account.display_name)||clean(account.username)||"Khách hàng",
+    username:clean(account.username),
+    role
+  };
 }
 
 async function fetchAll(make:()=>any,size=1000){
@@ -110,6 +89,40 @@ async function fetchAll(make:()=>any,size=1000){
     if(rows.length<size)break;
   }
   return out;
+}
+
+function customerView(row:any):ChatCustomer{
+  return {
+    id:String(row.id||""),
+    name:clean(row.display_name)||clean(row.username)||"Khách hàng",
+    username:clean(row.username),
+    avatarPath:clean(row.avatar_path)
+  };
+}
+
+async function listCustomers(){
+  const rows=await fetchAll(()=>db.from("v21_accounts")
+    .select("id,username,display_name,avatar_path,role,deleted_at,locked_at")
+    .eq("role","user")
+    .is("deleted_at",null)
+    .is("locked_at",null)
+    .order("display_name",{ascending:true,nullsFirst:false})
+    .order("username",{ascending:true}));
+  return rows.map(customerView);
+}
+
+async function selectedCustomer(customerId:string):Promise<ChatCustomer>{
+  if(!customerId)throw fail("Chưa chọn khách hàng");
+  const {data,error}=await db.from("v21_accounts")
+    .select("id,username,display_name,avatar_path,role,deleted_at,locked_at")
+    .eq("id",customerId)
+    .eq("role","user")
+    .is("deleted_at",null)
+    .is("locked_at",null)
+    .maybeSingle();
+  if(error)throw error;
+  if(!data)throw fail("Khách hàng không còn hoạt động",404);
+  return customerView(data);
 }
 
 function itemView(row:any,includeCost:boolean){
@@ -128,7 +141,7 @@ function itemView(row:any,includeCost:boolean){
 function orderView(order:any,items:any[],includeCost:boolean){
   const out:any={
     id:String(order.id),
-    customerId:String(order.customer_id||""),
+    customerId:String(order.chat_account_id||""),
     customerName:clean(order.customer_name),
     orderedAt:order.ordered_at,
     returnedAt:order.returned_at||null,
@@ -140,15 +153,16 @@ function orderView(order:any,items:any[],includeCost:boolean){
   return out;
 }
 
-async function listOrders(identity:Identity){
+async function listOrders(actor:Identity){
   let query=db.from("orders")
-    .select("id,customer_id,customer_name,ordered_at,returned_at,status,total_amount,total_cost")
+    .select("id,customer_id,customer_name,chat_account_id,ordered_at,returned_at,status,total_amount,total_cost")
+    .not("chat_account_id","is",null)
     .in("status",["pending","done","returned"])
     .order("ordered_at",{ascending:false})
     .order("id",{ascending:false});
-  if(identity.kind==="customer")query=query.eq("customer_id",identity.id);
-  const orders=await fetchAll(()=>query);
-  const ids=orders.map((row:any)=>String(row.id));
+  if(actor.kind==="customer")query=query.eq("chat_account_id",actor.id);
+  const orderRows=await fetchAll(()=>query);
+  const ids=orderRows.map((row:any)=>String(row.id));
   const items:any[]=[];
   for(let i=0;i<ids.length;i+=100){
     const batch=ids.slice(i,i+100);
@@ -166,13 +180,14 @@ async function listOrders(identity:Identity){
     const bucket=grouped.get(key)||[];
     bucket.push(row);grouped.set(key,bucket);
   }
-  return orders.map((row:any)=>orderView(row,grouped.get(String(row.id))||[],identity.kind==="admin"));
+  return orderRows.map((row:any)=>orderView(row,grouped.get(String(row.id))||[],actor.kind==="admin"));
 }
 
 async function requireAdminOrder(id:string,status:OrderStatus){
   const {data,error}=await db.from("orders")
-    .select("id,status")
+    .select("id,status,chat_account_id")
     .eq("id",id)
+    .not("chat_account_id","is",null)
     .maybeSingle();
   if(error)throw error;
   if(!data)throw fail("Không tìm thấy đơn",404);
@@ -212,7 +227,7 @@ async function resolveCreateItems(raw:unknown){
   }
   const urls=requested.map(x=>x.url);
   const {data,error}=await db.from("getlink_supplier_products")
-    .select("canonical_url,product_name,source_key,source_name,display_price_vnd,input_price_vnd,stock_status,is_active")
+    .select("canonical_url,product_name,source_key,display_price_vnd,input_price_vnd,stock_status,is_active")
     .in("canonical_url",urls)
     .eq("is_active",true);
   if(error)throw error;
@@ -220,7 +235,7 @@ async function resolveCreateItems(raw:unknown){
   const byUrl=new Map(rows.map((row:any)=>[clean(row.canonical_url).toLowerCase(),row]));
   if(byUrl.size!==urls.length)throw fail("Có sản phẩm không còn tồn tại");
   const shopMap=await uniqueShopProductMap(rows.map((row:any)=>clean(row.product_name)));
-  const items=requested.map(request=>{
+  return requested.map(request=>{
     const row:any=byUrl.get(request.url);
     const price=Number(row.display_price_vnd||0)/1000;
     const cost=Number(row.input_price_vnd||0)/1000;
@@ -230,7 +245,7 @@ async function resolveCreateItems(raw:unknown){
     const item:any={
       ten:clean(row.product_name),
       sourceId:clean(shop?.source_id||""),
-      nhom:clean(shop?.group_name||row.source_name||row.source_key||"Tạp hóa"),
+      nhom:clean(shop?.group_name||row.source_key||"Tạp hóa"),
       sl:request.qty,
       gia:price,
       von:Number.isFinite(cost)&&cost>0?cost:0,
@@ -239,42 +254,48 @@ async function resolveCreateItems(raw:unknown){
     if(shop?.id)item.maSP=String(shop.id);
     return item;
   });
-  return items;
 }
 
-async function createOrder(req:Request,account:Identity){
-  if(account.kind!=="customer")throw fail("Chỉ khách hàng được gửi đơn",403);
+async function createOrder(req:Request,actor:Identity){
   const body=await req.json().catch(()=>({}));
+  let customer:ChatCustomer;
+  if(actor.kind==="customer"){
+    customer=await selectedCustomer(actor.id);
+  }else{
+    const customerId=clean(body?.customerId);
+    if(!customerId)throw fail("Chưa chọn khách hàng");
+    customer=await selectedCustomer(customerId);
+  }
   const items=await resolveCreateItems(body?.items);
   const total=items.reduce((sum:number,item:any)=>sum+Number(item.gia||0)*Number(item.sl||0),0);
   const totalCost=items.reduce((sum:number,item:any)=>sum+Number(item.von||0)*Number(item.sl||0),0);
   const now=new Date().toISOString();
   const order={
-    id:newId("DH"),maKH:account.id,tenKH:account.name,ngay:now,trangThai:"pending",
-    tongTien:total,tongVon:totalCost,items
+    id:newId("DH"),chatAccountId:customer.id,maKH:"v21:"+customer.id,tenKH:customer.name,
+    ngay:now,trangThai:"pending",tongTien:total,tongVon:totalCost,items
   };
-  const {error}=await db.rpc("taphoa_create_order_with_debt",{p_order:order,p_items:items,p_debt:null});
+  const {error}=await db.rpc("getlink_create_v21_order",{p_order:order,p_items:items});
   if(error)throw error;
   return order;
 }
 
 async function approveOrder(id:string){
   await requireAdminOrder(id,"pending");
-  const {error}=await db.rpc("taphoa_approve_order_with_debt",{
+  const {error}=await db.rpc("getlink_approve_v21_order",{
     p_id:id,p_ngay:new Date().toISOString(),p_debt_id:newId("CN")
   });
   if(error)throw error;
 }
 async function returnOrder(id:string){
   await requireAdminOrder(id,"done");
-  const {error}=await db.rpc("taphoa_cancel_order",{
+  const {error}=await db.rpc("getlink_cancel_v21_order",{
     p_id:id,p_reverse_debt:true,p_debt_id:newId("CN")
   });
   if(error)throw error;
 }
 async function deletePendingOrder(id:string){
   await requireAdminOrder(id,"pending");
-  const {error}=await db.rpc("taphoa_cancel_order",{
+  const {error}=await db.rpc("getlink_cancel_v21_order",{
     p_id:id,p_reverse_debt:false,p_debt_id:newId("CN")
   });
   if(error)throw error;
@@ -285,27 +306,34 @@ Deno.serve(async(req:Request)=>{
   if(!publicKeyAuthorized(req))return json(req,{error:"unauthorized"},401);
   try{
     const path=routePath(req);
-    const who=await identity(req);
-    if(!who)return json(req,{error:"login_required"},401);
+    const actor=await chatIdentity(req);
+    if(!actor)return json(req,{error:"login_required"},401);
 
+    if(req.method==="GET"&&path==="/me"){
+      return json(req,{ok:true,account:{id:actor.id,name:actor.name,username:actor.username,role:actor.role}});
+    }
+    if(req.method==="GET"&&path==="/customers"){
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+      return json(req,{ok:true,customers:await listCustomers()});
+    }
     if(req.method==="GET"&&path==="/orders"){
-      return json(req,{ok:true,role:who.kind,orders:await listOrders(who)});
+      return json(req,{ok:true,role:actor.kind,orders:await listOrders(actor)});
     }
     if(req.method==="POST"&&path==="/orders"){
-      const order=await createOrder(req,who);
+      const order=await createOrder(req,actor);
       return json(req,{ok:true,order},201);
     }
 
     const match=path.match(/^\/orders\/([^/]+)\/(approve|return)$/);
     if(req.method==="POST"&&match){
-      if(who.kind!=="admin")return json(req,{error:"forbidden"},403);
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
       const id=decodeURIComponent(match[1]);
       if(match[2]==="approve")await approveOrder(id);else await returnOrder(id);
       return json(req,{ok:true});
     }
     const deleteMatch=path.match(/^\/orders\/([^/]+)$/);
     if(req.method==="DELETE"&&deleteMatch){
-      if(who.kind!=="admin")return json(req,{error:"forbidden"},403);
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
       await deletePendingOrder(decodeURIComponent(deleteMatch[1]));
       return json(req,{ok:true});
     }

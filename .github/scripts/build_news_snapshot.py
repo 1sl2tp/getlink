@@ -49,6 +49,15 @@ GOOGLE_HOT_QUERIES=[
  "tỷ phú",
  "lừa đảo",
 ]
+TOPIC_QUERIES={
+ "latest":["__top__",*GOOGLE_HOT_QUERIES],
+ "thoi-su":["thời sự","xã hội","chính trị"],
+ "kinh-doanh":["kinh doanh","thị trường","tài chính"],
+ "cong-nghe":["công nghệ","AI","điện thoại"],
+ "the-thao":["thể thao","bóng đá","V-League"],
+ "giai-tri":["giải trí","âm nhạc","điện ảnh"],
+ "suc-khoe":["sức khỏe","y tế","bệnh viện"],
+}
 STOP={"va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi","la","mot","nhung","cac","co","duoc","se","da","dang","ve","noi","theo","nay","hom","ngay","moi","nhat","vi","o"}
 
 def http_get(url,timeout,accept="*/*"):
@@ -82,9 +91,38 @@ def clean_text(v):
         except Exception:pass
     return unicodedata.normalize("NFC",value).replace("\ufffd","").strip()
 
-def title_is_clean(v):
+def clean_title(v,source_name=""):
+    value=plain(v)
+    source=plain(source_name)
+    if source:
+        for sep in (" - "," | "," – "," — "):
+            suffix=sep+source
+            if value.lower().endswith(suffix.lower()):
+                value=value[:-len(suffix)].strip()
+                break
+    # Remove only explicit packaging/SEO/ad labels; keep real headline words.
+    label=r"(?:quảng\s*cáo|qc|pr|advertorial|sponsored|tài\s*trợ|tin\s*tài\s*trợ|bài\s*tài\s*trợ|tin\s*hot|hot|video|ảnh|photo)"
+    value=re.sub(rf"^\s*(?:(?:\[|\()?\s*{label}\s*(?:\]|\))?\s*[:|\-–—]\s*)+", "", value, flags=re.I)
+    value=re.sub(rf"\s*(?:[:|\-–—]\s*)?(?:\[|\()?\s*{label}\s*(?:\]|\))?\s*$", "", value, flags=re.I)
+    value=re.sub(r"\s{2,}"," ",value).strip(" |:-–—")
+    return clean_text(value)
+
+def title_is_spam(v):
     value=clean_text(v)
-    if len(value)<12:return False
+    low=norm(value)
+    if not low:return True
+    if re.search(r"^(?:quang cao|qc|pr|advertorial|sponsored|tai tro)(?:\b|\s*[:\-])",low):return True
+    if re.search(r"\b(?:noi dung duoc tai tro|bai viet duoc tai tro|advertorial|sponsored content)\b",low):return True
+    if len(re.findall(r"[!]{2,}|[?]{2,}",value))>=2:return True
+    return False
+
+def title_key(v):
+    value=clean_title(v)
+    return norm(re.sub(r"\b(?:video|anh|photo|tin hot|hot)\b"," ",value,flags=re.I))
+
+def title_is_clean(v):
+    value=clean_title(v)
+    if len(value)<12 or title_is_spam(value):return False
     low=value.lower()
     if re.search(r"&(?:#\d+|#x[0-9a-f]+|[a-z]{2,12});",low,re.I):return False
     if re.search(r"(?:Ã[\x80-\xbf]|Â[\x80-\xbf]|Ä‘|â€|â€™|â€œ|â€˜|á»|áº|ðŸ|�)",value):return False
@@ -155,10 +193,7 @@ def fetch_google_query(query):
             source=e.get("source") or {}
             source_name=plain(source.get("title") if isinstance(source,dict) else "") or "Google News"
             source_href=str(source.get("href") if isinstance(source,dict) else "").strip()
-            title=plain(e.get("title"))
-            suffix=" - "+source_name
-            if source_name and title.lower().endswith(suffix.lower()):
-                title=title[:-len(suffix)].strip()
+            title=clean_title(e.get("title"),source_name)
             url=str(e.get("link") or "").strip()
             if not title or not url:continue
             summary_raw=e.get("summary") or e.get("description") or ""
@@ -184,7 +219,7 @@ def fetch_google_query(query):
         return []
 
 def near(a,b):
-    if norm(a.get("title"))==norm(b.get("title")) and norm(a.get("title")):return True
+    if title_key(a.get("title"))==title_key(b.get("title")) and title_key(a.get("title")):return True
     c,j,o=sim(a.get("title"),b.get("title"))
     if c>=4 and (o>=.72 or j>=.58):return True
     c,j,o=sim(str(a.get("content") or a.get("summary") or "")[:1600],str(b.get("content") or b.get("summary") or "")[:1600])
@@ -427,33 +462,36 @@ def compact(item,now):
     fallback=ready_image_url(item.get("image"))
     if fallback and fallback not in images:images.insert(0,fallback)
     return {
-      "id":str(item.get("id") or ""),"title":clean_text(item.get("title")),"summary":clean_text(str(item.get("summary") or ""))[:420],
+      "id":str(item.get("id") or ""),"title":clean_title(item.get("title"),item.get("source_name")),"summary":clean_text(str(item.get("summary") or ""))[:420],
       "content":"","url":str(item.get("url") or ""),"image":images[0] if images else "",
       "images":images[:3],"published_at":str(item.get("published_at") or ""),"source_key":str(item.get("source_key") or ""),
-      "source_name":str(item.get("source_name") or ""),"topic":"latest","duplicate_count":max(1,int(item.get("duplicate_count") or 1)),
+      "source_name":str(item.get("source_name") or ""),"topic":str(item.get("topic") or "latest"),"duplicate_count":max(1,int(item.get("duplicate_count") or 1)),
       "also_sources":[],"hot_score":hot_score(item,now)
     }
 
-def build_snapshot(limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT):
+def build_snapshot(limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT,topic="latest"):
     # Discovery deliberately over-fetches. The UI target is limit, while the
     # processor keeps a larger candidate pool so missing thumbnails/bad titles
     # can be rejected and replaced before a READY snapshot is published.
-    google_queries=["__top__",*GOOGLE_HOT_QUERIES]
+    topic=topic if topic in TOPIC_QUERIES else "latest"
+    google_queries=TOPIC_QUERIES[topic]
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         google_batches=list(pool.map(fetch_google_query,google_queries))
     items=process_items([x for batch in google_batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
     items=[x for x in items if title_is_clean(x.get("title"))]
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     pool_limit=max(limit,min(candidate_limit,len(items)))
+    for x in items:x["topic"]=topic
     rows=[compact(x,now) for x in items[:pool_limit] if x.get("title") and x.get("url")]
     newest=max((iso(x.get("published_at")) for x in rows),default=now)
     return {"version":5,"generated_at":now.isoformat().replace("+00:00","Z"),"newest_published_at":newest.isoformat().replace("+00:00","Z"),
       "newest_age_seconds":max(0,int((now-newest).total_seconds())),"strategy":"google-news-rss-only-snapshot",
       "phase":"candidate","storage":"git-ephemeral-branch","database":False,"query_count":len(google_queries),
-      "target_count":limit,"candidate_count":len(rows),"items":rows}
+      "topic":topic,"target_count":limit,"candidate_count":len(rows),"items":rows}
 
-def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT):
+def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT,topic="latest"):
     data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
+    topic=str(data.get("topic") or topic or "latest")
     items=list(data.get("items") or [])[:candidate_limit]
     candidates=list(items[:RICH_IMAGE_LIMIT])
     if candidates:
@@ -481,6 +519,7 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=D
     ready=ready[:limit]
     if not ready:
         raise SystemExit("No READY news items; keep previous snapshot")
+    for x in ready:x["topic"]=topic
     data["items"]=[compact(x,now) for x in ready]
     data["version"]=5
     data["phase"]="rich"
@@ -502,14 +541,15 @@ def main():
     p.add_argument("--enrich-only",action="store_true")
     p.add_argument("--limit",type=int,default=DEFAULT_LIMIT)
     p.add_argument("--candidate-limit",type=int,default=DISCOVERY_CANDIDATE_LIMIT)
+    p.add_argument("--topic",choices=sorted(TOPIC_QUERIES),default="latest")
     a=p.parse_args()
     limit=max(20,min(100,a.limit))
     candidate_limit=max(limit,min(240,a.candidate_limit))
     if a.enrich_only:
         if not a.input:raise SystemExit("--input is required with --enrich-only")
-        enrich_snapshot(a.input,a.output,limit,candidate_limit)
+        enrich_snapshot(a.input,a.output,limit,candidate_limit,a.topic)
         return
-    snap=build_snapshot(limit,candidate_limit)
+    snap=build_snapshot(limit,candidate_limit,a.topic)
     if not snap["items"]:raise SystemExit("No news items fetched; keep previous snapshot")
     out=pathlib.Path(a.output);out.parent.mkdir(parents=True,exist_ok=True)
     out.write_text(json.dumps(snap,ensure_ascii=False,separators=(",",":"))+"\n",encoding="utf-8")

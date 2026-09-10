@@ -107,7 +107,7 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000',APP)
         self.assertIn('cache:"force-cache"',APP)
         self.assertIn('https://wsrv.nl/',APP)
-        self.assertIn('loading="'+(eager?"eager":"lazy")+'',APP)
+        self.assertIn('const eager=index<(compact?6:12);',APP)
 
     def test_quick_reader_flows_images_through_article_and_swipes(self):
         self.assertIn('news-quick-hero',APP)

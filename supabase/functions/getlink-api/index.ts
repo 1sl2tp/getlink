@@ -2602,7 +2602,7 @@ function routePath(req:Request){
 }
 
 
-type NewsTopicKey="latest"|"thoi-su"|"kinh-doanh"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
+type NewsTopicKey="latest"|"thoi-su"|"kinh-doanh"|"tap-hoa"|"cong-nghe"|"the-thao"|"giai-tri"|"suc-khoe";
 type NewsItem={
   id:string;
   title:string;
@@ -2623,6 +2623,7 @@ const NEWS_TOPICS:{key:NewsTopicKey;name:string;query:string}[]=[
   {key:"latest",name:"Mới nhất",query:""},
   {key:"thoi-su",name:"Thời sự",query:"\"thời sự\" OR \"xã hội\" OR \"chính trị\""},
   {key:"kinh-doanh",name:"Kinh doanh",query:"\"kinh doanh\" OR \"thị trường\" OR \"tài chính\""},
+  {key:"tap-hoa",name:"Tạp hóa",query:"\"thuế\" OR \"an toàn vệ sinh thực phẩm\" OR \"hàng giả\" OR \"hàng nhái\" OR \"hộ kinh doanh\""},
   {key:"cong-nghe",name:"Công nghệ",query:"\"công nghệ\" OR \"AI\" OR \"điện thoại\""},
   {key:"the-thao",name:"Thể thao",query:"\"thể thao\" OR \"bóng đá\""},
   {key:"giai-tri",name:"Giải trí",query:"\"giải trí\" OR \"âm nhạc\" OR \"điện ảnh\""},

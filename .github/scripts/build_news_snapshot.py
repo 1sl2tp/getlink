@@ -204,7 +204,8 @@ def ready_image_url(v):
       "chia-se-mxh","share-default","/setting/","/settings/","/template/","/templates/",
       "/themes/images/","default-image","default_image","social-default",
       "google-news","google_news","googlenews","img-author","author-avatar",
-      "avatar-author","author-default","no-image","no_image","image-not-found"
+      "avatar-author","author-default","no-image","no_image","image-not-found",
+      "googletagmanager.com","fonts.googleapis.com"
     )):return ""
     if re.search(r"\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)",low):return ""
     return value
@@ -330,22 +331,68 @@ def dedupe(items):
 
 def is_noise_item(item):
     title=norm(item.get("title"))
+    source=norm(item.get("source_name"))
     if len(title)<12:return True
+    if re.match(r"^(?:video|clip|livestream|truc tiep)\b",title):return True
+    if re.match(r"^trang dia phuong\b",title):return True
     if re.match(r"^tin [a-z0-9 ]+ tin tuc\b",title):return True
     if title in {"tin moi","tin nong","tin hot","tin tuc","the thao","kinh doanh","giai tri"}:return True
     raw=str(item.get("url") or "")
     if "news.google.com/" not in raw:
         try:
             u=urllib.parse.urlparse(raw)
+            host=(u.hostname or "").lower().removeprefix("www.")
             path=(u.path or "").lower()
             query=(u.query or "").lower()
             if "/tag/" in path or "/tags/" in path or "page=" in query:return True
+            if re.match(r"^congan\.[^.]+\.gov\.vn$",host):return True
         except Exception:pass
+    if re.match(r"^(?:cong an tinh|cong an thanh pho|cong an tp)\b",source):return True
     return False
+def _news_image_key(value):
+    value=ready_image_url(value)
+    if not value:return ""
+    try:
+        u=urllib.parse.urlparse(value)
+        return u.scheme.lower()+"://"+(u.hostname or "").lower()+(u.path or "")
+    except Exception:return value
+
+def suppress_reused_news_images(items,min_reuse=3):
+    counts={}
+    for item in items:
+        seen=set()
+        for raw in [item.get("image"),*(item.get("images") or [])]:
+            key=_news_image_key(raw)
+            if key and key not in seen:
+                seen.add(key);counts[key]=counts.get(key,0)+1
+    repeated={key for key,count in counts.items() if count>=max(2,int(min_reuse or 3))}
+    out=[]
+    for item in items:
+        row=dict(item);images=[]
+        for raw in [*(item.get("images") or []),item.get("image")]:
+            url=ready_image_url(raw);key=_news_image_key(url)
+            if url and key not in repeated and url not in images:images.append(url)
+        row["images"]=images[:8]
+        row["image"]=images[0] if images else ""
+        out.append(row)
+    return out
+
+def diversify_news_sources(items,limit,max_per_source=2):
+    limit=max(0,int(limit or 0));cap=max(1,int(max_per_source or 1))
+    counts={};out=[]
+    for item in items:
+        key=norm(item.get("source_key") or item.get("source_name"))
+        if not key:
+            try:key=(urllib.parse.urlparse(str(item.get("url") or "")).hostname or "").lower()
+            except Exception:key=""
+        if key and counts.get(key,0)>=cap:continue
+        if key:counts[key]=counts.get(key,0)+1
+        out.append(item)
+        if len(out)>=limit:break
+    return out
 
 def process_items(items):
     return [x for x in dedupe(items) if not is_noise_item(x)]
-
 def meta_images(text,base):
     out=[]
     for tag in re.findall(r"<meta\b[^>]*>",text,re.I):
@@ -603,6 +650,7 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=D
                 if i is not None:items[i]=enriched
     now=dt.datetime.now(dt.timezone.utc)
     items=process_items(items)
+    items=suppress_reused_news_images(items)
     rejected_title=sum(1 for x in items if not title_is_clean(x.get("title")))
     rejected_url=sum(1 for x in items if title_is_clean(x.get("title")) and "news.google.com/" in str(x.get("url") or ""))
     rejected_image=0
@@ -613,7 +661,7 @@ def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT,candidate_limit=D
         if not image:rejected_image+=1
     ready=[x for x in items if ready_item(x)]
     ready.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
-    ready=ready[:limit]
+    ready=diversify_news_sources(ready,limit=limit,max_per_source=2)
     if not ready:
         raise SystemExit("No READY news items; keep previous snapshot")
     for x in ready:x["topic"]=topic

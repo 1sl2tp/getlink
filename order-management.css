@@ -176,22 +176,29 @@
 }
 
 /* UI/UX audit pass: operational density + accessible interaction */
-.order-manager,
-.order-work-nav,
-.order-cart-actions{
+:root{
   --order-touch:44px;
-  --order-list-gap:8px;
   --order-focus:#2f6fad;
   --order-selected:#2d7a4d;
 }
+.order-manager,
+.order-work-nav,
+.order-cart-actions{
+  --order-list-gap:8px;
+}
 
 /* Keep controls physically easy to hit without making the layout visually loose. */
+.order-manager-modes button,
 .order-manager-tabs button,
 .order-card-detail-toggle,
 .order-card-actions button,
 .order-work-nav button,
 .order-cart-actions button,
+.order-manager-entry,
+.order-customer-inline,
 #orderManagerClose,
+#orderCustomerPickerClose,
+#orderCustomerSearch,
 .order-manager-tool-actions button,
 .debt-payment-form button,
 .debt-payment-form input{
@@ -201,17 +208,23 @@
 
 .order-manager button,
 .order-work-nav button,
-.order-cart-actions button{
+.order-cart-actions button,
+.order-manager-entry,
+.order-customer-inline{
   transition:background-color .14s ease,border-color .14s ease,color .14s ease,transform .08s ease;
 }
 .order-manager button:active,
 .order-work-nav button:active,
-.order-cart-actions button:active{
+.order-cart-actions button:active,
+.order-manager-entry:active,
+.order-customer-inline:active{
   transform:translateY(1px);
 }
 .order-manager :is(button,input):focus-visible,
 .order-work-nav button:focus-visible,
-.order-cart-actions button:focus-visible{
+.order-cart-actions button:focus-visible,
+.order-manager-entry:focus-visible,
+.order-customer-inline:focus-visible{
   outline:2px solid var(--order-focus);
   outline-offset:2px;
 }
@@ -307,7 +320,9 @@
 @media(prefers-reduced-motion:reduce){
   .order-manager button,
   .order-work-nav button,
-  .order-cart-actions button{
+  .order-cart-actions button,
+  .order-manager-entry,
+  .order-customer-inline{
     transition:none!important;
     transform:none!important;
   }

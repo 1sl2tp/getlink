@@ -37,8 +37,9 @@ class TapHoaSalesCompletionContract(unittest.TestCase):
         self.assertIsNotNone(submit)
         body = submit.group(0)
         self.assertIn('orderFetch("/orders",{method:"POST",body})', body)
-        self.assertIn('localStorage.removeItem(QTY_KEY)', body)
-        self.assertLess(body.index('await orderFetch("/orders",{method:"POST",body})'), body.index('localStorage.removeItem(QTY_KEY)'))
+        self.assertIn('window.clearUserWorkOrderSelection();', body)
+        self.assertNotIn('localStorage.removeItem(QTY_KEY)', body)
+        self.assertLess(body.index('await orderFetch("/orders",{method:"POST",body})'), body.index('window.clearUserWorkOrderSelection();'))
         self.assertIn('activeStatus="pending"', body)
         self.assertIn('data?.order?.orderNo', body)
 

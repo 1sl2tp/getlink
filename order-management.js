@@ -613,9 +613,9 @@
     busy=true;setMainStatus("Đang gửi đơn...");
     try{
       const data=await orderFetch("/orders",{method:"POST",body});
-      localStorage.removeItem(QTY_KEY);
-      if(typeof window.renderUserWorkHome==="function")window.renderUserWorkHome();
-      if(typeof window.updateUserWorkOrderSummary==="function")window.updateUserWorkOrderSummary();
+      if(typeof window.clearUserWorkOrderSelection==="function"){
+        window.clearUserWorkOrderSelection();
+      }
       const customerName=currentRole()==="admin"?(selectedCustomer()?.name||""):"";
       const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");

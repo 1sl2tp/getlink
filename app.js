@@ -214,7 +214,7 @@ const NEWS_SOURCE_LABELS={
 };
 const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
-const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v2";
+const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v3";
 const NEWS_HOT_SNAPSHOT_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/latest.json";
 const NEWS_HOT_SNAPSHOT_MAX_AGE=8*60*1000;
 const NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000;

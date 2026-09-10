@@ -81,9 +81,12 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("google_top_feed",SCRIPT)
         self.assertIn("fetch_google_query",SCRIPT)
         self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
+        self.assertIn('GOOGLE_GENERIC_QUERIES=["Tin nóng","Tin hot"]',SCRIPT)
         self.assertIn('"tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"]',SCRIPT)
-        for phrase in ["Tin nóng","Tin hot","Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
-            self.assertIn(f'"{phrase}"',SCRIPT)
+        ordered=["Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","bãi nhiệm","cách chức","bổ nhiệm","tạm giam","khởi tố","khám xét","tổng thống","lãi","thuế","thủ tướng","chứng khoán","chủ tịch","tỷ phú","lừa đảo"]
+        hot=SCRIPT[SCRIPT.index('GOOGLE_HOT_QUERIES=['):SCRIPT.index('GOOGLE_GENERIC_QUERIES=')]
+        positions=[hot.index(f'"{phrase}"') for phrase in ordered]
+        self.assertEqual(positions,sorted(positions))
         self.assertIn("feedparser.parse",SCRIPT)
         self.assertIn("process_items",SCRIPT)
         self.assertIn("ftfy_fix_text",SCRIPT)

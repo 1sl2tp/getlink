@@ -1,0 +1,45 @@
+name: Smoke GETLINK order auth
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - feature/order-management
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    env:
+      ORDER_URL: https://gcnoahqsrquxkwkjbuxy.supabase.co/functions/v1/getlink-orders
+      API_KEY: sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w
+    steps:
+      - name: Public key is required
+        run: |
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' "$ORDER_URL/orders")
+          cat /tmp/body
+          test "$code" = "401"
+          grep -q '"error":"unauthorized"' /tmp/body
+      - name: Customer session is required
+        run: |
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' -H "apikey: $API_KEY" "$ORDER_URL/orders")
+          cat /tmp/body
+          test "$code" = "401"
+          grep -q '"error":"login_required"' /tmp/body
+      - name: Invalid customer token is rejected
+        run: |
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' -H "apikey: $API_KEY" -H "x-taphoa-session: invalid-order-smoke-token" "$ORDER_URL/orders")
+          cat /tmp/body
+          test "$code" = "401"
+          grep -q '"error":"login_required"' /tmp/body
+      - name: Invalid admin token is rejected
+        run: |
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' -H "apikey: $API_KEY" -H "x-getlink-admin: invalid-order-smoke-admin" "$ORDER_URL/orders")
+          cat /tmp/body
+          test "$code" = "401"
+          grep -q '"error":"login_required"' /tmp/body
+      - name: CORS preflight is accepted
+        run: |
+          code=$(curl -sS -o /tmp/body -w '%{http_code}' -X OPTIONS -H "Origin: https://get.taphoa.xyz" -H "Access-Control-Request-Method: POST" "$ORDER_URL/orders")
+          test "$code" = "204"

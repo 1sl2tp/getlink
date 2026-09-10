@@ -191,8 +191,18 @@ def entry_images(entry):
 
 def fetch_google_query(query):
     feed_url=google_top_feed() if query=="__top__" else google_query_feed(query)
+    body=None
+    last_error=None
+    for attempt in range(3):
+        try:
+            body,_=http_get(feed_url,FEED_TIMEOUT,"application/rss+xml, application/xml, text/xml, */*;q=0.8")
+            break
+        except Exception as exc:
+            last_error=exc
+            if attempt<2:
+                time.sleep(0.8*(attempt+1))
     try:
-        body,_=http_get(feed_url,FEED_TIMEOUT,"application/rss+xml, application/xml, text/xml, */*;q=0.8")
+        if body is None:raise last_error or RuntimeError("google_feed_unavailable")
         feed=feedparser.parse(body); rows=[]
         for e in list(feed.entries)[:30]:
             source=e.get("source") or {}

@@ -14,8 +14,10 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("google-news-rss-only-snapshot",SCRIPT)
         self.assertIn('"database":False',SCRIPT)
         self.assertNotIn("supabase.table",SCRIPT.lower())
-        self.assertNotIn("insert(",SCRIPT)
-        self.assertNotIn("update(",SCRIPT)
+        self.assertNotIn("supabase.table",SCRIPT.lower())
+        self.assertNotIn(".table(",SCRIPT)
+        self.assertNotIn(".insert(",SCRIPT)
+        self.assertNotIn(".update(",SCRIPT)
 
     def test_snapshot_refreshes_at_fastest_github_schedule(self):
         self.assertIn('cron: "*/5 * * * *"',WORKFLOW)
@@ -23,8 +25,8 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("news-cache",WORKFLOW)
         self.assertIn("googlenewsdecoder==0.1.7",WORKFLOW)
         self.assertIn("ftfy==6.3.1",WORKFLOW)
-        self.assertIn("Build Google News discovery snapshot",WORKFLOW)
-        self.assertIn("Resolve article URLs and thumbnails",WORKFLOW)
+        self.assertIn("Build Google News candidate snapshot",WORKFLOW)
+        self.assertIn("Resolve URLs, clean titles and require thumbnails",WORKFLOW)
         self.assertIn("Publish complete READY set atomically",WORKFLOW)
         self.assertIn("matrix:",WORKFLOW)
         self.assertIn("topic: thoi-su",WORKFLOW)

@@ -2,7 +2,7 @@ name: Refresh READY news snapshots
 
 # READY snapshots are rebuilt only after the producer's quality gate has
 # rejected publisher boilerplate, video/clip cards, obvious local portal noise,
-# repeated template images, and publisher floods.
+# repeated template images, publisher floods, and non-article image chrome.
 
 on:
   schedule:

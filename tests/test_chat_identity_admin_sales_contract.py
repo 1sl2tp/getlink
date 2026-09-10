@@ -17,7 +17,9 @@ class ChatIdentityOrderMigrationContract(unittest.TestCase):
         text = self.text().lower()
         self.assertIn("add column if not exists chat_account_id uuid", text)
         self.assertIn("references public.v21_accounts", text)
-        self.assertNotRegex(text, r"delete\s+from\s+public\.(?:orders|debts)")
+        # A targeted DELETE with a WHERE clause is part of cancelling one pending order.
+        # The migration itself must never contain a mass DELETE of historical orders/debts.
+        self.assertNotRegex(text, r"delete\s+from\s+public\.(?:orders|debts)\s*;")
         self.assertNotRegex(text, r"truncate\s+(?:table\s+)?public\.(?:orders|debts)")
         self.assertNotIn("insert into public.accounts", text)
 

@@ -158,3 +158,19 @@
 .order-card.expanded .order-card-detail-toggle{background:#f8fafc}
 .order-card.expanded .order-card-items{border-top:1px solid #eef0f2}
 @media(max-width:639px){.order-card-detail-toggle{min-height:32px;padding:0 10px;font-size:11.5px}}
+
+
+/* Tạp hóa order workflow parity */
+.order-action-secondary{border:1px solid #d5dbe2;background:#fff;color:#4a5969}
+#orderDeleteAllPendingButton{border-color:#e4c9c9;color:#963f3f;background:#fff8f8}
+.order-cart-actions{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto}
+.order-cart-actions[hidden],.order-cart-actions button[hidden]{display:none!important}
+.order-cart-actions button{min-height:34px;padding:0 10px;border:1px solid #d9dfe5;border-radius:8px;background:#fff;color:#4e5a68;font:650 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
+.order-cart-actions [data-order-cart-action="quick"]{border-color:#b9d8c4;background:#f1f9f4;color:#17683b}
+.order-cart-actions [data-order-cart-action="update"]{border-color:#afc8e6;background:#f2f7fd;color:#245f9e}
+@media(max-width:639px){
+  .order-cart-actions{gap:4px}
+  .order-cart-actions button{min-height:32px;padding:0 8px;font-size:11px}
+  .order-cart-actions.editing{flex:1}
+  .order-cart-actions.editing button{flex:1}
+}

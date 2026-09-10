@@ -183,3 +183,58 @@ grant execute on function public.getlink_sales_update_pending_order(uuid,uuid,js
 grant execute on function public.getlink_sales_delete_pending_order(uuid,uuid) to service_role;
 grant execute on function public.getlink_sales_delete_all_pending(uuid) to service_role;
 grant execute on function public.getlink_sales_create_quick_sale(jsonb,jsonb) to service_role;
+
+
+create or replace function public.getlink_sales_sync_state(
+  p_actor_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path to 'public'
+as $function$
+declare
+  v_actor_role text;
+  v_orders_count bigint:=0;
+  v_orders_max timestamptz;
+  v_orders_versions bigint:=0;
+  v_debt_count bigint:=0;
+  v_debt_max timestamptz;
+begin
+  select role into v_actor_role
+  from public.v21_accounts
+  where id=p_actor_id
+    and role in ('user','admin')
+    and deleted_at is null
+    and locked_at is null;
+  if v_actor_role is null then raise exception 'Invalid GETLINK actor'; end if;
+
+  if v_actor_role='user' then
+    select count(*),max(updated_at),coalesce(sum(version),0)
+      into v_orders_count,v_orders_max,v_orders_versions
+    from public.getlink_sales_orders
+    where customer_account_id=p_actor_id;
+
+    select count(*),max(created_at)
+      into v_debt_count,v_debt_max
+    from public.getlink_debt_ledger
+    where customer_account_id=p_actor_id;
+  else
+    select count(*),max(updated_at),coalesce(sum(version),0)
+      into v_orders_count,v_orders_max,v_orders_versions
+    from public.getlink_sales_orders;
+
+    select count(*),max(created_at)
+      into v_debt_count,v_debt_max
+    from public.getlink_debt_ledger;
+  end if;
+
+  return jsonb_build_object(
+    'ordersVersion',v_orders_count::text||':'||coalesce(v_orders_max::text,'')||':'||v_orders_versions::text,
+    'debtVersion',v_debt_count::text||':'||coalesce(v_debt_max::text,'')
+  );
+end;
+$function$;
+
+revoke all on function public.getlink_sales_sync_state(uuid) from public, anon, authenticated;
+grant execute on function public.getlink_sales_sync_state(uuid) to service_role;

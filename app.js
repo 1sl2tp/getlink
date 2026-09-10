@@ -5016,6 +5016,22 @@ function clearUserWorkOrderSelection(){
   updateUserWorkOrderSummary();
 }
 
+function loadUserWorkOrderSelection(order){
+  const map={};
+  for(const item of Array.isArray(order?.items)?order.items:[]){
+    const url=String(item?.url||"").trim();
+    const qty=Math.max(0,Math.round(Number(item?.qty||0)));
+    if(url&&qty>0)map[url]=qty;
+  }
+  writeUserWorkQtyMap(map);
+  mobileUserScope="mine";
+  userWorkDesktopScope="mine";
+  mobileUserScopeViewCache.delete("mine");
+  renderUserWorkHome();
+  updateUserWorkOrderSummary();
+  return map;
+}
+
 function updateUserWorkOrderSummary(){
   const selected=userWorkSelectedItems();
   const text="Đã chọn "+selected.length+" sản phẩm";
@@ -6549,6 +6565,7 @@ if(userWorkHome){
 
 window.userWorkSelectedItems=userWorkSelectedItems;
 window.clearUserWorkOrderSelection=clearUserWorkOrderSelection;
+window.loadUserWorkOrderSelection=loadUserWorkOrderSelection;
 window.renderUserWorkHome=renderUserWorkHome;
 window.updateUserWorkOrderSummary=updateUserWorkOrderSummary;
 

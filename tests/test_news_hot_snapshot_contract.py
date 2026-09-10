@@ -32,10 +32,14 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("480-age",SCRIPT)
         self.assertIn('item.get("duplicate_count")',SCRIPT)
         self.assertIn('len(item.get("images") or [])',SCRIPT)
-        self.assertIn("RICH_IMAGE_LIMIT=100",SCRIPT)\n        self.assertIn("RICH_CONTENT_LIMIT=24",SCRIPT)\n        self.assertIn("RICH_WORKERS=12",SCRIPT)
+        self.assertIn("RICH_IMAGE_LIMIT=100",SCRIPT)
+        self.assertIn("RICH_CONTENT_LIMIT=24",SCRIPT)
+        self.assertIn("RICH_WORKERS=12",SCRIPT)
         self.assertIn("decode_google_url",SCRIPT)
         self.assertIn("gnewsdecoder(value,interval=0)",SCRIPT)
-        self.assertIn("enrich_article",SCRIPT)\n        self.assertIn("page_images",SCRIPT)\n        self.assertIn('"content":"",',SCRIPT)
+        self.assertIn("enrich_article",SCRIPT)
+        self.assertIn("page_images",SCRIPT)
+        self.assertIn('"content":"",',SCRIPT)
         self.assertIn('data["phase"]="rich"',SCRIPT)
         self.assertIn('"phase":"fast"',SCRIPT)
         self.assertIn("google_feed",SCRIPT)
@@ -50,7 +54,12 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
     def test_frontend_has_static_snapshot_fast_path(self):
         self.assertIn("NEWS_HOT_SNAPSHOT_URL",APP)
         self.assertIn("fetchNewsHotSnapshot",APP)
-        self.assertIn("backgroundRefreshLatestNews",APP)\n        self.assertIn("NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000",APP)\n        self.assertIn('cache:"force-cache"',APP)\n        self.assertIn("prewarmLatestNews",APP)\n        self.assertIn("https://wsrv.nl/",APP)\n        self.assertIn("bindNewsCardImages",APP)
+        self.assertIn("backgroundRefreshLatestNews",APP)
+        self.assertIn("NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000",APP)
+        self.assertIn('cache:"force-cache"',APP)
+        self.assertIn("prewarmLatestNews",APP)
+        self.assertIn("https://wsrv.nl/",APP)
+        self.assertIn("bindNewsCardImages",APP)
 
 
 if __name__=="__main__":

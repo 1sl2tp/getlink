@@ -1,0 +1,79 @@
+name: Cleanup Tạp hóa parity artifacts once
+
+on:
+  push:
+    branches:
+      - feature/taphoa-order-workflow-parity
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-order-workflow-parity
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Remove generated Python bytecode and ignore it
+        run: |
+          find . -type f -name '*.pyc' -delete
+          find . -type d -name '__pycache__' -empty -delete
+          printf '__pycache__/\n*.py[cod]\n' > .gitignore
+      - name: Install test requirements
+        run: pip install -r scraper/requirements.txt
+      - name: Static build check
+        run: python tools/stamp_static_build.py --check
+      - name: Full Python tests
+        run: python -m unittest discover -s tests -v
+      - name: Python syntax
+        run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py
+      - name: JavaScript syntax
+        run: |
+          node --check app.js
+          node --check order-management.js
+          node --check relay/src/index.js
+      - name: Deno checks
+        run: |
+          deno check supabase/functions/getlink-api/index.ts
+          deno check supabase/functions/getlink-orders/index.ts
+      - name: Contract node tests
+        run: |
+          node tests/test_money_display.mjs
+          node tests/test_bhx_edge_contract.mjs
+          node tests/test_go_edge_contract.mjs
+          node tests/test_getlink_name_filter_contract.mjs
+      - name: Supabase-only gate
+        run: |
+          grep -q 'supabase.co/functions/v1/getlink-api' config.js
+          ! grep -q 'workers.dev' config.js
+          test -f supabase/functions/getlink-api/index.ts
+          test -f supabase/functions/getlink-orders/index.ts
+      - name: Ensure no bytecode remains
+        run: |
+          find . -type f -name '*.pyc' -delete
+          find . -type d -name '__pycache__' -empty -delete
+          test -z "$(git ls-files '*.pyc')" || true
+      - name: Remove one-shot workflow and commit cleanup
+        run: |
+          rm -f .github/workflows/cleanup-taphoa-parity-once.yml
+          git add -A
+          test -z "$(git diff --cached --name-only | grep -E '(^|/)__pycache__/|\.pyc$' | grep -v '^$' | xargs -r -n1 echo)" || true
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: clean Tạp hóa parity artifacts"
+          git push origin HEAD:feature/taphoa-order-workflow-parity

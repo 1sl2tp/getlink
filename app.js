@@ -203,9 +203,9 @@ const NEWS_TOPIC_LABELS={
 };
 const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
-const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v3";
-const NEWS_HOT_SNAPSHOT_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/latest.json";
-const NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000;
+const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v4";
+const NEWS_SNAPSHOT_BASE_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/";
+const NEWS_SNAPSHOT_BUCKET_MS=5*60*1000;
 const NEWS_THUMB_WIDTH=360;
 const newsCache=new Map();
 const newsDetailCache=new Map();
@@ -220,8 +220,7 @@ let newsQuickRequest=0;
 let newsQuickCurrentId="";
 let newsQuickTouchX=0;
 let newsQuickTouchY=0;
-let newsHotSnapshotPromise=null;
-let newsHotSnapshotBucket=-1;
+const newsSnapshotPromises=new Map();
 let mobileUserAutoLoadObserver=null;
 let mobileUserAutoLoadBusy=false;
 const MOBILE_MERGE_ENABLED=false;
@@ -394,7 +393,7 @@ function writeNewsBrowserCache(topic,items){
     }));
     box[topic]={at:Date.now(),items:compact};
     const keys=Object.keys(box).sort((x,y)=>Number(box[y]?.at||0)-Number(box[x]?.at||0));
-    for(const key of keys.slice(3))delete box[key];
+    for(const key of keys.slice(Object.keys(NEWS_TOPIC_LABELS).length))delete box[key];
     localStorage.setItem(NEWS_BROWSER_CACHE_KEY,JSON.stringify(box));
   }catch{}
 }
@@ -528,25 +527,31 @@ function applyNewsPayload(data){
   newsItems=Array.isArray(data&&data.items)?data.items:[];
   newsError="";
 }
-async function fetchNewsHotSnapshot(force=false){
-  const bucket=force?Date.now():Math.floor(Date.now()/NEWS_HOT_SNAPSHOT_BUCKET_MS);
-  if(!force&&newsHotSnapshotPromise&&newsHotSnapshotBucket===bucket)return newsHotSnapshotPromise;
-  newsHotSnapshotBucket=bucket;
-  newsHotSnapshotPromise=fetch(NEWS_HOT_SNAPSHOT_URL+"?v="+bucket,{
+async function fetchNewsSnapshot(topic,force=false){
+  const key=Object.prototype.hasOwnProperty.call(NEWS_TOPIC_LABELS,topic)?topic:"latest";
+  const bucket=force?Date.now():Math.floor(Date.now()/NEWS_SNAPSHOT_BUCKET_MS);
+  const promiseKey=key+":"+bucket;
+  if(!force&&newsSnapshotPromises.has(promiseKey))return newsSnapshotPromises.get(promiseKey);
+  const promise=fetch(NEWS_SNAPSHOT_BASE_URL+encodeURIComponent(key)+".json?v="+bucket,{
     cache:force?"no-store":"force-cache",
     mode:"cors",
     credentials:"omit"
   }).then(async response=>{
     if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
     const data=await response.json();
-    if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
+    const items=Array.isArray(data&&data.items)?data.items:[];
+    if(!items.length)throw new Error("news_snapshot_empty");
     if(String(data.phase||"")!=="rich"||data.ready!==true)throw new Error("news_snapshot_not_ready");
+    if(items.some(item=>!String(item&&item.title||"").trim()||!String(item&&item.image||"").trim()||String(item&&item.url||"").includes("news.google.com/"))){
+      throw new Error("news_snapshot_invalid_ready_item");
+    }
     return data;
   }).catch(error=>{
-    if(newsHotSnapshotBucket===bucket)newsHotSnapshotPromise=null;
+    newsSnapshotPromises.delete(promiseKey);
     throw error;
   });
-  return newsHotSnapshotPromise;
+  newsSnapshotPromises.set(promiseKey,promise);
+  return promise;
 }
 function prewarmLatestNews(){
   const browser=readNewsBrowserCache("latest");
@@ -554,7 +559,7 @@ function prewarmLatestNews(){
     newsCache.set("latest",{at:browser.at,items:browser.items});
     if(newsTopic==="latest"&&!newsItems.length)newsItems=browser.items;
   }
-  fetchNewsHotSnapshot(false)
+  fetchNewsSnapshot("latest",false)
     .then(data=>{
       const items=Array.isArray(data&&data.items)?data.items:[];
       if(!items.length)return;
@@ -596,32 +601,21 @@ function ensureNewsLoaded(force=false){
   const seq=++newsRequestSeq;
   refreshNewsViews();
 
-  const finish=(data,cacheKey=key)=>{
-    if(seq!==newsRequestSeq)return false;
-    const items=Array.isArray(data&&data.items)?data.items:[];
-    if(!items.length)return false;
-    newsCache.set(cacheKey,{at:Date.now(),items});
-    writeNewsBrowserCache(cacheKey,items);
-    if(newsTopic===cacheKey){
-      newsItems=items;
-      newsError="";
-    }
-    return true;
-  };
-
-  const loadPromise=key==="latest"
-    ?fetchNewsHotSnapshot(force).then(data=>{finish(data,"latest");})
-    :apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80",{cache:"default"})
-      .then(async response=>{
-        const data=await response.json().catch(()=>({}));
-        if(!response.ok)throw new Error(data.error||"Không đọc được tin");
-        finish(data,key);
-      });
-
-  loadPromise
+  fetchNewsSnapshot(key,force)
+    .then(data=>{
+      if(seq!==newsRequestSeq)return;
+      const items=Array.isArray(data&&data.items)?data.items:[];
+      if(!items.length)return;
+      newsCache.set(key,{at:Date.now(),items});
+      writeNewsBrowserCache(key,items);
+      if(newsTopic===key){
+        newsItems=items;
+        newsError="";
+      }
+    })
     .catch(error=>{
       if(seq!==newsRequestSeq)return;
-      if(!newsItems.length)newsError="Chưa đọc được gói tin sẵn sàng.";
+      if(!newsItems.length)newsError="Chưa có gói tin READY cho mục này.";
       console.debug("GETLINK news",error);
     })
     .finally(()=>{
@@ -6418,7 +6412,7 @@ window.addEventListener("resize",()=>{
   prewarmLatestNews();
   await refreshCatalog();
   setTimeout(()=>{
-    if(API&&!newsItems.length)ensureNewsLoaded(false);
+    if(!newsItems.length)ensureNewsLoaded(false);
   },800);
   if(requestId&&API&&appRole==="admin"){
     $("#importCard").hidden=false;

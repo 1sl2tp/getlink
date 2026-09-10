@@ -26,9 +26,9 @@ RICH_IMAGE_LIMIT=180
 RICH_WORKERS=16
 FEED_TIMEOUT=10
 DETAIL_TIMEOUT=6
+# Priority source order follows the user's hot-news watch list.
+# Generic "Tin nóng/Tin hot" feeds stay as broad discovery fallbacks at the end.
 GOOGLE_HOT_QUERIES=[
- "Tin nóng",
- "Tin hot",
  "Tăng giá",
  "Chiến tranh",
  "công an",
@@ -49,8 +49,9 @@ GOOGLE_HOT_QUERIES=[
  "tỷ phú",
  "lừa đảo",
 ]
+GOOGLE_GENERIC_QUERIES=["Tin nóng","Tin hot"]
 TOPIC_QUERIES={
- "latest":["__top__",*GOOGLE_HOT_QUERIES],
+ "latest":["__top__",*GOOGLE_HOT_QUERIES,*GOOGLE_GENERIC_QUERIES],
  "thoi-su":["thời sự","xã hội","chính trị"],
  "kinh-doanh":["kinh doanh","thị trường","tài chính"],
  "tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"],

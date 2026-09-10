@@ -59,7 +59,7 @@ class ChatIdentityOrderBackendContract(unittest.TestCase):
         text = self.text()
         self.assertRegex(text, r'actor\.kind\s*===\s*"customer"')
         self.assertRegex(text, r'\.eq\("customer_account_id",\s*actor\.id\)')
-        self.assertRegex(text, r'actor\.kind\s*==\s*"customer"[\s\S]{0,200}selectedCustomer\(actor\.id\)')
+        self.assertRegex(text, r'actor\.kind\s*===\s*"customer"[\s\S]{0,200}selectedCustomer\(actor\.id\)')
 
     def test_manager_reads_only_native_getlink_orders(self):
         text = self.text()

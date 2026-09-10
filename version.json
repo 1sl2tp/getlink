@@ -1,12 +1,14 @@
 {
   "version": "GETLINK",
-  "build_id": "e0160c11cdfdcbd8bbc0e254a9eadcc492ea0b9ce1bc0441ab040870773fd77e",
+  "build_id": "15379229680511e7de43b2407de8d743cc87ac7d1fe93e7f704404fb844f09d3",
   "update_policy": "auto-when-safe",
   "published_from": "github-main",
   "assets": [
     "index.html",
     "style.css",
     "config.js",
-    "app.js"
+    "app.js",
+    "order-management.js",
+    "order-management.css"
   ]
 }

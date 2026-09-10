@@ -101,13 +101,13 @@ class OrderFrontendContractTests(unittest.TestCase):
         for status in ('pending', 'done', 'returned'):
             self.assertIn(status, text)
 
-    def test_customer_login_is_shared_chat_identity_and_admin_chooses_customer(self):
+    def test_customer_access_is_chat_sourced_and_admin_chooses_customer(self):
         text = self.js_text()
-        self.assertIn("@taphoa.chat", text)
         self.assertIn("taphoa-chat-auth", text)
+        self.assertIn("taphoa-getlink-auth-request", text)
         self.assertIn("authorization", text)
         self.assertIn("orderCustomerPicker", text)
-        self.assertNotIn("taphoa-api", text)
+        self.assertNotIn("/auth/v1/token?grant_type=password", text)
         self.assertNotIn("getlink:taphoa-order-session", text)
 
     def test_order_module_has_dedicated_responsive_styles(self):

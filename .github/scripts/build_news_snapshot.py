@@ -210,6 +210,14 @@ def ready_image_url(v):
       "googletagmanager.com","fonts.googleapis.com"
     )):return ""
     if re.search(r"\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)",low):return ""
+    # Reject structural publisher chrome; no image is safer than a wrong image.
+    tiny=re.search(r"/thumb/(\d{1,3})x(\d{1,3})(?:/|$)",low)
+    if tiny and max(int(tiny.group(1)),int(tiny.group(2)))<240:return ""
+    if re.search(r"/image/images/(?:left|center|right|top|bottom)\.(?:png|jpe?g|webp)(?:[?#]|$)",low):return ""
+    if re.search(r"/docconvert/images/(?:[^/?#]+/)*(?:bg|background)\d*[-_.][^/?#]*\.(?:png|jpe?g|webp)(?:[?#]|$)",low):return ""
+    width=re.search(r"[?&](?:w|width)=(\d{1,3})(?:&|$)",low)
+    height=re.search(r"[?&](?:h|height)=(\d{1,3})(?:&|$)",low)
+    if width and height and max(int(width.group(1)),int(height.group(1)))<240:return ""
     return value
 
 def ready_item(item):
@@ -400,16 +408,13 @@ def meta_images(text,base):
     def add(value):
         u=ready_image_url(urllib.parse.urljoin(base,html.unescape(str(value or ""))))
         if u and u not in out:out.append(u)
+    # Only explicit social article-image metadata is trusted.
     for tag in re.findall(r"<meta\b[^>]*>",text,re.I):
-        km=re.search(r'\b(?:property|name|itemprop)=["\']([^"\']+)["\']',tag,re.I)
+        km=re.search(r'\b(?:property|name)=["\']([^"\']+)["\']',tag,re.I)
         cm=re.search(r'\bcontent=["\']([^"\']+)["\']',tag,re.I)
         key=km.group(1).lower() if km else ""
-        if key not in {"og:image","og:image:url","og:image:secure_url","twitter:image","twitter:image:src","image","thumbnail","thumbnailurl"} or not cm:continue
+        if key not in {"og:image","og:image:url","og:image:secure_url","twitter:image","twitter:image:src"} or not cm:continue
         add(cm.group(1))
-    for tag in re.findall(r"<link\b[^>]*>",text,re.I):
-        if not re.search(r'\brel=["\'][^"\']*(?:image_src|preload)[^"\']*["\']',tag,re.I):continue
-        hm=re.search(r'\bhref=["\']([^"\']+)["\']',tag,re.I)
-        if hm:add(hm.group(1))
     return out
 def article_host(base):
     try:return (urllib.parse.urlparse(str(base or "")).hostname or "").lower().removeprefix("www.")
@@ -512,6 +517,9 @@ def page_images(text,base):
         try:nodes=root.select("figure,picture,img,amp-img")
         except Exception:nodes=[]
         for tag in nodes:
+            name=str(getattr(tag,"name","") or "").lower()
+            parent=str(getattr(getattr(tag,"parent",None),"name","") or "").lower()
+            if name in ("img","amp-img") and parent not in ("figure","picture","p"):continue
             u=image_from_tag(tag,base)
             if u and u not in out:out.append(u)
             if len(out)>=8:break

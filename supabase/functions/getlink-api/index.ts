@@ -2745,6 +2745,13 @@ function newsUsableImageUrl(value:unknown,base=""){
   const low=url.toLowerCase();
   if(NEWS_BAD_IMAGE_FRAGMENTS.some((fragment)=>low.includes(fragment)))return "";
   if(/\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)/i.test(low))return "";
+  const tiny=low.match(/\/thumb\/(\d{1,3})x(\d{1,3})(?:\/|$)/);
+  if(tiny&&Math.max(Number(tiny[1])||0,Number(tiny[2])||0)<240)return "";
+  if(/\/image\/images\/(?:left|center|right|top|bottom)\.(?:png|jpe?g|webp)(?:[?#]|$)/i.test(low))return "";
+  if(/\/docconvert\/images\/(?:[^/?#]+\/)*(?:bg|background)\d*[-_.][^/?#]*\.(?:png|jpe?g|webp)(?:[?#]|$)/i.test(low))return "";
+  const width=low.match(/[?&](?:w|width)=(\d{1,3})(?:&|$)/);
+  const height=low.match(/[?&](?:h|height)=(\d{1,3})(?:&|$)/);
+  if(width&&height&&Math.max(Number(width[1])||0,Number(height[1])||0)<240)return "";
   return url;
 }
 function newsImagesFromItem(block:string,description:string,content:string,trustHtml=false){
@@ -3150,8 +3157,8 @@ function newsMetaImageValues(html:string,base:string){
   };
   const doc=newsArticleDocument(html);
   if(doc){
-    for(const node of doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:url"],meta[name="twitter:image"],meta[name="twitter:image:src"],meta[itemprop="image"],link[rel="image_src"]')){
-      add(node.getAttribute?.("content")||node.getAttribute?.("href")||"");
+    for(const node of doc.querySelectorAll('meta[property="og:image"],meta[property="og:image:url"],meta[name="twitter:image"],meta[name="twitter:image:src"]')){
+      add(node.getAttribute?.("content")||"");
     }
   }
   return values;
@@ -3175,6 +3182,13 @@ function newsArticleStripNoise(root:any,base=""){
     }catch{}
   }
 }
+function newsImageNodeIsArticleOwned(node:any){
+  const tag=String(node?.tagName||"").toLowerCase();
+  if(tag==="figure"||tag==="picture")return true;
+  if(tag!=="img"&&tag!=="amp-img")return false;
+  const parent=String(node?.parentNode?.tagName||node?.parentElement?.tagName||"").toLowerCase();
+  return parent==="figure"||parent==="picture"||parent==="p";
+}
 function newsArticleBlocks(html:string,base:string){
   const root=newsArticleRoot(html,base);
   if(!root)return [];
@@ -3191,6 +3205,7 @@ function newsArticleBlocks(html:string,base:string){
         blocks.push({type:"text",text});
       }
     }else{
+      if(!newsImageNodeIsArticleOwned(node))continue;
       const url=newsImageCandidateFromNode(node,base);
       if(url&&!seenImages.has(url)){
         seenImages.add(url);

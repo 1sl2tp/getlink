@@ -86,9 +86,13 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertRegex(text, r'qty\s*:\s*item\.qty')
         self.assertIn('JSON.stringify({items})', text)
         self.assertIn('JSON.stringify({items,customerId})', text)
-        forbidden = ["unit_price:", "gia:", "cost:", "von:", "customerName:"]
-        for token in forbidden:
+        # Local display variables such as customerName are allowed; they must not
+        # be serialized into the create-order payload. Price/cost fields are also
+        # forbidden because the server owns those values.
+        for token in ("unit_price:", "gia:", "cost:", "von:"):
             self.assertNotIn(token, text)
+        self.assertNotRegex(text, r'JSON\.stringify\(\{items(?:,customerId)?,customerName')
+        self.assertNotRegex(text, r'JSON\.stringify\(\{items[^}]*?(?:price|gia|cost|von)')
 
     def test_frontend_has_three_order_status_tabs(self):
         text = self.js_text()

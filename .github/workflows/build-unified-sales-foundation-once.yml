@@ -1,0 +1,262 @@
+name: Build unified sales foundation once
+
+on:
+  push:
+    branches: [unified-sales-foundation]
+    paths:
+      - ".github/workflows/build-unified-sales-foundation-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: pip install -r scraper/requirements.txt
+      - name: Implement shared account and sales runtime
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          # ---------- GETLINK frontend ----------
+          p=Path('app.js')
+          s=p.read_text(encoding='utf-8')
+
+          old='''let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";\nlet appRole="user";\nconst USER_CLIENT_ID_KEY="getlink:user-client-id";\n'''
+          new='''let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";\nlet appRole="user";\nconst GETLINK_CHAT_ORIGINS=new Set(["https://chat.taphoa.xyz","https://1sl2tp.github.io"]);\nlet sharedAccessToken="";\nlet sharedAccountContext=null;\nlet salesBootstrap=null;\nlet salesSelectedCustomerId="";\nlet salesBootstrapPending=null;\nlet salesSubmitBusy=false;\nconst USER_CLIENT_ID_KEY="getlink:user-client-id";\n'''
+          if old not in s: raise SystemExit('frontend state anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''function apiFetch(path,options={}){\n  const headers=new Headers(options.headers||{});\n  if(API_KEY)headers.set("apikey",API_KEY);\n  if(updateAdminToken)headers.set("x-getlink-admin",updateAdminToken);\n  return fetch(API+path,{...options,headers});\n}\n'''
+          new='''function apiFetch(path,options={}){\n  const headers=new Headers(options.headers||{});\n  if(API_KEY)headers.set("apikey",API_KEY);\n  if(updateAdminToken)headers.set("x-getlink-admin",updateAdminToken);\n  if(sharedAccessToken)headers.set("Authorization","Bearer "+sharedAccessToken);\n  return fetch(API+path,{...options,headers});\n}\n\nfunction salesAccountLabel(account){\n  if(!account)return "Chưa đăng nhập Chat";\n  return String(account.display_name||account.username||"Khách hàng").trim()||"Khách hàng";\n}\nfunction salesControlContainers(){\n  return [\n    [document.querySelector(".mobile-user-order-bar"),"mobile"],\n    [document.querySelector(".user-work-order-foot"),"desktop"]\n  ].filter(([node])=>Boolean(node));\n}\nfunction renderSalesAccountControls(){\n  const account=salesBootstrap?.account||sharedAccountContext;\n  const customers=Array.isArray(salesBootstrap?.customers)?salesBootstrap.customers:[];\n  const isAdmin=account?.role==="admin";\n  for(const [container,key] of salesControlContainers()){\n    let control=container.querySelector('[data-sales-account-control="'+key+'"]');\n    if(!control){\n      control=document.createElement("label");\n      control.className="sales-account-control";\n      control.dataset.salesAccountControl=key;\n      container.insertBefore(control,container.firstChild);\n    }\n    control.replaceChildren();\n    const caption=document.createElement("span");\n    caption.className="sales-account-caption";\n    caption.textContent=isAdmin?"Khách hàng":"Khách";\n    control.appendChild(caption);\n    if(isAdmin){\n      const select=document.createElement("select");\n      select.className="sales-customer-select";\n      select.id=key==="mobile"?"mobileSalesCustomer":"desktopSalesCustomer";\n      const empty=document.createElement("option");\n      empty.value=""; empty.textContent="Chọn khách hàng";\n      select.appendChild(empty);\n      for(const customer of customers){\n        const option=document.createElement("option");\n        option.value=String(customer.id||"");\n        option.textContent=salesAccountLabel(customer);\n        select.appendChild(option);\n      }\n      select.value=salesSelectedCustomerId;\n      select.addEventListener("change",()=>{\n        salesSelectedCustomerId=select.value;\n        document.querySelectorAll(".sales-customer-select").forEach(other=>{\n          if(other!==select)other.value=salesSelectedCustomerId;\n        });\n        updateUserWorkOrderSummary();\n      });\n      control.appendChild(select);\n    }else{\n      const value=document.createElement("strong");\n      value.className="sales-account-value";\n      value.textContent=salesAccountLabel(account);\n      control.appendChild(value);\n    }\n  }\n}\nasync function loadSalesBootstrap(force=false){\n  if(!sharedAccessToken||!sharedAccountContext){\n    salesBootstrap=null;\n    salesSelectedCustomerId="";\n    renderSalesAccountControls();\n    updateUserWorkOrderSummary();\n    return null;\n  }\n  if(salesBootstrapPending&&!force)return salesBootstrapPending;\n  const promise=apiFetch("/api/sales/bootstrap",{cache:"no-store"})\n    .then(async res=>{\n      const data=await res.json().catch(()=>({}));\n      if(!res.ok)throw new Error(data.error||"sales_bootstrap_failed");\n      salesBootstrap=data;\n      sharedAccountContext=data.account||sharedAccountContext;\n      if(sharedAccountContext?.role==="user")salesSelectedCustomerId=String(sharedAccountContext.id||"");\n      else if(!Array.isArray(data.customers)||!data.customers.some(x=>String(x.id)===salesSelectedCustomerId))salesSelectedCustomerId="";\n      renderSalesAccountControls();\n      updateUserWorkOrderSummary();\n      return data;\n    })\n    .catch(error=>{\n      console.debug("GETLINK sales bootstrap",error);\n      salesBootstrap=null;\n      renderSalesAccountControls();\n      updateUserWorkOrderSummary();\n      return null;\n    })\n    .finally(()=>{if(salesBootstrapPending===promise)salesBootstrapPending=null;});\n  salesBootstrapPending=promise;\n  return promise;\n}\nwindow.addEventListener("message",event=>{\n  if(!GETLINK_CHAT_ORIGINS.has(event.origin))return;\n  const data=event.data;\n  if(!data||data.type!=="taphoa-auth-context")return;\n  sharedAccessToken=data.authenticated?String(data.accessToken||""):"";\n  sharedAccountContext=data.authenticated&&data.account?{...data.account}:null;\n  salesBootstrap=null;\n  salesSelectedCustomerId=sharedAccountContext?.role==="user"?String(sharedAccountContext.id||""):"";\n  renderSalesAccountControls();\n  updateUserWorkOrderSummary();\n  void loadSalesBootstrap(true);\n});\n'''
+          if old not in s: raise SystemExit('apiFetch anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''function updateUserWorkOrderSummary(){\n  const selected=userWorkSelectedItems();\n  const text="Đã chọn "+selected.length+" sản phẩm";\n  const countHost=$("#userWorkSelectedCount");\n  const mobileCount=$("#mobileUserSelectedCount");\n  const send=$("#userWorkSendOrder");\n  const mobileSend=$("#mobileUserSendOrder");\n  if(countHost)countHost.textContent=text;\n  if(mobileCount)mobileCount.textContent=text;\n  if(send)send.disabled=selected.length===0;\n  if(mobileSend)mobileSend.disabled=selected.length===0;\n}\n\nfunction saveUserWorkOrderDraft(){\n  const selected=userWorkSelectedItems().map(item=>({\n    url:item.row.canonical_url,\n    name:canonicalDisplayName(item.row),\n    qty:item.qty,\n    bargain:readOwnPrice(item.row.canonical_url,"bargain")\n  }));\n  try{localStorage.setItem("getlink:work-order-draft",JSON.stringify(selected));}catch{}\n  const message="Đã giữ đơn tạm "+selected.length+" sản phẩm · bước sau sẽ nối sang Chat.";\n  const status=$("#userWorkOrderStatus");\n  const mobileStatus=$("#mobileUserOrderStatus");\n  if(status)status.textContent=message;\n  if(mobileStatus)mobileStatus.textContent=message;\n  return selected;\n}\n'''
+          new='''function updateUserWorkOrderSummary(){\n  const selected=userWorkSelectedItems();\n  const text="Đã chọn "+selected.length+" sản phẩm";\n  const countHost=$("#userWorkSelectedCount");\n  const mobileCount=$("#mobileUserSelectedCount");\n  const send=$("#userWorkSendOrder");\n  const mobileSend=$("#mobileUserSendOrder");\n  const account=salesBootstrap?.account||sharedAccountContext;\n  const customerReady=account?.role==="user"?Boolean(account?.id):Boolean(salesSelectedCustomerId);\n  const ready=Boolean(sharedAccessToken&&salesBootstrap&&customerReady&&selected.length&&!salesSubmitBusy);\n  if(countHost)countHost.textContent=text;\n  if(mobileCount)mobileCount.textContent=text;\n  if(send)send.disabled=!ready;\n  if(mobileSend)mobileSend.disabled=!ready;\n  renderSalesAccountControls();\n}\n\nasync function saveUserWorkOrderDraft(){\n  const picked=userWorkSelectedItems();\n  const status=$("#userWorkOrderStatus");\n  const mobileStatus=$("#mobileUserOrderStatus");\n  const setMessage=message=>{\n    if(status)status.textContent=message;\n    if(mobileStatus)mobileStatus.textContent=message;\n  };\n  if(!picked.length)return null;\n  if(!salesBootstrap)await loadSalesBootstrap(true);\n  const account=salesBootstrap?.account||sharedAccountContext;\n  if(!sharedAccessToken||!account){\n    setMessage("Đăng nhập Chat để gửi đơn.");\n    return null;\n  }\n  const customer_account_id=account.role==="user"?String(account.id||""):String(salesSelectedCustomerId||"");\n  if(!customer_account_id){\n    setMessage("Chọn khách hàng trước khi gửi đơn.");\n    return null;\n  }\n  const items=picked.map(item=>({\n    product_url:item.row.canonical_url,\n    qty:item.qty\n  }));\n  salesSubmitBusy=true;\n  updateUserWorkOrderSummary();\n  setMessage("Đang tạo đơn tạm...");\n  try{\n    const res=await apiFetch("/api/sales/orders",{\n      method:"POST",\n      headers:{"content-type":"application/json"},\n      body:JSON.stringify({customer_account_id,status:"pending",items})\n    });\n    const data=await res.json().catch(()=>({}));\n    if(!res.ok)throw new Error(data.error||"sales_order_failed");\n    for(const item of picked){\n      setUserWorkQty(item.row.canonical_url,0);\n      document.querySelectorAll('[data-work-url="'+CSS.escape(item.row.canonical_url)+'"] b').forEach(node=>node.textContent="0");\n    }\n    const order=data.order||{};\n    const code=order.order_no?" #"+order.order_no:"";\n    setMessage("Đã tạo đơn tạm"+code+" · Admin sẽ xác nhận giao.");\n    return order;\n  }catch(error){\n    setMessage("Chưa gửi được đơn · "+String(error&&error.message||error));\n    return null;\n  }finally{\n    salesSubmitBusy=false;\n    updateUserWorkOrderSummary();\n  }\n}\n'''
+          if old not in s: raise SystemExit('order draft anchor missing')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
+
+          # ---------- Small sales identity/customer UI ----------
+          p=Path('style.css')
+          css=p.read_text(encoding='utf-8')
+          addition='''\n\n/* Shared Chat account -> Tạp hóa sales identity. */\n.sales-account-control{\n  min-width:0;display:flex;align-items:center;gap:6px;color:#667085;font-size:10px;\n}\n.sales-account-caption{flex:0 0 auto;font-weight:650;color:#98a2b3}\n.sales-account-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#475467;font-weight:750}\n.sales-customer-select{\n  min-width:0;max-width:190px;height:30px;border:1px solid #d7dbe2;border-radius:8px;\n  background:#fff;color:#344054;padding:0 26px 0 8px;font:600 11px/1.2 inherit;outline:none;\n}\n.sales-customer-select:focus{border-color:#9bcbb4;box-shadow:0 0 0 2px #0a8f4d0d}\n@media(max-width:639px){\n  .mobile-user-order-bar{flex-wrap:wrap}\n  .mobile-user-order-bar .sales-account-control{flex:1 0 100%;height:28px}\n  .mobile-user-order-bar .sales-customer-select{flex:1;max-width:none}\n}\n'''
+          if '/* Shared Chat account -> Tạp hóa sales identity. */' not in css:
+            css+=addition
+          p.write_text(css,encoding='utf-8')
+
+          # ---------- Edge sales auth + routes ----------
+          p=Path('supabase/functions/getlink-api/index.ts')
+          e=p.read_text(encoding='utf-8')
+          old='''return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type,apikey,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};'''
+          new='''return {"access-control-allow-origin":allow,"access-control-allow-methods":"GET,POST,DELETE,OPTIONS","access-control-allow-headers":"content-type,apikey,authorization,x-getlink-internal,x-getlink-admin,x-getlink-cron","content-type":"application/json; charset=utf-8","cache-control":"no-store"};'''
+          if old not in e: raise SystemExit('cors anchor missing')
+          e=e.replace(old,new,1)
+
+          helper=r'''
+type SalesAccountRow={
+  id:string;auth_user_id:string;username:string;display_name:string;role:"admin"|"user";
+  avatar_url?:string|null;avatar_path?:string|null;locked_at?:string|null;deleted_at?:string|null;
+};
+type SalesAccountAuth=
+  | {ok:true;account:SalesAccountRow;accessToken:string}
+  | {ok:false;res:Response};
+
+async function salesAccount(req:Request):Promise<SalesAccountAuth>{
+  const header=clean(req.headers.get("authorization")||"");
+  const match=header.match(/^Bearer\s+(.+)$/i);
+  if(!match)return {ok:false,res:response(req,{error:"sales_auth_required"},401)};
+  const accessToken=clean(match[1]);
+  const {data:userData,error:userError}=await sb.auth.getUser(accessToken);
+  const authUser=userData?.user||null;
+  if(userError||!authUser?.id)return {ok:false,res:response(req,{error:"sales_auth_invalid"},401)};
+  const {data:account,error}=await sb.from("v21_accounts")
+    .select("id,auth_user_id,username,display_name,role,avatar_url,avatar_path,locked_at,deleted_at")
+    .eq("auth_user_id",authUser.id)
+    .maybeSingle();
+  if(error||!account||account.deleted_at||account.locked_at||!(account.role==="admin"||account.role==="user")){
+    return {ok:false,res:response(req,{error:"sales_account_unavailable"},403)};
+  }
+  return {ok:true,account:account as SalesAccountRow,accessToken};
+}
+function salesAdminRequired(account:SalesAccountRow){return account.role==="admin";}
+function salesPublicAccount(account:any){
+  return {
+    id:clean(account?.id),username:clean(account?.username),display_name:clean(account?.display_name),
+    role:account?.role==="admin"?"admin":"user",avatar_url:clean(account?.avatar_url||""),avatar_path:clean(account?.avatar_path||"")
+  };
+}
+async function salesOrderCustomer(account:SalesAccountRow,requestedId:unknown):Promise<string>{
+  if(account.role==="user")return account.id;
+  const id=clean(requestedId);
+  if(!id)throw new Error("sales_customer_required");
+  const {data,error}=await sb.from("v21_accounts")
+    .select("id,role,locked_at,deleted_at")
+    .eq("id",id).eq("role","user").is("locked_at",null).is("deleted_at",null).maybeSingle();
+  if(error||!data)throw new Error("sales_customer_invalid");
+  return clean(data.id);
+}
+function salesProductUrl(value:unknown):string{
+  const raw=clean(value);
+  let u:URL;
+  try{u=new URL(raw);}catch{throw new Error("sales_product_invalid");}
+  if(u.protocol!=="https:"||u.hostname.toLowerCase()!=="get.taphoa.xyz"||!u.pathname.startsWith("/nguon-hang/")){
+    throw new Error("sales_product_invalid");
+  }
+  return u.origin+u.pathname;
+}
+async function salesValidatedItems(rawItems:unknown):Promise<any[]>{
+  const incoming=Array.isArray(rawItems)?rawItems:[];
+  if(!incoming.length||incoming.length>100)throw new Error("sales_items_invalid");
+  const wanted=new Map<string,{url:string,qty:number}>();
+  for(const raw of incoming){
+    const url=salesProductUrl((raw as any)?.product_url||(raw as any)?.url);
+    const qty=Math.round(Number((raw as any)?.qty)||0);
+    if(qty<1||qty>999)throw new Error("sales_qty_invalid");
+    const key=url.toLowerCase();
+    const prior=wanted.get(key);
+    const total=(prior?.qty||0)+qty;
+    if(total>999)throw new Error("sales_qty_invalid");
+    wanted.set(key,{url,qty:total});
+  }
+  const urls=[...wanted.values()].map(x=>x.url);
+  const {data,error}=await sb.from("getlink_supplier_products")
+    .select("product_code,product_name,canonical_url,display_price_vnd,is_active,deleted_at")
+    .in("canonical_url",urls).eq("is_active",true).is("deleted_at",null);
+  if(error)throw error;
+  const products=new Map((data||[]).map((row:any)=>[clean(row.canonical_url).toLowerCase(),row]));
+  return [...wanted.entries()].map(([key,w])=>{
+    const row:any=products.get(key);
+    const price=Math.round(Number(row?.display_price_vnd)||0);
+    if(!row||price<=0)throw new Error("sales_product_unavailable");
+    return {
+      product_url:clean(row.canonical_url),product_code:clean(row.product_code),
+      product_name_snapshot:clean(row.product_name)||"Sản phẩm",qty:w.qty,unit_price_vnd:price,note:""
+    };
+  });
+}
+async function handleSalesRequest(req:Request,url:URL,route:string):Promise<Response>{
+  const auth=await salesAccount(req);
+  if(!auth.ok)return auth.res;
+  const account=auth.account;
+
+  if(req.method==="GET"&&route==="/api/sales/bootstrap"){
+    let customers:any[]=[];
+    if(account.role==="admin"){
+      const {data,error}=await sb.from("v21_accounts")
+        .select("id,username,display_name,role,avatar_url,avatar_path")
+        .eq("role","user").is("locked_at",null).is("deleted_at",null)
+        .order("display_name",{ascending:true}).order("username",{ascending:true});
+      if(error)throw error;
+      customers=(data||[]).map(salesPublicAccount);
+    }else{
+      customers=[salesPublicAccount(account)];
+    }
+    return response(req,{
+      account:salesPublicAccount(account),customers,
+      permissions:{can_select_customer:account.role==="admin",can_deliver:account.role==="admin",can_reverse:account.role==="admin"}
+    });
+  }
+
+  if(req.method==="GET"&&route==="/api/sales/orders"){
+    const requested=clean(url.searchParams.get("status")||"pending");
+    const status=["pending","delivered","reversed"].includes(requested)?requested:"pending";
+    let query=sb.from("getlink_sales_orders")
+      .select("id,order_no,customer_account_id,created_by_account_id,status,note,total_vnd,delivered_at,reversed_at,created_at,updated_at")
+      .eq("status",status).order("created_at",{ascending:false}).limit(100);
+    if(account.role==="user")query=query.eq("customer_account_id",account.id);
+    const {data,error}=await query;
+    if(error)throw error;
+    return response(req,{account:salesPublicAccount(account),status,orders:data||[]});
+  }
+
+  if(req.method==="POST"&&route==="/api/sales/orders"){
+    const body=await req.json().catch(()=>({}));
+    const customer_account_id=await salesOrderCustomer(account,body?.customer_account_id);
+    const items=await salesValidatedItems(body?.items);
+    const note=clean(body?.note||"").slice(0,500);
+    const {data,error}=await sb.rpc("getlink_sales_create_order",{
+      p_customer_account_id:customer_account_id,
+      p_created_by_account_id:account.id,
+      p_note:note,
+      p_items:items
+    });
+    if(error)throw error;
+    return response(req,{order:{...data,status:"pending"},items});
+  }
+
+  const deliverRoute=route.endsWith("/deliver");
+  const reverseRoute=route.endsWith("/reverse");
+  if(req.method==="POST"&&(deliverRoute||reverseRoute)){
+    if(!salesAdminRequired(account))return response(req,{error:"sales_admin_required"},403);
+    const parts=route.split("/").filter(Boolean);
+    const orderId=clean(parts[parts.length-2]);
+    if(!/^[0-9a-f-]{36}$/i.test(orderId))return response(req,{error:"sales_order_invalid"},400);
+    if(deliverRoute){
+      const {data,error}=await sb.rpc("getlink_sales_deliver_order",{p_order_id:orderId,p_actor_account_id:account.id});
+      if(error)throw error;
+      return response(req,{order:{...data,status:"delivered"},debt:{kind:"sale",amount_vnd:Number(data?.total_vnd||0)}});
+    }
+    const {data,error}=await sb.rpc("getlink_sales_reverse_order",{p_order_id:orderId,p_actor_account_id:account.id});
+    if(error)throw error;
+    return response(req,{order:{...data,status:"reversed"},debt:{kind:"reversal",amount_vnd:-Number(data?.total_vnd||0)}});
+  }
+
+  if(req.method==="DELETE"&&route.startsWith("/api/sales/orders/")){
+    if(!salesAdminRequired(account))return response(req,{error:"sales_admin_required"},403);
+    const orderId=clean(route.split("/").filter(Boolean).at(-1)||"");
+    if(!/^[0-9a-f-]{36}$/i.test(orderId))return response(req,{error:"sales_order_invalid"},400);
+    const {data,error}=await sb.rpc("getlink_sales_delete_pending_order",{p_order_id:orderId});
+    if(error)throw error;
+    return response(req,{deleted_id:data});
+  }
+  return response(req,{error:"sales_route_not_found"},404);
+}
+'''
+          anchor='\nDeno.serve(async(req:Request)=>{'
+          if anchor not in e: raise SystemExit('Deno serve anchor missing')
+          e=e.replace(anchor,helper+anchor,1)
+
+          old='''  if(!authorized(req))return response(req,{error:"unauthorized"},401);\n  if(req.method!=="GET"&&!writeAuthorized(req))return response(req,{error:"write_forbidden"},403);\n'''
+          new='''  if(route.startsWith("/api/sales/")){\n    try{return await handleSalesRequest(req,url,route);}\n    catch(e){\n      const code=errorText(e);\n      const status=code.includes("required")||code.includes("invalid")||code.includes("unavailable")?400:409;\n      return response(req,{error:code.slice(0,180)||"sales_failed"},status);\n    }\n  }\n\n  if(!authorized(req))return response(req,{error:"unauthorized"},401);\n  if(req.method!=="GET"&&!writeAuthorized(req))return response(req,{error:"write_forbidden"},403);\n'''
+          if old not in e: raise SystemExit('legacy auth gate anchor missing')
+          e=e.replace(old,new,1)
+          p.write_text(e,encoding='utf-8')
+          PY
+      - name: Targeted unified sales tests
+        run: python -m unittest tests.test_unified_sales_auth_contract tests.test_unified_sales_order_contract -v
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Full GETLINK verification
+        run: |
+          python tools/stamp_static_build.py --check
+          python -m unittest discover -s tests -v
+          python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py .github/scripts/build_news_snapshot.py
+          node --check app.js
+          node --check relay/src/index.js
+          curl -fsSL https://deno.land/install.sh | sh
+          export DENO_INSTALL="$HOME/.deno"
+          export PATH="$DENO_INSTALL/bin:$PATH"
+          deno check supabase/functions/getlink-api/index.ts
+      - name: Commit verified foundation
+        run: |
+          git config user.name "GETLINK Sales Foundation"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/build-unified-sales-foundation-once.yml
+          git add app.js style.css index.html version.json supabase/functions/getlink-api/index.ts supabase/migrations/20260910143000_unified_sales_core.sql tests/test_unified_sales_auth_contract.py tests/test_unified_sales_order_contract.py docs/superpowers
+          git commit -m "Add shared Chat account sales foundation"
+          git push origin HEAD:unified-sales-foundation

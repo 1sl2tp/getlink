@@ -34,10 +34,13 @@ jobs:
       - name: Preserve snapshot builder
         run: cp .github/scripts/build_news_snapshot.py /tmp/build_news_snapshot.py
 
-      - name: Build fast hot-news snapshot
-        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest.json --limit 100
+      - name: Build Google News discovery snapshot
+        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest-fast.json --limit 100
 
-      - name: Publish fast snapshot immediately
+      - name: Resolve article URLs and thumbnails
+        run: python /tmp/build_news_snapshot.py --input /tmp/getlink-news/latest-fast.json --output /tmp/getlink-news/latest.json --enrich-only --limit 100
+
+      - name: Publish complete snapshot atomically
         run: |
           git config user.name "GETLINK News Cache"
           git config user.email "actions@users.noreply.github.com"
@@ -45,18 +48,7 @@ jobs:
           git rm -rf .
           mkdir -p news
           cp /tmp/getlink-news/latest.json news/latest.json
-          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"fast\",\"history\":false,\"database\":false}" > news/meta.json
+          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
           git add news/latest.json news/meta.json
-          git commit -m "Refresh hot news snapshot"
-          git push --force origin HEAD:news-cache
-
-      - name: Enrich top stories with original images and content
-        run: python /tmp/build_news_snapshot.py --input news/latest.json --output /tmp/getlink-news/latest-rich.json --enrich-only --limit 100
-
-      - name: Replace with enriched snapshot
-        run: |
-          cp /tmp/getlink-news/latest-rich.json news/latest.json
-          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"history\":false,\"database\":false}" > news/meta.json
-          git add news/latest.json news/meta.json
-          git commit --amend --no-edit
+          git commit -m "Refresh Google News snapshot"
           git push --force origin HEAD:news-cache

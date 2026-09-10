@@ -1,0 +1,91 @@
+name: Fix mobile instant tabs once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-mobile-instant-tabs-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install test dependencies
+        run: pip install -r scraper/requirements.txt
+      - name: Patch instant mobile scope switching
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          p=Path('app.js')
+          s=p.read_text(encoding='utf-8')
+
+          old='''let mobileUserScope="mine";\nlet mobileUserCategoryKey="";\nlet mobileUserLimit=8;\n'''
+          new='''let mobileUserScope="mine";\nlet mobileUserCategoryKey="";\nlet mobileUserLimit=8;\nconst mobileUserScopeViewCache=new Map();\n'''
+          if old not in s: raise SystemExit('mobile state anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''function bindNewsCardImages(root){\n  if(!root)return;\n  root.querySelectorAll('img[data-news-fallbacks]').forEach(img=>{\n    if(img.dataset.newsFallbackBound==="1")return;\n    img.dataset.newsFallbackBound="1";\n    img.addEventListener("error",()=>{\n      let list=[];\n      try{list=JSON.parse(img.dataset.newsFallbacks||"[]");}catch{}\n      let index=Math.max(0,Number(img.dataset.newsFallbackIndex||0)||0);\n      const direct=img.dataset.newsFallbackDirect==="1";\n      if(!direct&&list[index]){\n        img.dataset.newsFallbackDirect="1";\n        img.src=list[index];\n        return;\n      }\n      index+=1;\n      if(index<list.length){\n        img.dataset.newsFallbackIndex=String(index);\n        img.dataset.newsFallbackDirect="0";\n        img.src=newsThumbUrl(list[index],Number(img.dataset.newsThumbWidth||NEWS_THUMB_WIDTH));\n        return;\n      }\n      const box=img.closest(".news-card-image");\n      if(box){\n        box.classList.add("news-card-image-empty");\n        box.innerHTML=workIconSvg("news","ui-icon");\n      }\n    });\n  });\n}\n'''
+          new='''function bindNewsCardImages(root){\n  if(!root)return;\n  root.querySelectorAll('img[data-news-fallbacks]').forEach(img=>{\n    if(img.dataset.newsFallbackBound==="1")return;\n    img.dataset.newsFallbackBound="1";\n    img.addEventListener("error",()=>{\n      let list=[];\n      try{list=JSON.parse(img.dataset.newsFallbacks||"[]");}catch{}\n      let index=Math.max(0,Number(img.dataset.newsFallbackIndex||0)||0);\n      const proxy=img.dataset.newsFallbackProxy==="1";\n      const width=Number(img.dataset.newsThumbWidth||NEWS_THUMB_WIDTH);\n      if(!proxy&&list[index]){\n        img.dataset.newsFallbackProxy="1";\n        img.src=newsThumbUrl(list[index],width);\n        return;\n      }\n      index+=1;\n      if(index<list.length){\n        img.dataset.newsFallbackIndex=String(index);\n        img.dataset.newsFallbackProxy="0";\n        img.src=list[index];\n        return;\n      }\n      const box=img.closest(".news-card-image");\n      if(box){\n        box.classList.add("news-card-image-empty");\n        box.innerHTML=workIconSvg("news","ui-icon");\n      }\n    });\n  });\n}\n'''
+          if old not in s: raise SystemExit('news fallback anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''?'<span class="news-card-image"><img src="'+escapeAttr(newsThumbUrl(image,thumbWidth))+'" data-news-fallbacks="'+escapeAttr(JSON.stringify(images))+'" data-news-fallback-index="0" data-news-fallback-direct="0" data-news-thumb-width="'+thumbWidth+'" alt="" loading="'+(eager?"eager":"lazy")+'" fetchpriority="'+priority+'" decoding="async" referrerpolicy="no-referrer"></span>'\n'''
+          new='''?'<span class="news-card-image"><img src="'+escapeAttr(image)+'" data-news-fallbacks="'+escapeAttr(JSON.stringify(images))+'" data-news-fallback-index="0" data-news-fallback-proxy="0" data-news-thumb-width="'+thumbWidth+'" alt="" loading="'+(eager?"eager":"lazy")+'" fetchpriority="'+priority+'" decoding="async" referrerpolicy="no-referrer"></span>'\n'''
+          if old not in s: raise SystemExit('news card src anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''  newsLoading=true;\n  newsError="";\n  const seq=++newsRequestSeq;\n  refreshNewsViews();\n\n  fetchNewsSnapshot(key,force)\n'''
+          new='''  newsLoading=true;\n  newsError="";\n  const seq=++newsRequestSeq;\n  // Existing READY cards stay mounted while a newer snapshot is checked.\n  // Re-rendering here would destroy decoded image nodes and make tab return slow.\n  if(!newsItems.length)refreshNewsViews();\n\n  fetchNewsSnapshot(key,force)\n'''
+          if old not in s: raise SystemExit('news loading render anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''function resetMobileUserResultsScroll(){\n  const host=$("#mobileUserResults");\n  if(!host)return;\n  host.scrollTop=0;\n}\n\nfunction renderMobileUserWork(){\n'''
+          new='''function resetMobileUserResultsScroll(){\n  const host=$("#mobileUserResults");\n  if(!host)return;\n  host.scrollTop=0;\n}\n\nfunction mobileUserScopeViewKey(scope){\n  if(scope==="news"){\n    const memory=newsCache.get(newsTopic);\n    return [\n      "news",newsTopic,newsQuery,newsItems.length,\n      String(newsItems[0]?.id||""),Number(memory?.at||0)\n    ].join("|");\n  }\n  return [scope,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");\n}\nfunction stashMobileUserScopeView(scope){\n  const host=$("#mobileUserResults");\n  if(!host||!host.childNodes.length)return false;\n  const fragment=document.createDocumentFragment();\n  while(host.firstChild)fragment.appendChild(host.firstChild);\n  mobileUserScopeViewCache.set(scope,{\n    key:mobileUserScopeViewKey(scope),\n    fragment,\n    scrollTop:host.scrollTop,\n    hasMore:host.dataset.hasMore||"0",\n    hidden:host.hidden\n  });\n  return true;\n}\nfunction restoreMobileUserScopeView(scope){\n  const host=$("#mobileUserResults");\n  const cached=mobileUserScopeViewCache.get(scope);\n  if(!host||!cached)return false;\n  if(cached.key!==mobileUserScopeViewKey(scope)){\n    mobileUserScopeViewCache.delete(scope);\n    return false;\n  }\n  host.replaceChildren(cached.fragment);\n  host.dataset.hasMore=cached.hasMore;\n  host.hidden=Boolean(cached.hidden);\n  host.classList.toggle("news-results",scope==="news");\n  host.scrollTop=Number(cached.scrollTop)||0;\n  if(scope==="news")bindNewsCardImages(host);\n  mobileUserScopeViewCache.delete(scope);\n  return true;\n}\nfunction switchMobileUserScope(next){\n  next=MOBILE_USER_SCOPES.includes(next)?next:"mine";\n  if(next===mobileUserScope)return;\n  stashMobileUserScopeView(mobileUserScope);\n  mobileUserScope=next;\n  mobileUserCategoryKey="";\n  mobileUserLimit=8;\n\n  const search=$("#mobileUserSearch");\n  const newsMode=mobileUserScope==="news";\n  if(search&&document.activeElement!==search)search.value=newsMode?newsQuery:libraryQuery;\n  if(search)search.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";\n  renderMobileUserSourceTabs();\n\n  if(restoreMobileUserScopeView(mobileUserScope)){\n    const empty=$("#mobileUserEmpty");\n    const orderBar=document.querySelector(".mobile-user-order-bar");\n    const orderStatus=$("#mobileUserOrderStatus");\n    if(newsMode){\n      if(mobileUserAutoLoadObserver){\n        mobileUserAutoLoadObserver.disconnect();\n        mobileUserAutoLoadObserver=null;\n      }\n      const merge=$("#mobileMergePanel");\n      if(merge)merge.hidden=true;\n      const visible=newsVisibleItems();\n      if(empty){\n        empty.hidden=newsLoading||visible.length>0;\n        empty.textContent=newsError||"Chưa có tin phù hợp.";\n      }\n      if(orderBar)orderBar.hidden=true;\n      if(orderStatus)orderStatus.hidden=true;\n      ensureNewsLoaded(false);\n    }else{\n      const rows=mobileUserRows();\n      if(empty)empty.hidden=rows.length!==0;\n      renderMobileMergePanel();\n      const marketMode=mobileUserScope==="market";\n      if(orderBar)orderBar.hidden=marketMode;\n      if(orderStatus)orderStatus.hidden=marketMode;\n      setupMobileUserAutoLoad();\n      updateUserWorkOrderSummary();\n    }\n    return;\n  }\n  renderMobileUserWork();\n}\n\nfunction renderMobileUserWork(){\n'''
+          if old not in s: raise SystemExit('mobile render helper anchor missing')
+          s=s.replace(old,new,1)
+
+          old='''    const mobileScope=e.target.closest("[data-mobile-scope]");\n    if(mobileScope){\n      const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)\n        ?mobileScope.dataset.mobileScope\n        :"mine";\n      mobileUserScope=next;\n      mobileUserCategoryKey="";\n      mobileUserLimit=8;\n      renderUserWorkHome();\n      resetMobileUserResultsScroll();\n      return;\n    }\n'''
+          new='''    const mobileScope=e.target.closest("[data-mobile-scope]");\n    if(mobileScope){\n      const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)\n        ?mobileScope.dataset.mobileScope\n        :"mine";\n      switchMobileUserScope(next);\n      return;\n    }\n'''
+          if old not in s: raise SystemExit('mobile scope click anchor missing')
+          s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
+      - name: Targeted instant-tab regression
+        run: python -m unittest tests.test_mobile_scope_instant_cache -v
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Full verification
+        run: |
+          python tools/stamp_static_build.py --check
+          python -m unittest discover -s tests -v
+          python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py .github/scripts/build_news_snapshot.py
+          node --check app.js
+          node --check relay/src/index.js
+          curl -fsSL https://deno.land/install.sh | sh
+          export DENO_INSTALL="$HOME/.deno"
+          export PATH="$DENO_INSTALL/bin:$PATH"
+          deno check supabase/functions/getlink-api/index.ts
+      - name: Commit verified instant-tab fix
+        run: |
+          git config user.name "GETLINK Performance Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-mobile-instant-tabs-once.yml
+          git add app.js index.html version.json
+          git commit -m "Keep mobile tabs and news images instant"
+          git push origin HEAD:main

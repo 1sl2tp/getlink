@@ -22,6 +22,21 @@ class TapHoaUiUxPassTests(unittest.TestCase):
             self.assertIn(selector, ORDER_CSS)
         self.assertIn("min-height:var(--order-touch)", ORDER_CSS)
 
+    def test_shared_touch_tokens_reach_navigation_and_customer_controls(self):
+        self.assertIn(":root{\n  --order-touch:44px;", ORDER_CSS)
+        touch_selectors = ORDER_CSS.split(
+            "/* Keep controls physically easy to hit without making the layout visually loose. */",
+            1,
+        )[1].split("{", 1)[0]
+        for selector in (
+            ".order-manager-modes button",
+            ".order-manager-entry",
+            ".order-customer-inline",
+            "#orderCustomerPickerClose",
+            "#orderCustomerSearch",
+        ):
+            self.assertIn(selector, touch_selectors)
+
     def test_order_controls_have_keyboard_and_pressed_feedback(self):
         self.assertIn(":focus-visible", ORDER_CSS)
         self.assertIn("outline:2px solid", ORDER_CSS)

@@ -1,6 +1,7 @@
 (()=>{
   "use strict";
 
+  const ACCESS_STATES=Object.freeze(["guest","user","admin"]);
   const AUTH_KEY="getlink:chat-order-auth";
   const SELECTED_CUSTOMER_KEY="getlink:order-selected-customer";
   const QTY_KEY="getlink:user-work-order-qty";
@@ -61,6 +62,7 @@
   function storeAuth(value){
     sessionStorage.setItem(AUTH_KEY,JSON.stringify(value));
     syncCustomerControls();
+    emitAccessChange();
   }
   function clearSelectedCustomer(){
     selectedCustomerId="";
@@ -76,9 +78,26 @@
     debtCustomerId="";
     clearSelectedCustomer();
     syncCustomerControls();
+    emitAccessChange();
   }
   function currentAccount(){return readAuth()?.account||null}
-  function currentRole(){return currentAccount()?.role==="admin"?"admin":"user"}
+  function currentAccessState(){
+    const auth=readAuth();
+    if(!auth)return "guest";
+    return auth.account?.role==="admin"?"admin":"user";
+  }
+  function accessSnapshot(){
+    const auth=readAuth();
+    return {
+      state:currentAccessState(),
+      account:auth?.account?{...auth.account}:null,
+      source:auth?.source==="chat"?"chat":null
+    };
+  }
+  function emitAccessChange(){
+    document.dispatchEvent(new CustomEvent("getlink-access-change",{detail:accessSnapshot()}));
+  }
+  function currentRole(){return currentAccessState()}
   function selectedCustomer(){return customers.find(row=>String(row.id)===String(selectedCustomerId))||null}
 
   function authHeaders(token,jsonBody=false){
@@ -662,7 +681,9 @@
     if(event.key==="Escape"&&!document.getElementById("orderManager")?.hidden)closeManager();
   });
 
+  window.GETLINK_ACCESS_CONTEXT={states:ACCESS_STATES,snapshot:accessSnapshot};
   injectUi();
+  emitAccessChange();
   requestChatAuth();
   window.setInterval(()=>{ensureInlineCustomerButtons();syncCustomerControls();},1500);
 })();

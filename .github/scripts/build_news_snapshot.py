@@ -569,7 +569,11 @@ def build_snapshot(limit=DEFAULT_LIMIT,candidate_limit=DISCOVERY_CANDIDATE_LIMIT
     # can be rejected and replaced before a READY snapshot is published.
     topic=topic if topic in TOPIC_QUERIES else "latest"
     google_queries=TOPIC_QUERIES[topic]
-    # Keep Google RSS requests deliberately low-concurrency; the seven topic jobs\n    # can otherwise burst enough requests to trigger transient HTTP 503 responses.\n    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:\n        google_batches=list(pool.map(fetch_google_query,google_queries))\n    items=process_items([x for batch in google_batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
+    # Keep Google RSS requests deliberately low-concurrency; the seven topic jobs
+    # can otherwise burst enough requests to trigger transient HTTP 503 responses.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        google_batches=list(pool.map(fetch_google_query,google_queries))
+    items=process_items([x for batch in google_batches for x in batch]);now=dt.datetime.now(dt.timezone.utc)
     items=[x for x in items if title_is_clean(x.get("title"))]
     items.sort(key=lambda x:(hot_score(x,now),x.get("published_at") or ""),reverse=True)
     pool_limit=max(limit,min(candidate_limit,len(items)))

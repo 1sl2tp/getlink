@@ -15157,3 +15157,51 @@ body.news-quick-open{overflow:hidden!important}
     max-height:none;
   }
 }
+
+
+/* =========================================================
+   News reader v59 — Google RSS cards + clean article flow
+   ========================================================= */
+.news-card-summary,
+.news-card-time{
+  display:none!important;
+}
+.news-card-copy{
+  justify-content:flex-start!important;
+}
+.news-quick-title{
+  max-width:680px;
+  margin:0 auto 20px;
+  color:#17211c;
+  font-size:30px;
+  font-weight:760;
+  line-height:1.22;
+  letter-spacing:-.02em;
+}
+.news-quick-loading{
+  max-width:680px;
+  margin:0 auto 14px;
+}
+.news-quick-content{
+  max-width:680px;
+  margin:0 auto;
+}
+.news-quick-content .news-quick-inline{
+  margin:18px 0 22px;
+}
+.news-quick-content .news-quick-inline img{
+  border-radius:0;
+}
+@media(max-width:639px){
+  .news-quick-title{
+    margin:0 0 16px!important;
+    font-size:24px!important;
+    line-height:1.25!important;
+  }
+  .news-quick-loading{
+    margin:0 0 12px!important;
+  }
+  .news-quick-content{
+    max-width:none!important;
+  }
+}

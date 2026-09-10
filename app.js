@@ -256,6 +256,7 @@ function setUserWorkQty(url,value){
   if(next)map[key]=next;
   else delete map[key];
   writeUserWorkQtyMap(map);
+  mobileUserScopeViewCache.delete("mine");
   return next;
 }
 
@@ -5008,6 +5009,13 @@ function userWorkSelectedItems(){
     .filter(item=>item.qty>0);
 }
 
+function clearUserWorkOrderSelection(){
+  try{localStorage.removeItem(USER_WORK_QTY_KEY);}catch{}
+  mobileUserScopeViewCache.delete("mine");
+  renderUserWorkHome();
+  updateUserWorkOrderSummary();
+}
+
 function updateUserWorkOrderSummary(){
   const selected=userWorkSelectedItems();
   const text="Đã chọn "+selected.length+" sản phẩm";
@@ -5017,8 +5025,9 @@ function updateUserWorkOrderSummary(){
   const mobileSend=$("#mobileUserSendOrder");
   if(countHost)countHost.textContent=text;
   if(mobileCount)mobileCount.textContent=text;
-  if(send)send.disabled=selected.length===0;
-  if(mobileSend)mobileSend.disabled=selected.length===0;
+  const unavailable=selected.length===0;
+  if(send)send.setAttribute("aria-disabled",unavailable?"true":"false");
+  if(mobileSend)mobileSend.setAttribute("aria-disabled",unavailable?"true":"false");
 }
 
 function saveUserWorkOrderDraft(){
@@ -6539,6 +6548,7 @@ if(userWorkHome){
 }
 
 window.userWorkSelectedItems=userWorkSelectedItems;
+window.clearUserWorkOrderSelection=clearUserWorkOrderSelection;
 window.renderUserWorkHome=renderUserWorkHome;
 window.updateUserWorkOrderSummary=updateUserWorkOrderSummary;
 

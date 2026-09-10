@@ -1,0 +1,36 @@
+.order-manager-panel{position:relative}
+.order-manager-tool-actions{display:flex;align-items:center;gap:7px;min-width:0}
+#orderCustomerPickerButton,#orderCustomerLogout{border:0;background:transparent;color:#3569a7;font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap;max-width:190px;overflow:hidden;text-overflow:ellipsis}
+.order-customer-inline{min-height:34px;max-width:180px;padding:0 9px;border:1px solid #d7dce3;border-radius:9px;background:#fff;color:#40536a;font:600 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.order-customer-inline:hover{background:#f6f8fa}
+.order-customer-picker[hidden]{display:none!important}
+.order-customer-picker{position:absolute;inset:0;z-index:4;background:#fff;display:flex;flex-direction:column;min-height:0}
+.order-customer-picker-head{min-height:64px;padding:11px 12px 10px 16px;border-bottom:1px solid #e5e8ec;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.order-customer-picker-head strong{display:block;color:#18202b;font-size:17px;line-height:1.25}
+.order-customer-picker-head small{display:block;margin-top:3px;color:#737d89;font-size:11px}
+#orderCustomerPickerClose{width:38px;height:38px;border:0;border-radius:10px;background:transparent;color:#5a6472;font-size:29px;line-height:36px;cursor:pointer}
+#orderCustomerPickerClose:hover{background:#f2f4f7}
+.order-customer-search-wrap{padding:10px 12px;border-bottom:1px solid #edf0f3}
+#orderCustomerSearch{width:100%;height:40px;box-sizing:border-box;padding:0 11px;border:1px solid #d4d9df;border-radius:9px;background:#fff;color:#202833;font-size:14px;outline:0;-webkit-appearance:none;appearance:none}
+#orderCustomerSearch:focus{border-color:#93b8e9;box-shadow:0 0 0 2px rgba(71,133,210,.10)}
+.order-customer-list{min-height:0;flex:1;overflow:auto;overscroll-behavior:contain;padding:8px;background:#f6f7f9;display:grid;align-content:start;gap:6px}
+.order-customer-option{width:100%;min-height:48px;padding:8px 11px;border:1px solid #e1e5e9;border-radius:10px;background:#fff;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer}
+.order-customer-option:hover{background:#f8fafc}
+.order-customer-option.selected{border-color:#a9c9ef;background:#f2f7fd}
+.order-customer-option span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#25303d;font-size:13px;font-weight:650}
+.order-customer-option small{flex:0 0 auto;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#788391;font-size:11px}
+.order-customer-empty{padding:18px 12px;color:#727c89;text-align:center;font-size:12px}
+
+@media(max-width:639px){
+  .order-customer-inline{min-height:32px;max-width:128px;padding:0 7px;font-size:11px}
+  .order-customer-picker-head{min-height:56px;padding:9px 10px 8px 13px}
+  .order-customer-picker-head strong{font-size:16px}
+  .order-customer-search-wrap{padding:8px}
+  .order-customer-list{padding:7px}
+  .order-customer-option{min-height:46px;padding:7px 9px}
+}
+
+@media(max-width:360px){
+  .order-customer-inline{max-width:104px}
+  #orderCustomerPickerButton{max-width:120px}
+}

@@ -61,7 +61,9 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
     def test_frontend_has_static_snapshot_fast_path(self):
         self.assertIn("NEWS_HOT_SNAPSHOT_URL",APP)
         self.assertIn("fetchNewsHotSnapshot",APP)
-        self.assertIn("backgroundRefreshLatestNews",APP)
+        self.assertNotIn("backgroundRefreshLatestNews",APP)
+        self.assertIn('String(data.phase||"")!=="rich"',APP)
+        self.assertIn("fetchNewsHotSnapshot(force)",APP)
         self.assertIn("NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000",APP)
         self.assertIn('cache:"force-cache"',APP)
         self.assertIn("prewarmLatestNews",APP)

@@ -1,8 +1,8 @@
 name: Refresh READY news snapshots
 
-# READY snapshots are rebuilt only after the producer's image-quality gate has
-# rejected publisher boilerplate (logos, author avatars, Google News badges,
-# placeholders) so the first image is a real article image.
+# READY snapshots are rebuilt only after the producer's quality gate has
+# rejected publisher boilerplate, video/clip cards, obvious local portal noise,
+# repeated template images, and publisher floods.
 
 on:
   schedule:
@@ -76,21 +76,45 @@ jobs:
         run: |
           python .github/scripts/build_news_snapshot.py             --topic "${{ matrix.topic }}"             --input "/tmp/getlink-news/${{ matrix.topic }}-candidate.json"             --output "/tmp/getlink-news/${{ matrix.topic }}.json"             --enrich-only             --limit "${{ matrix.limit }}"             --candidate-limit "${{ matrix.candidates }}"
 
-      - name: Validate READY topic
+      - name: Validate READY topic quality
         run: |
           python - <<'PY'
-          import json, pathlib, os
+          import collections, json, os, pathlib, re, urllib.parse, unicodedata
+
+          def norm(value):
+              s=unicodedata.normalize("NFD",str(value or "").lower())
+              s="".join(ch for ch in s if unicodedata.category(ch)!="Mn").replace("đ","d")
+              return re.sub(r"[^a-z0-9]+"," ",s).strip()
+
           topic=os.environ["TOPIC"]
           path=pathlib.Path(f"/tmp/getlink-news/{topic}.json")
           data=json.loads(path.read_text(encoding="utf-8"))
           items=data.get("items") or []
           assert data.get("phase")=="rich" and data.get("ready") is True
           assert items
+          sources=collections.Counter()
+          images=collections.Counter()
           for item in items:
-              assert item.get("title")
-              assert item.get("image")
-              assert "news.google.com/" not in str(item.get("url") or "")
-          print(topic, "READY", len(items))
+              title=str(item.get("title") or "")
+              source=str(item.get("source_name") or "")
+              url=str(item.get("url") or "")
+              image=str(item.get("image") or "")
+              assert title and image
+              assert "news.google.com/" not in url
+              title_key=norm(title)
+              source_key=norm(item.get("source_key") or source)
+              host=(urllib.parse.urlparse(url).hostname or "").lower().removeprefix("www.")
+              assert not re.match(r"^(?:video|clip|livestream|truc tiep)\b",title_key), title
+              assert not re.match(r"^trang dia phuong\b",title_key), title
+              assert not re.match(r"^congan\.[^.]+\.gov\.vn$",host), host
+              assert not re.match(r"^(?:cong an tinh|cong an thanh pho|cong an tp)\b",norm(source)), source
+              assert "googletagmanager.com" not in image and "fonts.googleapis.com" not in image
+              if source_key:sources[source_key]+=1
+              image_key=urllib.parse.urlsplit(image)._replace(query="",fragment="").geturl()
+              if image_key:images[image_key]+=1
+          assert max(sources.values(),default=0)<=2, sources.most_common(5)
+          assert max(images.values(),default=0)<=2, images.most_common(5)
+          print(topic,"READY",len(items),"sources",len(sources),"max_source",max(sources.values(),default=0))
           PY
         env:
           TOPIC: ${{ matrix.topic }}

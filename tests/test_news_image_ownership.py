@@ -106,6 +106,37 @@ class NewsImageOwnershipTest(unittest.TestCase):
         for marker in ('[class*="author"]','[id*="author"]','[class*="avatar"]','[class*="profile"]','[class*="logo"]'):
             self.assertIn(marker,EDGE)
 
+    def test_generic_ui_asset_urls_are_rejected(self):
+        bad=[
+            "https://tiin.vn/images//button-follow.jpg",
+            "https://tiin.vn/images/check.png",
+            "https://kilala.vn/data/images/img_1x1.png",
+            "https://example.vn/assets/btn-share.png",
+            "https://example.vn/assets/checkbox-checked.jpg",
+        ]
+        for url in bad:
+            with self.subTest(url=url):
+                self.assertEqual(BUILDER.ready_image_url(url),"")
+        valid="https://example.vn/uploads/2026/09/story-photo-1200x800.jpg"
+        self.assertEqual(BUILDER.ready_image_url(valid),valid)
+
+    def test_meta_images_does_not_use_preload_shell_assets(self):
+        page='''
+        <link rel="preload" as="image" href="/assets/site-shell.jpg">
+        <link rel="image_src" href="/media/story-image-src.jpg">
+        <meta property="og:image" content="/media/story-og.jpg">
+        '''
+        images=BUILDER.meta_images(page,"https://example.vn/article")
+        self.assertNotIn("https://example.vn/assets/site-shell.jpg",images)
+        self.assertIn("https://example.vn/media/story-image-src.jpg",images)
+        self.assertIn("https://example.vn/media/story-og.jpg",images)
+
+    def test_edge_has_ui_asset_filter_and_no_preload_fallback(self):
+        self.assertIn("newsImageLooksLikeUiAsset",EDGE)
+        self.assertIn("button-follow",EDGE)
+        self.assertIn("img_1x1",EDGE)
+        self.assertNotIn('(?:image_src|preload)',EDGE)
+
 
 if __name__=="__main__":
     unittest.main()

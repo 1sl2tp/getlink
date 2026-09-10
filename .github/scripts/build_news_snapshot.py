@@ -16,7 +16,6 @@ except Exception:
 DEFAULT_LIMIT=100
 DETAIL_LIMIT=24
 RICH_IMAGE_LIMIT=100
-RICH_CONTENT_LIMIT=24
 RICH_WORKERS=12
 FEED_TIMEOUT=10
 DETAIL_TIMEOUT=6
@@ -270,25 +269,23 @@ def decode_google_url(url):
         print("WARN decode",str(exc)[:120])
     return value
 
-def enrich_article(item,include_content=True):
+def enrich_article(item):
     original=str(item.get("url") or "").strip()
     target=decode_google_url(original)
+    out=dict(item)
+    if target and "news.google.com/" not in target:
+        out["url"]=target
     try:
         body,final=http_get(target,DETAIL_TIMEOUT,"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8")
         text=body.decode("utf-8",errors="ignore")
-    except:return item
-    jb,ji=jsonld(text); images=[]
+    except:
+        return out
+    _,ji=jsonld(text); images=[]
     for u in [*ji,*meta_images(text,final),*page_images(text,final),*(item.get("images") or [])]:
         if u and u not in images:images.append(u)
-    out=dict(item)
     if images:out["images"]=images[:8];out["image"]=images[0]
-    if include_content:
-        detail=jb or article_text(text)
-        if len(detail)>len(str(out.get("content") or "")):out["content"]=detail[:10000]
     if final and "news.google.com/" not in final:
         out["url"]=final
-    elif target and "news.google.com/" not in target:
-        out["url"]=target
     return out
 
 def iso(v):
@@ -330,15 +327,11 @@ def build_snapshot(limit=DEFAULT_LIMIT):
 def enrich_snapshot(input_path,output_path,limit=DEFAULT_LIMIT):
     data=json.loads(pathlib.Path(input_path).read_text(encoding="utf-8"))
     items=list(data.get("items") or [])[:limit]
-    candidates=[
-      (x,i<RICH_CONTENT_LIMIT)
-      for i,x in enumerate(items[:RICH_IMAGE_LIMIT])
-      if not (x.get("image") or x.get("images")) or (i<RICH_CONTENT_LIMIT and len(str(x.get("content") or ""))<450)
-    ]
+    candidates=list(items[:RICH_IMAGE_LIMIT])
     if candidates:
         pos={str(x.get("id") or ""):i for i,x in enumerate(items)}
         with concurrent.futures.ThreadPoolExecutor(max_workers=RICH_WORKERS) as pool:
-            jobs={pool.submit(enrich_article,x,include_content):str(x.get("id") or "") for x,include_content in candidates}
+            jobs={pool.submit(enrich_article,x):str(x.get("id") or "") for x in candidates}
             for future in concurrent.futures.as_completed(jobs):
                 try:enriched=future.result()
                 except Exception as exc:

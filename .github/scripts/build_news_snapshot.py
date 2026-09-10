@@ -121,7 +121,9 @@ GLOBAL_ARTICLE_REMOVE=[
  "[class*='suggest']","[id*='suggest']","[class*='read-more']","[class*='readmore']",
  "[class*='social']","[class*='share']","[class*='comment']","[id*='comment']",
  "[class*='newsletter']","[class*='subscription']","[class*='most-read']",
- "[class*='popular']","[class*='breadcrumb']","[class*='tags']","[class*='keyword']"
+ "[class*='popular']","[class*='breadcrumb']","[class*='tags']","[class*='keyword']","[class*='author']","[id*='author']","[class*='avatar']","[id*='avatar']"
+,"[class*='profile']","[id*='profile']","[class*='logo']","[id*='logo']"
+,"[class*='placeholder']","[id*='placeholder']","[class*='icon']","[id*='icon']"
 ]
 STOP={"va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi","la","mot","nhung","cac","co","duoc","se","da","dang","ve","noi","theo","nay","hom","ngay","moi","nhat","vi","o"}
 
@@ -243,20 +245,20 @@ def parse_time(entry):
         return (d if d.tzinfo else d.replace(tzinfo=dt.timezone.utc)).astimezone(dt.timezone.utc)
     except:return dt.datetime.fromtimestamp(0,dt.timezone.utc)
 
-def entry_images(entry):
+def entry_images(entry,trust_html=True):
     out=[]
     def add(v):
-        u=str(v or "").strip()
-        if u.startswith(("http://","https://")) and u not in out:out.append(u)
+        u=ready_image_url(str(v or "").strip())
+        if u and u not in out:out.append(u)
     for key in ("media_content","media_thumbnail"):
         for item in entry.get(key) or []:
             if isinstance(item,dict):add(item.get("url"))
     for item in entry.get("enclosures") or []:
         if isinstance(item,dict):add(item.get("href") or item.get("url"))
-    raw=str(entry.get("summary") or entry.get("description") or "")
-    for m in re.finditer(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']',raw,re.I):add(html.unescape(m.group(1)))
+    if trust_html:
+        raw=str(entry.get("summary") or entry.get("description") or "")
+        for m in re.finditer(r'<img\b[^>]*\bsrc=["\']([^"\']+)["\']',raw,re.I):add(html.unescape(m.group(1)))
     return out[:8]
-
 def fetch_google_query(query):
     feed_url=google_top_feed() if query=="__top__" else google_query_feed(query)
     body=None
@@ -284,7 +286,7 @@ def fetch_google_query(query):
             content=""
             parts=e.get("content") or []
             if parts and isinstance(parts[0],dict):content=plain(parts[0].get("value"))[:6000]
-            images=entry_images(e); published=parse_time(e)
+            images=entry_images(e,trust_html=False); published=parse_time(e)
             source_key=norm(source_name).replace(" ","-")[:48] or "google-news"
             rows.append({
               "id":f"google:{source_key}:{norm(title)[:96]}:{published.timestamp():.0f}",
@@ -314,13 +316,13 @@ def quality(x):
 def merge(a,b):
     p,o=(b,a) if quality(b)>quality(a) else (a,b)
     images=[]
-    for u in [*(p.get("images") or []),*(o.get("images") or [])]:
+    for raw in [*(p.get("images") or []),p.get("image")]:
+        u=ready_image_url(raw)
         if u and u not in images:images.append(u)
-    out=dict(p); out["images"]=images[:8]; out["image"]=images[0] if images else (p.get("image") or o.get("image") or "")
+    out=dict(p); out["images"]=images[:8]; out["image"]=images[0] if images else ""
     out["content"]=p.get("content") or o.get("content") or ""; out["summary"]=p.get("summary") or o.get("summary") or ""
     out["duplicate_count"]=int(a.get("duplicate_count") or 1)+int(b.get("duplicate_count") or 1)
     out["also_sources"]=[]; return out
-
 def dedupe(items):
     out=[]
     for item in sorted(items,key=lambda x:x.get("published_at") or "",reverse=True):
@@ -395,21 +397,20 @@ def process_items(items):
     return [x for x in dedupe(items) if not is_noise_item(x)]
 def meta_images(text,base):
     out=[]
+    def add(value):
+        u=ready_image_url(urllib.parse.urljoin(base,html.unescape(str(value or ""))))
+        if u and u not in out:out.append(u)
     for tag in re.findall(r"<meta\b[^>]*>",text,re.I):
         km=re.search(r'\b(?:property|name|itemprop)=["\']([^"\']+)["\']',tag,re.I)
         cm=re.search(r'\bcontent=["\']([^"\']+)["\']',tag,re.I)
         key=km.group(1).lower() if km else ""
         if key not in {"og:image","og:image:url","og:image:secure_url","twitter:image","twitter:image:src","image","thumbnail","thumbnailurl"} or not cm:continue
-        u=urllib.parse.urljoin(base,html.unescape(cm.group(1)))
-        if u.startswith(("http://","https://")) and u not in out:out.append(u)
+        add(cm.group(1))
     for tag in re.findall(r"<link\b[^>]*>",text,re.I):
         if not re.search(r'\brel=["\'][^"\']*(?:image_src|preload)[^"\']*["\']',tag,re.I):continue
         hm=re.search(r'\bhref=["\']([^"\']+)["\']',tag,re.I)
-        if not hm:continue
-        u=urllib.parse.urljoin(base,html.unescape(hm.group(1)))
-        if u.startswith(("http://","https://")) and u not in out:out.append(u)
+        if hm:add(hm.group(1))
     return out
-
 def article_host(base):
     try:return (urllib.parse.urlparse(str(base or "")).hostname or "").lower().removeprefix("www.")
     except Exception:return ""
@@ -516,24 +517,44 @@ def page_images(text,base):
             if len(out)>=8:break
     return out[:8]
 
+ARTICLE_JSONLD_TYPES={
+    "article","newsarticle","reportagenewsarticle","analysisnewsarticle",
+    "blogposting","liveblogposting"
+}
+def jsonld_types(value):
+    raw=value.get("@type") if isinstance(value,dict) else None
+    values=raw if isinstance(raw,list) else [raw]
+    out=[]
+    for item in values:
+        name=re.split(r"[/#]",str(item or ""))[-1].strip().lower()
+        if name:out.append(name)
+    return out
+def jsonld_is_article(value):
+    return any(name in ARTICLE_JSONLD_TYPES for name in jsonld_types(value))
 def jsonld(text):
     body=""; images=[]
+    def add_image(value):
+        u=ready_image_url(value)
+        if u and u not in images:images.append(u)
     def walk(v):
         nonlocal body
         if isinstance(v,list):
             for x in v:walk(x)
         elif isinstance(v,dict):
-            if not body and isinstance(v.get("articleBody"),str):body=plain(v["articleBody"])
-            img=v.get("image"); vals=img if isinstance(img,list) else [img]
-            for x in vals:
-                u=x if isinstance(x,str) else (x.get("url") if isinstance(x,dict) else "")
-                if isinstance(u,str) and u.startswith(("http://","https://")) and u not in images:images.append(u)
+            is_article=jsonld_is_article(v)
+            if is_article and not body and isinstance(v.get("articleBody"),str):body=plain(v["articleBody"])
+            if is_article:
+                img=v.get("image"); vals=img if isinstance(img,list) else [img]
+                for x in vals:
+                    if isinstance(x,str):u=x
+                    elif isinstance(x,dict):u=x.get("url") or x.get("contentUrl") or ""
+                    else:u=""
+                    add_image(u)
             if isinstance(v.get("@graph"),list):walk(v["@graph"])
     for m in re.finditer(r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>([\s\S]*?)</script>',text,re.I):
         try:walk(json.loads(html.unescape(m.group(1))))
         except:pass
     return body,images
-
 def article_text(text):
     m=re.search(r"<article\b[^>]*>([\s\S]*?)</article>",text,re.I); scope=m.group(1) if m else text; out=[]
     for p in re.finditer(r"<p\b[^>]*>([\s\S]*?)</p>",scope,re.I):
@@ -573,10 +594,9 @@ def enrich_article(item):
         return out
     _,ji=jsonld(text); images=[]
     ordered=[
+      *ji,
       *page_images(text,final),
-      *(item.get("images") or []),
       *meta_images(text,final),
-      *ji
     ]
     for u in ordered:
         u=ready_image_url(u)

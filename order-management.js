@@ -10,6 +10,7 @@
   const CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
   const ORDER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
   const STATUS_LABELS={pending:"Đơn tạm",delivered:"Đã giao",returned:"Đã hoàn"};
+  const ORDER_SYNC_MS=3000;
   const DEBT_EVENT_LABELS={
     order_debt:"Đã giao",
     payment:"Thanh toán",
@@ -20,6 +21,10 @@
   let activeView="orders";
   let activeStatus="pending";
   let expandedOrderId="";
+  let editingOrderId="";
+  let ordersVersion="";
+  let debtVersion="";
+  let syncBusy=false;
   let orders=[];
   let customers=[];
   let debtSummaries=[];
@@ -97,6 +102,7 @@
   }
   function emitAccessChange(){
     syncWorkManagerNav();
+    syncCartActions();
     document.dispatchEvent(new CustomEvent("getlink-access-change",{detail:accessSnapshot()}));
   }
   function currentRole(){return currentAccessState()}
@@ -236,6 +242,7 @@
 
   function injectUi(){
     ensureWorkManagerNav();
+    ensureCartActions();
     if(document.getElementById("orderManager"))return;
     const roleSwitch=document.querySelector(".role-switch");
     if(roleSwitch){
@@ -268,6 +275,7 @@
               <span id="orderManagerSummary"></span>
               <div class="order-manager-tool-actions">
                 <button id="debtBackButton" type="button" hidden>Khách hàng</button>
+                <button id="orderDeleteAllPendingButton" type="button" data-order-batch="delete-pending" hidden>Xóa tất cả</button>
                 <button id="orderCustomerPickerButton" type="button" hidden>Chọn khách hàng</button>
               </div>
             </div>
@@ -303,18 +311,62 @@
       send.parentElement?.insertBefore(button,send);
     }
   }
+
+  function ensureCartActions(){
+    for(const id of ["userWorkSendOrder","mobileUserSendOrder"]){
+      const send=document.getElementById(id);
+      if(!send||send.parentElement?.querySelector?.(`[data-order-cart-for="${id}"]`))continue;
+      const wrap=document.createElement("span");
+      wrap.className="order-cart-actions";
+      wrap.dataset.orderCartFor=id;
+      const clear=document.createElement("button");
+      clear.type="button";clear.dataset.orderCartAction="clear";clear.textContent="Xóa";
+      const quick=document.createElement("button");
+      quick.type="button";quick.dataset.orderCartAction="quick";quick.textContent="Bán nhanh";
+      const cancel=document.createElement("button");
+      cancel.type="button";cancel.dataset.orderCartAction="cancel-edit";cancel.textContent="Hủy";
+      const update=document.createElement("button");
+      update.type="button";update.dataset.orderCartAction="update";update.textContent="Cập nhật đơn";
+      wrap.append(clear,quick,cancel,update);
+      send.parentElement?.insertBefore(wrap,send);
+    }
+    syncCartActions();
+  }
+  function syncCartActions(){
+    const admin=currentRole()==="admin";
+    const editing=Boolean(editingOrderId);
+    document.querySelectorAll("[data-order-cart-for]").forEach(wrap=>{
+      const send=document.getElementById(String(wrap.dataset.orderCartFor||""));
+      if(send)send.hidden=editing;
+      const clear=wrap.querySelector('[data-order-cart-action="clear"]');
+      const quick=wrap.querySelector('[data-order-cart-action="quick"]');
+      const cancel=wrap.querySelector('[data-order-cart-action="cancel-edit"]');
+      const update=wrap.querySelector('[data-order-cart-action="update"]');
+      if(clear)clear.hidden=editing;
+      if(quick){quick.hidden=!admin||editing;quick.textContent="Bán nhanh";}
+      if(cancel)cancel.hidden=!editing;
+      if(update)update.hidden=!editing;
+      wrap.classList.toggle("editing",editing);
+    });
+  }
+  function syncBatchControls(){
+    const button=document.getElementById("orderDeleteAllPendingButton");
+    if(!button)return;
+    const pendingCount=orders.filter(order=>order.status==="pending").length;
+    button.hidden=activeView!=="orders"||activeStatus!=="pending"||pendingCount===0;
+  }
   function syncCustomerControls(){
     ensureInlineCustomerButtons();
     const admin=currentRole()==="admin"&&Boolean(readAuth());
     const customer=selectedCustomer();
     for(const button of document.querySelectorAll("[data-order-customer-select]")){
-      button.hidden=!admin;
+      button.hidden=!admin||Boolean(editingOrderId);
       button.textContent=customer?"Khách · "+customer.name:"Chọn khách";
       button.title=customer?(customer.name+(customer.username?" · @"+customer.username:"")):"Chọn khách hàng trước khi gửi đơn";
     }
     const picker=document.getElementById("orderCustomerPickerButton");
     if(picker){
-      picker.hidden=!(admin&&activeView==="orders");
+      picker.hidden=!(admin&&activeView==="orders"&&!editingOrderId);
       picker.textContent=customer?"Khách · "+customer.name:"Chọn khách hàng";
     }
   }
@@ -330,6 +382,8 @@
     if(back)back.hidden=activeView!=="debts"||currentRole()!=="admin"||!debtCustomerId;
     syncWorkManagerNav();
     syncCustomerControls();
+    syncBatchControls();
+    syncCartActions();
   }
 
   function setMainStatus(message){
@@ -452,13 +506,14 @@
     });
   }
   function orderActions(order){
-    if(currentRole()!=="admin")return "";
+    const admin=currentRole()==="admin";
     if(order.status==="pending")return `
       <div class="order-card-actions">
-        <button type="button" class="order-action-primary" data-order-action="deliver" data-order-id="${escapeHtml(order.id)}">Đã giao</button>
-        <button type="button" class="order-action-danger" data-order-action="delete" data-order-id="${escapeHtml(order.id)}">Xóa đơn tạm</button>
+        <button type="button" class="order-action-secondary" data-order-action="edit" data-order-id="${escapeHtml(order.id)}">Sửa</button>
+        ${admin?`<button type="button" class="order-action-primary" data-order-action="deliver" data-order-id="${escapeHtml(order.id)}">Đã giao</button>`:""}
+        <button type="button" class="order-action-danger" data-order-action="delete" data-order-id="${escapeHtml(order.id)}">Xóa</button>
       </div>`;
-    if(order.status==="delivered")return `
+    if(order.status==="delivered"&&admin)return `
       <div class="order-card-actions">
         <button type="button" class="order-action-danger" data-order-action="return" data-order-id="${escapeHtml(order.id)}">Đã hoàn</button>
       </div>`;
@@ -472,6 +527,7 @@
     const empty=document.getElementById("orderManagerEmpty");
     const summary=document.getElementById("orderManagerSummary");
     if(summary)summary.textContent=(STATUS_LABELS[activeStatus]||activeStatus)+" · "+visible.length+" đơn";
+    syncBatchControls();
     if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn ở trạng thái này.";}
     if(!list)return;
     list.innerHTML=visible.map(order=>{
@@ -488,7 +544,7 @@
         </div>
         <button type="button" class="order-card-detail-toggle" data-order-detail data-order-id="${escapeHtml(id)}">${expanded?"Thu gọn":"Xem đơn"}</button>
         ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</small></div>`).join("")}</div>`:""}
-        ${orderActions(order)}
+        ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
   }
@@ -592,12 +648,125 @@
     try{
       if(activeView==="debts")await refreshDebts();
       else {await loadOrders();renderOrders();}
+      if(!syncBusy)await checkRemoteRevision(true);
     }catch(error){
       if(!handleAuthError(error)){
         const list=document.getElementById("orderManagerList");
         if(list)list.innerHTML='<div class="order-manager-message">'+escapeHtml(error?.message||error)+'</div>';
       }
     }
+  }
+
+
+  function selectedOrderPayload(){
+    const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
+    if(!Array.isArray(selected)||selected.length===0)return null;
+    return selected.map(item=>({url:item.row.canonical_url,qty:item.qty}));
+  }
+  function afterCartMutation(){
+    window.setTimeout(()=>{ensureCartActions();syncCartActions();syncCustomerControls();},0);
+  }
+  function clearCurrentCart(){
+    if(typeof window.clearUserWorkOrderSelection==="function")window.clearUserWorkOrderSelection();
+    afterCartMutation();
+  }
+  async function startEditOrder(id){
+    if(busy)return;
+    const order=orders.find(row=>String(row.id)===String(id));
+    if(!order||order.status!=="pending")return;
+    if(typeof window.loadUserWorkOrderSelection!=="function"){
+      alert("Không tải được đơn vào Tạp hóa.");
+      return;
+    }
+    if(currentRole()==="admin"){
+      selectedCustomerId=String(order.customerId||"");
+      if(selectedCustomerId)sessionStorage.setItem(SELECTED_CUSTOMER_KEY,selectedCustomerId);
+    }
+    editingOrderId=String(order.id);
+    window.loadUserWorkOrderSelection(order);
+    closeManager();
+    syncCartActions();syncCustomerControls();
+    setMainStatus("Đang sửa đơn "+orderRef(order)+".");
+  }
+  function cancelEditOrder(){
+    if(!editingOrderId)return;
+    const label=orderRef(orders.find(row=>String(row.id)===String(editingOrderId))||{id:editingOrderId});
+    editingOrderId="";
+    clearCurrentCart();
+    if(currentRole()==="admin")clearSelectedCustomer();
+    syncCartActions();syncCustomerControls();
+    setMainStatus("Đã hủy sửa đơn "+label+".");
+  }
+  async function updateEditingOrder(){
+    if(busy||!editingOrderId)return;
+    if(!(await requireChatAuth()))return;
+    const items=selectedOrderPayload();
+    if(!items){setMainStatus("Đơn phải có ít nhất một sản phẩm.");return;}
+    const id=editingOrderId;
+    busy=true;setMainStatus("Đang cập nhật đơn...");
+    try{
+      const data=await orderFetch("/orders/"+encodeURIComponent(id),{method:"PUT",body:JSON.stringify({items})});
+      editingOrderId="";
+      clearCurrentCart();
+      if(currentRole()==="admin")clearSelectedCustomer();
+      const label=data?.order?.orderNo?"#"+data.order.orderNo:String(id);
+      setMainStatus("Đã cập nhật đơn "+label+".");
+      expandedOrderId=String(id);activeView="orders";activeStatus="pending";
+      openManager();
+    }catch(error){
+      handleAuthError(error);setMainStatus(String(error?.message||error));
+    }finally{busy=false;syncCartActions();syncCustomerControls();}
+  }
+  async function submitQuickSale(){
+    if(busy||currentRole()!=="admin")return;
+    if(!(await requireChatAuth()))return;
+    const items=selectedOrderPayload();
+    if(!items){setMainStatus("Chưa chọn sản phẩm.");return;}
+    if(!selectedCustomerId){setMainStatus("Chưa chọn khách hàng.");await openCustomerPicker();return;}
+    const customerId=selectedCustomerId;
+    busy=true;setMainStatus("Đang bán nhanh...");
+    try{
+      const data=await orderFetch("/orders",{method:"POST",body:JSON.stringify({items,customerId,mode:"quick"})});
+      clearCurrentCart();
+      const label=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
+      clearSelectedCustomer();
+      setMainStatus("Đã bán nhanh đơn "+label+" · Đã giao.");
+      expandedOrderId="";activeView="orders";activeStatus="delivered";
+      openManager();
+    }catch(error){
+      handleAuthError(error);setMainStatus(String(error?.message||error));
+    }finally{busy=false;syncCartActions();syncCustomerControls();}
+  }
+  async function deleteAllPendingOrders(){
+    if(busy)return;
+    const count=orders.filter(order=>order.status==="pending").length;
+    if(!count)return;
+    if(!confirm("Xóa tất cả "+count+" đơn tạm trong phạm vi hiện tại?"))return;
+    busy=true;
+    try{
+      await orderFetch("/orders/pending",{method:"DELETE"});
+      expandedOrderId="";
+      await refreshManager();
+    }catch(error){
+      if(!handleAuthError(error))alert(String(error?.message||error));
+    }finally{busy=false;}
+  }
+
+  async function checkRemoteRevision(forceBaseline=false){
+    const host=document.getElementById("orderManager");
+    if(!readAuth()||!host||host.hidden||syncBusy||busy)return;
+    syncBusy=true;
+    try{
+      const data=await orderFetch("/sync",{method:"GET"});
+      const nextOrders=String(data?.ordersVersion||"");
+      const nextDebt=String(data?.debtVersion||"");
+      const hadBaseline=Boolean(ordersVersion||debtVersion);
+      const changed=hadBaseline&&(nextOrders!==ordersVersion||nextDebt!==debtVersion);
+      ordersVersion=nextOrders;debtVersion=nextDebt;
+      if(changed&&!forceBaseline)await refreshManager();
+    }catch(error){
+      handleAuthError(error);
+    }finally{syncBusy=false;}
   }
 
   async function submitSelectedOrder(){
@@ -637,7 +806,14 @@
   }
 
   async function performAdminAction(action,id){
-    if(busy||currentRole()!=="admin")return;
+    return performOrderAction(action,id);
+  }
+
+  async function performOrderAction(action,id){
+    if(action==="edit"){await startEditOrder(id);return;}
+    if(busy)return;
+    const admin=currentRole()==="admin";
+    if((action==="deliver"||action==="return")&&!admin)return;
     if(action==="delete"&&!confirm("Xóa đơn tạm này?"))return;
     if(action==="return"&&!confirm("Hoàn đơn này và đảo lại công nợ?"))return;
     busy=true;
@@ -645,6 +821,7 @@
       if(action==="deliver")await orderFetch("/orders/"+encodeURIComponent(id)+"/deliver",{method:"POST"});
       else if(action==="return")await orderFetch("/orders/"+encodeURIComponent(id)+"/return",{method:"POST"});
       else if(action==="delete")await orderFetch("/orders/"+encodeURIComponent(id),{method:"DELETE"});
+      expandedOrderId="";
       await refreshManager();
     }catch(error){
       if(!handleAuthError(error))alert(String(error?.message||error));
@@ -686,6 +863,17 @@
 
   document.addEventListener("click",async event=>{
     const target=event.target;
+    const cartAction=target.closest?.("[data-order-cart-action]");
+    if(cartAction){
+      const action=String(cartAction.dataset.orderCartAction||"");
+      if(action==="clear")clearCurrentCart();
+      else if(action==="quick")await submitQuickSale();
+      else if(action==="cancel-edit")cancelEditOrder();
+      else if(action==="update")await updateEditingOrder();
+      return;
+    }
+    const batch=target.closest?.("[data-order-batch]");
+    if(batch?.dataset.orderBatch==="delete-pending"){await deleteAllPendingOrders();return;}
     const workView=target.closest?.("[data-order-work-view]");
     if(workView){
       activeView=String(workView.dataset.orderWorkView||"orders");
@@ -725,7 +913,7 @@
       return;
     }
     const action=target.closest?.("[data-order-action]");
-    if(action)await performAdminAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));
+    if(action)await performOrderAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));
   });
 
   document.addEventListener("submit",async event=>{
@@ -746,5 +934,8 @@
   injectUi();
   emitAccessChange();
   requestChatAuth();
-  window.setInterval(()=>{ensureWorkManagerNav();ensureInlineCustomerButtons();syncCustomerControls();},1500);
+  window.setInterval(()=>{ensureWorkManagerNav();ensureInlineCustomerButtons();ensureCartActions();syncCustomerControls();},1500);
+  window.setInterval(()=>{void checkRemoteRevision();},ORDER_SYNC_MS);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkRemoteRevision();});
+  window.addEventListener("focus",()=>{void checkRemoteRevision();});
 })();

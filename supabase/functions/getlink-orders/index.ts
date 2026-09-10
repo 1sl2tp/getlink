@@ -21,7 +21,7 @@ function cors(req:Request){
   return {
     "content-type":"application/json; charset=utf-8",
     "access-control-allow-origin":allowed?origin:"https://get.taphoa.xyz",
-    "access-control-allow-methods":"GET,POST,DELETE,OPTIONS",
+    "access-control-allow-methods":"GET,POST,PUT,DELETE,OPTIONS",
     "access-control-allow-headers":"apikey, authorization, content-type",
     "access-control-max-age":"86400",
     "vary":"Origin"
@@ -238,8 +238,26 @@ async function resolveCreateItems(raw:unknown){
   });
 }
 
-async function createOrder(req:Request,actor:Identity){
-  const body=await req.json().catch(()=>({}));
+async function readOrder(id:string,actor:Identity){
+  let query=db.from("getlink_sales_orders")
+    .select("id,order_no,customer_account_id,created_by_account_id,created_by_role,status,total_amount_vnd,total_cost_vnd,submitted_at,delivered_at,returned_at")
+    .eq("id",id);
+  if(actor.kind==="customer")query=query.eq("customer_account_id",actor.id);
+  const {data:order,error}=await query.maybeSingle();
+  if(error)throw error;
+  if(!order)throw fail("Không tìm thấy đơn",404);
+  const {data:itemRows,error:itemError}=await db.from("getlink_sales_order_items")
+    .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,unit_cost_vnd,source_key")
+    .eq("order_id",id)
+    .order("line_no")
+    .order("id");
+  if(itemError)throw itemError;
+  const names=await accountNameMap([String(order.customer_account_id||"")]);
+  return orderView(order,itemRows||[],names.get(String(order.customer_account_id))||"Khách hàng",actor.kind==="admin");
+}
+
+async function createOrder(body:any,actor:Identity,quick=false){
+  if(quick&&actor.kind!=="admin")throw fail("forbidden",403);
   const customer=actor.kind==="customer"
     ?await selectedCustomer(actor.id)
     :await selectedCustomer(clean(body?.customerId));
@@ -247,32 +265,35 @@ async function createOrder(req:Request,actor:Identity){
   const items=await resolveCreateItems(body?.items);
   const id=crypto.randomUUID();
   const submittedAt=new Date().toISOString();
-  const total=items.reduce((sum:number,item:any)=>sum+item.unitPriceVnd*item.quantity,0);
-  const totalCost=items.reduce((sum:number,item:any)=>sum+item.unitCostVnd*item.quantity,0);
-  const {error}=await db.rpc("getlink_sales_create_order",{
+  const rpcArgs={
     p_order:{id,customerAccountId:customer.id,createdByAccountId:actor.id,submittedAt},
     p_items:items
-  });
+  };
+  const {error}=quick
+    ?await db.rpc("getlink_sales_create_quick_sale",rpcArgs)
+    :await db.rpc("getlink_sales_create_order",rpcArgs);
   if(error)throw error;
 
-  // The database owns the human order number and final persisted totals/status.
-  // Read the inserted row back so the submit response is immediately usable by
-  // both the purchase confirmation and order manager without falling back to UUID.
-  const {data:created,error:createdError}=await db.from("getlink_sales_orders")
-    .select("order_no,total_amount_vnd,total_cost_vnd,submitted_at")
+  // Keep the human order number explicit at the create boundary. It is owned by
+  // the database identity column and must be immediately available to the UI.
+  const {data:persisted,error:persistedError}=await db.from("getlink_sales_orders")
+    .select("order_no,status")
     .eq("id",id)
     .single();
-  if(createdError||!created)throw createdError||fail("Không đọc được đơn vừa tạo",500);
+  if(persistedError||!persisted)throw persistedError||fail("Không đọc được đơn vừa tạo",500);
+  const created=await readOrder(id,actor);
+  return quick
+    ?{...created,orderNo:Number(persisted.order_no||0)}
+    :{...created,orderNo:Number(persisted.order_no||0),status:"pending"};
+}
 
-  return {
-    id,orderNo:Number(created.order_no||0),customerId:customer.id,customerName:customer.name,
-    orderedAt:created.submitted_at||submittedAt,status:"pending",
-    total:Number(created.total_amount_vnd||total),totalCost:Number(created.total_cost_vnd||totalCost),
-    items:items.map((item:any)=>({
-      productId:item.productCode,name:item.productName,qty:item.quantity,price:item.unitPriceVnd,
-      cost:item.unitCostVnd,sourceId:item.sourceKey,url:item.productUrl
-    }))
-  };
+async function updatePendingOrder(id:string,body:any,actor:Identity){
+  const items=await resolveCreateItems(body?.items);
+  const {error}=await db.rpc("getlink_sales_update_pending_order",{
+    p_id:id,p_actor_id:actor.id,p_items:items
+  });
+  if(error)throw error;
+  return await readOrder(id,actor);
 }
 
 async function deliverOrder(id:string,actor:Identity){
@@ -284,14 +305,21 @@ async function returnOrder(id:string,actor:Identity){
   if(error)throw error;
 }
 async function deletePendingOrder(id:string,actor:Identity){
-  const {data,error}=await db.from("getlink_sales_orders")
-    .select("id,status")
-    .eq("id",id)
-    .maybeSingle();
+  const {error}=await db.rpc("getlink_sales_delete_pending_order",{p_id:id,p_actor_id:actor.id});
   if(error)throw error;
-  if(!data)throw fail("Không tìm thấy đơn",404);
-  if(data.status!=="pending")throw fail("Chỉ xóa được Đơn tạm",409);
-  await returnOrder(id,actor);
+}
+async function deleteAllPending(actor:Identity){
+  const {data,error}=await db.rpc("getlink_sales_delete_all_pending",{p_actor_id:actor.id});
+  if(error)throw error;
+  return Number(data||0);
+}
+async function syncState(actor:Identity){
+  const {data,error}=await db.rpc("getlink_sales_sync_state",{p_actor_id:actor.id});
+  if(error)throw error;
+  return {
+    ordersVersion:clean(data?.ordersVersion),
+    debtVersion:clean(data?.debtVersion)
+  };
 }
 
 function signedDebt(row:any){
@@ -389,8 +417,14 @@ Deno.serve(async(req:Request)=>{
     if(req.method==="GET"&&path==="/orders"){
       return json(req,{ok:true,role:actor.kind,orders:await listOrders(actor)});
     }
+    if(req.method==="GET"&&path==="/sync"){
+      return json(req,{ok:true,...await syncState(actor)});
+    }
     if(req.method==="POST"&&path==="/orders"){
-      const order=await createOrder(req,actor);
+      const body=await req.json().catch(()=>({}));
+      const quick=String(body?.mode)==="quick";
+      if(quick&&actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+      const order=await createOrder(body,actor,quick);
       return json(req,{ok:true,order},201);
     }
     if(req.method==="GET"&&path==="/debts"){
@@ -416,10 +450,19 @@ Deno.serve(async(req:Request)=>{
       if(match[2]==="deliver")await deliverOrder(id,actor);else await returnOrder(id,actor);
       return json(req,{ok:true});
     }
-    const deleteMatch=path.match(/^\/orders\/([^/]+)$/);
-    if(req.method==="DELETE"&&deleteMatch){
-      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
-      await deletePendingOrder(decodeURIComponent(deleteMatch[1]),actor);
+    if(req.method==="DELETE"&&path==="/orders/pending"){
+      const deleted=await deleteAllPending(actor);
+      return json(req,{ok:true,deleted});
+    }
+    const orderIdMatch=path.match(/^\/orders\/([^/]+)$/);
+    if(req.method==="PUT"&&orderIdMatch){
+      const id=decodeURIComponent(orderIdMatch[1]);
+      const body=await req.json().catch(()=>({}));
+      const order=await updatePendingOrder(id,body,actor);
+      return json(req,{ok:true,order});
+    }
+    if(req.method==="DELETE"&&orderIdMatch){
+      await deletePendingOrder(decodeURIComponent(orderIdMatch[1]),actor);
       return json(req,{ok:true});
     }
     return json(req,{error:"not_found"},404);

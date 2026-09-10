@@ -540,7 +540,7 @@ async function fetchNewsHotSnapshot(force=false){
     if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
     const data=await response.json();
     if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
-    if(String(data.phase||"")!=="rich")throw new Error("news_snapshot_not_ready");
+    if(String(data.phase||"")!=="rich"||data.ready!==true)throw new Error("news_snapshot_not_ready");
     return data;
   }).catch(error=>{
     if(newsHotSnapshotBucket===bucket)newsHotSnapshotPromise=null;

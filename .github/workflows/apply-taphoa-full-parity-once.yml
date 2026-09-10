@@ -1,5 +1,6 @@
 name: Apply TAPHOA full parity once
 
+# rerun after correcting the focused contract to assert behavior, not syntax spelling
 on:
   push:
     branches:

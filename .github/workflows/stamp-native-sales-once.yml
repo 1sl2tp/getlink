@@ -1,0 +1,31 @@
+name: Stamp native sales build once
+
+on:
+  push:
+    branches:
+      - feature/getlink-native-sales-core
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/getlink-native-sales-core
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stamp and self-delete
+        run: |
+          python tools/stamp_static_build.py
+          rm .github/workflows/stamp-native-sales-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html version.json .github/workflows/stamp-native-sales-once.yml
+          git commit -m "chore: stamp native sales build"
+          git push origin HEAD:feature/getlink-native-sales-core

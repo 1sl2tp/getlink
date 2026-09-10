@@ -29,7 +29,7 @@ jobs:
           fetch-depth: 1
 
       - name: Install Google News RSS processor
-        run: python -m pip install --quiet feedparser googlenewsdecoder==0.1.7 ftfy==6.3.1
+        run: python -m pip install --quiet feedparser googlenewsdecoder==0.1.7 ftfy==6.3.1 beautifulsoup4==4.12.3
 
       - name: Preserve snapshot builder
         run: cp .github/scripts/build_news_snapshot.py /tmp/build_news_snapshot.py

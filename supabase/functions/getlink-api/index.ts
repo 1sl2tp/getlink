@@ -2940,7 +2940,7 @@ function newsArticleRoot(html:string){
     '[class*="post-content"]','[class*="entry-content"]','[class*="fck_detail"]',
     '[class*="singular-content"]','[class*="the-article-body"]','[class*="news-content"]',
     '[class*="content-body"]','[id*="article-body"]','[id*="article-content"]',
-    '[id*="detail-content"]','main'
+    '[id*="detail-content"]'
   ];
   const seen=new Set<any>(),candidates:any[]=[];
   for(const selector of selectors){
@@ -2948,7 +2948,7 @@ function newsArticleRoot(html:string){
       if(!seen.has(node)){seen.add(node);candidates.push(node);}
     }
   }
-  if(!candidates.length)return doc.querySelector("body")||doc;
+  if(!candidates.length)return null;
   const score=(node:any)=>{
     const text=newsStripHtml(node.textContent||"");
     const pCount=node.querySelectorAll?.("p")?.length||0;
@@ -3016,12 +3016,35 @@ function newsMetaImageValues(html:string,base:string){
   }
   return values;
 }
+function newsArticleNoiseText(value:unknown){
+  const text=newsStripHtml(value).trim();
+  if(!text)return true;
+  const low=plain(text);
+  if(/^(quang cao|advertisement|sponsored|tai tro|xem them|doc them|tin lien quan|bai lien quan|bai viet lien quan|tin cung chuyen muc|co the ban quan tam|de xuat|goi y|theo doi chung toi|chia se bai viet|dang ky nhan tin|nguon|nguon anh|anh|photo|video)\s*[:：-]/.test(low))return true;
+  if(/^(quang cao|advertisement|sponsored|tai tro|xem them|doc them|tin lien quan|bai lien quan|tin cung chuyen muc|co the ban quan tam)$/.test(low))return true;
+  if(text.length<220&&/(facebook\.com|youtube\.com|tiktok\.com|zalo\.me|theo doi.*facebook|dang ky.*newsletter)/i.test(text))return true;
+  return false;
+}
+function newsArticleStripNoise(root:any){
+  if(!root)return;
+  const selectors=[
+    "script","style","noscript","svg","nav","aside","footer","form","iframe",
+    '[class*="advert"]','[id*="advert"]','[class*="quang-cao"]','[id*="quang-cao"]',
+    '[class*="related"]','[id*="related"]','[class*="recommend"]','[id*="recommend"]',
+    '[class*="suggest"]','[id*="suggest"]','[class*="read-more"]','[class*="readmore"]',
+    '[class*="social"]','[class*="share"]','[class*="comment"]','[id*="comment"]',
+    '[class*="newsletter"]','[class*="subscription"]','[class*="most-read"]',
+    '[class*="popular"]','[class*="breadcrumb"]','[class*="tags"]','[class*="keyword"]',
+    '[data-component*="related"]','[data-component*="recommend"]','[data-testid*="related"]'
+  ];
+  for(const selector of selectors){
+    for(const node of root.querySelectorAll?.(selector)||[])node.remove?.();
+  }
+}
 function newsArticleBlocks(html:string,base:string){
   const root=newsArticleRoot(html);
   if(!root)return [];
-  for(const selector of ["script","style","noscript","svg","nav","aside","footer","form","iframe"]){
-    for(const node of root.querySelectorAll?.(selector)||[])node.remove?.();
-  }
+  newsArticleStripNoise(root);
   const blocks:{type:"text"|"image";text?:string;url?:string}[]=[];
   const seenText=new Set<string>(),seenImages=new Set<string>();
   const nodes=root.querySelectorAll?.("p,h2,h3,blockquote,figure,picture,img")||[];
@@ -3029,7 +3052,7 @@ function newsArticleBlocks(html:string,base:string){
     const tag=String(node.tagName||"").toLowerCase();
     if(["p","h2","h3","blockquote"].includes(tag)){
       const text=newsStripHtml(node.textContent||"");
-      if(text.length>=35&&!seenText.has(text)){
+      if(text.length>=35&&!newsArticleNoiseText(text)&&!seenText.has(text)){
         seenText.add(text);
         blocks.push({type:"text",text});
       }
@@ -3044,16 +3067,102 @@ function newsArticleBlocks(html:string,base:string){
   }
   return blocks;
 }
-function newsArticleImages(html:string,base:string,jsonImages:string[]){
+function newsArticleImages(html:string,base:string,_jsonImages:string[]){
   const values:string[]=[];
-  const add=(value:unknown)=>{
-    const url=newsAbsoluteUrl(value,base);
-    if(url&&!values.includes(url))values.push(url);
-  };
-  for(const block of newsArticleBlocks(html,base))if(block.type==="image")add(block.url);
-  for(const value of jsonImages)add(value);
-  for(const value of newsMetaImageValues(html,base))add(value);
+  for(const block of newsArticleBlocks(html,base)){
+    if(block.type!=="image"||!block.url||values.includes(block.url))continue;
+    values.push(block.url);
+  }
   return values.slice(0,12);
+}
+function newsGoogleArticleId(value:string){
+  try{
+    const u=new URL(value);
+    if(u.hostname!=="news.google.com")return "";
+    const parts=u.pathname.split("/").filter(Boolean);
+    const index=parts.findIndex(x=>x==="articles"||x==="read");
+    return index>=0?String(parts[index+1]||""):"";
+  }catch{return "";}
+}
+function newsBase64UrlBytes(token:string){
+  try{
+    let raw=String(token||"").replace(/-/g,"+").replace(/_/g,"/");
+    while(raw.length%4)raw+="=";
+    const binary=atob(raw);
+    return Uint8Array.from(binary,ch=>ch.charCodeAt(0));
+  }catch{return new Uint8Array();}
+}
+function newsDecodeGoogleOffline(articleId:string){
+  const data=newsBase64UrlBytes(articleId);
+  if(data.length<5||data[0]!==0x08||data[1]!==0x13||data[2]!==0x22)return "";
+  let offset=3;
+  let length=0,shift=0;
+  for(let i=0;i<3&&offset<data.length;i++){
+    const byte=data[offset++];
+    length|=(byte&0x7f)<<shift;
+    if(!(byte&0x80))break;
+    shift+=7;
+  }
+  if(!length||offset+length>data.length)return "";
+  try{
+    const value=new TextDecoder("utf-8").decode(data.slice(offset,offset+length));
+    return /^https?:\/\//i.test(value)?value:"";
+  }catch{return "";}
+}
+async function newsResolveGoogleUrl(value:string){
+  const input=String(value||"").trim();
+  const articleId=newsGoogleArticleId(input);
+  if(!articleId)return input;
+  const offline=newsDecodeGoogleOffline(articleId);
+  if(offline)return offline;
+  const headers={
+    "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language":"vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6",
+    "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+  };
+  try{
+    const page=await fetch("https://news.google.com/rss/articles/"+encodeURIComponent(articleId),{headers,redirect:"follow"});
+    if(!page.ok)return input;
+    const html=await page.text();
+    const doc=newsArticleDocument(html);
+    const el=doc?.querySelector("[data-n-a-sg][data-n-a-ts]");
+    const signature=el?.getAttribute("data-n-a-sg")||"";
+    const timestamp=Number(el?.getAttribute("data-n-a-ts")||0);
+    if(!signature||!timestamp)return input;
+    const request=[
+      "garturlreq",
+      [["X","X",["X","X"],null,null,1,1,"VN:vi",null,1,null,null,null,null,null,0,1],"X","X",1,[1,1,1],1,1,null,0,0,null,0],
+      articleId,timestamp,signature
+    ];
+    const outer=[[["Fbv4je",JSON.stringify(request),null,"generic"]]];
+    const res=await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute",{
+      method:"POST",
+      headers:{...headers,"content-type":"application/x-www-form-urlencoded;charset=UTF-8"},
+      body:"f.req="+encodeURIComponent(JSON.stringify(outer))
+    });
+    if(!res.ok)return input;
+    const body=await res.text();
+    const match=body.match(/\[\\\"garturlres\\\",\\\"((?:https?:)?\\\/\\\/[^"]+)/);
+    if(match){
+      try{
+        const decoded=JSON.parse('"'+match[1]+'"');
+        if(/^https?:\/\//i.test(decoded))return decoded;
+      }catch{}
+    }
+    for(const chunk of body.split("\n\n")){
+      const raw=chunk.trim();
+      if(!raw||raw.startsWith(")]}'"))continue;
+      try{
+        const parsed=JSON.parse(raw);
+        const inner=parsed?.[0]?.[2];
+        if(typeof inner==="string"){
+          const value=JSON.parse(inner)?.[1];
+          if(typeof value==="string"&&/^https?:\/\//i.test(value))return value;
+        }
+      }catch{}
+    }
+  }catch{}
+  return input;
 }
 async function newsArticleDetail(rawUrl:string){
   const requested=new URL(rawUrl);
@@ -3062,10 +3171,12 @@ async function newsArticleDetail(rawUrl:string){
   const key=requested.toString();
   const cached=newsDetailCache.get(key);
   if(cached&&Date.now()-cached.at<NEWS_DETAIL_CACHE_MS)return {...cached.payload,cache_hit:true};
+  const resolvedUrl=await newsResolveGoogleUrl(key);
+  if(new URL(resolvedUrl).hostname==="news.google.com")throw new Error("news_detail_unresolved_google_url");
   const controller=new AbortController();
   const timer=setTimeout(()=>controller.abort(),6500);
   try{
-    const res=await fetch(key,{
+    const res=await fetch(resolvedUrl,{
       signal:controller.signal,
       redirect:"follow",
       headers:{
@@ -3095,7 +3206,7 @@ async function newsArticleDetail(rawUrl:string){
     const images=newsArticleImages(html,finalUrl,collected.images);
     const blocks=orderedBlocks.length
       ?orderedBlocks
-      :paragraphs.slice(0,40).map(text=>({type:"text" as const,text}));
+      :paragraphs.filter(text=>!newsArticleNoiseText(text)).slice(0,40).map(text=>({type:"text" as const,text}));
     const payload={
       title:newsArticleTitle(html),
       content:paragraphs.join("\n\n").slice(0,16000),

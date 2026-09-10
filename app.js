@@ -429,11 +429,27 @@ function newsAge(iso){
   const age=formatAge(iso);
   return age||"";
 }
+const NEWS_BAD_IMAGE_FRAGMENTS=[
+  "logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert",
+  "placeholder","loading","blank","footer","header-logo","site-logo","brand-logo",
+  "chia-se-mxh","share-default","/setting/","/settings/","/template/","/templates/",
+  "/themes/images/","default-image","default_image","social-default",
+  "google-news","google_news","googlenews","img-author","author-avatar",
+  "avatar-author","author-default","no-image","no_image","image-not-found"
+];
+function newsImageUrlUsable(value){
+  const url=String(value||"").trim();
+  if(!/^https?:\/\//i.test(url))return false;
+  const low=url.toLowerCase();
+  if(NEWS_BAD_IMAGE_FRAGMENTS.some(fragment=>low.includes(fragment)))return false;
+  if(/\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)/i.test(low))return false;
+  return true;
+}
 function newsImageCandidates(item){
   const out=[];
   for(const value of [item&&item.image,...((item&&item.images)||[])]){
     const url=String(value||"").trim();
-    if(/^https?:\/\//i.test(url)&&!out.includes(url))out.push(url);
+    if(newsImageUrlUsable(url)&&!out.includes(url))out.push(url);
   }
   return out.slice(0,3);
 }
@@ -718,7 +734,7 @@ function newsRenderQuickContent(value,fallback="",images=[],blocks=[]){
     for(const block of cleanBlocks.slice(0,80)){
       if(block.type==="text"&&String(block.text||"").trim()){
         parts.push('<p>'+escapeHtml(String(block.text||"").trim())+'</p>');
-      }else if(block.type==="image"&&/^https?:\/\//i.test(String(block.url||""))){
+      }else if(block.type==="image"&&newsImageUrlUsable(block.url)){
         parts.push('<figure class="news-quick-inline"><img src="'+escapeAttr(String(block.url))+'" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"></figure>');
       }
     }
@@ -730,7 +746,7 @@ function newsRenderQuickContent(value,fallback="",images=[],blocks=[]){
 
   const paragraphs=newsContentParagraphs(value||fallback);
   const pictures=(Array.isArray(images)?images:[])
-    .filter((url,index,all)=>url&&all.indexOf(url)===index)
+    .filter((url,index,all)=>newsImageUrlUsable(url)&&all.indexOf(url)===index)
     .slice(0,7);
   if(!paragraphs.length){
     host.innerHTML='<p class="news-quick-empty">Đang lấy nội dung bài viết...</p>';

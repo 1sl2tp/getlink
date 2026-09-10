@@ -199,10 +199,12 @@ def ready_image_url(v):
     if not value.startswith(("http://","https://")):return ""
     low=value.lower()
     if any(x in low for x in (
-      "logo","favicon","sprite","tracking","pixel","placeholder","loading","blank",
-      "footer","header-logo","site-logo","brand-logo","chia-se-mxh","share-default",
-      "/setting/","/settings/","/template/","/templates/","/themes/images/",
-      "default-image","default_image","social-default"
+      "logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert",
+      "placeholder","loading","blank","footer","header-logo","site-logo","brand-logo",
+      "chia-se-mxh","share-default","/setting/","/settings/","/template/","/templates/",
+      "/themes/images/","default-image","default_image","social-default",
+      "google-news","google_news","googlenews","img-author","author-avatar",
+      "avatar-author","author-default","no-image","no_image","image-not-found"
     )):return ""
     if re.search(r"\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)",low):return ""
     return value
@@ -452,11 +454,7 @@ def image_from_tag(tag,base):
         if raw:break
     if not raw:return ""
     u=urllib.parse.urljoin(base,html.unescape(raw))
-    low=u.lower()
-    if not u.startswith(("http://","https://")):return ""
-    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert","placeholder","loading","blank","footer","header-logo","chia-se-mxh","/setting/","/templates/","/themes/images/")
-    if any(x in low for x in bad) or re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
-    return u
+    return ready_image_url(u)
 
 def page_images(text,base):
     out=[]

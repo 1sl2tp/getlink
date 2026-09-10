@@ -2731,10 +2731,26 @@ function newsAbsoluteImage(value:unknown,base=""){
     return /^https?:$/.test(u.protocol)?u.toString():"";
   }catch{return "";}
 }
+const NEWS_BAD_IMAGE_FRAGMENTS=[
+  "logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert",
+  "placeholder","loading","blank","footer","header-logo","site-logo","brand-logo",
+  "chia-se-mxh","share-default","/setting/","/settings/","/template/","/templates/",
+  "/themes/images/","default-image","default_image","social-default",
+  "google-news","google_news","googlenews","img-author","author-avatar",
+  "avatar-author","author-default","no-image","no_image","image-not-found"
+];
+function newsUsableImageUrl(value:unknown,base=""){
+  const url=newsAbsoluteImage(value,base);
+  if(!url)return "";
+  const low=url.toLowerCase();
+  if(NEWS_BAD_IMAGE_FRAGMENTS.some((fragment)=>low.includes(fragment)))return "";
+  if(/\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)/i.test(low))return "";
+  return url;
+}
 function newsImagesFromItem(block:string,description:string,content:string){
   const values:string[]=[];
   const add=(value:unknown)=>{
-    const url=newsAbsoluteImage(value);
+    const url=newsUsableImageUrl(value);
     if(url&&!values.includes(url))values.push(url);
   };
   for(const tag of ["media:content","media:thumbnail"]){
@@ -3087,12 +3103,7 @@ function newsImageCandidateFromNode(node:any,base:string){
     if(raw)break;
   }
   const url=newsAbsoluteUrl(raw,base);
-  const low=url.toLowerCase();
-  if(!url)return "";
-  const bad=["logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert","placeholder","loading","blank","footer","header-logo","site-logo","brand-logo","chia-se-mxh","share-default","/setting/","/settings/","/template/","/templates/","/themes/images/","default-image","default_image","social-default"];
-  if(bad.some(x=>low.includes(x)))return "";
-  if(/\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)/i.test(low))return "";
-  return url;
+  return newsUsableImageUrl(url);
 }
 function newsArticleParagraphs(html:string,base=""){
   const root=newsArticleRoot(html,base);

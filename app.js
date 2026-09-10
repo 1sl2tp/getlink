@@ -205,7 +205,6 @@ const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
 const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v3";
 const NEWS_HOT_SNAPSHOT_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/latest.json";
-const NEWS_HOT_SNAPSHOT_MAX_AGE=8*60*1000;
 const NEWS_HOT_SNAPSHOT_BUCKET_MS=5*60*1000;
 const NEWS_THUMB_WIDTH=360;
 const newsCache=new Map();
@@ -528,10 +527,6 @@ function refreshNewsViews(){
 function applyNewsPayload(data){
   newsItems=Array.isArray(data&&data.items)?data.items:[];
   newsError="";
-}
-function newsSnapshotAge(data){
-  const t=Date.parse(String(data&&data.generated_at||""));
-  return Number.isFinite(t)?Math.max(0,Date.now()-t):Infinity;
 }
 async function fetchNewsHotSnapshot(force=false){
   const bucket=force?Date.now():Math.floor(Date.now()/NEWS_HOT_SNAPSHOT_BUCKET_MS);

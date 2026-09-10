@@ -1,4 +1,4 @@
-name: Refresh hot news snapshot
+name: Refresh READY news snapshots
 
 on:
   schedule:
@@ -15,13 +15,38 @@ permissions:
   contents: write
 
 concurrency:
-  group: getlink-hot-news-snapshot
+  group: getlink-ready-news-snapshot
   cancel-in-progress: true
 
 jobs:
-  refresh:
+  build:
     runs-on: ubuntu-latest
     timeout-minutes: 4
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - topic: latest
+            limit: 100
+            candidates: 180
+          - topic: thoi-su
+            limit: 60
+            candidates: 90
+          - topic: kinh-doanh
+            limit: 60
+            candidates: 90
+          - topic: cong-nghe
+            limit: 60
+            candidates: 90
+          - topic: the-thao
+            limit: 60
+            candidates: 90
+          - topic: giai-tri
+            limit: 60
+            candidates: 90
+          - topic: suc-khoe
+            limit: 60
+            candidates: 90
     steps:
       - name: Checkout app source
         uses: actions/checkout@v4
@@ -31,24 +56,86 @@ jobs:
       - name: Install Google News RSS processor
         run: python -m pip install --quiet feedparser googlenewsdecoder==0.1.7 ftfy==6.3.1 beautifulsoup4==4.12.3
 
-      - name: Preserve snapshot builder
-        run: cp .github/scripts/build_news_snapshot.py /tmp/build_news_snapshot.py
+      - name: Build Google News candidate snapshot
+        run: |
+          mkdir -p /tmp/getlink-news
+          python .github/scripts/build_news_snapshot.py             --topic "${{ matrix.topic }}"             --output "/tmp/getlink-news/${{ matrix.topic }}-candidate.json"             --limit "${{ matrix.limit }}"             --candidate-limit "${{ matrix.candidates }}"
 
-      - name: Build Google News discovery snapshot
-        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest-fast.json --limit 100 --candidate-limit 180
+      - name: Resolve URLs, clean titles and require thumbnails
+        run: |
+          python .github/scripts/build_news_snapshot.py             --topic "${{ matrix.topic }}"             --input "/tmp/getlink-news/${{ matrix.topic }}-candidate.json"             --output "/tmp/getlink-news/${{ matrix.topic }}.json"             --enrich-only             --limit "${{ matrix.limit }}"             --candidate-limit "${{ matrix.candidates }}"
 
-      - name: Resolve article URLs and thumbnails
-        run: python /tmp/build_news_snapshot.py --input /tmp/getlink-news/latest-fast.json --output /tmp/getlink-news/latest.json --enrich-only --limit 100 --candidate-limit 180
+      - name: Validate READY topic
+        run: |
+          python - <<'PY'
+          import json, pathlib, os
+          topic=os.environ["TOPIC"]
+          path=pathlib.Path(f"/tmp/getlink-news/{topic}.json")
+          data=json.loads(path.read_text(encoding="utf-8"))
+          items=data.get("items") or []
+          assert data.get("phase")=="rich" and data.get("ready") is True
+          assert items
+          for item in items:
+              assert item.get("title")
+              assert item.get("image")
+              assert "news.google.com/" not in str(item.get("url") or "")
+          print(topic, "READY", len(items))
+          PY
+        env:
+          TOPIC: ${{ matrix.topic }}
 
-      - name: Publish complete snapshot atomically
+      - name: Upload READY topic
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-${{ matrix.topic }}
+          path: /tmp/getlink-news/${{ matrix.topic }}.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Checkout app source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download all READY topics
+        uses: actions/download-artifact@v4
+        with:
+          pattern: news-*
+          path: /tmp/getlink-ready
+          merge-multiple: true
+
+      - name: Validate complete READY set
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          topics=["latest","thoi-su","kinh-doanh","cong-nghe","the-thao","giai-tri","suc-khoe"]
+          root=pathlib.Path("/tmp/getlink-ready")
+          for topic in topics:
+              path=root/f"{topic}.json"
+              assert path.exists(), topic
+              data=json.loads(path.read_text(encoding="utf-8"))
+              items=data.get("items") or []
+              assert data.get("phase")=="rich" and data.get("ready") is True, topic
+              assert items, topic
+              assert all(x.get("title") and x.get("image") and "news.google.com/" not in str(x.get("url") or "") for x in items), topic
+              print(topic, len(items))
+          PY
+
+      - name: Publish complete READY set atomically
         run: |
           git config user.name "GETLINK News Cache"
           git config user.email "actions@users.noreply.github.com"
           git checkout --orphan news-cache-publish
           git rm -rf .
           mkdir -p news
-          cp /tmp/getlink-news/latest.json news/latest.json
-          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
-          git add news/latest.json news/meta.json
-          git commit -m "Refresh Google News snapshot"
+          cp /tmp/getlink-ready/*.json news/
+          printf '%s
+' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"topics\":7,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
+          git add news/*.json
+          git commit -m "Refresh READY Google News snapshots"
           git push --force origin HEAD:news-cache

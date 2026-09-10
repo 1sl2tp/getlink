@@ -42,8 +42,12 @@ class NewsImageRelevanceTest(unittest.TestCase):
         self.assertNotIn('rel in {"image_src","preload"}',SCRIPT)
 
     def test_edge_rejects_tiny_and_decorative_image_urls(self):
-        for token in ['48x48','docconvert','image/images/left','image/images/center','image/images/right']:
-            self.assertIn(token,EDGE.lower())
+        edge=EDGE.lower()
+        # Assert the actual grouped rules instead of expanded URL strings. The
+        # production regex intentionally groups left/center/right into one rule.
+        self.assertIn('const tiny=low.match',edge)
+        self.assertIn('docconvert',edge)
+        self.assertIn('(?:left|center|right|top|bottom)',edge)
 
     def test_edge_reader_does_not_render_unqualified_bare_images(self):
         self.assertIn('function newsArticleBlocks',EDGE)

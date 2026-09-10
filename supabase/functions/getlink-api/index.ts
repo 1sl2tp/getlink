@@ -2954,7 +2954,14 @@ function newsArticleRoot(html:string){
     const pCount=node.querySelectorAll?.("p")?.length||0;
     const imageCount=node.querySelectorAll?.("img")?.length||0;
     const linkCount=node.querySelectorAll?.("a")?.length||0;
-    return Math.min(30000,text.length)+Math.min(50,pCount)*220+Math.min(20,imageCount)*45-Math.min(80,linkCount)*8;
+    const tag=String(node.tagName||"").toLowerCase();
+    const marker=String((node.getAttribute?.("class")||"")+" "+(node.getAttribute?.("id")||"")+" "+(node.getAttribute?.("itemprop")||"")).toLowerCase();
+    let semantic=0;
+    if(marker.includes("articlebody"))semantic+=9000;
+    if(tag==="article")semantic+=7000;
+    if(/article[-_ ]?(body|content)|detail[-_ ]?content|content[-_ ]?detail|fck_detail|entry[-_ ]?content|post[-_ ]?content|news[-_ ]?content|content[-_ ]?body/.test(marker))semantic+=6000;
+    if(tag==="main")semantic-=2500;
+    return semantic+Math.min(30000,text.length)+Math.min(50,pCount)*240+Math.min(20,imageCount)*45-Math.min(100,linkCount)*14;
   };
   candidates.sort((a,b)=>score(b)-score(a));
   return candidates[0]||doc.querySelector("body")||doc;
@@ -3062,8 +3069,10 @@ async function newsArticleDetail(rawUrl:string){
       signal:controller.signal,
       redirect:"follow",
       headers:{
-        "accept":"text/html,application/xhtml+xml;q=0.9,*/*;q=0.8",
-        "user-agent":"GETLINK-News-Reader/1.0 (+https://get.taphoa.xyz)"
+        "accept":"text/html,application/xhtml+xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language":"vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6",
+        "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+        "referer":"https://news.google.com/"
       }
     });
     if(!res.ok)throw new Error("news_detail_http_"+res.status);

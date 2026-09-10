@@ -19,6 +19,7 @@
 
   let activeView="orders";
   let activeStatus="pending";
+  let expandedOrderId="";
   let orders=[];
   let customers=[];
   let debtSummaries=[];
@@ -475,12 +476,18 @@
     if(!list)return;
     list.innerHTML=visible.map(order=>{
       const items=Array.isArray(order.items)?order.items:[];
-      return `<article class="order-card" data-order-id="${escapeHtml(order.id)}">
+      const id=String(order.id||"");
+      const expanded=expandedOrderId===String(order.id);
+      const secondary=currentRole()==="admin"
+        ?String(order.customerName||"Khách hàng")+" · "+dateTime(order.orderedAt)
+        :dateTime(order.orderedAt);
+      return `<article class="order-card ${expanded?"expanded":""}" data-order-id="${escapeHtml(order.id)}">
         <div class="order-card-head">
-          <div><strong>${currentRole()==="admin"?escapeHtml(order.customerName||"Khách hàng"):escapeHtml(STATUS_LABELS[order.status]||order.status)}</strong><small>${escapeHtml(dateTime(order.orderedAt))} · ${escapeHtml(orderRef(order))}</small></div>
+          <div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(secondary)} · ${items.length+" dòng"}</small></div>
           <b>${escapeHtml(moneyVnd(order.total))}</b>
         </div>
-        <div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</small></div>`).join("")}</div>
+        <button type="button" class="order-card-detail-toggle" data-order-detail data-order-id="${escapeHtml(id)}">${expanded?"Thu gọn":"Xem đơn"}</button>
+        ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</small></div>`).join("")}</div>`:""}
         ${orderActions(order)}
       </article>`;
     }).join("");
@@ -619,7 +626,7 @@
       const customerName=currentRole()==="admin"?(selectedCustomer()?.name||""):"";
       const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");
-      activeView="orders";activeStatus="pending";
+      expandedOrderId="";activeView="orders";activeStatus="pending";
       debtCustomerId="";debtDetail=null;
       if(currentRole()==="admin")clearSelectedCustomer();
       openManager();
@@ -709,7 +716,14 @@
     const customerOption=target.closest?.("[data-order-customer-id]");
     if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
     const tab=target.closest?.("[data-order-status]");
-    if(tab){activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
+    if(tab){expandedOrderId="";activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
+    const detail=target.closest?.("[data-order-detail]");
+    if(detail){
+      const id=String(detail.dataset.orderId||"");
+      expandedOrderId=expandedOrderId===id?"":id;
+      renderOrders();
+      return;
+    }
     const action=target.closest?.("[data-order-action]");
     if(action)await performAdminAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));
   });

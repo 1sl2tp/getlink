@@ -194,8 +194,9 @@ let mobileUserLimit=8;
 
 const NEWS_TOPIC_LABELS={
   "latest":"Mới nhất",
-  "thoi-su":"Thời sự",
-  "kinh-doanh":"Kinh doanh",
+  "chinh-tri":"Chính trị",
+  "phap-luat":"Pháp luật",
+  "kinh-te":"Kinh tế",
   "tap-hoa":"Tạp hóa",
   "cong-nghe":"Công nghệ",
   "the-thao":"Thể thao",
@@ -204,7 +205,7 @@ const NEWS_TOPIC_LABELS={
 };
 const NEWS_CACHE_TTL=3*60*1000;
 const NEWS_BROWSER_CACHE_TTL=20*60*1000;
-const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v4";
+const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v5";
 const NEWS_SNAPSHOT_BASE_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/";
 const NEWS_SNAPSHOT_BUCKET_MS=5*60*1000;
 const NEWS_THUMB_WIDTH=360;

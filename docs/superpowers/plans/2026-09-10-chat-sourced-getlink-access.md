@@ -31,9 +31,9 @@
 - Consumes: current `order-management.js` text contract.
 - Produces: regression tests that reject local login and require Chat-only gating.
 
-- [ ] **Step 1: Write failing tests** checking that `chatLogin`, `/auth/v1/token?grant_type=password`, `orderLoginUsername`, `orderLoginPassword`, and `orderLoginSubmit` are absent; that embedded mode calls `requestChatAuth`; that standalone protected access targets `https://chat.taphoa.xyz/`; and that backend-verified `/me` remains the source of account role.
-- [ ] **Step 2: Run** `python -m unittest tests.test_getlink_chat_sourced_access -v` and confirm failure against current main behavior.
-- [ ] **Step 3: Commit** the RED contract.
+- [x] **Step 1: Write failing tests** checking that `chatLogin`, `/auth/v1/token?grant_type=password`, `orderLoginUsername`, `orderLoginPassword`, and `orderLoginSubmit` are absent; that embedded mode calls `requestChatAuth`; that standalone protected access targets `https://chat.taphoa.xyz/`; and that backend-verified `/me` remains the source of account role.
+- [x] **Step 2: Run** `python -m unittest tests.test_getlink_chat_sourced_access -v` and confirm failure against current main behavior.
+- [x] **Step 3: Commit** the RED contract.
 
 ### Task 2: Replace local login with Chat-only access gating
 
@@ -44,12 +44,12 @@
 - Produces: `isEmbeddedInChat(): boolean`, `goToChat(): void`, `waitForChatAuth(timeoutMs=1200): Promise<boolean>`, and `requireChatAuth(): Promise<boolean>`.
 - Preserves: `acceptChatBridge`, `requestChatAuth`, `orderFetch`, customer picker, order manager, submit and admin actions.
 
-- [ ] **Step 1: Remove local auth ownership**: delete `SUPABASE_ORIGIN`, `normalizeUsername`, `chatLogin`, login inputs/buttons, login-submit handlers and password-specific keyboard handling.
-- [ ] **Step 2: Add embedded/standalone gate**: embedded mode requests Chat auth and waits up to 1200ms for the verified bridge state; standalone mode navigates to Chat on a protected user action.
-- [ ] **Step 3: Change manager state**: when embedded but not yet authenticated show `Đang xác thực qua Chat...`; never render a credential form. On 401 clear transient auth and re-enter the same Chat-only gate.
-- [ ] **Step 4: Preserve protected behavior**: user sends `{items}`; admin sends `{items, customerId}` after customer selection; `/me` continues verifying the bearer server-side.
-- [ ] **Step 5: Run targeted tests and** `node --check order-management.js`; fix until GREEN.
-- [ ] **Step 6: Commit** the implementation.
+- [x] **Step 1: Remove local auth ownership**: delete `SUPABASE_ORIGIN`, `normalizeUsername`, `chatLogin`, login inputs/buttons, login-submit handlers and password-specific keyboard handling.
+- [x] **Step 2: Add embedded/standalone gate**: embedded mode requests Chat auth and waits up to 1200ms for the verified bridge state; standalone mode navigates to Chat on a protected user action.
+- [x] **Step 3: Change manager state**: when embedded but not yet authenticated show `Đang xác thực qua Chat...`; never render a credential form. On 401 clear transient auth and re-enter the same Chat-only gate.
+- [x] **Step 4: Preserve protected behavior**: user sends `{items}`; admin sends `{items, customerId}` after customer selection; `/me` continues verifying the bearer server-side.
+- [x] **Step 5: Run targeted tests and** `node --check order-management.js`; fix until GREEN.
+- [x] **Step 6: Commit** the implementation.
 
 ### Task 3: Full verification and production integration
 
@@ -60,7 +60,7 @@
 - Consumes: GREEN Task 2.
 - Produces: merge-ready GETLINK-only change.
 
-- [ ] **Step 1: Run static build stamp/check** using the repository's existing script.
+- [x] **Step 1: Run static build stamp/check** using the repository's existing script.
 - [ ] **Step 2: Run full** `python -m unittest discover -s tests -v`.
 - [ ] **Step 3: Run** `node --check app.js`, `node --check order-management.js`, and the workflow's existing Deno checks.
 - [ ] **Step 4: Open/update PR and wait for `Verify GETLINK` GREEN.**

@@ -21,7 +21,8 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn('cron: "*/5 * * * *"',WORKFLOW)
         self.assertIn("workflow_dispatch:",WORKFLOW)
         self.assertIn("news-cache",WORKFLOW)
-        self.assertIn("googlenewsdecoder==0.1.7",WORKFLOW)\n        self.assertIn("ftfy==6.3.1",WORKFLOW)
+        self.assertIn("googlenewsdecoder==0.1.7",WORKFLOW)
+        self.assertIn("ftfy==6.3.1",WORKFLOW)
         self.assertIn("Publish fast snapshot immediately",WORKFLOW)
         self.assertIn("Enrich top stories with original images and content",WORKFLOW)
         self.assertIn("Replace with enriched snapshot",WORKFLOW)
@@ -42,14 +43,16 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn('"content":"",',SCRIPT)
         self.assertIn('data["phase"]="rich"',SCRIPT)
         self.assertIn('"phase":"fast"',SCRIPT)
-        self.assertIn("google_feed",SCRIPT)
+        self.assertNotIn("def fetch_source(",SCRIPT)
         self.assertIn("google_query_feed",SCRIPT)
         self.assertIn("google_top_feed",SCRIPT)
         self.assertIn("fetch_google_query",SCRIPT)
         self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
         for phrase in ["Tin nóng","Tin hot","Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
             self.assertIn(f'"{phrase}"',SCRIPT)
-        self.assertIn("feedparser.parse",SCRIPT)\n        self.assertIn("process_items",SCRIPT)\n        self.assertIn("ftfy_fix_text",SCRIPT)
+        self.assertIn("feedparser.parse",SCRIPT)
+        self.assertIn("process_items",SCRIPT)
+        self.assertIn("ftfy_fix_text",SCRIPT)
 
     def test_frontend_has_static_snapshot_fast_path(self):
         self.assertIn("NEWS_HOT_SNAPSHOT_URL",APP)

@@ -8,7 +8,6 @@
   const API_KEY=String(window.GETLINK_API_KEY||"");
   const CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
   const ORDER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
-  const SUPABASE_ORIGIN=(()=>{try{return new URL(CATALOG_API).origin}catch{return ""}})();
   const STATUS_LABELS={pending:"Đơn tạm",done:"Đã giao",returned:"Đã hoàn"};
   let activeStatus="pending";
   let orders=[];
@@ -33,14 +32,14 @@
   function normalizedSearch(value){
     return String(value||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase().trim();
   }
-  function normalizeUsername(value){
-    return String(value||"").trim().replace(/^@/,"").replace(/@taphoa\.chat$/i,"").toLowerCase();
-  }
 
   function readAuth(){
     try{
       const value=JSON.parse(sessionStorage.getItem(AUTH_KEY)||"null");
-      if(!value?.accessToken||!value?.account?.id)return null;
+      if(!value?.accessToken||!value?.account?.id||value?.source!=="chat"){
+        sessionStorage.removeItem(AUTH_KEY);
+        return null;
+      }
       if(value.expiresAt&&Date.parse(value.expiresAt)<=Date.now()+5000){
         sessionStorage.removeItem(AUTH_KEY);
         return null;
@@ -101,33 +100,11 @@
     return data;
   }
 
-  async function chatLogin(username,password){
-    const user=normalizeUsername(username);
-    if(!user||!password)throw new Error("Nhập tài khoản và mật khẩu.");
-    const res=await fetch(SUPABASE_ORIGIN+"/auth/v1/token?grant_type=password",{
-      method:"POST",
-      headers:new Headers({"content-type":"application/json",...(API_KEY?{apikey:API_KEY}:{})}),
-      body:JSON.stringify({email:user+"@taphoa.chat",password:String(password)})
-    });
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok||!data?.access_token)throw new Error("Tài khoản hoặc mật khẩu chưa đúng.");
-    const me=await orderFetchWithToken("/me",String(data.access_token));
-    const expiresIn=Math.max(30,Number(data.expires_in||3600));
-    const auth={
-      accessToken:String(data.access_token),
-      expiresAt:new Date(Date.now()+expiresIn*1000).toISOString(),
-      account:me.account,
-      source:"direct"
-    };
-    storeAuth(auth);
-    return auth;
-  }
-
   async function acceptChatBridge(message){
     const seq=++bridgeSeq;
     if(!message?.accessToken){
       clearAuth();
-      if(!document.getElementById("orderManager")?.hidden)await refreshManager();
+      if(!document.getElementById("orderManager")?.hidden)setManagerGate("Cần đăng nhập Chat để tiếp tục.");
       return false;
     }
     try{
@@ -142,7 +119,10 @@
       if(!document.getElementById("orderManager")?.hidden)await refreshManager();
       return true;
     }catch{
-      if(seq===bridgeSeq)clearAuth();
+      if(seq===bridgeSeq){
+        clearAuth();
+        if(!document.getElementById("orderManager")?.hidden)setManagerGate("Phiên Chat chưa hợp lệ. Đăng nhập lại ở Chat.");
+      }
       return false;
     }
   }
@@ -154,12 +134,43 @@
     void acceptChatBridge(message);
   });
 
+  function isEmbeddedInChat(){return window.parent!==window}
   function requestChatAuth(){
-    if(window.parent===window)return false;
+    if(!isEmbeddedInChat())return false;
     try{
       window.parent.postMessage({type:"taphoa-getlink-auth-request"},CHAT_ORIGIN);
       return true;
     }catch{return false;}
+  }
+  function goToChat(){
+    window.location.assign(CHAT_ORIGIN+"/");
+  }
+  async function waitForChatAuth(timeoutMs=1200){
+    if(readAuth())return true;
+    if(!isEmbeddedInChat())return false;
+    requestChatAuth();
+    const started=Date.now();
+    while(Date.now()-started<timeoutMs){
+      await new Promise(resolve=>setTimeout(resolve,60));
+      if(readAuth())return true;
+    }
+    return Boolean(readAuth());
+  }
+  async function requireChatAuth(message="Đang xác thực qua Chat..."){
+    if(readAuth())return true;
+    if(!isEmbeddedInChat()){
+      goToChat();
+      return false;
+    }
+    setMainStatus(message);
+    setManagerGate(message);
+    const ok=await waitForChatAuth();
+    if(ok){
+      clearManagerGate();
+      return true;
+    }
+    setManagerGate("Cần đăng nhập Chat để tiếp tục.");
+    return false;
   }
 
   function injectUi(){
@@ -180,14 +191,7 @@
             <div><h2 id="orderManagerTitle">Quản lý đơn</h2><small id="orderManagerIdentity"></small></div>
             <button id="orderManagerClose" type="button" aria-label="Đóng">×</button>
           </header>
-          <div id="orderManagerLogin" class="order-manager-login" hidden>
-            <strong>Đăng nhập bằng tài khoản Chat</strong>
-            <small>Cùng tài khoản đang dùng ở chat.taphoa.xyz.</small>
-            <input id="orderLoginUsername" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Tài khoản">
-            <input id="orderLoginPassword" type="password" autocomplete="current-password" placeholder="Mật khẩu">
-            <button id="orderLoginSubmit" type="button">Đăng nhập</button>
-            <span id="orderLoginStatus"></span>
-          </div>
+          <div id="orderManagerGate" class="order-manager-message" hidden></div>
           <div id="orderManagerBody" class="order-manager-body">
             <nav id="orderManagerTabs" class="order-manager-tabs" aria-label="Trạng thái đơn">
               <button type="button" data-order-status="pending" class="active">Đơn tạm <small>0</small></button>
@@ -198,7 +202,6 @@
               <span id="orderManagerSummary"></span>
               <div class="order-manager-tool-actions">
                 <button id="orderCustomerPickerButton" type="button" hidden>Chọn khách hàng</button>
-                <button id="orderCustomerLogout" type="button" hidden>Đăng xuất</button>
               </div>
             </div>
             <div id="orderManagerList" class="order-manager-list"></div>
@@ -254,6 +257,21 @@
       if(node)node.textContent=message;
     }
   }
+  function setManagerGate(message){
+    injectUi();
+    const host=document.getElementById("orderManager");
+    const gate=document.getElementById("orderManagerGate");
+    const body=document.getElementById("orderManagerBody");
+    if(host){host.hidden=false;host.setAttribute("aria-hidden","false");}
+    if(gate){gate.hidden=false;gate.textContent=message;}
+    if(body)body.hidden=true;
+  }
+  function clearManagerGate(){
+    const gate=document.getElementById("orderManagerGate");
+    const body=document.getElementById("orderManagerBody");
+    if(gate){gate.hidden=true;gate.textContent="";}
+    if(body)body.hidden=false;
+  }
   function openManager(){
     injectUi();
     const host=document.getElementById("orderManager");
@@ -266,23 +284,13 @@
     if(!host)return;
     host.hidden=true;host.setAttribute("aria-hidden","true");
   }
-  function setLoginVisible(show,message=""){
-    const login=document.getElementById("orderManagerLogin");
-    const body=document.getElementById("orderManagerBody");
-    if(login)login.hidden=!show;
-    if(body)body.hidden=show;
-    const status=document.getElementById("orderLoginStatus");
-    if(status)status.textContent=message;
-  }
   function updateIdentity(){
     const node=document.getElementById("orderManagerIdentity");
-    const logout=document.getElementById("orderCustomerLogout");
     const auth=readAuth();
-    if(!auth){if(node)node.textContent="Chưa đăng nhập";if(logout)logout.hidden=true;return;}
+    if(!auth){if(node)node.textContent="Chưa xác thực qua Chat";return;}
     if(node)node.textContent=currentRole()==="admin"
       ?"Admin · tất cả khách hàng"
       :(String(auth.account?.name||auth.account?.username||"Khách hàng"));
-    if(logout)logout.hidden=auth.source==="chat";
     syncCustomerControls();
   }
 
@@ -310,10 +318,12 @@
       </button>`).join(""):'<div class="order-customer-empty">Không tìm thấy khách hàng.</div>';
   }
   async function openCustomerPicker(){
+    if(!(await requireChatAuth()))return false;
     if(currentRole()!=="admin")return false;
     injectUi();
     const host=document.getElementById("orderManager");
     if(host?.hidden){host.hidden=false;host.setAttribute("aria-hidden","false");}
+    clearManagerGate();
     const picker=document.getElementById("orderCustomerPicker");
     if(!picker)return false;
     picker.hidden=false;picker.setAttribute("aria-hidden","false");
@@ -326,6 +336,10 @@
       setTimeout(()=>document.getElementById("orderCustomerSearch")?.focus(),0);
       return true;
     }catch(error){
+      if(error?.status===401){
+        clearAuth();
+        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
+      }
       if(list)list.innerHTML='<div class="order-customer-empty">'+escapeHtml(error?.message||error)+'</div>';
       return false;
     }finally{pickerBusy=false;}
@@ -400,11 +414,18 @@
     injectUi();
     updateIdentity();
     if(!readAuth()){
-      setLoginVisible(true,"Đăng nhập tài khoản Chat để tiếp tục.");
-      requestChatAuth();
-      return;
+      if(!isEmbeddedInChat()){
+        goToChat();
+        return;
+      }
+      setManagerGate("Đang xác thực qua Chat...");
+      if(!(await waitForChatAuth())){
+        setManagerGate("Cần đăng nhập Chat để tiếp tục.");
+        return;
+      }
     }
-    setLoginVisible(false);
+    clearManagerGate();
+    updateIdentity();
     if(currentRole()==="admin")void loadCustomers().catch(()=>{});
     const list=document.getElementById("orderManagerList");
     if(list)list.innerHTML='<div class="order-manager-message">Đang tải đơn...</div>';
@@ -412,22 +433,18 @@
       await loadOrders();renderOrders();
     }catch(error){
       if(error?.status===401){
-        clearAuth();setLoginVisible(true,"Phiên đăng nhập đã hết hạn.");requestChatAuth();
+        clearAuth();
+        if(isEmbeddedInChat()){
+          setManagerGate("Phiên Chat đã hết hạn. Đang xác thực lại...");
+          requestChatAuth();
+        }else goToChat();
       }else if(list)list.innerHTML='<div class="order-manager-message">'+escapeHtml(error?.message||error)+'</div>';
     }
   }
 
-  async function ensureLogin(){
-    if(readAuth())return true;
-    requestChatAuth();
-    await new Promise(resolve=>setTimeout(resolve,80));
-    if(readAuth())return true;
-    openManager();setLoginVisible(true,"Đăng nhập tài khoản Chat trước khi gửi đơn.");
-    return false;
-  }
   async function submitSelectedOrder(){
     if(busy)return;
-    if(!(await ensureLogin()))return;
+    if(!(await requireChatAuth()))return;
     const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
     if(!Array.isArray(selected)||selected.length===0){setMainStatus("Chưa chọn sản phẩm.");return;}
     const items=selected.map(item=>({url:item.row.canonical_url,qty:item.qty}));
@@ -456,7 +473,8 @@
       if(!document.getElementById("orderManager")?.hidden)await refreshManager();
     }catch(error){
       if(error?.status===401){
-        clearAuth();openManager();setLoginVisible(true,"Phiên đăng nhập đã hết hạn. Đăng nhập lại để gửi đơn.");
+        clearAuth();
+        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
       }
       setMainStatus(String(error?.message||error));
     }finally{busy=false;}
@@ -473,7 +491,10 @@
       else if(action==="delete")await orderFetch("/orders/"+encodeURIComponent(id),{method:"DELETE"});
       await refreshManager();
     }catch(error){
-      alert(String(error?.message||error));
+      if(error?.status===401){
+        clearAuth();
+        void requireChatAuth("Phiên Chat đã hết hạn. Đang xác thực lại...");
+      }else alert(String(error?.message||error));
     }finally{busy=false;}
   }
 
@@ -487,7 +508,10 @@
 
   document.addEventListener("click",async event=>{
     const target=event.target;
-    if(target.closest?.("#orderManagerButton")){openManager();return;}
+    if(target.closest?.("#orderManagerButton")){
+      if(await requireChatAuth())openManager();
+      return;
+    }
     if(target.closest?.("#orderManagerClose")){closeManager();return;}
     if(target.id==="orderManager"){closeManager();return;}
     if(target.closest?.("#orderCustomerPickerClose")){closeCustomerPicker();return;}
@@ -496,24 +520,6 @@
     if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
     const tab=target.closest?.("[data-order-status]");
     if(tab){activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
-    if(target.closest?.("#orderCustomerLogout")){
-      clearAuth();await refreshManager();return;
-    }
-    if(target.closest?.("#orderLoginSubmit")){
-      const username=String(document.getElementById("orderLoginUsername")?.value||"").trim();
-      const password=String(document.getElementById("orderLoginPassword")?.value||"");
-      const status=document.getElementById("orderLoginStatus");
-      if(!username||!password){if(status)status.textContent="Nhập tài khoản và mật khẩu.";return;}
-      if(status)status.textContent="Đang đăng nhập...";
-      try{
-        await chatLogin(username,password);
-        if(status)status.textContent="";
-        setLoginVisible(false);updateIdentity();
-        if(currentRole()==="admin")await loadCustomers(true);
-        await loadOrders();renderOrders();
-      }catch(error){if(status)status.textContent=String(error?.message||error);}
-      return;
-    }
     const action=target.closest?.("[data-order-action]");
     if(action){await performAdminAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));}
   });
@@ -524,7 +530,6 @@
   document.addEventListener("keydown",event=>{
     if(event.key==="Escape"&&!document.getElementById("orderCustomerPicker")?.hidden){closeCustomerPicker();return;}
     if(event.key==="Escape"&&!document.getElementById("orderManager")?.hidden)closeManager();
-    if(event.key==="Enter"&&event.target?.id==="orderLoginPassword")document.getElementById("orderLoginSubmit")?.click();
   });
 
   injectUi();

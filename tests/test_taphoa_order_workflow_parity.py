@@ -25,7 +25,8 @@ class TapHoaOrderWorkflowParity(unittest.TestCase):
         self.assertIn("getlink_sales_create_order(p_order,p_items)", sql)
         self.assertIn("getlink_sales_deliver_order(v_id,v_creator_id)", sql)
         self.assertGreaterEqual(sql.count("grant execute on function"), 4)
-        self.assertNotIn("grant execute on function public.getlink_sales_update_pending_order", sql.split("to authenticated")[0] if "to authenticated" in sql else "")
+        self.assertGreaterEqual(sql.count("to service_role"), 4)
+        self.assertNotRegex(sql, r"grant execute on function[^;]+to\s+(?:anon|authenticated)\b")
 
     def test_edge_exposes_update_delete_all_quick_sale_and_sync(self):
         edge = text(EDGE)

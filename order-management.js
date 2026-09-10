@@ -805,6 +805,10 @@
     }finally{busy=false;}
   }
 
+  async function performAdminAction(action,id){
+    return performOrderAction(action,id);
+  }
+
   async function performOrderAction(action,id){
     if(action==="edit"){await startEditOrder(id);return;}
     if(busy)return;

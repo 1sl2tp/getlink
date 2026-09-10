@@ -265,13 +265,26 @@ async function createOrder(body:any,actor:Identity,quick=false){
   const items=await resolveCreateItems(body?.items);
   const id=crypto.randomUUID();
   const submittedAt=new Date().toISOString();
-  const rpcName=quick?"getlink_sales_create_quick_sale":"getlink_sales_create_order";
-  const {error}=await db.rpc(rpcName,{
+  const rpcArgs={
     p_order:{id,customerAccountId:customer.id,createdByAccountId:actor.id,submittedAt},
     p_items:items
-  });
+  };
+  const {error}=quick
+    ?await db.rpc("getlink_sales_create_quick_sale",rpcArgs)
+    :await db.rpc("getlink_sales_create_order",rpcArgs);
   if(error)throw error;
-  return await readOrder(id,actor);
+
+  // Keep the human order number explicit at the create boundary. It is owned by
+  // the database identity column and must be immediately available to the UI.
+  const {data:persisted,error:persistedError}=await db.from("getlink_sales_orders")
+    .select("order_no,status")
+    .eq("id",id)
+    .single();
+  if(persistedError||!persisted)throw persistedError||fail("Không đọc được đơn vừa tạo",500);
+  const created=await readOrder(id,actor);
+  return quick
+    ?{...created,orderNo:Number(persisted.order_no||0)}
+    :{...created,orderNo:Number(persisted.order_no||0),status:"pending"};
 }
 
 async function updatePendingOrder(id:string,body:any,actor:Identity){

@@ -82,7 +82,7 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('storage:\"memory-cache\"',EDGE)
 
     def test_browser_reads_cached_news_before_background_refresh(self):
-        self.assertIn('NEWS_BROWSER_CACHE_KEY=\"getlink:news-cache:v2\"',APP)
+        self.assertIn('NEWS_BROWSER_CACHE_KEY=\"getlink:news-cache:v3\"',APP)
         self.assertIn('readNewsBrowserCache',APP)
         self.assertIn('writeNewsBrowserCache',APP)
         self.assertIn('cache:force?\"no-store\":\"default\"',APP)

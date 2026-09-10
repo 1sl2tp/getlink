@@ -11,7 +11,7 @@ WORKFLOW=(ROOT/".github/workflows/news-snapshot.yml").read_text(encoding="utf-8"
 
 class NewsHotSnapshotContractTest(unittest.TestCase):
     def test_snapshot_is_background_and_database_free(self):
-        self.assertIn("google-news-primary-hot-snapshot",SCRIPT)
+        self.assertIn("google-news-rss-only-snapshot",SCRIPT)
         self.assertIn('"database":False',SCRIPT)
         self.assertNotIn("supabase.table",SCRIPT.lower())
         self.assertNotIn("insert(",SCRIPT)
@@ -21,7 +21,7 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn('cron: "*/5 * * * *"',WORKFLOW)
         self.assertIn("workflow_dispatch:",WORKFLOW)
         self.assertIn("news-cache",WORKFLOW)
-        self.assertIn("googlenewsdecoder==0.1.7",WORKFLOW)
+        self.assertIn("googlenewsdecoder==0.1.7",WORKFLOW)\n        self.assertIn("ftfy==6.3.1",WORKFLOW)
         self.assertIn("Publish fast snapshot immediately",WORKFLOW)
         self.assertIn("Enrich top stories with original images and content",WORKFLOW)
         self.assertIn("Replace with enriched snapshot",WORKFLOW)
@@ -47,9 +47,9 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("google_top_feed",SCRIPT)
         self.assertIn("fetch_google_query",SCRIPT)
         self.assertIn('GOOGLE_HOT_QUERIES=[',SCRIPT)
-        for phrase in ["Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
+        for phrase in ["Tin nóng","Tin hot","Tăng giá","Chiến tranh","công an","xét xử","vĩ mô","tạm giam","khởi tố","thuế","chứng khoán","lừa đảo"]:
             self.assertIn(f'"{phrase}"',SCRIPT)
-        self.assertIn("feedparser.parse",SCRIPT)
+        self.assertIn("feedparser.parse",SCRIPT)\n        self.assertIn("process_items",SCRIPT)\n        self.assertIn("ftfy_fix_text",SCRIPT)
 
     def test_frontend_has_static_snapshot_fast_path(self):
         self.assertIn("NEWS_HOT_SNAPSHOT_URL",APP)

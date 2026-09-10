@@ -45,8 +45,9 @@ new = '''  const rpcArgs={
     .single();
   if(persistedError||!persisted)throw persistedError||fail("Không đọc được đơn vừa tạo",500);
   const created=await readOrder(id,actor);
-  created.orderNo=Number(persisted.order_no||0);
-  return quick?created:{...created,status:"pending"};
+  return quick
+    ?{...created,orderNo:Number(persisted.order_no||0)}
+    :{...created,orderNo:Number(persisted.order_no||0),status:"pending"};
 }'''
 edge = replace_once(edge, old, new, "explicit create RPC and order number")
 write(edge_rel, edge)

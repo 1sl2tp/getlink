@@ -16,44 +16,24 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
         self.assertIn('news:"Tin tức"',APP)
 
-    def test_requested_sources_are_declared(self):
-        for token in [
-            'name:"VnExpress"',
-            'name:"Dân Trí"',
-            'name:"Tuổi Trẻ"',
-            'name:"Báo Mới"',
-            'name:"VietnamNet"',
-            'name:"Kênh14"',
-            'name:"Zing News"',
-            'name:"Báo Thanh Niên"',
-            'name:"Lao Động"',
-        ]:
-            self.assertIn(token,EDGE)
-
-    def test_common_topics_and_rss_fallback_exist(self):
+    def test_google_news_rss_is_the_only_runtime_discovery_path(self):
         for key in ["latest","thoi-su","kinh-doanh","cong-nghe","the-thao","giai-tri","suc-khoe"]:
             self.assertIn('key:"'+key+'"',EDGE)
-        self.assertIn("news.google.com/rss/search",EDGE)
-        self.assertIn("newsFetchSource",EDGE)
+        self.assertIn("newsGoogleTopFeed",EDGE)
+        self.assertIn("newsGoogleQueryFeed",EDGE)
+        self.assertIn("newsGoogleTopicFeeds",EDGE)
+        self.assertIn("newsParseGoogleItems",EDGE)
+        self.assertIn('discovery:"google-news-rss-only"',EDGE)
         self.assertIn("newsDeduplicate",EDGE)
+        self.assertNotIn("async function newsFetchSource(",EDGE)
         self.assertIn('route==="/api/news"',EDGE)
-
-    def test_official_rss_is_preferred_for_major_publishers(self):
-        for url in [
-            "https://vnexpress.net/rss/tin-moi-nhat.rss",
-            "https://dantri.com.vn/rss/home.rss",
-            "https://tuoitre.vn/home.rss",
-            "https://kenh14.vn/rss/home.rss",
-            "https://thanhnien.vn/rss/home.rss",
-        ]:
-            self.assertIn(url,EDGE)
 
     def test_quick_view_is_local_content_reader_without_ad_iframe(self):
         self.assertIn('id="newsQuickView"',HTML)
-        self.assertIn('id="newsQuickGallery"',HTML)
         self.assertIn('id="newsQuickContent"',HTML)
-        self.assertIn('id="newsQuickOriginal"',HTML)
-        self.assertNotIn('id="newsQuickTitle"',HTML)
+        self.assertIn('id="newsQuickTitle"',HTML)
+        self.assertNotIn('id="newsQuickGallery"',HTML)
+        self.assertNotIn('id="newsQuickOriginal"',HTML)
         self.assertNotIn('id="newsQuickMeta"',HTML)
         quick=HTML[HTML.index('id="newsQuickView"'):]
         self.assertNotIn("<iframe",quick.split("<script>")[0].lower())
@@ -71,6 +51,8 @@ class NewsRssContractTest(unittest.TestCase):
         card=APP[APP.index("function newsCardHtml"):APP.index("function renderNewsDesktop")]
         self.assertNotIn("source_name",card)
         self.assertNotIn("also_sources",card)
+        self.assertNotIn("news-card-summary",card)
+        self.assertNotIn("news-card-time",card)
 
     def test_news_prefers_richer_images_and_deduplicates_title_or_content(self):
         self.assertIn("images:string[]",EDGE)
@@ -87,6 +69,8 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn("articleBody",EDGE)
         self.assertIn("newsArticleParagraphs",EDGE)
         self.assertIn("newsArticleImages",EDGE)
+        self.assertIn("newsArticleBlocks",EDGE)
+        self.assertIn("blocks,",EDGE)
 
     def test_news_storage_is_ephemeral_cache_only(self):
         news_block=EDGE[EDGE.index('type NewsTopicKey='):EDGE.index('const UPDATE_ADMIN_PIN_SHA256=')]
@@ -110,13 +94,14 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('const eager=index<(compact?6:12);',APP)
 
     def test_quick_reader_flows_images_through_article_and_swipes(self):
-        self.assertIn('news-quick-hero',APP)
+        self.assertNotIn('newsRenderQuickGallery',APP)
         self.assertIn('news-quick-inline',APP)
+        self.assertIn('data.blocks||[]',APP)
         self.assertIn('function newsQuickMove(delta)',APP)
         self.assertIn('card.addEventListener(\"touchstart\"',APP)
         self.assertIn('card.addEventListener(\"touchend\"',APP)
         self.assertIn('newsQuickMove(dx<0?1:-1)',APP)
-        self.assertIn('News reader v58',CSS)
+        self.assertIn('News reader v59',CSS)
         self.assertIn('touch-action:pan-y',CSS)
     def test_news_ui_owns_its_scroll_and_mobile_rows(self):
         self.assertIn(".news-grid",CSS)

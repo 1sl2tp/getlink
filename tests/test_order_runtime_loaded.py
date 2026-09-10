@@ -12,8 +12,8 @@ class OrderRuntimeBootstrapContract(unittest.TestCase):
         text = INDEX.read_text(encoding="utf-8")
         config = CONFIG.read_text(encoding="utf-8")
 
-        self.assertIn('href="./order-management.css', text)
-        self.assertIn('href="./order-customer-picker.css', text)
+        self.assertIn('runtime.assetUrl("order-management.css",build)', text)
+        self.assertIn('runtime.assetUrl("order-customer-picker.css",build)', text)
         self.assertIn('runtime.assetUrl("order-management.js",build)', text)
         self.assertIn('await loadScript(orderManagementUrl,build)', text)
 

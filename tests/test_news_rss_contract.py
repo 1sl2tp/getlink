@@ -43,7 +43,7 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertNotIn("<iframe",quick.split("<script>")[0].lower())
         self.assertIn('if(e.target.id==="newsQuickView")closeNewsQuickView()',APP)
         self.assertIn('loadNewsQuickDetail(item,request)',APP)
-        self.assertIn('/api/news-detail?url=',APP)
+        self.assertIn('/api/news-detail?reader=2&url=',APP)
 
     def test_news_ui_hides_publishers_and_mobile_is_two_columns(self):
         self.assertNotIn('id="newsSourceTabs"',HTML)
@@ -83,6 +83,8 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('npm:node-html-parser@7.0.1',EDGE)
         self.assertIn("blocks,",EDGE)
         self.assertIn("title:newsArticleTitle(html)",EDGE)
+        self.assertIn('"accept-language":"vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6"',EDGE)
+        self.assertIn("semantic+=9000",EDGE)
         self.assertIn('String(data.title||"").trim()',APP)
 
     def test_news_storage_is_ephemeral_cache_only(self):

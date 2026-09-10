@@ -35,10 +35,10 @@ jobs:
         run: cp .github/scripts/build_news_snapshot.py /tmp/build_news_snapshot.py
 
       - name: Build Google News discovery snapshot
-        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest-fast.json --limit 100
+        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest-fast.json --limit 100 --candidate-limit 180
 
       - name: Resolve article URLs and thumbnails
-        run: python /tmp/build_news_snapshot.py --input /tmp/getlink-news/latest-fast.json --output /tmp/getlink-news/latest.json --enrich-only --limit 100
+        run: python /tmp/build_news_snapshot.py --input /tmp/getlink-news/latest-fast.json --output /tmp/getlink-news/latest.json --enrich-only --limit 100 --candidate-limit 180
 
       - name: Publish complete snapshot atomically
         run: |
@@ -48,7 +48,7 @@ jobs:
           git rm -rf .
           mkdir -p news
           cp /tmp/getlink-news/latest.json news/latest.json
-          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
+          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
           git add news/latest.json news/meta.json
           git commit -m "Refresh Google News snapshot"
           git push --force origin HEAD:news-cache

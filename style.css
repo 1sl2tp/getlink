@@ -15047,16 +15047,70 @@ body.news-quick-open{overflow:hidden!important}
     box-sizing:border-box;
   }
 }
-@media(max-width:340px){
+@media(max-width:520px){
+  /* Smallest mobile owner: one readable news row per line.
+     Do not keep the two-column desktop/tablet card geometry this narrow. */
   .mobile-user-results.news-results{
+    grid-template-columns:minmax(0,1fr)!important;
+    grid-auto-flow:row!important;
     gap:6px!important;
     padding:6px!important;
   }
+  .mobile-user-results.news-results .news-card{
+    box-sizing:border-box!important;
+    min-height:86px!important;
+    height:auto!important;
+    display:grid!important;
+    grid-template-columns:92px minmax(0,1fr)!important;
+    grid-template-rows:auto!important;
+    align-items:center!important;
+    gap:8px!important;
+    padding:6px!important;
+    overflow:hidden!important;
+  }
+  .mobile-user-results.news-results .news-card-image{
+    width:92px!important;
+    height:72px!important;
+    min-width:92px!important;
+    min-height:72px!important;
+    aspect-ratio:auto!important;
+    border-radius:8px!important;
+  }
   .mobile-user-results.news-results .news-card-copy{
-    padding:7px!important;
+    min-width:0!important;
+    min-height:72px!important;
+    padding:4px 5px 4px 0!important;
+    justify-content:flex-start!important;
   }
   .mobile-user-results.news-results .news-card-title{
-    font-size:11.5px!important;
+    font-size:12.5px!important;
+    line-height:1.32!important;
+    -webkit-line-clamp:3!important;
+  }
+}
+@media(max-width:340px){
+  .mobile-user-results.news-results{
+    gap:5px!important;
+    padding:5px!important;
+  }
+  .mobile-user-results.news-results .news-card{
+    grid-template-columns:82px minmax(0,1fr)!important;
+    min-height:78px!important;
+    padding:5px!important;
+    gap:7px!important;
+  }
+  .mobile-user-results.news-results .news-card-image{
+    width:82px!important;
+    height:66px!important;
+    min-width:82px!important;
+    min-height:66px!important;
+  }
+  .mobile-user-results.news-results .news-card-copy{
+    min-height:66px!important;
+    padding:3px 4px 3px 0!important;
+  }
+  .mobile-user-results.news-results .news-card-title{
+    font-size:11.8px!important;
   }
 }
 

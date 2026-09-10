@@ -333,8 +333,8 @@ def image_from_tag(tag,base):
     if tag is None:return ""
     target=tag
     name=str(getattr(tag,"name","") or "").lower()
-    if name!="img":
-        try:target=tag.find("img") or tag.find("source")
+    if name not in ("img","amp-img","source"):
+        try:target=tag.find("img") or tag.find("amp-img") or tag.find("source")
         except Exception:target=None
     if target is None:return ""
     try:
@@ -367,7 +367,7 @@ def page_images(text,base):
             for selector in ("script","style","noscript","svg","nav","aside","footer","form","iframe"):
                 for node in root.select(selector):node.decompose()
         except Exception:pass
-        try:nodes=root.select("figure,picture,img")
+        try:nodes=root.select("figure,picture,img,amp-img")
         except Exception:nodes=[]
         for tag in nodes:
             u=image_from_tag(tag,base)

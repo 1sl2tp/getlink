@@ -62,6 +62,9 @@ class TapHoaFullOrderDebtParity(unittest.TestCase):
         self.assertIn("THU", order)
         self.assertIn("LÃI", order)
         self.assertIn("Tổng SP", order)
+        # Report accumulators may display server-returned cost to Admin, but the
+        # browser must never introduce a client-authoritative `cost:` payload field.
+        self.assertNotIn("cost:", order)
 
     def test_delivered_order_actions_include_edit_return_and_filtered_batch_return(self):
         order = text(ORDER)

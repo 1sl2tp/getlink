@@ -1,0 +1,47 @@
+name: Apply final Tạp hóa workflow review once
+
+on:
+  push:
+    branches:
+      - feature/taphoa-order-workflow-parity
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-order-workflow-parity
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply bounded review patch
+        run: python tools/apply_taphoa_order_review_once.py
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Focused workflow tests
+        run: python -m unittest tests.test_taphoa_order_workflow_parity -v
+      - name: JavaScript syntax
+        run: |
+          node --check app.js
+          node --check order-management.js
+      - name: Ensure temporary machinery is gone
+        run: |
+          test ! -e tools/apply_taphoa_order_review_once.py
+          test ! -e .github/workflows/apply-taphoa-order-review-once.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "fix: close Tạp hóa order workflow review gaps"
+          git push origin HEAD:feature/taphoa-order-workflow-parity

@@ -35,8 +35,7 @@ jobs:
         run: cp .github/scripts/build_news_snapshot.py /tmp/build_news_snapshot.py
 
       - name: Build fast hot-news snapshot
-        run: |
-          python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest.json --limit 100
+        run: python /tmp/build_news_snapshot.py --output /tmp/getlink-news/latest.json --limit 100
 
       - name: Publish fast snapshot immediately
         run: |
@@ -46,21 +45,18 @@ jobs:
           git rm -rf .
           mkdir -p news
           cp /tmp/getlink-news/latest.json news/latest.json
-          printf '{"updated_at":"%s","phase":"fast","history":false,"database":false}
-' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > news/meta.json
+          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"fast\",\"history\":false,\"database\":false}" > news/meta.json
           git add news/latest.json news/meta.json
           git commit -m "Refresh hot news snapshot"
           git push --force origin HEAD:news-cache
 
       - name: Enrich top stories with original images and content
-        run: |
-          python /tmp/build_news_snapshot.py             --input news/latest.json             --output /tmp/getlink-news/latest-rich.json             --enrich-only             --limit 100
+        run: python /tmp/build_news_snapshot.py --input news/latest.json --output /tmp/getlink-news/latest-rich.json --enrich-only --limit 100
 
       - name: Replace with enriched snapshot
         run: |
           cp /tmp/getlink-news/latest-rich.json news/latest.json
-          printf '{"updated_at":"%s","phase":"rich","history":false,"database":false}
-' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > news/meta.json
+          printf '%s\n' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"history\":false,\"database\":false}" > news/meta.json
           git add news/latest.json news/meta.json
           git commit --amend --no-edit
           git push --force origin HEAD:news-cache

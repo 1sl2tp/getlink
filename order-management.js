@@ -560,13 +560,13 @@
     }).sort((a,b)=>new Date(b.orderedAt||0)-new Date(a.orderedAt||0)||Number(b.orderNo||0)-Number(a.orderNo||0));
   }
   function summarizeOrdersBySource(rows=[]){
-    const map=new Map();const total={qty:0,cost:0,revenue:0,profit:0,costKnown:false};
+    const map=new Map();const total={qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false};
     for(const order of rows){
       for(const item of order.items||[]){
         const source=String(item.sourceId||"Khác").trim()||"Khác",qty=Number(item.qty||0),price=Number(item.price||0),cost=Number(item.cost||0),known=item.cost!==undefined&&item.cost!==null;
-        const row=map.get(source)||{source,qty:0,cost:0,revenue:0,profit:0,costKnown:false,orders:new Set()};
-        row.qty+=qty;row.revenue+=price*qty;row.cost+=known?cost*qty:0;row.profit+=known?(price-cost)*qty:0;row.costKnown=row.costKnown||known;row.orders.add(String(order.id));map.set(source,row);
-        total.qty+=qty;total.revenue+=price*qty;if(known){total.cost+=cost*qty;total.profit+=(price-cost)*qty;total.costKnown=true;}
+        const row=map.get(source)||{source,qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false,orders:new Set()};
+        row.qty+=qty;row.revenue+=price*qty;row.expenseVnd+=known?cost*qty:0;row.profit+=known?(price-cost)*qty:0;row.costKnown=row.costKnown||known;row.orders.add(String(order.id));map.set(source,row);
+        total.qty+=qty;total.revenue+=price*qty;if(known){total.expenseVnd+=cost*qty;total.profit+=(price-cost)*qty;total.costKnown=true;}
       }
     }
     return {rows:[...map.values()].sort((a,b)=>b.revenue-a.revenue||a.source.localeCompare(b.source,"vi")).map(row=>({...row,orderCount:row.orders.size,orders:undefined})),total};
@@ -595,8 +595,8 @@
     const value=(n,known=true)=>known?moneyVnd(n):"—";
     return `<section class="order-source-summary">
       <div class="order-source-grid order-source-head"><span>NGUỒN</span><span>SL</span><span>CHI</span><span>THU</span><span>LÃI</span></div>
-      ${summary.rows.map(row=>`<button type="button" class="order-source-grid order-source-row" data-order-source-open="${escapeHtml(row.source)}"><span>${escapeHtml(row.source)}</span><span>${row.qty}</span><span>${escapeHtml(value(row.cost,admin&&row.costKnown))}</span><span>${escapeHtml(value(row.revenue))}</span><span>${escapeHtml(value(row.profit,admin&&row.costKnown))}</span></button>`).join("")}
-      <div class="order-source-grid order-source-total"><span>TỔNG (${rows.length} đơn)</span><span>${summary.total.qty}</span><span>${escapeHtml(value(summary.total.cost,admin&&summary.total.costKnown))}</span><span>${escapeHtml(value(summary.total.revenue))}</span><span>${escapeHtml(value(summary.total.profit,admin&&summary.total.costKnown))}</span></div>
+      ${summary.rows.map(row=>`<button type="button" class="order-source-grid order-source-row" data-order-source-open="${escapeHtml(row.source)}"><span>${escapeHtml(row.source)}</span><span>${row.qty}</span><span>${escapeHtml(value(row.expenseVnd,admin&&row.costKnown))}</span><span>${escapeHtml(value(row.revenue))}</span><span>${escapeHtml(value(row.profit,admin&&row.costKnown))}</span></button>`).join("")}
+      <div class="order-source-grid order-source-total"><span>TỔNG (${rows.length} đơn)</span><span>${summary.total.qty}</span><span>${escapeHtml(value(summary.total.expenseVnd,admin&&summary.total.costKnown))}</span><span>${escapeHtml(value(summary.total.revenue))}</span><span>${escapeHtml(value(summary.total.profit,admin&&summary.total.costKnown))}</span></div>
     </section>`;
   }
   function sourceDetailRows(rows,source){

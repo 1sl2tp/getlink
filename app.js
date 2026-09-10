@@ -6544,6 +6544,10 @@ if(userWorkHome){
   });
 }
 
+window.userWorkSelectedItems=userWorkSelectedItems;
+window.renderUserWorkHome=renderUserWorkHome;
+window.updateUserWorkOrderSummary=updateUserWorkOrderSummary;
+
 startClassificationAutoRefresh();
 
 const saved=localStorage.getItem("getlink:last-url")||"";

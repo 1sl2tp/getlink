@@ -77,7 +77,13 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn("newsArticleParagraphs",EDGE)
         self.assertIn("newsArticleImages",EDGE)
         self.assertIn("newsArticleBlocks",EDGE)
+        self.assertIn("newsArticleRoot",EDGE)
+        self.assertIn("newsArticleTitle",EDGE)
+        self.assertIn('npm:he@1.2.0',EDGE)
+        self.assertIn('npm:node-html-parser@7.0.1',EDGE)
         self.assertIn("blocks,",EDGE)
+        self.assertIn("title:newsArticleTitle(html)",EDGE)
+        self.assertIn('String(data.title||"").trim()',APP)
 
     def test_news_storage_is_ephemeral_cache_only(self):
         news_block=EDGE[EDGE.index('type NewsTopicKey='):EDGE.index('const UPDATE_ADMIN_PIN_SHA256=')]

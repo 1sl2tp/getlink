@@ -52,8 +52,9 @@ GOOGLE_HOT_QUERIES=[
 GOOGLE_GENERIC_QUERIES=["Tin nóng","Tin hot"]
 TOPIC_QUERIES={
  "latest":["__top__",*GOOGLE_HOT_QUERIES,*GOOGLE_GENERIC_QUERIES],
- "thoi-su":["thời sự","xã hội","chính trị"],
- "kinh-doanh":["kinh doanh","thị trường","tài chính"],
+ "chinh-tri":["chính trị","chiến tranh","tổng thống","thủ tướng","chủ tịch","bãi nhiệm","cách chức","bổ nhiệm"],
+ "phap-luat":["pháp luật","công an","xét xử","tạm giam","khởi tố","khám xét","lừa đảo"],
+ "kinh-te":["kinh tế","tăng giá","vĩ mô","lãi suất","chứng khoán","tỷ phú","thị trường","tài chính"],
  "tap-hoa":["thuế","an toàn vệ sinh thực phẩm","hàng giả","hàng nhái","hộ kinh doanh"],
  "cong-nghe":["công nghệ","AI","điện thoại"],
  "the-thao":["thể thao","bóng đá","V-League"],

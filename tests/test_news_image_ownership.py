@@ -1,3 +1,4 @@
+# Regression coverage for article-image ownership across snapshot and quick reader.
 import importlib.util
 import sys
 import types

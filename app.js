@@ -4,6 +4,8 @@ const API_KEY=String(window.GETLINK_API_KEY||"");
 const UPDATE_ADMIN_TOKEN_KEY="getlink:update-admin-session";
 let updateAdminToken=sessionStorage.getItem(UPDATE_ADMIN_TOKEN_KEY)||"";
 let appRole="user";
+// appRole is UI presentation only; it is not account identity or a second login.
+// Sales identity is GETLINK_ACCESS_CONTEXT with exactly guest/user/admin, normally sourced from Chat.
 const USER_CLIENT_ID_KEY="getlink:user-client-id";
 const userFeedbackTimers=new Map();
 

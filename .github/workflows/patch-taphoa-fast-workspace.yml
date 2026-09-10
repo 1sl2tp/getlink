@@ -18,6 +18,45 @@ jobs:
         with:
           ref: feature/taphoa-fast-workspace-flow
           fetch-depth: 0
+      - name: Harden function-scoped quick-sale patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/patch_taphoa_fast_workspace.py')
+          s=p.read_text(encoding='utf-8')
+          start=s.index('# Quick sale: keep customer, stay Sales.')
+          end=s.index('# Normal send: keep customer, stay Sales, visible busy state.', start)
+          block=r'''# Quick sale: keep customer, stay Sales, explicit busy state.
+          order=sub_once(
+              order,
+              r'  async function submitQuickSale\(\)\{[\s\S]*?(?=\n  async function deleteAllPendingOrders\(\)\{)',
+          ''' + "'''" + '''  async function submitQuickSale(){
+              if(busy||currentRole()!=="admin")return;
+              if(!(await requireChatAuth()))return;
+              const items=selectedOrderPayload();
+              if(!items){setMainStatus("Chưa chọn sản phẩm.");return;}
+              if(!selectedCustomerId){setMainStatus("Chưa chọn khách hàng.");await openCustomerPicker();return;}
+              const customerId=selectedCustomerId;
+              busy=true;setSalesBusyState("quick",true);setMainStatus("Đang bán nhanh...");
+              try{
+                const data=await orderFetch("/orders",{method:"POST",body:JSON.stringify({items,customerId,mode:"quick"})});
+                clearCurrentCart();
+                const label=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
+                setMainStatus("Đã bán nhanh đơn "+label+" · Đã giao.");
+                expandedOrderId="";activeView="orders";activeStatus="delivered";
+                taphoaWorkView="sales";syncTaphoaWorkspace();
+              }catch(error){
+                handleAuthError(error);setMainStatus(String(error?.message||error));
+              }finally{busy=false;setSalesBusyState("quick",false);syncCartActions();syncCustomerControls();}
+            }
+          ''' + "'''" + ''',
+              'quick sale function',
+              re.M
+          )
+
+          '''
+          p.write_text(s[:start]+block+s[end:],encoding='utf-8')
+          PY
       - name: Patch runtime
         run: python tools/patch_taphoa_fast_workspace.py
       - name: Focused RED to GREEN contracts

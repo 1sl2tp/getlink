@@ -51,6 +51,9 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn("display:none!important",CSS)
         self.assertIn(".mobile-user-results.news-results",CSS)
         self.assertIn("grid-template-columns:repeat(2,minmax(0,1fr))!important",CSS)
+        self.assertIn("@media(max-width:520px)",CSS)
+        self.assertIn("grid-template-columns:minmax(0,1fr)!important",CSS)
+        self.assertIn("grid-template-columns:92px minmax(0,1fr)!important",CSS)
         self.assertIn('results.classList.add("news-results")',APP)
         card=APP[APP.index("function newsCardHtml"):APP.index("function renderNewsDesktop")]
         self.assertNotIn("source_name",card)

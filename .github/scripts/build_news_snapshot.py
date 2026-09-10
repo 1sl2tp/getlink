@@ -139,7 +139,7 @@ def ready_image_url(v):
       "/setting/","/settings/","/template/","/templates/","/themes/images/",
       "default-image","default_image","social-default"
     )):return ""
-    if re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
+    if re.search(r"\.(?:svg|ico|woff2?|ttf|otf|css|js|json|pdf|xml)(?:[?#]|$)",low):return ""
     return value
 
 def ready_item(item):
@@ -297,7 +297,7 @@ def article_soup(text):
       "[class*='post-content']","[class*='entry-content']","[class*='fck_detail']",
       "[class*='singular-content']","[class*='the-article-body']","[class*='news-content']",
       "[class*='content-body']","[id*='article-body']","[id*='article-content']",
-      "[id*='detail-content']","main"
+      "[id*='detail-content']"
     ]
     seen=set(); candidates=[]
     for selector in selectors:
@@ -307,7 +307,7 @@ def article_soup(text):
             key=id(node)
             if key not in seen:
                 seen.add(key); candidates.append(node)
-    if not candidates:return soup.body or soup
+    if not candidates:return None
     def score(node):
         try:
             text_len=len(plain(node.get_text(" ",strip=True)))

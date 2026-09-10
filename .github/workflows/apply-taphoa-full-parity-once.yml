@@ -1,0 +1,43 @@
+name: Apply TAPHOA full parity once
+
+on:
+  push:
+    branches:
+      - feature/taphoa-full-order-debt-parity
+    paths:
+      - .github/workflows/apply-taphoa-full-parity-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-full-order-debt-parity
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply parity patch
+        run: python tools/apply_taphoa_full_parity_once.py
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Focused RED to GREEN test
+        run: python -m unittest tests.test_taphoa_full_order_debt_parity -v
+      - name: Syntax check frontend
+        run: node --check order-management.js
+      - name: Commit implementation
+        run: |
+          git config user.name "1sl2tp"
+          git config user.email "1sl2tp@gmail.com"
+          git add order-management.js order-management.css index.html version.json supabase/functions/getlink-orders/index.ts
+          git commit -m "feat: complete TAPHOA order and debt parity"
+          git push origin HEAD:feature/taphoa-full-order-debt-parity
+      - name: Remove one-shot helper
+        run: |
+          git rm tools/apply_taphoa_full_parity_once.py .github/workflows/apply-taphoa-full-parity-once.yml
+          git commit -m "chore: remove TAPHOA parity one-shot helper"
+          git push origin HEAD:feature/taphoa-full-order-debt-parity

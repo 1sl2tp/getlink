@@ -18,15 +18,16 @@ jobs:
         with:
           ref: feature/taphoa-fast-workspace-flow
           fetch-depth: 0
-      - name: Harden function-scoped quick-sale patch
+      - name: Harden brittle one-shot patch anchors
         run: |
           python - <<'PY'
           from pathlib import Path
           p=Path('tools/patch_taphoa_fast_workspace.py')
           s=p.read_text(encoding='utf-8')
+
           start=s.index('# Quick sale: keep customer, stay Sales.')
           end=s.index('# Normal send: keep customer, stay Sales, visible busy state.', start)
-          block=r'''# Quick sale: keep customer, stay Sales, explicit busy state.
+          quick=r'''# Quick sale: keep customer, stay Sales, explicit busy state.
           order=sub_once(
               order,
               r'  async function submitQuickSale\(\)\{[\s\S]*?(?=\n  async function deleteAllPendingOrders\(\)\{)',
@@ -55,7 +56,19 @@ jobs:
           )
 
           '''
-          p.write_text(s[:start]+block+s[end:],encoding='utf-8')
+          s=s[:start]+quick+s[end:]
+
+          old=r'''order=sub_once(order,r'    const mode=target\.closest\?\.\("\[data-manager-view\]"\);\n    if\(mode\)\{[^\n]*\}\n','', 'remove manager mode event')'''
+          new=r'''order=sub_once(
+              order,
+              r'    const mode=target\.closest\?\.\("\[data-manager-view\]"\);\n    if\(mode\)\{[\s\S]*?await refreshManager\(\);return;\}\n',
+              '',
+              'remove manager mode event'
+          )'''
+          if old not in s:
+              raise SystemExit('manager-mode patch anchor missing in helper')
+          s=s.replace(old,new,1)
+          p.write_text(s,encoding='utf-8')
           PY
       - name: Patch runtime
         run: python tools/patch_taphoa_fast_workspace.py

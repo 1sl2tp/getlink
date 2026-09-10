@@ -26,6 +26,10 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('discovery:"google-news-rss-only"',EDGE)
         self.assertIn("newsDeduplicate",EDGE)
         self.assertNotIn("async function newsFetchSource(",EDGE)
+        self.assertNotIn("const NEWS_SOURCES:",EDGE)
+        self.assertNotIn("type NewsSourceDef=",EDGE)
+        self.assertNotIn("async function newsParseItems(",EDGE)
+        self.assertNotIn("function newsGoogleFeed(",EDGE)
         self.assertIn('route==="/api/news"',EDGE)
 
     def test_quick_view_is_local_content_reader_without_ad_iframe(self):
@@ -53,6 +57,9 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertNotIn("also_sources",card)
         self.assertNotIn("news-card-summary",card)
         self.assertNotIn("news-card-time",card)
+        self.assertNotIn("NEWS_SOURCE_LABELS",APP)
+        self.assertNotIn("newsSourceButtons",APP)
+        self.assertNotIn("data-news-source",APP)
 
     def test_news_prefers_richer_images_and_deduplicates_title_or_content(self):
         self.assertIn("images:string[]",EDGE)

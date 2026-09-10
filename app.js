@@ -196,6 +196,7 @@ const NEWS_TOPIC_LABELS={
   "latest":"Mới nhất",
   "thoi-su":"Thời sự",
   "kinh-doanh":"Kinh doanh",
+  "tap-hoa":"Tạp hóa",
   "cong-nghe":"Công nghệ",
   "the-thao":"Thể thao",
   "giai-tri":"Giải trí",

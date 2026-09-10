@@ -620,8 +620,9 @@
       const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");
       activeView="orders";activeStatus="pending";
+      debtCustomerId="";debtDetail=null;
       if(currentRole()==="admin")clearSelectedCustomer();
-      if(!document.getElementById("orderManager")?.hidden)await refreshManager();
+      openManager();
     }catch(error){
       handleAuthError(error);
       setMainStatus(String(error?.message||error));

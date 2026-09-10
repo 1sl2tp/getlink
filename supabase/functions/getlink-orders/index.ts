@@ -6,6 +6,7 @@ const PUBLISHABLES=(()=>{try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABL
 const PUBLIC_KEY=String(PUBLISHABLES.default||Deno.env.get("SUPABASE_ANON_KEY")||"");
 const db=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});
 const enc=new TextEncoder();
+// TAPHOA_FULL_ORDER_DEBT_PARITY_20260911
 const ORDER_STATUSES=["pending","delivered","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
@@ -296,6 +297,16 @@ async function updatePendingOrder(id:string,body:any,actor:Identity){
   return await readOrder(id,actor);
 }
 
+async function updateDeliveredOrder(id:string,body:any,actor:Identity){
+  if(actor.kind!=="admin")throw fail("forbidden",403);
+  const items=await resolveCreateItems(body?.items);
+  const {error}=await db.rpc("getlink_sales_update_delivered_order",{
+    p_id:id,p_actor_id:actor.id,p_items:items
+  });
+  if(error)throw error;
+  return await readOrder(id,actor);
+}
+
 async function deliverOrder(id:string,actor:Identity){
   const {error}=await db.rpc("getlink_sales_deliver_order",{p_id:id,p_actor_id:actor.id});
   if(error)throw error;
@@ -313,6 +324,18 @@ async function deleteAllPending(actor:Identity){
   if(error)throw error;
   return Number(data||0);
 }
+async function returnDeliveredScope(ids:string[],actor:Identity){
+  if(actor.kind!=="admin")throw fail("forbidden",403);
+  const unique=Array.from(new Set((ids||[]).map(clean).filter(Boolean)));
+  if(!unique.length)throw fail("Chưa có đơn đã giao để hoàn");
+  if(unique.length>500)throw fail("Phạm vi hoàn đơn quá lớn");
+  const {data,error}=await db.rpc("getlink_sales_return_delivered_scope",{
+    p_actor_id:actor.id,p_ids:unique
+  });
+  if(error)throw error;
+  return Number(data||0);
+}
+
 async function syncState(actor:Identity){
   const {data,error}=await db.rpc("getlink_sales_sync_state",{p_actor_id:actor.id});
   if(error)throw error;
@@ -454,11 +477,28 @@ Deno.serve(async(req:Request)=>{
       const deleted=await deleteAllPending(actor);
       return json(req,{ok:true,deleted});
     }
+    if(req.method==="POST"&&path==="/orders/return-batch"){
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+      const body=await req.json().catch(()=>({}));
+      const ids=Array.isArray(body?.ids)?body.ids.map((value:any)=>clean(value)).filter(Boolean):[];
+      const returned=await returnDeliveredScope(ids,actor);
+      return json(req,{ok:true,returned});
+    }
     const orderIdMatch=path.match(/^\/orders\/([^/]+)$/);
+    if(req.method==="GET"&&orderIdMatch){
+      const id=decodeURIComponent(orderIdMatch[1]);
+      return json(req,{ok:true,order:await readOrder(id,actor)});
+    }
     if(req.method==="PUT"&&orderIdMatch){
       const id=decodeURIComponent(orderIdMatch[1]);
       const body=await req.json().catch(()=>({}));
-      const order=await updatePendingOrder(id,body,actor);
+      const existing=await readOrder(id,actor);
+      let order;
+      if(existing.status==="pending")order=await updatePendingOrder(id,body,actor);
+      else if(existing.status==="delivered"){
+        if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+        order=await updateDeliveredOrder(id,body,actor);
+      }else throw fail("Đơn đã hoàn không thể sửa");
       return json(req,{ok:true,order});
     }
     if(req.method==="DELETE"&&orderIdMatch){

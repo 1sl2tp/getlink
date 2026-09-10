@@ -1,7 +1,10 @@
 (()=>{
   "use strict";
 
+  const CHAT_AUTH_DETACHED=true;
   const AUTH_KEY="getlink:chat-order-auth";
+  sessionStorage.removeItem("getlink:chat-order-auth");
+  sessionStorage.removeItem("getlink:order-selected-customer");
   const SELECTED_CUSTOMER_KEY="getlink:order-selected-customer";
   const QTY_KEY="getlink:user-work-order-qty";
   const CHAT_ORIGIN="https://chat.taphoa.xyz";
@@ -45,6 +48,7 @@
   }
 
   function readAuth(){
+    if(CHAT_AUTH_DETACHED){sessionStorage.removeItem(AUTH_KEY);return null;}
     try{
       const value=JSON.parse(sessionStorage.getItem(AUTH_KEY)||"null");
       if(!value?.accessToken||!value?.account?.id||value?.source!=="chat"){
@@ -113,6 +117,7 @@
   }
 
   async function acceptChatBridge(message){
+    if(CHAT_AUTH_DETACHED){clearAuth();return false;}
     const seq=++bridgeSeq;
     if(!message?.accessToken){
       clearAuth();
@@ -148,6 +153,7 @@
 
   function isEmbeddedInChat(){return window.parent!==window}
   function requestChatAuth(){
+    if(CHAT_AUTH_DETACHED)return false;
     if(!isEmbeddedInChat())return false;
     try{
       window.parent.postMessage({type:"taphoa-getlink-auth-request"},CHAT_ORIGIN);
@@ -167,6 +173,12 @@
     return Boolean(readAuth());
   }
   async function requireChatAuth(message="Đang xác thực qua Chat..."){
+    if(CHAT_AUTH_DETACHED){
+      clearAuth();
+      setMainStatus("GETLINK đã tách quyền xác thực khỏi Chat.");
+      setManagerGate("GETLINK đã tách quyền xác thực khỏi Chat.");
+      return false;
+    }
     if(readAuth())return true;
     if(!isEmbeddedInChat()){
       goToChat();

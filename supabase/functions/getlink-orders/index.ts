@@ -6,6 +6,7 @@ const PUBLISHABLES=(()=>{try{return JSON.parse(Deno.env.get("SUPABASE_PUBLISHABL
 const PUBLIC_KEY=String(PUBLISHABLES.default||Deno.env.get("SUPABASE_ANON_KEY")||"");
 const db=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});
 const enc=new TextEncoder();
+const CHAT_AUTH_DETACHED=true;
 const ORDER_STATUSES=["pending","delivered","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
@@ -362,6 +363,7 @@ async function recordPayment(req:Request,actor:Identity,customerId:string){
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   if(!publicKeyAuthorized(req))return json(req,{error:"unauthorized"},401);
+  if(CHAT_AUTH_DETACHED)return json(req,{error:"chat_auth_detached"},410);
   try{
     const path=routePath(req);
     const actor=await chatIdentity(req);

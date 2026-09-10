@@ -75,6 +75,10 @@ class ChatIdentityOrderBackendContract(unittest.TestCase):
         self.assertRegex(text, r'\.eq\("chat_account_id",\s*actor\.id\)')
         self.assertRegex(text, r'actor\.kind\s*===\s*"customer"[\s\S]{0,300}selectedCustomer')
 
+    def test_v21_manager_does_not_mix_legacy_orders(self):
+        text = self.text()
+        self.assertIn('.not("chat_account_id","is",null)', text.replace(" ", ""))
+
 
 class ChatIdentityOrderFrontendContract(unittest.TestCase):
     def text(self):

@@ -130,12 +130,13 @@ After successful Gửi/Bán, do **not** automatically open a management overlay.
 ## 8. Ordering / recency
 
 Anything whose primary meaning is chronological defaults to newest/recent first:
-- order lists: `submitted_at DESC`, then `order_no DESC`;
-- delivered/returned views use their lifecycle timestamp where relevant but retain newest visible first;
-- debt customer list: `lastOccurredAt DESC` by default;
-- debt timeline UI: newest transaction displayed first.
+- **Đơn tạm:** `submitted_at DESC`, then `order_no DESC`;
+- **Đã giao:** `delivered_at DESC` with `submitted_at DESC` fallback;
+- **Đã hoàn:** `returned_at DESC` with lifecycle fallback;
+- **Danh sách khách công nợ:** `lastOccurredAt DESC` by default;
+- **Timeline công nợ:** newest transaction displayed first.
 
-Running debt balance remains mathematically correct. If backend timeline is chronological for balance calculation, calculate `balanceAfter` in chronological order first, then reverse only the rendered rows.
+Running debt balance remains mathematically correct. Backend timeline may stay chronological for calculation; calculate each `balanceAfter` in chronological order first, then reverse only the rendered rows.
 
 Optional alternate debt sorts may exist later, but default is **gần nhất trước**.
 

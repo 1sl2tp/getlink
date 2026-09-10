@@ -533,18 +533,19 @@ function newsSnapshotAge(data){
   const t=Date.parse(String(data&&data.generated_at||""));
   return Number.isFinite(t)?Math.max(0,Date.now()-t):Infinity;
 }
-async function fetchNewsHotSnapshot(){
-  const bucket=Math.floor(Date.now()/NEWS_HOT_SNAPSHOT_BUCKET_MS);
-  if(newsHotSnapshotPromise&&newsHotSnapshotBucket===bucket)return newsHotSnapshotPromise;
+async function fetchNewsHotSnapshot(force=false){
+  const bucket=force?Date.now():Math.floor(Date.now()/NEWS_HOT_SNAPSHOT_BUCKET_MS);
+  if(!force&&newsHotSnapshotPromise&&newsHotSnapshotBucket===bucket)return newsHotSnapshotPromise;
   newsHotSnapshotBucket=bucket;
   newsHotSnapshotPromise=fetch(NEWS_HOT_SNAPSHOT_URL+"?v="+bucket,{
-    cache:"force-cache",
+    cache:force?"no-store":"force-cache",
     mode:"cors",
     credentials:"omit"
   }).then(async response=>{
     if(!response.ok)throw new Error("news_snapshot_http_"+response.status);
     const data=await response.json();
     if(!Array.isArray(data&&data.items)||!data.items.length)throw new Error("news_snapshot_empty");
+    if(String(data.phase||"")!=="rich")throw new Error("news_snapshot_not_ready");
     return data;
   }).catch(error=>{
     if(newsHotSnapshotBucket===bucket)newsHotSnapshotPromise=null;
@@ -558,7 +559,7 @@ function prewarmLatestNews(){
     newsCache.set("latest",{at:browser.at,items:browser.items});
     if(newsTopic==="latest"&&!newsItems.length)newsItems=browser.items;
   }
-  fetchNewsHotSnapshot()
+  fetchNewsHotSnapshot(false)
     .then(data=>{
       const items=Array.isArray(data&&data.items)?data.items:[];
       if(!items.length)return;
@@ -570,28 +571,10 @@ function prewarmLatestNews(){
         const visible=(isMobileUserWork()&&mobileUserScope==="news")||(!isMobileUserWork()&&userWorkDesktopScope==="news");
         if(visible)refreshNewsViews();
       }
-      if(newsSnapshotAge(data)>NEWS_HOT_SNAPSHOT_MAX_AGE)queueMicrotask(backgroundRefreshLatestNews);
     })
     .catch(error=>console.debug("GETLINK news prewarm",error));
 }
-function backgroundRefreshLatestNews(){
-  if(!API)return;
-  apiFetch("/api/news?topic=latest&source=all&limit=80&refresh=1",{cache:"no-store"})
-    .then(async response=>{
-      const data=await response.json().catch(()=>({}));
-      if(!response.ok||!Array.isArray(data&&data.items))return;
-      newsCache.set("latest",{at:Date.now(),items:data.items});
-      writeNewsBrowserCache("latest",data.items);
-      if(newsTopic==="latest"){
-        newsItems=data.items;
-        newsError="";
-        refreshNewsViews();
-      }
-    })
-    .catch(error=>console.debug("GETLINK latest background refresh",error));
-}
 function ensureNewsLoaded(force=false){
-  if(!API)return;
   const key=newsTopic;
   const memory=newsCache.get(key);
   if(!force&&memory&&Date.now()-Number(memory.at||0)<NEWS_CACHE_TTL){
@@ -602,13 +585,13 @@ function ensureNewsLoaded(force=false){
     return;
   }
 
-  if(!force&&!newsItems.length){
+  if(!newsItems.length){
     const browser=readNewsBrowserCache(key);
     if(browser){
       newsItems=browser.items||[];
       newsCache.set(key,{at:browser.at,items:newsItems});
       queueMicrotask(refreshNewsViews);
-      if(Date.now()-browser.at<NEWS_CACHE_TTL)return;
+      if(!force&&Date.now()-browser.at<NEWS_CACHE_TTL)return;
     }
   }
 
@@ -631,34 +614,19 @@ function ensureNewsLoaded(force=false){
     return true;
   };
 
-  const fallbackToApi=()=>{
-    const suffix=force?"&refresh=1":"";
-    return apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80"+suffix,{cache:force?"no-store":"default"})
+  const loadPromise=key==="latest"
+    ?fetchNewsHotSnapshot(force).then(data=>{finish(data,"latest");})
+    :apiFetch("/api/news?topic="+encodeURIComponent(key)+"&source=all&limit=80",{cache:"default"})
       .then(async response=>{
         const data=await response.json().catch(()=>({}));
         if(!response.ok)throw new Error(data.error||"Không đọc được tin");
         finish(data,key);
       });
-  };
-
-  const loadPromise=(!force&&key==="latest")
-    ?fetchNewsHotSnapshot()
-      .then(data=>{
-        const accepted=finish(data,"latest");
-        if(accepted&&newsSnapshotAge(data)>NEWS_HOT_SNAPSHOT_MAX_AGE){
-          queueMicrotask(backgroundRefreshLatestNews);
-        }
-      })
-      .catch(error=>{
-        console.debug("GETLINK hot snapshot fallback",error);
-        return fallbackToApi();
-      })
-    :fallbackToApi();
 
   loadPromise
     .catch(error=>{
       if(seq!==newsRequestSeq)return;
-      if(!newsItems.length)newsError="Chưa đọc được tin. Thử làm mới.";
+      if(!newsItems.length)newsError="Chưa đọc được gói tin sẵn sàng.";
       console.debug("GETLINK news",error);
     })
     .finally(()=>{
@@ -6282,10 +6250,7 @@ if(userWorkHome){
     }
 
     if(e.target.closest("#newsRefresh")){
-      newsCache.delete(newsTopic);
-      newsItems=[];
       newsError="";
-      refreshNewsViews();
       ensureNewsLoaded(true);
       resetUserWorkDesktopScroll();
       return;

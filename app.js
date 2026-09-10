@@ -4566,7 +4566,7 @@ function mobileUserCanonicalMineCard(row){
         (retail?'<small>Lẻ '+money(retail)+(leafUnit?'/'+escapeHtml(leafUnit.toLowerCase()):"")+'</small>':'')+
       '</div>'
     :"";
-  return '<article class="mobile-user-mine-card mobile-user-product-card '+(mobileMergeTargetUrl===canonical(row.canonical_url)?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="mobile-user-mine-card mobile-user-product-card '+(mobileMergeTargetUrl===canonical(row.canonical_url)?"merge-selected":"")+(qty>0?" is-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
@@ -4692,7 +4692,7 @@ function mobileUserMineCard(row){
   const qc=qcRaw==="—"?"":String(qcRaw||"").trim();
   const qty=userWorkQty(row.canonical_url);
   const selected=mobileMergeTargetUrl===canonical(row.canonical_url);
-  return '<article class="mobile-user-mine-card mobile-user-product-card '+(selected?"merge-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<article class="mobile-user-mine-card mobile-user-product-card '+(selected?"merge-selected":"")+(qty>0?" is-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     mobileMergeSelectButton(row)+
     '<div class="mobile-user-product-image">'+
       (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
@@ -4982,7 +4982,7 @@ function userWorkMineRow(row){
   const qty=userWorkQty(row.canonical_url);
   const bargain=readOwnPrice(row.canonical_url,"bargain");
 
-  return '<div class="user-work-order-row product-card" data-url="'+escapeAttr(row.canonical_url)+'">'+
+  return '<div class="user-work-order-row product-card '+(qty>0?"is-selected":"")+'" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="user-work-order-product">'+
       '<div class="user-work-order-thumb">'+
         (image?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">':'<span>GL</span>')+
@@ -6528,6 +6528,8 @@ if(userWorkHome){
       const next=setUserWorkQty(url,userWorkQty(url)+Number(qtyButton.dataset.workQty||0));
       const value=box&&box.querySelector("b");
       if(value)value.textContent=String(next);
+      const selectedSurface=qtyButton.closest(".mobile-user-product-card,.user-work-order-row");
+      if(selectedSurface)selectedSurface.classList.toggle("is-selected",next>0);
       updateUserWorkOrderSummary();
       return;
     }

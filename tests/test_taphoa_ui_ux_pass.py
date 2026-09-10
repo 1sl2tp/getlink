@@ -1,3 +1,5 @@
+"""UI-only contracts for the approved Tạp hóa operational redesign pass."""
+
 from pathlib import Path
 import unittest
 

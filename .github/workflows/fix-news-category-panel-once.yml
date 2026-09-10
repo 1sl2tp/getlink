@@ -1,0 +1,46 @@
+name: Fix news category panel once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-news-category-panel-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add hidden-state CSS contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path("style.css")
+          text=path.read_text(encoding="utf-8")
+          rule='.user-work-category-panel[hidden]{display:none!important}'
+          if rule not in text:
+              text=text.rstrip()+"\n\n/* News scope isolation v62 — product categories never overlap the news reader. */\n"+rule+"\n"
+              path.write_text(text,encoding="utf-8")
+          PY
+
+      - name: Verify regression test before stamp
+        run: python -m unittest tests.test_news_rss_contract.NewsRssContractTest.test_news_hides_product_category_panel -v
+
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+
+      - name: Commit fix and remove one-time workflow
+        run: |
+          git config user.name "GETLINK UI Fix"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/fix-news-category-panel-once.yml
+          git add style.css index.html version.json
+          git commit -m "Hide product categories in news scope"
+          git push origin HEAD:main

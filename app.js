@@ -345,6 +345,21 @@ function formatAge(iso){
   return Math.floor(sec/86400)+" ngày trước";
 }
 
+function newsPublishedLabel(value){
+  const d=new Date(String(value||""));
+  if(!Number.isFinite(d.getTime()))return "";
+  try{
+    const parts=new Intl.DateTimeFormat("vi-VN",{
+      timeZone:"Asia/Ho_Chi_Minh",
+      hour:"2-digit",minute:"2-digit",day:"2-digit",month:"2-digit",
+      hour12:false
+    }).formatToParts(d);
+    const get=type=>(parts.find(x=>x.type===type)||{}).value||"";
+    const hh=get("hour"),mm=get("minute"),dd=get("day"),mo=get("month");
+    return hh&&mm&&dd&&mo?hh+":"+mm+" · "+dd+"/"+mo:"";
+  }catch{return "";}
+}
+
 function searchKey(value){
   return String(value||"")
     .normalize("NFD")
@@ -466,6 +481,7 @@ function newsCardHtml(item,compact=false,index=0){
       :'<span class="news-card-image news-card-image-empty">'+workIconSvg("news","ui-icon")+'</span>')+
     '<span class="news-card-copy">'+
       '<strong class="news-card-title">'+escapeHtml(item.title||"")+'</strong>'+
+      (newsPublishedLabel(item.published_at)?'<span class="news-card-time">'+escapeHtml(newsPublishedLabel(item.published_at))+'</span>':'')+
     '</span>'+
   '</button>';
 }

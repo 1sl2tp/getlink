@@ -191,6 +191,7 @@ function displayUpperFirst(value){
 let mobileUserScope="mine";
 let mobileUserCategoryKey="";
 let mobileUserLimit=8;
+const mobileUserScopeViewCache=new Map();
 
 const NEWS_TOPIC_LABELS={
   "latest":"Mới nhất",
@@ -468,17 +469,18 @@ function bindNewsCardImages(root){
       let list=[];
       try{list=JSON.parse(img.dataset.newsFallbacks||"[]");}catch{}
       let index=Math.max(0,Number(img.dataset.newsFallbackIndex||0)||0);
-      const direct=img.dataset.newsFallbackDirect==="1";
-      if(!direct&&list[index]){
-        img.dataset.newsFallbackDirect="1";
-        img.src=list[index];
+      const proxy=img.dataset.newsFallbackProxy==="1";
+      const width=Number(img.dataset.newsThumbWidth||NEWS_THUMB_WIDTH);
+      if(!proxy&&list[index]){
+        img.dataset.newsFallbackProxy="1";
+        img.src=newsThumbUrl(list[index],width);
         return;
       }
       index+=1;
       if(index<list.length){
         img.dataset.newsFallbackIndex=String(index);
-        img.dataset.newsFallbackDirect="0";
-        img.src=newsThumbUrl(list[index],Number(img.dataset.newsThumbWidth||NEWS_THUMB_WIDTH));
+        img.dataset.newsFallbackProxy="0";
+        img.src=list[index];
         return;
       }
       const box=img.closest(".news-card-image");
@@ -497,7 +499,7 @@ function newsCardHtml(item,compact=false,index=0){
   const thumbWidth=compact?320:NEWS_THUMB_WIDTH;
   return '<button class="news-card '+(compact?"news-card-compact ":"")+'" type="button" data-news-id="'+escapeAttr(item.id||"")+'">'+
     (image
-      ?'<span class="news-card-image"><img src="'+escapeAttr(newsThumbUrl(image,thumbWidth))+'" data-news-fallbacks="'+escapeAttr(JSON.stringify(images))+'" data-news-fallback-index="0" data-news-fallback-direct="0" data-news-thumb-width="'+thumbWidth+'" alt="" loading="'+(eager?"eager":"lazy")+'" fetchpriority="'+priority+'" decoding="async" referrerpolicy="no-referrer"></span>'
+      ?'<span class="news-card-image"><img src="'+escapeAttr(image)+'" data-news-fallbacks="'+escapeAttr(JSON.stringify(images))+'" data-news-fallback-index="0" data-news-fallback-proxy="0" data-news-thumb-width="'+thumbWidth+'" alt="" loading="'+(eager?"eager":"lazy")+'" fetchpriority="'+priority+'" decoding="async" referrerpolicy="no-referrer"></span>'
       :'<span class="news-card-image news-card-image-empty">'+workIconSvg("news","ui-icon")+'</span>')+
     '<span class="news-card-copy">'+
       '<strong class="news-card-title">'+escapeHtml(item.title||"")+'</strong>'+
@@ -661,7 +663,9 @@ function ensureNewsLoaded(force=false){
   newsLoading=true;
   newsError="";
   const seq=++newsRequestSeq;
-  refreshNewsViews();
+  // Existing READY cards stay mounted while a newer snapshot is checked.
+  // Re-rendering here would destroy decoded image nodes and make tab return slow.
+  if(!newsItems.length)refreshNewsViews();
 
   fetchNewsSnapshot(key,force)
     .then(data=>{
@@ -4786,6 +4790,95 @@ function resetMobileUserResultsScroll(){
   host.scrollTop=0;
 }
 
+function mobileUserScopeViewKey(scope){
+  if(scope==="news"){
+    const memory=newsCache.get(newsTopic);
+    return [
+      "news",newsTopic,newsQuery,newsItems.length,
+      String(newsItems[0]?.id||""),Number(memory?.at||0)
+    ].join("|");
+  }
+  return [scope,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");
+}
+function stashMobileUserScopeView(scope){
+  const host=$("#mobileUserResults");
+  if(!host||!host.childNodes.length)return false;
+  const fragment=document.createDocumentFragment();
+  while(host.firstChild)fragment.appendChild(host.firstChild);
+  mobileUserScopeViewCache.set(scope,{
+    key:mobileUserScopeViewKey(scope),
+    fragment,
+    scrollTop:host.scrollTop,
+    hasMore:host.dataset.hasMore||"0",
+    hidden:host.hidden
+  });
+  return true;
+}
+function restoreMobileUserScopeView(scope){
+  const host=$("#mobileUserResults");
+  const cached=mobileUserScopeViewCache.get(scope);
+  if(!host||!cached)return false;
+  if(cached.key!==mobileUserScopeViewKey(scope)){
+    mobileUserScopeViewCache.delete(scope);
+    return false;
+  }
+  host.replaceChildren(cached.fragment);
+  host.dataset.hasMore=cached.hasMore;
+  host.hidden=Boolean(cached.hidden);
+  host.classList.toggle("news-results",scope==="news");
+  host.scrollTop=Number(cached.scrollTop)||0;
+  if(scope==="news")bindNewsCardImages(host);
+  mobileUserScopeViewCache.delete(scope);
+  return true;
+}
+function switchMobileUserScope(next){
+  next=MOBILE_USER_SCOPES.includes(next)?next:"mine";
+  if(next===mobileUserScope)return;
+  stashMobileUserScopeView(mobileUserScope);
+  mobileUserScope=next;
+  mobileUserCategoryKey="";
+  mobileUserLimit=8;
+
+  const search=$("#mobileUserSearch");
+  const newsMode=mobileUserScope==="news";
+  if(search&&document.activeElement!==search)search.value=newsMode?newsQuery:libraryQuery;
+  if(search)search.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";
+  renderMobileUserSourceTabs();
+
+  if(restoreMobileUserScopeView(mobileUserScope)){
+    const empty=$("#mobileUserEmpty");
+    const orderBar=document.querySelector(".mobile-user-order-bar");
+    const orderStatus=$("#mobileUserOrderStatus");
+    if(newsMode){
+      if(mobileUserAutoLoadObserver){
+        mobileUserAutoLoadObserver.disconnect();
+        mobileUserAutoLoadObserver=null;
+      }
+      const merge=$("#mobileMergePanel");
+      if(merge)merge.hidden=true;
+      const visible=newsVisibleItems();
+      if(empty){
+        empty.hidden=newsLoading||visible.length>0;
+        empty.textContent=newsError||"Chưa có tin phù hợp.";
+      }
+      if(orderBar)orderBar.hidden=true;
+      if(orderStatus)orderStatus.hidden=true;
+      ensureNewsLoaded(false);
+    }else{
+      const rows=mobileUserRows();
+      if(empty)empty.hidden=rows.length!==0;
+      renderMobileMergePanel();
+      const marketMode=mobileUserScope==="market";
+      if(orderBar)orderBar.hidden=marketMode;
+      if(orderStatus)orderStatus.hidden=marketMode;
+      setupMobileUserAutoLoad();
+      updateUserWorkOrderSummary();
+    }
+    return;
+  }
+  renderMobileUserWork();
+}
+
 function renderMobileUserWork(){
   const search=$("#mobileUserSearch");
   const newsMode=mobileUserScope==="news";
@@ -6387,11 +6480,7 @@ if(userWorkHome){
       const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)
         ?mobileScope.dataset.mobileScope
         :"mine";
-      mobileUserScope=next;
-      mobileUserCategoryKey="";
-      mobileUserLimit=8;
-      renderUserWorkHome();
-      resetMobileUserResultsScroll();
+      switchMobileUserScope(next);
       return;
     }
 

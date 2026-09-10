@@ -15,10 +15,13 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('id="userWorkNews"',HTML)
         self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
         self.assertIn('news:"Tin tức"',APP)
+        self.assertIn('"chinh-tri":"Chính trị"',APP)
+        self.assertIn('"phap-luat":"Pháp luật"',APP)
+        self.assertIn('"kinh-te":"Kinh tế"',APP)
         self.assertIn('"tap-hoa":"Tạp hóa"',APP)
 
     def test_google_news_rss_is_the_only_runtime_discovery_path(self):
-        for key in ["latest","thoi-su","kinh-doanh","tap-hoa","cong-nghe","the-thao","giai-tri","suc-khoe"]:
+        for key in ["latest","chinh-tri","phap-luat","kinh-te","tap-hoa","cong-nghe","the-thao","giai-tri","suc-khoe"]:
             self.assertIn('key:"'+key+'"',EDGE)
         self.assertIn("newsGoogleTopFeed",EDGE)
         self.assertIn("newsGoogleQueryFeed",EDGE)
@@ -118,7 +121,7 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('storage:\"memory-cache\"',EDGE)
 
     def test_browser_keeps_ready_snapshot_while_refreshing(self):
-        self.assertIn('NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v4"',APP)
+        self.assertIn('NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v5"',APP)
         self.assertIn('readNewsBrowserCache',APP)
         self.assertIn('writeNewsBrowserCache',APP)
         self.assertIn('if(!newsItems.length)ensureNewsLoaded(false)',APP)

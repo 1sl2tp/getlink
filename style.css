@@ -15397,3 +15397,5 @@ body.news-quick-open{overflow:hidden!important}
   }
 }
 
+/* News scope isolation v62 — product categories never overlap the news reader. */
+.user-work-category-panel[hidden]{display:none!important}

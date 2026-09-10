@@ -133,7 +133,12 @@ def ready_image_url(v):
     value=str(v or "").strip()
     if not value.startswith(("http://","https://")):return ""
     low=value.lower()
-    if any(x in low for x in ("logo","favicon","sprite","tracking","pixel","placeholder","loading","blank")):return ""
+    if any(x in low for x in (
+      "logo","favicon","sprite","tracking","pixel","placeholder","loading","blank",
+      "footer","header-logo","site-logo","brand-logo","chia-se-mxh","share-default",
+      "/setting/","/settings/","/template/","/templates/","/themes/images/",
+      "default-image","default_image","social-default"
+    )):return ""
     if re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
     return value
 
@@ -350,7 +355,7 @@ def image_from_tag(tag,base):
     u=urllib.parse.urljoin(base,html.unescape(raw))
     low=u.lower()
     if not u.startswith(("http://","https://")):return ""
-    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert","placeholder","loading","blank")
+    bad=("logo","icon","avatar","sprite","favicon","tracking","pixel","banner","advert","placeholder","loading","blank","footer","header-logo","chia-se-mxh","/setting/","/templates/","/themes/images/")
     if any(x in low for x in bad) or re.search(r"\.(?:svg|ico)(?:\?|$)",low):return ""
     return u
 
@@ -368,17 +373,6 @@ def page_images(text,base):
             u=image_from_tag(tag,base)
             if u and u not in out:out.append(u)
             if len(out)>=8:break
-    if out:return out[:8]
-    # Last fallback for malformed pages that lack a recognizable article container.
-    scope=text[:450000]
-    for tag_text in re.findall(r"<img\b[^>]*>",scope,re.I):
-        fake=None
-        if BeautifulSoup is not None:
-            try:fake=BeautifulSoup(tag_text,"html.parser").find("img")
-            except Exception:fake=None
-        u=image_from_tag(fake,base) if fake is not None else ""
-        if u and u not in out:out.append(u)
-        if len(out)>=8:break
     return out[:8]
 
 def jsonld(text):
@@ -437,7 +431,14 @@ def enrich_article(item):
     except:
         return out
     _,ji=jsonld(text); images=[]
-    for u in [*ji,*meta_images(text,final),*page_images(text,final),*(item.get("images") or [])]:
+    ordered=[
+      *page_images(text,final),
+      *(item.get("images") or []),
+      *meta_images(text,final),
+      *ji
+    ]
+    for u in ordered:
+        u=ready_image_url(u)
         if u and u not in images:images.append(u)
     if images:out["images"]=images[:8];out["image"]=images[0]
     if final and "news.google.com/" not in final:

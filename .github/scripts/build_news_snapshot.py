@@ -87,7 +87,7 @@ def title_is_clean(v):
     if len(value)<12:return False
     low=value.lower()
     if re.search(r"&(?:#\d+|#x[0-9a-f]+|[a-z]{2,12});",low,re.I):return False
-    if any(x in value for x in ("Ã","Â","â€","â€™","â€œ","â€˜","á»","áº","ðŸ","�")):return False
+    if re.search(r"(?:Ã[\x80-\xbf]|Â[\x80-\xbf]|Ä‘|â€|â€™|â€œ|â€˜|á»|áº|ðŸ|�)",value):return False
     if any(ord(ch)<32 and ch not in "\t\n\r" for ch in value):return False
     return True
 

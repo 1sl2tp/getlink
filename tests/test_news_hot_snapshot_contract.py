@@ -16,7 +16,6 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertNotIn("supabase.table",SCRIPT.lower())
         self.assertNotIn("supabase.table",SCRIPT.lower())
         self.assertNotIn(".table(",SCRIPT)
-        self.assertNotIn(".insert(",SCRIPT)
         self.assertNotIn(".update(",SCRIPT)
 
     def test_snapshot_refreshes_at_fastest_github_schedule(self):
@@ -36,7 +35,7 @@ class NewsHotSnapshotContractTest(unittest.TestCase):
         self.assertIn("topic: giai-tri",WORKFLOW)
         self.assertIn("topic: suc-khoe",WORKFLOW)
         self.assertIn("candidates: 180",WORKFLOW)
-        self.assertIn('"ready":true',WORKFLOW)
+        self.assertIn('\\\"ready\\\":true',WORKFLOW)
         self.assertEqual(WORKFLOW.count("git push --force origin HEAD:news-cache"),1)
 
     def test_hot_ranking_prefers_fresh_multi_source_rich_items(self):

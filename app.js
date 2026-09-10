@@ -204,7 +204,6 @@ const NEWS_TOPIC_LABELS={
   "suc-khoe":"Sức khỏe"
 };
 const NEWS_CACHE_TTL=3*60*1000;
-const NEWS_BROWSER_CACHE_TTL=20*60*1000;
 const NEWS_BROWSER_CACHE_KEY="getlink:news-cache:v5";
 const NEWS_SNAPSHOT_BASE_URL="https://raw.githubusercontent.com/1sl2tp/getlink/news-cache/news/";
 const NEWS_SNAPSHOT_BUCKET_MS=5*60*1000;
@@ -385,9 +384,12 @@ function readNewsBrowserCache(topic){
     const box=JSON.parse(localStorage.getItem(NEWS_BROWSER_CACHE_KEY)||"{}");
     const row=box&&box[topic];
     if(!row||!Array.isArray(row.items))return null;
-    const age=Date.now()-Number(row.at||0);
-    if(age<0||age>NEWS_BROWSER_CACHE_TTL)return null;
-    return {at:Number(row.at||0),items:row.items};
+    const at=Number(row.at||0);
+    if(!Number.isFinite(at)||at<=0)return null;
+    // Last READY package is always usable as the instant first paint.
+    // Freshness is checked separately in the background; never blank the UI
+    // just because the cached package is older than a short TTL.
+    return {at,items:row.items};
   }catch{return null;}
 }
 function writeNewsBrowserCache(topic,items){
@@ -592,22 +594,48 @@ function prewarmLatestNews(){
     })
     .catch(error=>console.debug("GETLINK news prewarm",error));
 }
+
+function prewarmOtherNewsTopics(){
+  const topics=Object.keys(NEWS_TOPIC_LABELS).filter(key=>key!=="latest");
+  let index=0;
+  const step=()=>{
+    if(index>=topics.length)return;
+    const key=topics[index++];
+    const browser=readNewsBrowserCache(key);
+    if(browser&&browser.items.length)newsCache.set(key,{at:browser.at,items:browser.items});
+    fetchNewsSnapshot(key,false)
+      .then(data=>{
+        const items=Array.isArray(data&&data.items)?data.items:[];
+        if(items.length){
+          newsCache.set(key,{at:Date.now(),items});
+          writeNewsBrowserCache(key,items);
+        }
+      })
+      .catch(error=>console.debug("GETLINK news idle prewarm",key,error))
+      .finally(()=>setTimeout(step,120));
+  };
+  if("requestIdleCallback" in window)requestIdleCallback(step,{timeout:1800});
+  else setTimeout(step,900);
+}
 function ensureNewsLoaded(force=false){
   const key=newsTopic;
   const memory=newsCache.get(key);
-  if(!force&&memory&&Date.now()-Number(memory.at||0)<NEWS_CACHE_TTL){
+
+  // Paint any previously completed READY package immediately, regardless of age.
+  // Age only decides whether we should check for a newer completed package.
+  if(!force&&memory&&Array.isArray(memory.items)&&memory.items.length){
     if(newsItems!==memory.items){
-      newsItems=memory.items||[];
+      newsItems=memory.items;
       queueMicrotask(refreshNewsViews);
     }
-    return;
+    if(Date.now()-Number(memory.at||0)<NEWS_CACHE_TTL)return;
   }
 
   if(!newsItems.length){
     const browser=readNewsBrowserCache(key);
-    if(browser){
-      newsItems=browser.items||[];
-      newsCache.set(key,{at:browser.at,items:newsItems});
+    if(browser&&browser.items.length){
+      newsItems=browser.items;
+      newsCache.set(key,{at:browser.at,items:browser.items});
       queueMicrotask(refreshNewsViews);
       if(!force&&Date.now()-browser.at<NEWS_CACHE_TTL)return;
     }
@@ -648,8 +676,22 @@ function setNewsTopic(key){
   newsTopic=key;
   newsItems=[];
   newsError="";
+
+  // A request from the previous tab must never block the newly selected tab.
+  if(newsLoading){
+    newsRequestSeq++;
+    newsLoading=false;
+  }
+
   const cached=newsCache.get(key);
-  if(cached&&Date.now()-Number(cached.at||0)<NEWS_CACHE_TTL)newsItems=cached.items||[];
+  if(cached&&Array.isArray(cached.items)&&cached.items.length)newsItems=cached.items;
+  if(!newsItems.length){
+    const browser=readNewsBrowserCache(key);
+    if(browser&&browser.items.length){
+      newsItems=browser.items;
+      newsCache.set(key,{at:browser.at,items:browser.items});
+    }
+  }
   refreshNewsViews();
   ensureNewsLoaded(false);
 }
@@ -6428,6 +6470,7 @@ window.addEventListener("resize",()=>{
 (async()=>{
   await restoreAppRole();
   prewarmLatestNews();
+prewarmOtherNewsTopics();
   await refreshCatalog();
   setTimeout(()=>{
     if(!newsItems.length)ensureNewsLoaded(false);

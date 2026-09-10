@@ -2997,7 +2997,8 @@ function newsArticleDocument(html:string){
 }
 function newsReadabilityRoot(html:string,base:string){
   try{
-    const {document}=parseDomHtml(String(html||""));
+    const dom:any=parseDomHtml(String(html||""));
+    const document:any=dom.document;
     if(base&&document.head){
       const baseNode=document.createElement("base");
       baseNode.setAttribute("href",base);

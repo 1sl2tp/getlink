@@ -58,8 +58,9 @@ class OrderBackendContractTests(unittest.TestCase):
         self.assertIn('getlink_sales_return_order', text)
         self.assertIn('getlink_sales_record_payment', text)
         self.assertRegex(text, r'pending.*delivered.*returned|\["pending","delivered","returned"\]')
-        self.assertIn('/debts/', text)
-        self.assertIn('/payments', text)
+        self.assertIn('path==="/debts"', text)
+        self.assertIn('debts\\/([^/]+)', text)
+        self.assertIn('payments', text)
 
 
 class OrderFrontendContractTests(unittest.TestCase):

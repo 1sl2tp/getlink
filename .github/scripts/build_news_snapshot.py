@@ -53,7 +53,9 @@ STOP={"va","cua","cho","voi","tai","tu","den","trong","tren","sau","truoc","khi"
 def http_get(url,timeout,accept="*/*"):
     req=urllib.request.Request(url,headers={
       "Accept":accept,
-      "User-Agent":"Mozilla/5.0 (compatible; GETLINK-News-Snapshot/2.0; +https://get.taphoa.xyz)",
+      "Accept-Language":"vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6",
+      "User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36",
+      "Referer":"https://news.google.com/",
       "Cache-Control":"no-cache",
     })
     with urllib.request.urlopen(req,timeout=timeout) as res:
@@ -241,7 +243,18 @@ def article_soup(text):
             p_count=len(node.find_all("p"))
             img_count=len(node.find_all("img"))
             link_count=len(node.find_all("a"))
-            return min(30000,text_len)+min(50,p_count)*220+min(20,img_count)*45-min(80,link_count)*8
+            tag=str(getattr(node,"name","") or "").lower()
+            marker=" ".join([
+              " ".join(node.get("class") or []) if hasattr(node,"get") else "",
+              str(node.get("id") or "") if hasattr(node,"get") else "",
+              str(node.get("itemprop") or "") if hasattr(node,"get") else ""
+            ]).lower()
+            semantic=0
+            if "articlebody" in marker:semantic+=9000
+            if tag=="article":semantic+=7000
+            if re.search(r"article[-_ ]?(body|content)|detail[-_ ]?content|content[-_ ]?detail|fck_detail|entry[-_ ]?content|post[-_ ]?content|news[-_ ]?content|content[-_ ]?body",marker):semantic+=6000
+            if tag=="main":semantic-=2500
+            return semantic+min(30000,text_len)+min(50,p_count)*240+min(20,img_count)*45-min(100,link_count)*14
         except Exception:return 0
     return max(candidates,key=score)
 

@@ -1,0 +1,33 @@
+name: Stamp shared identity sales assets
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - feature/chat-identity-admin-sales
+    paths:
+      - ".github/workflows/stamp-chat-identity-sales-once.yml"
+
+jobs:
+  stamp:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/chat-identity-admin-sales
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/stamp_static_build.py
+      - name: Commit stamp
+        run: |
+          git config user.name "GETLINK Build Stamp"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/stamp-chat-identity-sales-once.yml
+          git add index.html version.json
+          git commit -m "build: stamp shared identity sales assets"
+          git push origin HEAD:feature/chat-identity-admin-sales

@@ -134,8 +134,7 @@ jobs:
           git rm -rf .
           mkdir -p news
           cp /tmp/getlink-ready/*.json news/
-          printf '%s
-' "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"topics\":7,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
+          echo "{\"updated_at\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"phase\":\"rich\",\"ready\":true,\"topics\":7,\"history\":false,\"database\":false,\"discovery\":\"google-news-rss-only\"}" > news/meta.json
           git add news/*.json
           git commit -m "Refresh READY Google News snapshots"
           git push --force origin HEAD:news-cache

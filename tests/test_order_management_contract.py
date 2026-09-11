@@ -116,11 +116,11 @@ class OrderFrontendContractTests(unittest.TestCase):
 
     def test_frontend_has_native_debt_management(self):
         text = self.js_text()
-        self.assertIn('data-manager-view="debts"', text)
+        self.assertIn('data-taphoa-work-view="debts"', text)
         self.assertIn('Công nợ', text)
         self.assertIn('Dư nợ sau giao dịch', text)
         self.assertIn('/payments', text)
-        self.assertIn('moneyVnd', text)
+        self.assertIn('compactMoney', text)
         self.assertNotIn('moneyFromCore', text)
 
     def test_order_module_has_dedicated_responsive_styles(self):

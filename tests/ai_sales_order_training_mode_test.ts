@@ -10,17 +10,17 @@ async function loadTraining():Promise<any>{
   catch(error){assert.fail(`training module missing or invalid: ${String(error)}`);}
 }
 
-Deno.test("Groq training translator receives catalog plus learned examples and returns all current-message items",async()=>{
+Deno.test("Groq training translator receives learned examples but not the full catalog",async()=>{
   const {translateTrainingMessageWithModel}=await loadModel();
   let requestBody:any=null;
   const result=await translateTrainingMessageWithModel({
-    customerText:"2 bịch hướng dương\n5 thùng miliket\nMai có lịch sữa chua ko đấy lão",
+    customerText:"akiko 10",
     catalog:[
-      {productCode:"HT-000173",productName:"Hướng dương"},
-      {productCode:"HT-000180",productName:"Mi miket"},
+      {productCode:"HT-AKIKO",productName:"Akiko"},
+      {productCode:"HT-MIKET",productName:"Mi miket"},
     ],
     learnedExamples:[
-      {rawText:"miliket",productName:"Mi miket",productCode:"HT-000180",quantity:5,unitHint:"thùng",status:"corrected"},
+      {rawText:"akiko 5",productName:"Akiko",productCode:"HT-AKIKO",quantity:5,unitHint:null,status:"auto"},
     ],
   },async (_url:string,init:RequestInit)=>{
     requestBody=JSON.parse(String(init.body||"{}"));
@@ -28,10 +28,7 @@ Deno.test("Groq training translator receives catalog plus learned examples and r
       status:"completed",
       output_text:JSON.stringify({
         kind:"order",
-        items:[
-          {raw_text:"2 bịch hướng dương",product_name:"Hướng dương",quantity:2,unit_hint:"bịch",product_code:"HT-000173",confidence:0.99},
-          {raw_text:"5 thùng miliket",product_name:"Mi miket",quantity:5,unit_hint:"thùng",product_code:"HT-000180",confidence:0.98},
-        ],
+        items:[{raw_text:"akiko 10",product_name:"Akiko",quantity:10,unit_hint:null,product_code:null,confidence:0.99}],
         teachings:[],
         reply_text:"",
       }),
@@ -39,75 +36,88 @@ Deno.test("Groq training translator receives catalog plus learned examples and r
   },{apiKey:"groq-test-key",model:"qwen/qwen3.8-27b"});
 
   assert.equal(result.kind,"order");
-  assert.equal(result.items.length,2);
-  assert.equal(result.items[1].productName,"Mi miket");
-  assert.equal(result.items[1].quantity,5);
+  assert.equal(result.items[0].productName,"Akiko");
+  assert.equal(result.items[0].quantity,10);
   const prompt=JSON.stringify(requestBody);
-  assert.match(prompt,/HT-000180/);
-  assert.match(prompt,/miliket/);
   assert.match(prompt,/learned_examples/);
-  assert.match(prompt,/catalog/);
+  assert.match(prompt,/akiko 5/i);
+  assert.doesNotMatch(prompt,/HT-MIKET/);
+  assert.doesNotMatch(prompt,/"catalog"/);
 });
 
-Deno.test("training mode replies only with products from the current message and saves them as examples",async()=>{
+Deno.test("name then quantity is canonicalized only by an exact catalog match",async()=>{
   const {processTrainingMessage}=await loadTraining();
   const saved:any[]=[];
   const result=await processTrainingMessage({
-    customerAccountId:"u-test",
-    conversationId:"c-test",
-    messageId:"m-new",
-    body:"2 bịch hướng dương\n5 thùng miliket",
+    customerAccountId:"u-test",conversationId:"c-test",messageId:"m1",body:"akiko 10",
+  },{
+    loadCatalog:async()=>[{productCode:"HT-AKIKO",productName:"Akiko"}],
+    loadExamples:async()=>[],
+    translate:async()=>({kind:"order",items:[{rawText:"akiko 10",productName:"akiko",quantity:10,unitHint:null,productCode:null,confidence:0.99}],teachings:[],replyText:""}),
+    saveExample:async(example:any)=>{saved.push(example);},
+  });
+  assert.equal(result.reply,"Akiko × 10");
+  assert.equal(saved.length,1);
+  assert.equal(saved[0].productCode,"HT-AKIKO");
+  assert.equal(saved[0].productName,"Akiko");
+  assert.equal(saved[0].quantity,10);
+});
+
+Deno.test("quantity then name is learned by Groq without a server word-order parser",async()=>{
+  const {processTrainingMessage}=await loadTraining();
+  const saved:any[]=[];
+  const result=await processTrainingMessage({
+    customerAccountId:"u-test",conversationId:"c-test",messageId:"m2",body:"10 akiko",
+  },{
+    loadCatalog:async()=>[{productCode:"HT-AKIKO",productName:"Akiko"}],
+    loadExamples:async()=>[{rawText:"akiko 10",productName:"Akiko",productCode:"HT-AKIKO",quantity:10,unitHint:null,status:"auto"}],
+    translate:async(input:any)=>{
+      assert.equal(input.customerText,"10 akiko");
+      assert.equal(input.learnedExamples[0].rawText,"akiko 10");
+      return {kind:"order",items:[{rawText:"10 akiko",productName:"Akiko",quantity:10,unitHint:null,productCode:null,confidence:0.99}],teachings:[],replyText:""};
+    },
+    saveExample:async(example:any)=>{saved.push(example);},
+  });
+  assert.equal(result.reply,"Akiko × 10");
+  assert.equal(saved.length,1);
+  assert.equal(saved[0].rawText,"10 akiko");
+  assert.equal(saved[0].quantity,10);
+});
+
+Deno.test("a similar catalog name is suggested but never auto-selected or learned",async()=>{
+  const {processTrainingMessage}=await loadTraining();
+  const saved:any[]=[];
+  const result=await processTrainingMessage({
+    customerAccountId:"u-test",conversationId:"c-test",messageId:"m3",body:"5 thùng miliket",
   },{
     loadCatalog:async()=>[
-      {productCode:"HT-000173",productName:"Hướng dương"},
-      {productCode:"HT-000180",productName:"Mi miket"},
+      {productCode:"HT-MIKET",productName:"Mi miket"},
+      {productCode:"HT-MILO",productName:"Sua milo"},
     ],
-    loadExamples:async()=>[
-      {rawText:"tin cũ",productName:"Sữa TH to",productCode:"HT-OLD",quantity:2,unitHint:null,status:"auto"},
-    ],
-    translate:async()=>({
-      kind:"order",
-      items:[
-        {rawText:"2 bịch hướng dương",productName:"Hướng dương",quantity:2,unitHint:"bịch",productCode:"HT-000173",confidence:0.99},
-        {rawText:"5 thùng miliket",productName:"Mi miket",quantity:5,unitHint:"thùng",productCode:"HT-000180",confidence:0.98},
-      ],
-      teachings:[],
-      replyText:"",
-    }),
+    loadExamples:async()=>[],
+    translate:async()=>({kind:"order",items:[{rawText:"5 thùng miliket",productName:"Miliket",quantity:5,unitHint:"thùng",productCode:null,confidence:0.86}],teachings:[],replyText:""}),
     saveExample:async(example:any)=>{saved.push(example);},
   });
-
-  assert.equal(result.reply,"Hướng dương × 2 bịch\nMi miket × 5 thùng");
-  assert.doesNotMatch(result.reply,/Sữa TH/);
-  assert.equal(saved.length,2);
-  assert.equal(saved[1].rawText,"5 thùng miliket");
-  assert.equal(saved[1].productCode,"HT-000180");
-  assert.equal(saved[1].status,"auto");
+  assert.equal(result.reply,"Có phải Mi miket × 5 thùng không?\n1. Đúng\n2. Sai / bỏ qua");
+  assert.equal(saved.length,0);
+  assert.ok(result.pendingConfirmation);
+  assert.equal(result.pendingConfirmation.productCode,"HT-MIKET");
+  assert.equal(result.pendingConfirmation.rawText,"5 thùng miliket");
 });
 
-Deno.test("a teaching message stores the correction for Groq instead of changing parser code",async()=>{
+Deno.test("an explicit teaching message stores a corrected exact catalog mapping",async()=>{
   const {processTrainingMessage}=await loadTraining();
   const saved:any[]=[];
   const result=await processTrainingMessage({
-    customerAccountId:"u-test",
-    conversationId:"c-test",
-    messageId:"m-correction",
-    body:"miliket là Mi miket",
+    customerAccountId:"u-test",conversationId:"c-test",messageId:"m-correction",body:"miliket là Mi miket",
   },{
-    loadCatalog:async()=>[{productCode:"HT-000180",productName:"Mi miket"}],
+    loadCatalog:async()=>[{productCode:"HT-MIKET",productName:"Mi miket"}],
     loadExamples:async()=>[],
-    translate:async()=>({
-      kind:"teaching",
-      items:[],
-      teachings:[{rawText:"miliket",productName:"Mi miket",productCode:"HT-000180"}],
-      replyText:"",
-    }),
+    translate:async()=>({kind:"teaching",items:[],teachings:[{rawText:"miliket",productName:"Mi miket",productCode:null}],replyText:""}),
     saveExample:async(example:any)=>{saved.push(example);},
   });
-
   assert.equal(result.reply,"miliket → Mi miket");
   assert.equal(saved.length,1);
   assert.equal(saved[0].status,"corrected");
-  assert.equal(saved[0].rawText,"miliket");
-  assert.equal(saved[0].productCode,"HT-000180");
+  assert.equal(saved[0].productCode,"HT-MIKET");
 });

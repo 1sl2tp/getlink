@@ -59,6 +59,38 @@ Deno.test("round suggestion is a separate gentle follow-up",async()=>{
   assert.match(followUp.body,/tròn 20/);
 });
 
+Deno.test("small price list is sent inline with stable P-codes",async()=>{
+  const {composeReply}=await loadReply();
+  const reply=composeReply({kind:"price_list",priceList:{
+    scope:"sữa",
+    count:2,
+    url:"https://get.taphoa.xyz/price-list.html?scope=group&name=s%E1%BB%AFa",
+    items:[
+      {code:"P01",productName:"Sữa A",priceVnd:12000,unitLabel:"hộp"},
+      {code:"P02",productName:"Sữa B",priceVnd:24000,unitLabel:"thùng"},
+    ],
+  }});
+  assert.equal(reply.replyKind,"price_list");
+  assert.match(reply.body,/P01 · Sữa A · 12\.000\/hộp/);
+  assert.match(reply.body,/P02 · Sữa B · 24\.000\/thùng/);
+  assert.doesNotMatch(reply.body,/price-list\.html/);
+});
+
+Deno.test("large price list sends scoped URL instead of flooding chat",async()=>{
+  const {composeReply}=await loadReply();
+  const items=Array.from({length:12},(_,index)=>({
+    code:`P${String(index+1).padStart(2,"0")}`,
+    productName:`Sản phẩm ${index+1}`,
+    priceVnd:10000+index,
+    unitLabel:"thùng",
+  }));
+  const url="https://get.taphoa.xyz/price-list.html?scope=all";
+  const reply=composeReply({kind:"price_list",priceList:{scope:"toàn bộ",count:items.length,url,items}});
+  assert.equal(reply.replyKind,"price_list");
+  assert.match(reply.body,new RegExp(url.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")));
+  assert.doesNotMatch(reply.body,/P12 · Sản phẩm 12/);
+});
+
 Deno.test("enqueueReply uses outbox uniqueness and flush uses ai client id",async()=>{
   const {enqueueReply,flushReply}=await loadChat();
   const calls:any[]=[];

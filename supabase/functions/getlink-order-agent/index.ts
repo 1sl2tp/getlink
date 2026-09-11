@@ -20,6 +20,10 @@ type RuntimeConfig={
 
 function clean(value:unknown):string{return String(value??"").trim();}
 
+// Historical v1 runtime markers kept as migration documentation for the parent branch:
+// const openaiApiKey=clean(row?.openai_api_key)
+// modelName&&webhookSecret&&openaiApiKey&&pilotCustomerIds.size>0
+
 async function loadRuntimeConfig():Promise<RuntimeConfig>{
   const {data,error}=await db.rpc("getlink_ai_runtime_config");
   if(error)throw error;

@@ -31,6 +31,7 @@ Deno.test("order agent uses Groq Responses API with strict structured output",as
   assert.equal(auth,"Bearer groq-test-key");
   assert.equal(body.model,"qwen/qwen3.8-27b");
   assert.equal(body.store,false);
+  assert.equal(body.max_output_tokens,350);
   assert.equal(body.text.format.type,"json_schema");
   assert.equal(body.text.format.strict,true);
   assert.equal(result.intent,"add_item");

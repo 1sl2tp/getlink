@@ -13,6 +13,8 @@ export type ReplyDraft={
   followUp?:ReplyDraft|null;
 };
 
+const PRICE_LIST_INLINE_MAX=6;
+
 function clean(value:unknown):string{return String(value??"").replace(/\s+/g," ").trim();}
 export function formatVnd(value:unknown):string{
   const n=Math.max(0,Math.round(Number(value)||0));
@@ -29,6 +31,13 @@ function linesTotal(lines:any[]):number{return (Array.isArray(lines)?lines:[]).r
 function lineText(line:any):string{
   const name=clean(line?.productName)||"Sản phẩm";
   return `${name} × ${qty(line?.quantity)}`;
+}
+function priceListLine(item:any):string{
+  const code=clean(item?.code).toUpperCase();
+  const name=clean(item?.productName)||"Sản phẩm";
+  const price=formatVnd(item?.priceVnd);
+  const unit=clean(item?.unitLabel).toLowerCase();
+  return `${code} · ${name} · ${price}${unit?`/${unit}`:""}`;
 }
 
 function marketSentence(market:any,unitLabel:string):string{
@@ -93,8 +102,19 @@ export function composeReply(result:any):ReplyDraft{
   if(kind==="price_list"){
     const list=result?.priceList||result?.facts||{};
     const scope=clean(list.scope||result?.scope)||"toàn bộ";
-    const count=Number(list.count??list.items?.length)||0;
+    const items=Array.isArray(list.items)?list.items:[];
+    const count=Number(list.count??items.length)||0;
     const url=clean(list.url);
+    if(items.length>0&&items.length<=PRICE_LIST_INLINE_MAX){
+      return {
+        replyKind:"price_list",
+        body:[
+          `Dạ em gửi chị giá ${scope} hôm nay ạ 😄`,
+          ...items.map(priceListLine),
+          "Chị nhắn mã P + số lượng là em ghi đơn ngay ạ.",
+        ].join("\n"),
+      };
+    }
     const countText=count>0?` Có ${count} mặt hàng đang bán.`:"";
     const linkText=url?`\n${url}`:"";
     return {replyKind:"price_list",body:`Dạ em gửi chị bảng giá ${scope} hôm nay ạ 😄${countText}${linkText}`};

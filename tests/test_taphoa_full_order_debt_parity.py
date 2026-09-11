@@ -44,9 +44,8 @@ class TapHoaFullOrderDebtParity(unittest.TestCase):
             "filterOrdersForReport",
             "summarizeOrdersBySource",
             'data-order-report-search',
-            'data-order-report-today',
+            'data-order-report-preset',
             'data-order-report-range',
-            'data-order-report-quick',
             'data-order-source-open',
             'data-order-source-mode',
             "shareOrderSource",
@@ -54,10 +53,13 @@ class TapHoaFullOrderDebtParity(unittest.TestCase):
             "navigator.clipboard.writeText",
         ):
             self.assertIn(token, order)
+        self.assertNotIn('data-order-report-today', order)
+        self.assertNotIn('data-order-report-quick', order)
         self.assertIn("Hôm qua", order)
         self.assertIn("Tuần này", order)
         self.assertIn("Tháng này", order)
         self.assertIn("Năm nay", order)
+        self.assertIn("Tùy chọn", order)
         self.assertIn("CHI", order)
         self.assertIn("THU", order)
         self.assertIn("LÃI", order)

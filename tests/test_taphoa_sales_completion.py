@@ -40,7 +40,7 @@ class TapHoaSalesCompletionContract(unittest.TestCase):
         self.assertIn('window.clearUserWorkOrderSelection();', body)
         self.assertNotIn('localStorage.removeItem(QTY_KEY)', body)
         self.assertLess(body.index('await orderFetch("/orders",{method:"POST",body})'), body.index('window.clearUserWorkOrderSelection();'))
-        self.assertIn('activeStatus="pending"', body)
+        self.assertIn('setActiveOrderStatus("pending")', body)
         self.assertIn('data?.order?.orderNo', body)
 
     def test_manager_covers_order_lifecycle_and_debt(self):

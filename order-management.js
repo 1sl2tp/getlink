@@ -4,6 +4,7 @@
   const ACCESS_STATES=Object.freeze(["guest","user","admin"]);
   const AUTH_KEY="getlink:chat-order-auth";
   const SELECTED_CUSTOMER_KEY="getlink:order-selected-customer";
+  const ORDER_REPORT_STATE_KEY="getlink:taphoa-order-report-state";
   const QTY_KEY="getlink:user-work-order-qty";
   const CHAT_ORIGIN="https://chat.taphoa.xyz";
   const API_KEY=String(window.GETLINK_API_KEY||"");
@@ -24,7 +25,8 @@
   let expandedOrderId="";
   let editingOrderId="";
   let editingOrderStatus="";
-  let orderReportFilter={mode:"all",from:localDateKey(new Date()),to:localDateKey(new Date()),search:""};
+  let orderReportFilters=loadOrderReportFilters();
+  let orderReportFilter=orderReportFilters[activeStatus];
   let sourceDrillSource="";
   let sourceDrillMode="detail";
   let debtLinkedOrder=null;
@@ -575,11 +577,12 @@
     return "";
   }
   function orderRef(order){return order.orderNo?"#"+order.orderNo:String(order.id||"")}
-  function orderRecency(order){
-    if(order.status==="returned")return Date.parse(order.returnedAt||order.deliveredAt||order.orderedAt||0)||0;
-    if(order.status==="delivered")return Date.parse(order.deliveredAt||order.orderedAt||0)||0;
-    return Date.parse(order.submittedAt||order.orderedAt||0)||0;
+  function orderRecencyValue(order){
+    if(order.status==="returned")return order.returnedAt||order.deliveredAt||order.orderedAt||0;
+    if(order.status==="delivered")return order.deliveredAt||order.orderedAt||0;
+    return order.submittedAt||order.orderedAt||0;
   }
+  function orderRecency(order){return Date.parse(orderRecencyValue(order)||0)||0;}
   function sortOrdersNewestFirst(rows){
     return [...(rows||[])].sort((a,b)=>orderRecency(b)-orderRecency(a)||Number(b.orderNo||0)-Number(a.orderNo||0));
   }
@@ -595,28 +598,69 @@
     const p=n=>String(n).padStart(2,"0");
     return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
   }
+  function defaultOrderReportFilter(status){
+    const today=localDateKey(new Date());
+    if(status==="pending")return {mode:"all",from:today,to:today,search:""};
+    if(status==="delivered")return {mode:"today",from:today,to:today,search:""};
+    return {mode:"today",from:today,to:today,search:""};
+  }
+  function loadOrderReportFilters(){
+    const allowed=new Set(["all","today","yesterday","week","month","year","custom"]),result={};
+    let stored=null;
+    try{stored=JSON.parse(sessionStorage.getItem(ORDER_REPORT_STATE_KEY)||"null");}catch{stored=null;}
+    for(const status of Object.keys(STATUS_LABELS)){
+      const base=defaultOrderReportFilter(status),raw=stored?.[status]||{};
+      result[status]={
+        mode:allowed.has(String(raw.mode||""))?String(raw.mode):base.mode,
+        from:/^\d{4}-\d{2}-\d{2}$/.test(String(raw.from||""))?String(raw.from):base.from,
+        to:/^\d{4}-\d{2}-\d{2}$/.test(String(raw.to||""))?String(raw.to):base.to,
+        search:String(raw.search||"")
+      };
+    }
+    return result;
+  }
+  function saveOrderReportFilters(){
+    try{sessionStorage.setItem(ORDER_REPORT_STATE_KEY,JSON.stringify(orderReportFilters));}catch{}
+  }
+  function setOrderReportFilter(next){
+    orderReportFilter={...orderReportFilter,...next};
+    orderReportFilters[activeStatus]=orderReportFilter;
+    saveOrderReportFilters();
+  }
+  function setActiveOrderStatus(status){
+    const next=Object.prototype.hasOwnProperty.call(STATUS_LABELS,status)?status:"pending";
+    activeStatus=next;
+    if(!orderReportFilters[activeStatus])orderReportFilters[activeStatus]=defaultOrderReportFilter(activeStatus);
+    orderReportFilter=orderReportFilters[activeStatus];
+    saveOrderReportFilters();
+  }
   function orderQuickRange(kind){
     const base=new Date();base.setHours(12,0,0,0);let from=new Date(base),to=new Date(base);
-    if(kind==="yesterday"){from.setDate(from.getDate()-1);to=new Date(from);}
+    if(kind==="today"){}
+    else if(kind==="yesterday"){from.setDate(from.getDate()-1);to=new Date(from);}
     else if(kind==="week"){const day=base.getDay(),delta=day===0?-6:1-day;from.setDate(base.getDate()+delta);to=new Date(from);to.setDate(from.getDate()+6);}
     else if(kind==="month"){from=new Date(base.getFullYear(),base.getMonth(),1,12);to=new Date(base.getFullYear(),base.getMonth()+1,0,12);}
     else if(kind==="year"){from=new Date(base.getFullYear(),0,1,12);to=new Date(base.getFullYear(),11,31,12);}
     return {from:localDateKey(from),to:localDateKey(to)};
   }
+  function orderFilterRange(filter){
+    const mode=String(filter?.mode||"all");
+    if(mode==="all")return null;
+    if(mode==="custom")return {from:String(filter?.from||""),to:String(filter?.to||filter?.from||"")};
+    return orderQuickRange(mode);
+  }
   function filterOrdersForReport(rows=orders){
-    const mode=String(orderReportFilter.mode||"all"),from=String(orderReportFilter.from||""),to=String(orderReportFilter.to||from),query=normalizedSearch(orderReportFilter.search);
-    const today=localDateKey(new Date());
+    const range=orderFilterRange(orderReportFilter),query=normalizedSearch(orderReportFilter.search);
     return (rows||[]).filter(order=>{
       if(order.status!==activeStatus)return false;
-      const key=localDateKey(order.orderedAt);
-      if(mode==="today"&&key!==today)return false;
-      if(mode==="range"&&from&&to&&(key<from||key>to))return false;
+      const key=localDateKey(orderRecencyValue(order));
+      if(range?.from&&range?.to&&(key<range.from||key>range.to))return false;
       if(query){
         const hay=normalizedSearch([orderRef(order),order.orderNo,order.customerName,...(order.items||[]).map(item=>item.name)].join(" "));
         if(!hay.includes(query))return false;
       }
       return true;
-    }).sort((a,b)=>new Date(b.orderedAt||0)-new Date(a.orderedAt||0)||Number(b.orderNo||0)-Number(a.orderNo||0));
+    });
   }
   function summarizeOrdersBySource(rows=[]){
     const map=new Map();const total={qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false};
@@ -632,19 +676,12 @@
   }
   function orderReportControlsMarkup(){
     const f=orderReportFilter;
+    const option=(value,label)=>`<option value="${value}" ${f.mode===value?"selected":""}>${label}</option>`;
     return `<section class="order-report-controls">
       <div class="order-report-search"><input type="search" data-order-report-search value="${escapeHtml(f.search)}" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Tìm khách, mã đơn, sản phẩm"></div>
       <div class="order-report-time">
-        <button type="button" data-order-report-all aria-pressed="${f.mode==="all"}">Tất cả</button>
-        <button type="button" data-order-report-today aria-pressed="${f.mode==="today"}">Hôm nay</button>
-        <label>Từ <input type="date" data-order-report-range="from" value="${escapeHtml(f.from)}"></label>
-        <label>Đến <input type="date" data-order-report-range="to" value="${escapeHtml(f.to)}"></label>
-      </div>
-      <div class="order-report-quick">
-        <button type="button" data-order-report-quick="yesterday">Hôm qua</button>
-        <button type="button" data-order-report-quick="week">Tuần này</button>
-        <button type="button" data-order-report-quick="month">Tháng này</button>
-        <button type="button" data-order-report-quick="year">Năm nay</button>
+        <label class="order-report-preset"><span>Thời gian</span><select data-order-report-preset aria-label="Chọn thời gian">${option("all","Tất cả")}${option("today","Hôm nay")}${option("yesterday","Hôm qua")}${option("week","Tuần này")}${option("month","Tháng này")}${option("year","Năm nay")}${option("custom","Tùy chọn")}</select></label>
+        ${f.mode==="custom"?`<div class="order-report-custom"><label>Từ <input type="date" data-order-report-range="from" value="${escapeHtml(f.from)}"></label><span>→</span><label>Đến <input type="date" data-order-report-range="to" value="${escapeHtml(f.to)}"></label></div>`:""}
       </div>
     </section>`;
   }
@@ -709,9 +746,10 @@
       const items=Array.isArray(order.items)?order.items:[];
       const id=String(order.id||"");
       const expanded=expandedOrderId===String(order.id);
-      const secondary=currentRole()==="admin"?String(order.customerName||"Khách hàng")+" · "+dateTime(order.orderedAt):dateTime(order.orderedAt);
+      const preview=items.slice(0,3).map(item=>`${String(item.name||"Sản phẩm")} ×${Number(item.qty||0)}`).join(" · ")+(items.length>3?` · +${items.length-3}`:"");
       return `<article class="order-card ${expanded?"expanded":""}" data-order-id="${escapeHtml(order.id)}">
-        <div class="order-card-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(secondary)} · ${items.length+" dòng"}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
+        <div class="order-card-head"><div><strong class="order-card-customer">${escapeHtml(order.customerName||"Khách hàng")}</strong><small class="order-card-meta">${escapeHtml(dateTime(orderRecencyValue(order)))} · ${items.length+" dòng"} · ${escapeHtml(orderRef(order))}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
+        ${preview?`<div class="order-card-preview">${escapeHtml(preview)}</div>`:""}
         <button type="button" class="order-card-detail-toggle" data-order-detail data-order-id="${escapeHtml(id)}">${expanded?"Thu gọn":"Xem đơn"}</button>
         ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(compactMoney(item.price))}</small></div>`).join("")}</div>`:""}
         ${expanded?orderActions(order):""}
@@ -909,7 +947,7 @@
       editingOrderId="";editingOrderStatus="";clearCurrentCart();
       const label=data?.order?.orderNo?"#"+data.order.orderNo:String(id);
       setMainStatus("Đã cập nhật đơn "+label+".");
-      expandedOrderId=String(id);activeView="orders";activeStatus=String(data?.order?.status||previousStatus);debtLinkedOrder=null;
+      expandedOrderId=String(id);activeView="orders";setActiveOrderStatus(String(data?.order?.status||previousStatus));debtLinkedOrder=null;
       taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){handleAuthError(error);setMainStatus(String(error?.message||error));}
     finally{busy=false;setSalesBusyState("update",false);syncCartActions();syncCustomerControls();}
@@ -928,7 +966,7 @@
       clearCurrentCart();
       const label=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã bán nhanh đơn "+label+" · Đã giao.");
-      expandedOrderId="";activeView="orders";activeStatus="delivered";
+      expandedOrderId="";activeView="orders";setActiveOrderStatus("delivered");
       taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){
       handleAuthError(error);setMainStatus(String(error?.message||error));
@@ -1001,7 +1039,7 @@
       const customerName=currentRole()==="admin"?(selectedCustomer()?.name||""):"";
       const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");
-      expandedOrderId="";activeView="orders";activeStatus="pending";
+      expandedOrderId="";activeView="orders";setActiveOrderStatus("pending");
       debtCustomerId="";debtDetail=null;
       taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){
@@ -1074,10 +1112,6 @@
     const batch=target.closest?.("[data-order-batch]");
     if(batch?.dataset.orderBatch==="delete-pending"){await deleteAllPendingOrders();return;}
     if(batch?.dataset.orderBatch==="return-delivered"){await returnFilteredDeliveredOrders();return;}
-    if(target.closest?.("[data-order-report-all]")){orderReportFilter={...orderReportFilter,mode:"all"};sourceDrillSource="";renderOrders();return;}
-    if(target.closest?.("[data-order-report-today]")){const today=localDateKey(new Date());orderReportFilter={...orderReportFilter,mode:"today",from:today,to:today};sourceDrillSource="";renderOrders();return;}
-    const reportQuick=target.closest?.("[data-order-report-quick]");
-    if(reportQuick){const range=orderQuickRange(String(reportQuick.dataset.orderReportQuick||""));orderReportFilter={...orderReportFilter,mode:"range",...range};sourceDrillSource="";renderOrders();return;}
     const sourceOpen=target.closest?.("[data-order-source-open]");if(sourceOpen){sourceDrillSource=String(sourceOpen.dataset.orderSourceOpen||"");sourceDrillMode="detail";renderOrders();return;}
     const sourceMode=target.closest?.("[data-order-source-mode]");if(sourceMode){sourceDrillMode=String(sourceMode.dataset.orderSourceMode||"detail")==="combined"?"combined":"detail";renderOrders();return;}
     if(target.closest?.("[data-order-source-close]")){sourceDrillSource="";renderOrders();return;}
@@ -1088,7 +1122,7 @@
     if(workView){
       taphoaWorkView=String(workView.dataset.taphoaWorkView||"sales");
       activeView=taphoaWorkView==="debts"?"debts":"orders";
-      sourceDrillSource="";debtLinkedOrder=null;
+      debtLinkedOrder=null;
       if(taphoaWorkView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
       else if(taphoaWorkView!=="debts")debtCustomerId="";
       debtDetail=null;syncTaphoaWorkspace();syncManagerView();
@@ -1100,7 +1134,7 @@
     if(target.closest?.("#debtBackButton")){debtCustomerId="";debtDetail=null;debtLinkedOrder=null;syncManagerView();await refreshDebts();return;}
     const debtCustomer=target.closest?.("[data-debt-customer-id]");if(debtCustomer){debtLinkedOrder=null;await openDebtCustomer(String(debtCustomer.dataset.debtCustomerId||""));return;}
     const customerOption=target.closest?.("[data-order-customer-id]");if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
-    const tab=target.closest?.("[data-order-status]");if(tab){expandedOrderId="";sourceDrillSource="";activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
+    const tab=target.closest?.("[data-order-status]");if(tab){expandedOrderId="";sourceDrillSource="";setActiveOrderStatus(String(tab.dataset.orderStatus||"pending"));renderOrders();return;}
     const detail=target.closest?.("[data-order-detail]");if(detail){const id=String(detail.dataset.orderId||"");expandedOrderId=expandedOrderId===id?"":id;renderOrders();return;}
     const action=target.closest?.("[data-order-action]");if(action){await performOrderAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));return;}
     if(target.closest?.(".user-work-jump-button,#mobileUserSourceTabs button"))window.setTimeout(()=>{if(!isTaphoaWorkspaceActive())taphoaWorkView="sales";ensureTaphoaWorkspaceNav();syncTaphoaWorkspace();},0);
@@ -1115,11 +1149,20 @@
   document.addEventListener("input",event=>{
     if(event.target?.id==="orderCustomerSearch"&&!pickerBusy){renderCustomerList();return;}
     if(event.target?.matches?.("[data-order-report-search]")){
-      orderReportFilter={...orderReportFilter,search:String(event.target.value||"")};sourceDrillSource="";renderOrders();
+      setOrderReportFilter({search:String(event.target.value||"")});sourceDrillSource="";renderOrders();
       const input=document.querySelector("[data-order-report-search]");input?.focus();input?.setSelectionRange(orderReportFilter.search.length,orderReportFilter.search.length);return;
     }
     const range=event.target?.closest?.("[data-order-report-range]");
-    if(range){const side=String(range.dataset.orderReportRange||"from"),value=String(range.value||"");let next={...orderReportFilter,mode:"range",[side]:value};if(next.from&&next.to&&next.from>next.to){if(side==="from")next.to=next.from;else next.from=next.to;}orderReportFilter=next;sourceDrillSource="";renderOrders();}
+    if(range){const side=String(range.dataset.orderReportRange||"from"),value=String(range.value||"");let next={...orderReportFilter,mode:"custom",[side]:value};if(next.from&&next.to&&next.from>next.to){if(side==="from")next.to=next.from;else next.from=next.to;}setOrderReportFilter(next);sourceDrillSource="";renderOrders();}
+  });
+  document.addEventListener("change",event=>{
+    if(!event.target?.matches?.("[data-order-report-preset]"))return;
+    const mode=String(event.target.value||"all");
+    if(!["all","today","yesterday","week","month","year","custom"].includes(mode))return;
+    if(mode==="custom")setOrderReportFilter({mode});
+    else if(mode==="all")setOrderReportFilter({mode});
+    else setOrderReportFilter({mode,...orderQuickRange(mode)});
+    sourceDrillSource="";renderOrders();
   });
   document.addEventListener("keydown",event=>{
     if(event.key==="Escape"&&!document.getElementById("orderCustomerPicker")?.hidden){closeCustomerPicker();return;}

@@ -31,7 +31,7 @@ class TaphoaOrderFlowPolishTest(unittest.TestCase):
         self.assertIsNotNone(block)
         self.assertIn("data-order-report-preset", block)
         for value in ("all", "today", "yesterday", "week", "month", "year", "custom"):
-            self.assertIn(f'value="{value}"', block)
+            self.assertRegex(block, rf'(?:value="{value}"|option\("{value}",)')
         self.assertIn('f.mode==="custom"', block)
         self.assertNotIn("data-order-report-all", block)
         self.assertNotIn("data-order-report-today", block)

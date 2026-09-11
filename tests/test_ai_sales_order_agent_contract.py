@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,10 @@ AGENT_RULES = AGENT_DIR / "rules.ts"
 AGENT_MATCHER = AGENT_DIR / "matcher.ts"
 AGENT_COMMERCE = AGENT_DIR / "commerce.ts"
 ORDERS_EDGE = ROOT / "supabase/functions/getlink-orders/index.ts"
+GETLINK_API = ROOT / "supabase/functions/getlink-api/index.ts"
+PRICE_LIST_HTML = ROOT / "price-list.html"
+PRICE_LIST_JS = ROOT / "price-list.js"
+PRICE_LIST_CSS = ROOT / "price-list.css"
 VERIFY = ROOT / ".github/workflows/verify.yml"
 
 
@@ -95,6 +100,35 @@ class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
         text = VERIFY.read_text(encoding="utf-8")
         self.assertIn("deno test -A tests/ai_sales_order_agent_test.ts", text)
         self.assertIn("deno check supabase/functions/getlink-order-agent/index.ts", text)
+
+    def test_price_list_static_surface_exists(self):
+        for path in (PRICE_LIST_HTML, PRICE_LIST_JS, PRICE_LIST_CSS):
+            self.assertTrue(path.exists(), f"missing price-list asset: {path.name}")
+        html = PRICE_LIST_HTML.read_text(encoding="utf-8")
+        js = PRICE_LIST_JS.read_text(encoding="utf-8")
+        self.assertIn("price-list.css", html)
+        self.assertIn("price-list.js", html)
+        self.assertIn("/api/library?view=search", js)
+        self.assertIn("scope", js)
+        self.assertIn("group", js)
+        self.assertRegex(js, r"P\$\{String\(index\+1\)\.padStart\(2,\s*[\"']0[\"']\)\}")
+
+    def test_public_catalog_excludes_internal_supplier_commercial_fields(self):
+        text = GETLINK_API.read_text(encoding="utf-8")
+        match = re.search(r"function publicCatalogRow\(row:any\)\{([\s\S]*?)\n\}\n\nfunction publicCatalogRows", text)
+        self.assertIsNotNone(match, "publicCatalogRow sanitizer must exist")
+        public_block = match.group(1)
+        for forbidden in (
+            "supplier_input_price_vnd",
+            "supplier_margin_thousand",
+            "supplier_actual_profit_vnd",
+            "supplier_expected_profit_percent",
+            "supplier_expected_profit_vnd",
+            "supplier_applied_profit_vnd",
+            "supplier_selected_profit_vnd",
+            "raw_row",
+        ):
+            self.assertNotIn(forbidden, public_block)
 
 
 if __name__ == "__main__":

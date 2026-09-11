@@ -39,10 +39,7 @@ export type TrainingTranslation={
   replyText:string;
 };
 
-export type ModelCredentials={
-  apiKey:string;
-  model:string;
-};
+export type ModelCredentials={apiKey:string;model:string;};
 
 export class ModelParseError extends Error{
   code="model_unavailable_or_invalid";
@@ -56,23 +53,13 @@ const intentSchema={
   type:"object",
   additionalProperties:false,
   properties:{
-    intent:{
-      type:"string",
-      enum:["ignore","add_item","change_qty","remove_item","price_query","price_list","confirm","decline","clarification_answer"],
-    },
+    intent:{type:"string",enum:["ignore","add_item","change_qty","remove_item","price_query","price_list","confirm","decline","clarification_answer"]},
     raw_product_text:{type:"string"},
     quantity:{type:["number","null"],exclusiveMinimum:0},
     unit_hint:{type:["string","null"]},
     attributes:{
-      type:"object",
-      additionalProperties:false,
-      properties:{
-        color:{type:["string","null"]},
-        flavor:{type:["string","null"]},
-        size:{type:["string","null"]},
-        pack:{type:["string","null"]},
-        other:{type:["string","null"]},
-      },
+      type:"object",additionalProperties:false,
+      properties:{color:{type:["string","null"]},flavor:{type:["string","null"]},size:{type:["string","null"]},pack:{type:["string","null"]},other:{type:["string","null"]}},
       required:["color","flavor","size","pack","other"],
     },
     line_note:{type:"string"},
@@ -80,10 +67,7 @@ const intentSchema={
     needs_clarification:{type:"boolean"},
     clarification_question_hint:{type:["string","null"]},
   },
-  required:[
-    "intent","raw_product_text","quantity","unit_hint","attributes","line_note",
-    "reference_target","needs_clarification","clarification_question_hint",
-  ],
+  required:["intent","raw_product_text","quantity","unit_hint","attributes","line_note","reference_target","needs_clarification","clarification_question_hint"],
 } as const;
 
 const trainingSchema={
@@ -92,33 +76,21 @@ const trainingSchema={
   properties:{
     kind:{type:"string",enum:["order","teaching","conversation"]},
     items:{
-      type:"array",
-      maxItems:40,
+      type:"array",maxItems:40,
       items:{
-        type:"object",
-        additionalProperties:false,
+        type:"object",additionalProperties:false,
         properties:{
-          raw_text:{type:"string"},
-          product_name:{type:"string"},
-          quantity:{type:"number",exclusiveMinimum:0},
-          unit_hint:{type:["string","null"]},
-          product_code:{type:["string","null"]},
-          confidence:{type:"number",minimum:0,maximum:1},
+          raw_text:{type:"string"},product_name:{type:"string"},quantity:{type:"number",exclusiveMinimum:0},
+          unit_hint:{type:["string","null"]},product_code:{type:["string","null"]},confidence:{type:"number",minimum:0,maximum:1},
         },
         required:["raw_text","product_name","quantity","unit_hint","product_code","confidence"],
       },
     },
     teachings:{
-      type:"array",
-      maxItems:20,
+      type:"array",maxItems:20,
       items:{
-        type:"object",
-        additionalProperties:false,
-        properties:{
-          raw_text:{type:"string"},
-          product_name:{type:"string"},
-          product_code:{type:["string","null"]},
-        },
+        type:"object",additionalProperties:false,
+        properties:{raw_text:{type:"string"},product_name:{type:"string"},product_code:{type:["string","null"]}},
         required:["raw_text","product_name","product_code"],
       },
     },
@@ -127,47 +99,25 @@ const trainingSchema={
   required:["kind","items","teachings","reply_text"],
 } as const;
 
-function boundedText(value:unknown,max=1000):string{
-  return String(value??"").replace(/\s+/g," ").trim().slice(0,max);
-}
+function boundedText(value:unknown,max=1000):string{return String(value??"").replace(/\s+/g," ").trim().slice(0,max);}
 
 function sanitizedInput(input:ModelParseInput){
   return {
     customer_text:boundedText(input.customerText,2000),
-    recent_context:(input.recentContext||[]).slice(-8).map(row=>({
-      role:row.role,
-      text:boundedText(row.text,500),
-    })),
-    candidates:(input.candidates||[]).slice(0,20).map(row=>({
-      product_code:boundedText(row.productCode,120),
-      product_name:boundedText(row.productName,300),
-    })),
-    awaiting_clarification:input.awaitingClarification?{
-      attribute:boundedText(input.awaitingClarification.attribute,80),
-      product_name:boundedText(input.awaitingClarification.productName,300),
-    }:null,
-    list_context:(input.listContext||[]).slice(0,30).map(row=>({
-      code:boundedText(row.code,80),
-      product_code:boundedText(row.productCode,120),
-      product_name:boundedText(row.productName,300),
-    })),
+    recent_context:(input.recentContext||[]).slice(-8).map(row=>({role:row.role,text:boundedText(row.text,500)})),
+    candidates:(input.candidates||[]).slice(0,20).map(row=>({product_code:boundedText(row.productCode,120),product_name:boundedText(row.productName,300)})),
+    awaiting_clarification:input.awaitingClarification?{attribute:boundedText(input.awaitingClarification.attribute,80),product_name:boundedText(input.awaitingClarification.productName,300)}:null,
+    list_context:(input.listContext||[]).slice(0,30).map(row=>({code:boundedText(row.code,80),product_code:boundedText(row.productCode,120),product_name:boundedText(row.productName,300)})),
   };
 }
 
 function sanitizedTrainingInput(input:TrainingModelInput){
   return {
     customer_text:boundedText(input.customerText,8000),
-    catalog:(input.catalog||[]).slice(0,600).map(row=>({
-      product_code:boundedText(row.productCode,120),
-      product_name:boundedText(row.productName,300),
-    })),
-    learned_examples:(input.learnedExamples||[]).slice(0,80).map(row=>({
-      raw_text:boundedText(row.rawText,500),
-      product_name:boundedText(row.productName,300),
+    learned_examples:(input.learnedExamples||[]).slice(0,40).map(row=>({
+      raw_text:boundedText(row.rawText,500),product_name:boundedText(row.productName,300),
       product_code:row.productCode?boundedText(row.productCode,120):null,
-      quantity:row.quantity==null?null:Number(row.quantity),
-      unit_hint:row.unitHint?boundedText(row.unitHint,80):null,
-      status:boundedText(row.status,40),
+      quantity:row.quantity==null?null:Number(row.quantity),unit_hint:row.unitHint?boundedText(row.unitHint,80):null,status:boundedText(row.status,40),
     })),
   };
 }
@@ -185,12 +135,7 @@ function extractOutputText(payload:any):string{
 }
 
 function modelCredentials(credentials?:Partial<ModelCredentials>|null):ModelCredentials{
-  const apiKey=String(
-    credentials?.apiKey
-      ??Deno.env.get("GROQ_API_KEY")
-      ??Deno.env.get("OPENAI_API_KEY")
-      ??"",
-  ).trim();
+  const apiKey=String(credentials?.apiKey??Deno.env.get("GROQ_API_KEY")??Deno.env.get("OPENAI_API_KEY")??"").trim();
   const model=String(credentials?.model??Deno.env.get("ORDER_AGENT_MODEL")??"").trim();
   if(!apiKey||!model)throw new ModelParseError("model_configuration_missing");
   return {apiKey,model};
@@ -200,21 +145,14 @@ async function callGroq(body:any,fetchImpl:typeof fetch,apiKey:string):Promise<a
   let response:Response;
   try{
     response=await fetchImpl("https://api.groq.com/openai/v1/responses",{
-      method:"POST",
-      headers:{
-        "authorization":`Bearer ${apiKey}`,
-        "content-type":"application/json",
-      },
-      body:JSON.stringify(body),
+      method:"POST",headers:{authorization:`Bearer ${apiKey}`,"content-type":"application/json"},body:JSON.stringify(body),
     });
-  }catch{
-    throw new ModelParseError("model_request_failed");
-  }
+  }catch{throw new ModelParseError("model_request_failed:network");}
   let payload:any;
   try{payload=await response.json();}
-  catch{throw new ModelParseError("model_response_not_json");}
+  catch{throw new ModelParseError(`model_response_not_json:${response.status}`);}
   if(!response.ok||payload?.status==="failed"||payload?.status==="incomplete"){
-    throw new ModelParseError("model_request_failed");
+    throw new ModelParseError(`model_request_failed:${response.status}`);
   }
   return payload;
 }
@@ -225,23 +163,16 @@ function validateTrainingTranslation(input:any,catalog:TrainingCatalogItem[]):Tr
   if(!["order","teaching","conversation"].includes(kind))throw new ModelParseError("model_output_invalid");
   const catalogByCode=new Map(catalog.map(row=>[String(row.productCode),row]));
   const items=(Array.isArray(input.items)?input.items:[]).map((row:any)=>{
-    const rawText=boundedText(row?.raw_text,1000);
-    let productName=boundedText(row?.product_name,400);
-    const quantity=Number(row?.quantity);
-    const confidence=Math.max(0,Math.min(1,Number(row?.confidence)||0));
+    const rawText=boundedText(row?.raw_text,1000);let productName=boundedText(row?.product_name,400);
+    const quantity=Number(row?.quantity);const confidence=Math.max(0,Math.min(1,Number(row?.confidence)||0));
     if(!rawText||!productName||!Number.isFinite(quantity)||quantity<=0)throw new ModelParseError("model_output_invalid");
     let productCode=row?.product_code==null?null:boundedText(row.product_code,120)||null;
     if(productCode&&!catalogByCode.has(productCode))productCode=null;
     if(productCode)productName=String(catalogByCode.get(productCode)?.productName||productName);
-    return {
-      rawText,productName,quantity,
-      unitHint:row?.unit_hint==null?null:boundedText(row.unit_hint,80)||null,
-      productCode,confidence,
-    } as TrainingItem;
+    return {rawText,productName,quantity,unitHint:row?.unit_hint==null?null:boundedText(row.unit_hint,80)||null,productCode,confidence} as TrainingItem;
   });
   const teachings=(Array.isArray(input.teachings)?input.teachings:[]).map((row:any)=>{
-    const rawText=boundedText(row?.raw_text,1000);
-    let productName=boundedText(row?.product_name,400);
+    const rawText=boundedText(row?.raw_text,1000);let productName=boundedText(row?.product_name,400);
     if(!rawText||!productName)throw new ModelParseError("model_output_invalid");
     let productCode=row?.product_code==null?null:boundedText(row.product_code,120)||null;
     if(productCode&&!catalogByCode.has(productCode))productCode=null;
@@ -251,19 +182,11 @@ function validateTrainingTranslation(input:any,catalog:TrainingCatalogItem[]):Tr
   return {kind,items,teachings,replyText:boundedText(input.reply_text,2000)};
 }
 
-export async function parseWithModel(
-  input:ModelParseInput,
-  fetchImpl:typeof fetch=fetch,
-  credentials?:Partial<ModelCredentials>|null,
-):Promise<ParsedIntent>{
-  const {apiKey,model}=modelCredentials(credentials);
-  const safe=sanitizedInput(input);
+export async function parseWithModel(input:ModelParseInput,fetchImpl:typeof fetch=fetch,credentials?:Partial<ModelCredentials>|null):Promise<ParsedIntent>{
+  const {apiKey,model}=modelCredentials(credentials);const safe=sanitizedInput(input);
   if(!safe.customer_text)throw new ModelParseError("customer_text_required");
-
   const body={
-    model,
-    store:false,
-    max_output_tokens:350,
+    model,store:false,max_output_tokens:350,
     instructions:[
       "Bạn là bộ phân tích ý định đặt hàng tiếng Việt cho cửa hàng tạp hóa.",
       "Chỉ phân tích lời khách thành JSON đúng schema; không tự tạo giá, tổng tiền, tồn kho hoặc product id.",
@@ -271,75 +194,32 @@ export async function parseWithModel(
       "Hiểu viết tắt, thiếu dấu và câu sửa theo recent_context. Nếu đang chờ màu/vị/size, ưu tiên hiểu câu hiện tại là clarification_answer.",
       "Không trò chuyện với khách ở bước này; chỉ trả structured JSON.",
     ].join(" "),
-    input:[{
-      role:"user",
-      content:[{
-        type:"input_text",
-        text:`Dữ liệu JSON tối thiểu để phân tích:\n${JSON.stringify(safe)}`,
-      }],
-    }],
-    text:{
-      format:{
-        type:"json_schema",
-        name:"getlink_order_intent",
-        strict:true,
-        schema:intentSchema,
-      },
-    },
+    input:[{role:"user",content:[{type:"input_text",text:`Dữ liệu JSON tối thiểu để phân tích:\n${JSON.stringify(safe)}`}]}],
+    text:{format:{type:"json_schema",name:"getlink_order_intent",strict:true,schema:intentSchema}},
   };
-
   const payload=await callGroq(body,fetchImpl,apiKey);
-  try{
-    const parsed=JSON.parse(extractOutputText(payload));
-    return validateParsedIntent(parsed);
-  }catch(error){
-    if(error instanceof ModelParseError)throw error;
-    throw new ModelParseError("model_output_invalid");
-  }
+  try{return validateParsedIntent(JSON.parse(extractOutputText(payload)));}
+  catch(error){if(error instanceof ModelParseError)throw error;throw new ModelParseError("model_output_invalid");}
 }
 
-export async function translateTrainingMessageWithModel(
-  input:TrainingModelInput,
-  fetchImpl:typeof fetch=fetch,
-  credentials?:Partial<ModelCredentials>|null,
-):Promise<TrainingTranslation>{
-  const {apiKey,model}=modelCredentials(credentials);
-  const safe=sanitizedTrainingInput(input);
+export async function translateTrainingMessageWithModel(input:TrainingModelInput,fetchImpl:typeof fetch=fetch,credentials?:Partial<ModelCredentials>|null):Promise<TrainingTranslation>{
+  const {apiKey,model}=modelCredentials(credentials);const safe=sanitizedTrainingInput(input);
   if(!safe.customer_text)throw new ModelParseError("customer_text_required");
   const body={
-    model,
-    store:false,
-    max_output_tokens:800,
+    model,store:false,max_output_tokens:500,
     instructions:[
-      "Bạn là người dịch tin nhắn bán buôn tạp hóa tiếng Việt sang TÊN SẢN PHẨM + SỐ LƯỢNG.",
-      "Đọc nguyên văn trước khi đối chiếu dữ liệu. Tự hiểu viết tắt, không dấu, sai chính tả, số viết bằng chữ, số dính vào tên, câu nói xen giữa và nhiều mặt hàng trong cùng một tin.",
-      "Không dùng quy tắc hard-code ngoài dữ liệu được cung cấp. learned_examples là ký ức đã học; ưu tiên corrected hơn auto khi có xung đột.",
-      "catalog là dữ liệu chuẩn để đối chiếu. product_code chỉ được chọn từ catalog. Nếu chưa chắc mã thì để null nhưng vẫn trả product_name mà bạn hiểu được.",
-      "Nếu người dùng đang dạy/sửa cách hiểu, kind=teaching và ghi vào teachings. Nếu là hội thoại không phải đặt hàng, kind=conversation và trả lời ngắn trong reply_text.",
-      "Nếu là đơn hàng, kind=order; mỗi mặt hàng là một item riêng; không kéo mặt hàng từ tin cũ vào; bỏ các câu hội thoại khỏi items.",
-      "Chỉ trả JSON đúng schema, không thêm lời giải thích ngoài JSON.",
+      "Bạn chỉ làm một việc: đọc tin nhắn bán hàng tiếng Việt và tách thành TÊN SẢN PHẨM + SỐ LƯỢNG.",
+      "Tên có thể đứng trước số lượng hoặc số lượng đứng trước tên. Tự hiểu bằng ngôn ngữ, không dựa vào parser phía server.",
+      "learned_examples là các ví dụ người dùng đã dạy; ưu tiên corrected hơn auto khi có xung đột và khái quát cách hiểu sang câu mới.",
+      "Không có catalog trong bước này. Không tự chọn product_code; luôn để product_code=null. Chỉ trả tên sản phẩm mà bạn hiểu từ câu và số lượng.",
+      "Nếu người dùng đang dạy/sửa cách hiểu, kind=teaching. Nếu là hội thoại không phải mặt hàng, kind=conversation. Nếu là đơn, kind=order.",
+      "Mỗi mặt hàng là một item riêng và chỉ lấy từ tin hiện tại; không kéo mặt hàng của tin trước vào.",
+      "Chỉ trả JSON đúng schema, không thêm giải thích ngoài JSON.",
     ].join(" "),
-    input:[{
-      role:"user",
-      content:[{
-        type:"input_text",
-        text:`Dữ liệu học và tin hiện tại:\n${JSON.stringify(safe)}`,
-      }],
-    }],
-    text:{
-      format:{
-        type:"json_schema",
-        name:"getlink_training_translation",
-        strict:true,
-        schema:trainingSchema,
-      },
-    },
+    input:[{role:"user",content:[{type:"input_text",text:`Tin hiện tại và ví dụ đã học:\n${JSON.stringify(safe)}`}]}],
+    text:{format:{type:"json_schema",name:"getlink_training_translation",strict:true,schema:trainingSchema}},
   };
   const payload=await callGroq(body,fetchImpl,apiKey);
-  try{
-    return validateTrainingTranslation(JSON.parse(extractOutputText(payload)),input.catalog||[]);
-  }catch(error){
-    if(error instanceof ModelParseError)throw error;
-    throw new ModelParseError("model_output_invalid");
-  }
+  try{return validateTrainingTranslation(JSON.parse(extractOutputText(payload)),input.catalog||[]);}
+  catch(error){if(error instanceof ModelParseError)throw error;throw new ModelParseError("model_output_invalid");}
 }

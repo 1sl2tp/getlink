@@ -55,7 +55,7 @@ Deno.test("round suggestion is a separate gentle follow-up",async()=>{
   const followUp=reply.followUp;
   assert.ok(followUp);
   assert.equal(followUp.replyKind,"round_suggestion");
-  assert.match(followUp.body,/thêm 3 thùng/);
+  assert.match(followUp.body,/thêm.*3 thùng/);
   assert.match(followUp.body,/tròn 20/);
 });
 

@@ -201,7 +201,7 @@ export async function processTurn(
 
       if(parsed.intent==="price_query"){
         const facts=await deps.commercialFacts(resolution.productCode,1);
-        result={kind:"price",sessionId:session.id,lines,facts,roundSuggestion:null};
+        result={kind:"price",sessionId:session.id,lines,facts:{...facts,productName:resolution.productName},roundSuggestion:null};
         continue;
       }
 
@@ -226,7 +226,7 @@ export async function processTurn(
         lineKey:existing?.lineKey||resolution.productCode,
         productCode:resolution.productCode,
         productName:resolution.productName,
-        customerRawText:clean(message.body),
+        customerRawText:clean(parsed.raw_product_text)||clean(message.body),
         quantity,
         unitHint:parsed.unit_hint??existing?.unitHint??null,
         attributes:{...(existing?.attributes||{}),...(parsed.attributes||{})},
@@ -250,7 +250,7 @@ export async function processTurn(
           questionHint:parsed.clarification_question_hint||null,
         };
         await repo.updateSession(session.id,{state:"awaiting_clarification",awaitingContext:session.awaitingContext});
-        result={kind:"clarification",sessionId:session.id,lines,facts,reason:"missing_attribute",roundSuggestion:null};
+        result={kind:"clarification",sessionId:session.id,lines,facts:{...facts,productName:next.productName,missingAttribute:requiredAttribute||"other"},reason:"missing_attribute",roundSuggestion:null};
         continue;
       }
 
@@ -264,7 +264,7 @@ export async function processTurn(
       }
       await repo.updateSession(session.id,{state:"collecting"});
       session.state="collecting";
-      result={kind:"order_update",sessionId:session.id,lines,facts,roundSuggestion};
+      result={kind:"order_update",sessionId:session.id,lines,facts:{...facts,productName:next.productName},roundSuggestion};
     }
   }
 

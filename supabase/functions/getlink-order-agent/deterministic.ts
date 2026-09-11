@@ -1,6 +1,9 @@
 import { normalizeCustomerText } from "./normalize.ts";
+import type { OrderFragment } from "./multiline.ts";
 
-export type DeterministicOrderFamily="sua_chua"|"probi_to"|"probi_be"|"thuoc_la"|"milo"|null;
+export type DeterministicOrderFamily=
+  |"sua_chua"|"probi_to"|"probi_be"|"thuoc_la"|"milo"
+  |"mi_chinh"|"hoa_my_pham"|"dau_an"|null;
 
 export type DeterministicOrderContext={
   family:DeterministicOrderFamily;
@@ -15,6 +18,20 @@ export type DeterministicOrderItem={
 export type DeterministicOrderParse={
   items:DeterministicOrderItem[];
   unresolved:string[];
+  context:DeterministicOrderContext;
+};
+
+export type DeterministicFragmentReason=
+  |"not_in_catalog"|"ambiguous"|"size_mismatch"|"needs_owner_confirmation"|"other";
+
+export type DeterministicFragmentParse={
+  kind:"resolved"|"unresolved";
+  rawText:string;
+  rawProductText:string;
+  quantity:number|null;
+  unitHint:string|null;
+  lookupText:string|null;
+  reason:DeterministicFragmentReason|null;
   context:DeterministicOrderContext;
 };
 
@@ -41,6 +58,105 @@ function result(
   raw:string,
 ):DeterministicOrderParse{
   return {items,unresolved:items.length?[]:[raw],context};
+}
+
+function resolvedFragment(
+  fragment:OrderFragment,
+  lookupText:string,
+  family:Exclude<DeterministicOrderFamily,null>,
+):DeterministicFragmentParse{
+  return {
+    kind:"resolved",
+    rawText:fragment.rawText,
+    rawProductText:fragment.rawProductText,
+    quantity:fragment.quantity,
+    unitHint:fragment.unitHint,
+    lookupText,
+    reason:null,
+    context:{family},
+  };
+}
+
+function unresolvedFragment(
+  fragment:OrderFragment,
+  family:DeterministicOrderFamily,
+  reason:DeterministicFragmentReason,
+):DeterministicFragmentParse{
+  return {
+    kind:"unresolved",
+    rawText:fragment.rawText,
+    rawProductText:fragment.rawProductText,
+    quantity:fragment.quantity,
+    unitHint:fragment.unitHint,
+    lookupText:null,
+    reason,
+    context:{family},
+  };
+}
+
+export function parseDeterministicOrderFragment(
+  fragment:OrderFragment,
+  prior:DeterministicOrderContext=emptyOrderContext(),
+):DeterministicFragmentParse{
+  const normalized=normalizeCustomerText(fragment.rawProductText);
+  const priorFamily=prior?.family??null;
+
+  if(!normalized||!fragment.quantity){
+    return unresolvedFragment(fragment,priorFamily,"other");
+  }
+
+  if(normalized==="huong duong"){
+    return unresolvedFragment(fragment,priorFamily,"not_in_catalog");
+  }
+
+  const bat=normalized.match(/^bat\s+(.+)$/u);
+  if(bat){
+    const size=bat[1].replace(/\s+/g,"");
+    if(size==="1kg"||size==="1")return resolvedFragment(fragment,"Mi chinh bat 1","mi_chinh");
+    if(size==="454"||size==="454g")return resolvedFragment(fragment,"Mi chinh bat 454","mi_chinh");
+    if(size==="1.8kg"||size==="1,8kg")return unresolvedFragment(fragment,"mi_chinh","size_mismatch");
+    return unresolvedFragment(fragment,"mi_chinh","needs_owner_confirmation");
+  }
+
+  const omo=normalized.match(/^omo\s+(.+)$/u);
+  if(omo){
+    const size=omo[1].replace(/\s+/g,"");
+    const names:Record<string,string>={
+      "1.15kg":"Bot giat omo 1.15kg",
+      "5.5kg":"Bot giat omo 5.5kg",
+      "5.1kg":"Bot giat omo 5.1kg",
+      "2.9kg":"Bot giat omo 2.9kg",
+      "2.6kg":"Bot giat omo 2.6kg",
+      "700g":"Bot giat omo 700g",
+      "380g":"Bot giat omo 380g",
+    };
+    const lookup=names[size];
+    return lookup
+      ?resolvedFragment(fragment,lookup,"hoa_my_pham")
+      :unresolvedFragment(fragment,"hoa_my_pham","needs_owner_confirmation");
+  }
+
+  const lan=normalized.match(/^cai\s+lan\s+(1|5)(?:l)?$/u);
+  if(lan)return resolvedFragment(fragment,`Dau lan ${lan[1]}`,"dau_an");
+
+  const meizan=normalized.match(/^meizan\s+(1|5)(?:l)?$/u);
+  if(meizan)return resolvedFragment(fragment,`Dau zan ${meizan[1]}`,"dau_an");
+
+  const gao=normalized.match(/^gao\s+2(?:l)?$/u);
+  if(gao){
+    return priorFamily==="dau_an"
+      ?resolvedFragment(fragment,"Dau sim gao 2","dau_an")
+      :unresolvedFragment(fragment,priorFamily,"needs_owner_confirmation");
+  }
+
+  const nep=normalized.match(/^nep\s+2(?:l)?$/u);
+  if(nep){
+    return priorFamily==="dau_an"
+      ?resolvedFragment(fragment,"Dau nep 2","dau_an")
+      :unresolvedFragment(fragment,priorFamily,"needs_owner_confirmation");
+  }
+
+  return unresolvedFragment(fragment,priorFamily,"not_in_catalog");
 }
 
 function probiVariantLookup(family:"probi_to"|"probi_be",variant:string):string|null{

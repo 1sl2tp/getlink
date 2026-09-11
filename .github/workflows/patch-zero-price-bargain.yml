@@ -20,6 +20,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install verify requirements
+        run: pip install -r scraper/requirements.txt
       - name: Apply scoped production patch
         run: python tools/patch_zero_price_bargain.py
       - name: Focused RED to GREEN contract

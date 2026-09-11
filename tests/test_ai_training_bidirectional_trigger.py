@@ -12,7 +12,7 @@ class AiTrainingBidirectionalTriggerTest(unittest.TestCase):
         self.assertIn("v_sender_role='admin' and v_other_role='user'", sql)
         self.assertIn("v_sender_role='user' and v_other_role='admin'", sql)
         self.assertIn("p.account_id=v_customer_id", sql)
-        self.assertIn("new.client_id like 'ai:%'", sql)
+        self.assertIn("coalesce(new.client_id,'') like 'ai:%'", sql)
         self.assertNotIn("if v_role is distinct from 'user'", sql)
 
 

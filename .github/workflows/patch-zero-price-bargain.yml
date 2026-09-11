@@ -6,6 +6,9 @@ on:
       - fix/taphoa-zero-price-order
     paths:
       - tools/patch_zero_price_bargain.py
+      - tests/test_taphoa_zero_price_bargain.py
+      - tests/test_taphoa_order_workflow_parity.py
+      - .github/workflows/patch-zero-price-bargain.yml
 
 permissions:
   contents: write

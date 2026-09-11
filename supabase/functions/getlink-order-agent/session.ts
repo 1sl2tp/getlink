@@ -1,5 +1,6 @@
 import type { ParsedIntent, ProductResolution } from "./types.ts";
 import { parseFastCommand, nextRoundSuggestion } from "./rules.ts";
+import { normalizeCustomerText } from "./normalize.ts";
 
 export type DraftLine={
   lineKey:string;
@@ -63,7 +64,51 @@ export type TurnResult={
   priceList?:unknown;
 };
 
+type PriceListContextItem={
+  code:string;
+  productCode:string;
+  productName:string;
+};
+
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim();}
+
+function priceListContextItems(session:AgentSession):PriceListContextItem[]{
+  const rows=Array.isArray(session.lastPriceListContext?.items)
+    ?session.lastPriceListContext.items as unknown[]
+    :[];
+  return rows.map((row:any)=>({
+    code:clean(row?.code).toUpperCase(),
+    productCode:clean(row?.productCode),
+    productName:clean(row?.productName),
+  })).filter(row=>Boolean(row.code&&row.productCode&&row.productName));
+}
+
+function priceListReferenceIntent(text:unknown,session:AgentSession):ParsedIntent|null{
+  if(session.state==="awaiting_clarification")return null;
+  const items=priceListContextItems(session);
+  if(!items.length)return null;
+  const normalized=normalizeCustomerText(text);
+  let match=normalized.match(/^(?:ma\s+)?p0*(\d{1,3})\s+(?:lay\s+)?(\d+(?:[.,]\d+)?)\s*$/u);
+  if(!match)match=normalized.match(/^cai\s+so\s+(\d{1,3})\s+(?:lay\s+)?(\d+(?:[.,]\d+)?)\s*$/u);
+  if(!match)return null;
+  const index=Number(match[1]);
+  const quantity=Number(String(match[2]).replace(",","."));
+  if(!Number.isInteger(index)||index<1||!Number.isFinite(quantity)||quantity<=0)return null;
+  const code=`P${String(index).padStart(2,"0")}`;
+  const item=items.find(row=>row.code===code);
+  if(!item)return null;
+  return {
+    intent:"add_item",
+    raw_product_text:item.productName,
+    quantity,
+    unit_hint:null,
+    attributes:{},
+    line_note:"",
+    reference_target:item.productCode,
+    needs_clarification:false,
+    clarification_question_hint:null,
+  };
+}
 
 function attributeValue(intent:ParsedIntent,key:string):string{
   const direct=intent.attributes?.[key];
@@ -78,6 +123,8 @@ async function parseMessage(
   lines:DraftLine[],
   deps:ProcessDeps,
 ):Promise<ParsedIntent>{
+  const priceRef=priceListReferenceIntent(message.body,session);
+  if(priceRef)return priceRef;
   const fast=parseFastCommand(message.body);
   if(fast && session.state!=="awaiting_clarification")return fast;
   if(fast?.intent==="confirm"||fast?.intent==="decline")return fast;
@@ -91,6 +138,7 @@ async function parseMessage(
 async function resolveForIntent(
   intent:ParsedIntent,
   lines:DraftLine[],
+  session:AgentSession,
   customerId:string,
   deps:ProcessDeps,
 ):Promise<ProductResolution>{
@@ -98,6 +146,13 @@ async function resolveForIntent(
   if(target){
     const existing=lines.find(line=>line.productCode===target||line.lineKey===target);
     if(existing)return {productCode:existing.productCode,productName:existing.productName,confidence:1,source:"canonical"};
+    const fromPriceList=priceListContextItems(session).find(item=>item.productCode===target||item.code===target.toUpperCase());
+    if(fromPriceList)return {
+      productCode:fromPriceList.productCode,
+      productName:fromPriceList.productName,
+      confidence:1,
+      source:"canonical",
+    };
   }
   return deps.resolveProduct(customerId,intent.raw_product_text);
 }
@@ -184,16 +239,25 @@ export async function processTurn(
 
     if(parsed.intent==="price_list"){
       const scope=clean(parsed.raw_product_text)||"toan bo";
-      const priceList=await repo.listPriceScope(scope);
-      session.lastPriceListContext={scope};
-      await repo.updateSession(session.id,{lastPriceListContext:{scope},state:"quoted"});
+      const priceList:any=await repo.listPriceScope(scope);
+      const context={
+        scope:clean(priceList?.scope)||scope,
+        url:clean(priceList?.url),
+        items:(Array.isArray(priceList?.items)?priceList.items:[]).map((item:any)=>({
+          code:clean(item?.code).toUpperCase(),
+          productCode:clean(item?.productCode),
+          productName:clean(item?.productName),
+        })).filter((item:PriceListContextItem)=>Boolean(item.code&&item.productCode&&item.productName)),
+      };
+      session.lastPriceListContext=context;
+      await repo.updateSession(session.id,{lastPriceListContext:context,state:"quoted"});
       session.state="quoted";
       result={kind:"price_list",sessionId:session.id,lines,priceList,roundSuggestion:null};
       continue;
     }
 
     if(["add_item","change_qty","remove_item","price_query"].includes(parsed.intent)){
-      const resolution=await resolveForIntent(parsed,lines,claimedTurn.customerAccountId,deps);
+      const resolution=await resolveForIntent(parsed,lines,session,claimedTurn.customerAccountId,deps);
       if(!resolution){
         result={kind:"clarification",sessionId:session.id,lines,reason:"product_not_confident",roundSuggestion:null};
         continue;

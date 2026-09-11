@@ -1,6 +1,9 @@
 import type { ParsedIntent, ProductResolution } from "./types.ts";
+import type { UnresolvedDraftLine, UnresolvedDraftStatus } from "./unresolved.ts";
 import { parseFastCommand, nextRoundSuggestion } from "./rules.ts";
 import { normalizeCustomerText } from "./normalize.ts";
+import { segmentOrderMessage } from "./multiline.ts";
+import { emptyOrderContext, parseDeterministicOrderFragment } from "./deterministic.ts";
 
 export type DraftLine={
   lineKey:string;
@@ -41,6 +44,9 @@ export type SessionRepository={
   listDraftLines(sessionId:string):Promise<DraftLine[]>;
   saveLine(sessionId:string,line:DraftLine):Promise<unknown>;
   deleteLine(sessionId:string,lineKey:string):Promise<unknown>;
+  listUnresolvedLines?(sessionId:string,status?:UnresolvedDraftStatus|null):Promise<UnresolvedDraftLine[]>;
+  saveUnresolvedLine?(sessionId:string,line:UnresolvedDraftLine):Promise<UnresolvedDraftLine>;
+  markUnresolvedResolved?(id:string,productCode:string):Promise<UnresolvedDraftLine>;
   updateSession(sessionId:string,patch:Record<string,unknown>):Promise<AgentSession|unknown>;
   getProductHint(productCode:string):Promise<{askAttribute?:string|null}|null>;
   listPriceScope(scope:string):Promise<unknown>;
@@ -54,32 +60,25 @@ export type ProcessDeps={
 };
 
 export type TurnResult={
-  kind:"ignore"|"order_update"|"clarification"|"price"|"price_list"|"confirmation"|"decline"|"fallback";
+  kind:"ignore"|"order_update"|"owner_review"|"clarification"|"price"|"price_list"|"confirmation"|"decline"|"fallback";
   sessionId:string;
   facts?:any;
   lines?:DraftLine[];
+  unresolvedLines?:UnresolvedDraftLine[];
   salesOrderId?:string;
   reason?:string;
   roundSuggestion?:{target:number;gap:number}|null;
   priceList?:unknown;
 };
 
-type PriceListContextItem={
-  code:string;
-  productCode:string;
-  productName:string;
-};
+type PriceListContextItem={code:string;productCode:string;productName:string;};
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim();}
 
 function priceListContextItems(session:AgentSession):PriceListContextItem[]{
-  const rows=Array.isArray(session.lastPriceListContext?.items)
-    ?session.lastPriceListContext.items as unknown[]
-    :[];
+  const rows=Array.isArray(session.lastPriceListContext?.items)?session.lastPriceListContext.items as unknown[]:[];
   return rows.map((row:any)=>({
-    code:clean(row?.code).toUpperCase(),
-    productCode:clean(row?.productCode),
-    productName:clean(row?.productName),
+    code:clean(row?.code).toUpperCase(),productCode:clean(row?.productCode),productName:clean(row?.productName),
   })).filter(row=>Boolean(row.code&&row.productCode&&row.productName));
 }
 
@@ -98,15 +97,8 @@ function priceListReferenceIntent(text:unknown,session:AgentSession):ParsedInten
   const item=items.find(row=>row.code===code);
   if(!item)return null;
   return {
-    intent:"add_item",
-    raw_product_text:item.productName,
-    quantity,
-    unit_hint:null,
-    attributes:{},
-    line_note:"",
-    reference_target:item.productCode,
-    needs_clarification:false,
-    clarification_question_hint:null,
+    intent:"add_item",raw_product_text:item.productName,quantity,unit_hint:null,attributes:{},line_note:"",
+    reference_target:item.productCode,needs_clarification:false,clarification_question_hint:null,
   };
 }
 
@@ -118,15 +110,12 @@ function attributeValue(intent:ParsedIntent,key:string):string{
 }
 
 async function parseMessage(
-  message:{body:string},
-  session:AgentSession,
-  lines:DraftLine[],
-  deps:ProcessDeps,
+  message:{body:string},session:AgentSession,lines:DraftLine[],deps:ProcessDeps,
 ):Promise<ParsedIntent>{
   const priceRef=priceListReferenceIntent(message.body,session);
   if(priceRef)return priceRef;
   const fast=parseFastCommand(message.body);
-  if(fast && session.state!=="awaiting_clarification")return fast;
+  if(fast&&session.state!=="awaiting_clarification")return fast;
   if(fast?.intent==="confirm"||fast?.intent==="decline")return fast;
   return await deps.parseWithModel({
     customerText:message.body,
@@ -136,23 +125,14 @@ async function parseMessage(
 }
 
 async function resolveForIntent(
-  intent:ParsedIntent,
-  lines:DraftLine[],
-  session:AgentSession,
-  customerId:string,
-  deps:ProcessDeps,
+  intent:ParsedIntent,lines:DraftLine[],session:AgentSession,customerId:string,deps:ProcessDeps,
 ):Promise<ProductResolution>{
   const target=clean(intent.reference_target);
   if(target){
     const existing=lines.find(line=>line.productCode===target||line.lineKey===target);
     if(existing)return {productCode:existing.productCode,productName:existing.productName,confidence:1,source:"canonical"};
     const fromPriceList=priceListContextItems(session).find(item=>item.productCode===target||item.code===target.toUpperCase());
-    if(fromPriceList)return {
-      productCode:fromPriceList.productCode,
-      productName:fromPriceList.productName,
-      confidence:1,
-      source:"canonical",
-    };
+    if(fromPriceList)return {productCode:fromPriceList.productCode,productName:fromPriceList.productName,confidence:1,source:"canonical"};
   }
   return deps.resolveProduct(customerId,intent.raw_product_text);
 }
@@ -168,16 +148,114 @@ async function cartonEquivalent(lines:DraftLine[],deps:ProcessDeps):Promise<numb
   return total;
 }
 
-export async function processTurn(
+function multilineRepo(repo:SessionRepository){
+  if(!repo.listUnresolvedLines||!repo.saveUnresolvedLine)throw new Error("unresolved_repository_unavailable");
+  return {
+    listUnresolvedLines:repo.listUnresolvedLines.bind(repo),
+    saveUnresolvedLine:repo.saveUnresolvedLine.bind(repo),
+  };
+}
+
+async function processMultilineOrderMessage(
   repo:SessionRepository,
-  claimedTurn:ClaimedTurn,
+  session:AgentSession,
+  lines:DraftLine[],
+  message:{id:string;body:string},
+  customerId:string,
   deps:ProcessDeps,
+):Promise<TurnResult>{
+  const storage=multilineRepo(repo);
+  const fragments=segmentOrderMessage(message.body);
+  let context=emptyOrderContext();
+
+  for(const fragment of fragments){
+    const parsed=parseDeterministicOrderFragment(fragment,context);
+    context=parsed.context;
+    const unresolvedLineKey=`${message.id}:${fragment.index}`;
+
+    if(parsed.kind==="unresolved"||!parsed.lookupText||!parsed.quantity){
+      await storage.saveUnresolvedLine(session.id,{
+        lineKey:unresolvedLineKey,
+        sourceMessageId:message.id,
+        rawText:parsed.rawText,
+        rawProductText:parsed.rawProductText,
+        quantity:parsed.quantity,
+        unitHint:parsed.unitHint,
+        contextFamily:parsed.context.family,
+        candidateProductCodes:[],
+        reason:parsed.reason||"other",
+        status:"pending",
+        resolvedProductCode:null,
+      });
+      continue;
+    }
+
+    const resolution=await deps.resolveProduct(customerId,parsed.lookupText);
+    if(!resolution){
+      await storage.saveUnresolvedLine(session.id,{
+        lineKey:unresolvedLineKey,
+        sourceMessageId:message.id,
+        rawText:parsed.rawText,
+        rawProductText:parsed.rawProductText,
+        quantity:parsed.quantity,
+        unitHint:parsed.unitHint,
+        contextFamily:parsed.context.family,
+        candidateProductCodes:[],
+        reason:"ambiguous",
+        status:"pending",
+        resolvedProductCode:null,
+      });
+      continue;
+    }
+
+    const existing=lines.find(line=>line.productCode===resolution.productCode);
+    const replayOfSameMessage=existing?.sourceMessageId===message.id;
+    const quantity=replayOfSameMessage
+      ?parsed.quantity
+      :(Number(existing?.quantity)||0)+parsed.quantity;
+    const facts=await deps.commercialFacts(resolution.productCode,quantity);
+    const next:DraftLine={
+      lineKey:existing?.lineKey||resolution.productCode,
+      productCode:resolution.productCode,
+      productName:resolution.productName,
+      customerRawText:parsed.rawProductText,
+      quantity,
+      unitHint:parsed.unitHint??existing?.unitHint??null,
+      attributes:{...(existing?.attributes||{})},
+      lineNote:existing?.lineNote||"",
+      quotedPriceVnd:Number(facts?.unitPriceVnd)||0,
+      confidence:resolution.confidence,
+      resolutionSource:resolution.source,
+      sourceMessageId:message.id,
+    };
+    await repo.saveLine(session.id,next);
+    lines=await repo.listDraftLines(session.id);
+  }
+
+  lines=await repo.listDraftLines(session.id);
+  const unresolvedLines=await storage.listUnresolvedLines(session.id,"pending");
+  await repo.updateSession(session.id,{state:"collecting"});
+  session.state="collecting";
+  return unresolvedLines.length
+    ?{kind:"owner_review",sessionId:session.id,lines,unresolvedLines,reason:"pending_unresolved",roundSuggestion:null}
+    :{kind:"order_update",sessionId:session.id,lines,unresolvedLines:[],roundSuggestion:null};
+}
+
+export async function processTurn(
+  repo:SessionRepository,claimedTurn:ClaimedTurn,deps:ProcessDeps,
 ):Promise<TurnResult>{
   const session=await repo.loadOrCreateSession(claimedTurn.customerAccountId,claimedTurn.conversationId);
   let lines=await repo.listDraftLines(session.id);
   let result:TurnResult={kind:"ignore",sessionId:session.id,lines,roundSuggestion:null};
 
   for(const message of claimedTurn.messages){
+    const fragments=segmentOrderMessage(message.body);
+    if(fragments.length>1){
+      result=await processMultilineOrderMessage(repo,session,lines,message,claimedTurn.customerAccountId,deps);
+      lines=result.lines||await repo.listDraftLines(session.id);
+      continue;
+    }
+
     let parsed:ParsedIntent;
     try{parsed=await parseMessage(message,session,lines,deps);}
     catch{
@@ -204,11 +282,8 @@ export async function processTurn(
       }
       const value=attributeValue(parsed,attribute)||clean(message.body);
       const next:DraftLine={
-        ...line,
-        attributes:{...(line.attributes||{}),[attribute]:value},
-        lineNote:clean(parsed.line_note)||line.lineNote||value,
-        sourceMessageId:message.id,
-        resolutionSource:"clarification",
+        ...line,attributes:{...(line.attributes||{}),[attribute]:value},lineNote:clean(parsed.line_note)||line.lineNote||value,
+        sourceMessageId:message.id,resolutionSource:"clarification",
       };
       await repo.saveLine(session.id,next);
       session.state="collecting";
@@ -241,12 +316,9 @@ export async function processTurn(
       const scope=clean(parsed.raw_product_text)||"toan bo";
       const priceList:any=await repo.listPriceScope(scope);
       const context={
-        scope:clean(priceList?.scope)||scope,
-        url:clean(priceList?.url),
+        scope:clean(priceList?.scope)||scope,url:clean(priceList?.url),
         items:(Array.isArray(priceList?.items)?priceList.items:[]).map((item:any)=>({
-          code:clean(item?.code).toUpperCase(),
-          productCode:clean(item?.productCode),
-          productName:clean(item?.productName),
+          code:clean(item?.code).toUpperCase(),productCode:clean(item?.productCode),productName:clean(item?.productName),
         })).filter((item:PriceListContextItem)=>Boolean(item.code&&item.productCode&&item.productName)),
       };
       session.lastPriceListContext=context;
@@ -282,23 +354,13 @@ export async function processTurn(
         result={kind:"fallback",sessionId:session.id,lines,reason:"invalid_quantity",roundSuggestion:null};
         continue;
       }
-      const quantity=parsed.intent==="change_qty"
-        ?incomingQty
-        :(Number(existing?.quantity)||0)+incomingQty;
+      const quantity=parsed.intent==="change_qty"?incomingQty:(Number(existing?.quantity)||0)+incomingQty;
       const facts=await deps.commercialFacts(resolution.productCode,quantity);
       const next:DraftLine={
-        lineKey:existing?.lineKey||resolution.productCode,
-        productCode:resolution.productCode,
-        productName:resolution.productName,
-        customerRawText:clean(parsed.raw_product_text)||clean(message.body),
-        quantity,
-        unitHint:parsed.unit_hint??existing?.unitHint??null,
-        attributes:{...(existing?.attributes||{}),...(parsed.attributes||{})},
-        lineNote:clean(parsed.line_note)||existing?.lineNote||"",
-        quotedPriceVnd:Number(facts?.unitPriceVnd)||0,
-        confidence:resolution.confidence,
-        resolutionSource:resolution.source,
-        sourceMessageId:message.id,
+        lineKey:existing?.lineKey||resolution.productCode,productCode:resolution.productCode,productName:resolution.productName,
+        customerRawText:clean(parsed.raw_product_text)||clean(message.body),quantity,unitHint:parsed.unit_hint??existing?.unitHint??null,
+        attributes:{...(existing?.attributes||{}),...(parsed.attributes||{})},lineNote:clean(parsed.line_note)||existing?.lineNote||"",
+        quotedPriceVnd:Number(facts?.unitPriceVnd)||0,confidence:resolution.confidence,resolutionSource:resolution.source,sourceMessageId:message.id,
       };
       await repo.saveLine(session.id,next);
       lines=await repo.listDraftLines(session.id);
@@ -309,9 +371,8 @@ export async function processTurn(
       if(parsed.needs_clarification||(requiredAttribute&&!requiredValue)){
         session.state="awaiting_clarification";
         session.awaitingContext={
-          kind:"attribute",lineKey:next.lineKey,productCode:next.productCode,
-          productName:next.productName,attribute:requiredAttribute||"other",
-          questionHint:parsed.clarification_question_hint||null,
+          kind:"attribute",lineKey:next.lineKey,productCode:next.productCode,productName:next.productName,
+          attribute:requiredAttribute||"other",questionHint:parsed.clarification_question_hint||null,
         };
         await repo.updateSession(session.id,{state:"awaiting_clarification",awaitingContext:session.awaitingContext});
         result={kind:"clarification",sessionId:session.id,lines,facts:{...facts,productName:next.productName,missingAttribute:requiredAttribute||"other"},reason:"missing_attribute",roundSuggestion:null};

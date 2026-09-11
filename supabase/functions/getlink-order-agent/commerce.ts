@@ -1,3 +1,5 @@
+import { normalizeCustomerText } from "./normalize.ts";
+
 export const MARKET_MAX_AGE_MS=24*60*60*1000;
 export const NATIVE_ORDER_RPC="getlink_sales_create_order";
 
@@ -56,14 +58,20 @@ export async function buildCommercialFacts(db:any,productCode:string,quantity:nu
   const unitPrice=Math.max(0,Math.round(Number(product.display_price_vnd)||0));
   const qty=Number(quantity);
   if(!Number.isFinite(qty)||qty<=0)throw new Error("invalid_quantity");
+  const unitLabel=String(product.primary_packaging||product.retail_packaging||product.retail_unit||"").trim();
+  const isCarton=/\bthung\b/u.test(normalizeCustomerText(unitLabel));
   return {
     productCode:String(product.product_code),
     productName:String(product.product_name),
     quantity:qty,
+    unitLabel,
     unitPriceVnd:unitPrice,
     lineTotalVnd:Math.round(unitPrice*qty),
+    cartonEquivalent:isCarton?qty:0,
+    unitsPerCarton:product.units_per_carton==null?null:Number(product.units_per_carton),
     supplierPriceDirection:product.supplier_price_direction||null,
     supplierPriceDeltaVnd:product.supplier_price_delta_vnd==null?null:Number(product.supplier_price_delta_vnd),
     supplierPriceChangedAt:product.supplier_price_changed_at||null,
+    productUpdatedAt:product.updated_at||null,
   };
 }

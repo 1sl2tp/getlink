@@ -17,6 +17,13 @@ class GroqOrderAgentContractTests(unittest.TestCase):
         self.assertIn("grant execute on function public.getlink_ai_runtime_config() to service_role", text)
         self.assertIn("revoke all on function public.getlink_ai_runtime_config() from public, anon, authenticated", text)
 
+    def test_runtime_migration_replaces_old_rpc_before_changing_return_shape(self):
+        text = GROQ_RUNTIME_MIGRATION.read_text(encoding="utf-8").lower()
+        drop_at = text.find("drop function if exists public.getlink_ai_runtime_config()")
+        create_at = text.find("create or replace function public.getlink_ai_runtime_config()")
+        self.assertGreaterEqual(drop_at, 0, "changing the RPC return columns requires dropping the old signature first")
+        self.assertGreater(create_at, drop_at, "the replacement RPC must be created after the old signature is dropped")
+
     def test_agent_fail_closes_pilot_on_missing_groq_key(self):
         text = AGENT_INDEX.read_text(encoding="utf-8").replace(" ", "")
         self.assertIn("constgroqApiKey=clean(row?.groq_api_key)", text)

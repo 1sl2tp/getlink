@@ -108,6 +108,40 @@ Deno.test("parseWithModel uses Responses structured output and returns a validat
   }
 });
 
+Deno.test("parseWithModel can use server-supplied credentials with empty env", async () => {
+  const mod = await loadModule("../supabase/functions/getlink-order-agent/llm.ts");
+  const oldKey=Deno.env.get("OPENAI_API_KEY");
+  const oldModel=Deno.env.get("ORDER_AGENT_MODEL");
+  Deno.env.delete("OPENAI_API_KEY");
+  Deno.env.delete("ORDER_AGENT_MODEL");
+  let auth="";
+  let model="";
+  try {
+    const result=await mod.parseWithModel(
+      {customerText:"555 hôm nay bao nhiêu"},
+      async (_url:string,init:RequestInit)=>{
+        auth=String(new Headers(init.headers).get("authorization")||"");
+        model=String(JSON.parse(String(init.body||"{}")).model||"");
+        return new Response(JSON.stringify({
+          status:"completed",
+          output_text:JSON.stringify({
+            intent:"price_query",raw_product_text:"555",quantity:null,unit_hint:null,
+            attributes:{},line_note:"",reference_target:null,needs_clarification:false,
+            clarification_question_hint:null,
+          }),
+        }),{status:200,headers:{"content-type":"application/json"}});
+      },
+      {apiKey:"vault-key",model:"vault-model"},
+    );
+    assert.equal(result.intent,"price_query");
+    assert.equal(auth,"Bearer vault-key");
+    assert.equal(model,"vault-model");
+  } finally {
+    oldKey==null?Deno.env.delete("OPENAI_API_KEY"):Deno.env.set("OPENAI_API_KEY",oldKey);
+    oldModel==null?Deno.env.delete("ORDER_AGENT_MODEL"):Deno.env.set("ORDER_AGENT_MODEL",oldModel);
+  }
+});
+
 Deno.test("parseWithModel can interpret an answer to an awaiting color clarification", async () => {
   const mod = await loadModule("../supabase/functions/getlink-order-agent/llm.ts");
   const oldKey=Deno.env.get("OPENAI_API_KEY");

@@ -24,8 +24,16 @@ jobs:
         run: pip install -r scraper/requirements.txt
       - name: Apply scoped production patch
         run: |
-          python tools/patch_taphoa_order_flow.py
-          python tools/patch_taphoa_order_return_state.py
+          if grep -q 'ORDER_REPORT_STATE_KEY="getlink:taphoa-order-report-state"' order-management.js; then
+            echo "Primary order-flow patch already present"
+          else
+            python tools/patch_taphoa_order_flow.py
+          fi
+          if grep -q 'sourceDrillSource="";debtLinkedOrder=null;' order-management.js; then
+            python tools/patch_taphoa_order_return_state.py
+          else
+            echo "Return-state patch already present"
+          fi
       - name: Focused RED to GREEN contract
         run: python -m unittest tests.test_taphoa_order_flow_polish -v
       - name: Stamp static build

@@ -5005,7 +5005,7 @@ function userWorkMineRow(row){
 function userWorkSelectedItems(){
   return libraryCache
     .filter(row=>String(row.preference_state||"normal")!=="hidden"&&isMineRow(row))
-    .map(row=>({row,qty:userWorkQty(row.canonical_url)}))
+    .map(row=>({row,qty:userWorkQty(row.canonical_url),bargain:readOwnPrice(row.canonical_url,"bargain")}))
     .filter(item=>item.qty>0);
 }
 
@@ -5021,8 +5021,12 @@ function loadUserWorkOrderSelection(order){
   for(const item of Array.isArray(order?.items)?order.items:[]){
     const url=String(item?.url||"").trim();
     const qty=Math.max(0,Math.round(Number(item?.qty||0)));
+    const bargain=Math.max(0,Math.round(Number(item?.bargainPrice??item?.bargainPriceVnd??0)));
     const key=canonical(url);
-    if(key&&qty>0)map[key]=qty;
+    if(key&&qty>0){
+      map[key]=qty;
+      writeOwnPrice(url,"bargain",bargain);
+    }
   }
   writeUserWorkQtyMap(map);
   mobileUserScope="mine";

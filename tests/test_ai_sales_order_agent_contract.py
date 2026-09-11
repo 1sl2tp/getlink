@@ -4,6 +4,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260912013000_getlink_ai_sales_order_agent.sql"
+PILOT_GATE_MIGRATION = ROOT / "supabase/migrations/20260912013300_getlink_ai_pilot_gate.sql"
 AGENT_DIR = ROOT / "supabase/functions/getlink-order-agent"
 AGENT_INDEX = AGENT_DIR / "index.ts"
 AGENT_TYPES = AGENT_DIR / "types.ts"
@@ -50,6 +51,16 @@ class AiSalesOrderAgentSchemaContractTests(unittest.TestCase):
         self.assertRegex(text, r"unique\s*\([^)]*message_id[^)]*\)")
         self.assertRegex(text, r"unique\s*\([^)]*session_id[^)]*turn_key[^)]*reply_kind[^)]*\)")
         self.assertIn("4 seconds", text)
+
+    def test_inbox_is_gated_to_explicit_pilot_customers(self):
+        self.assertTrue(PILOT_GATE_MIGRATION.exists(), "pilot gate migration must exist")
+        text = PILOT_GATE_MIGRATION.read_text(encoding="utf-8").lower()
+        self.assertIn("getlink_ai_pilot_customers", text)
+        self.assertIn("enable row level security", text)
+        self.assertRegex(text, r"exists\s*\([\s\S]*getlink_ai_pilot_customers[\s\S]*account_id\s*=\s*new\.sender_account_id")
+        self.assertIn("if not v_is_pilot then", text)
+        self.assertNotIn("username='test'", text.replace(" ", ""))
+        self.assertNotIn('username="test"', text.replace(" ", ""))
 
 
 class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):

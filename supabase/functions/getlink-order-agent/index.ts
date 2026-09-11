@@ -7,37 +7,68 @@ import { claimTurn, processLiveRows, processShadowRows, recoverySweep } from "./
 
 const SUPABASE_URL=String(Deno.env.get("SUPABASE_URL")||"").trim();
 const SERVICE_ROLE=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"").trim();
-const WEBHOOK_SECRET=String(Deno.env.get("ORDER_AGENT_WEBHOOK_SECRET")||"").trim();
-const OPENAI_KEY=String(Deno.env.get("OPENAI_API_KEY")||"").trim();
-const MODEL=String(Deno.env.get("ORDER_AGENT_MODEL")||"").trim();
-const requestedMode=String(Deno.env.get("ORDER_AGENT_MODE")||"off").trim().toLowerCase();
-export const ORDER_AGENT_MODE:OrderAgentMode=(new Set(["off","shadow","pilot","on"]).has(requestedMode)?requestedMode:"off") as OrderAgentMode;
-const PILOT_CUSTOMER_IDS=new Set(
-  String(Deno.env.get("ORDER_AGENT_PILOT_CUSTOMER_IDS")||"")
-    .split(",").map(x=>x.trim()).filter(Boolean),
-);
-
 const db=createClient(SUPABASE_URL,SERVICE_ROLE,{auth:{persistSession:false,autoRefreshToken:false}});
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,Math.max(0,ms)));
 
-const handler=createOrderAgentHandler({
-  mode:ORDER_AGENT_MODE,
-  webhookSecret:WEBHOOK_SECRET,
-  pilotCustomerIds:PILOT_CUSTOMER_IDS,
-  sleep,
-  claimTurn:(conversationId:string)=>claimTurn(db,conversationId),
-  processShadowTurn:(rows)=>processShadowRows(db,rows),
-  processLiveTurn:(rows)=>processLiveRows(db,rows,ORDER_AGENT_MODE==="pilot"?"pilot":"on"),
-  sweep:()=>recoverySweep(db,ORDER_AGENT_MODE,PILOT_CUSTOMER_IDS),
-  health:()=>({
-    database_configured:Boolean(SUPABASE_URL&&SERVICE_ROLE),
-    webhook_configured:Boolean(WEBHOOK_SECRET),
-    model_configured:Boolean(OPENAI_KEY&&MODEL),
-    pilot_customer_count:PILOT_CUSTOMER_IDS.size,
-    debounce_ms:TURN_DEBOUNCE_MS,
-    market_max_age_ms:MARKET_MAX_AGE_MS,
-    alias_promotion_customers:STORE_ALIAS_PROMOTION_CUSTOMERS,
-  }),
-});
+type RuntimeConfig={
+  mode:OrderAgentMode;
+  modelName:string;
+  webhookSecret:string;
+  openaiApiKey:string;
+  pilotCustomerIds:Set<string>;
+};
 
-Deno.serve(handler);
+function clean(value:unknown):string{return String(value??"").trim();}
+
+async function loadRuntimeConfig():Promise<RuntimeConfig>{
+  const {data,error}=await db.rpc("getlink_ai_runtime_config");
+  if(error)throw error;
+  const row=Array.isArray(data)?data[0]:data;
+  const requested=clean(row?.mode).toLowerCase();
+  const mode:OrderAgentMode=requested==="pilot"?"pilot":"off";
+  const ids=Array.isArray(row?.pilot_customer_ids)?row.pilot_customer_ids:[];
+  return {
+    mode,
+    modelName:clean(row?.model_name),
+    webhookSecret:clean(row?.webhook_secret),
+    openaiApiKey:clean(row?.openai_api_key),
+    pilotCustomerIds:new Set(ids.map((value:unknown)=>clean(value)).filter(Boolean)),
+  };
+}
+
+function unavailable(error:unknown):Response{
+  console.error("order-agent runtime config unavailable",error);
+  return new Response(JSON.stringify({ok:false,mode:"off",error:"runtime_config_unavailable"}),{
+    status:503,
+    headers:{"content-type":"application/json; charset=utf-8"},
+  });
+}
+
+Deno.serve(async (req:Request)=>{
+  let config:RuntimeConfig;
+  try{config=await loadRuntimeConfig();}
+  catch(error){return unavailable(error);}
+
+  const modelCredentials={apiKey:config.openaiApiKey,model:config.modelName};
+  const handler=createOrderAgentHandler({
+    mode:config.mode,
+    webhookSecret:config.webhookSecret,
+    pilotCustomerIds:config.pilotCustomerIds,
+    sleep,
+    claimTurn:(conversationId:string)=>claimTurn(db,conversationId),
+    processShadowTurn:(rows)=>processShadowRows(db,rows,modelCredentials),
+    processLiveTurn:(rows)=>processLiveRows(db,rows,"pilot",modelCredentials),
+    sweep:()=>recoverySweep(db,config.mode,config.pilotCustomerIds,modelCredentials),
+    health:()=>({
+      database_configured:Boolean(SUPABASE_URL&&SERVICE_ROLE),
+      runtime_configured:true,
+      webhook_configured:Boolean(config.webhookSecret),
+      model_configured:Boolean(config.openaiApiKey&&config.modelName),
+      pilot_customer_count:config.pilotCustomerIds.size,
+      debounce_ms:TURN_DEBOUNCE_MS,
+      market_max_age_ms:MARKET_MAX_AGE_MS,
+      alias_promotion_customers:STORE_ALIAS_PROMOTION_CUSTOMERS,
+    }),
+  });
+  return handler(req);
+});

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createSessionRepository } from "../supabase/functions/getlink-order-agent/repository.ts";
 import { processTurn } from "../supabase/functions/getlink-order-agent/session.ts";
+import { shouldEnqueueCustomerReply } from "../supabase/functions/getlink-order-agent/orchestrator.ts";
 
 function memoryUnresolvedDb(){
   const rows:any[]=[];
@@ -84,6 +85,22 @@ Deno.test("owner resolution marks one unresolved row resolved with catalog produ
   assert.equal((await repo.listUnresolvedLines("session-1","pending")).length,0);
 });
 
+Deno.test("repository materialization fails closed before native order when unresolved rows remain",async()=>{
+  const db:any=memoryUnresolvedDb();
+  const repo:any=createSessionRepository(db);
+  await repo.saveUnresolvedLine("session-1",{
+    lineKey:"message-1:0",sourceMessageId:"message-1",rawText:"2 bịch hướng dương",rawProductText:"hướng dương",
+    quantity:2,unitHint:"bịch",contextFamily:null,candidateProductCodes:[],reason:"not_in_catalog",status:"pending",resolvedProductCode:null,
+  });
+  await assert.rejects(
+    ()=>repo.materializePendingOrder(
+      {id:"session-1",customerAccountId:"u1",conversationId:"c1",state:"collecting",awaitingContext:{},lastPriceListContext:{},roundUpsellOffered:false,roundUpsellDeclined:false,salesOrderId:null},
+      [{lineKey:"P1",productCode:"P1",productName:"Known",customerRawText:"known",quantity:1,unitHint:null,attributes:{},lineNote:"",quotedPriceVnd:1000,confidence:1,resolutionSource:"canonical"}],
+    ),
+    /unresolved_items_pending/,
+  );
+});
+
 const MULTILINE=`2 bịch hướng dương
 - 2 bát 1.8kg, 2 bát 1kg, 2 bát 454
 - 2 omo 1.15kg, 2 omo 5.5kg, 2 omo 5.1kg, 2 omo 2.9kg, 2 omo 2.6kg, 2 omo 700g, 1 omo 380g
@@ -127,23 +144,42 @@ class MixedMemoryRepo{
   async materializePendingOrder(){this.materializeCalls+=1;return "order-1";}
 }
 
+function deterministicDeps(){
+  return {
+    parseWithModel:async()=>{throw new Error("model should not own deterministic multiline fixture");},
+    resolveProduct:async(_customerId:string,raw:string)=>LOOKUPS[raw]?{...LOOKUPS[raw],confidence:1,source:"canonical" as const}:null,
+    commercialFacts:async(productCode:string,quantity:number)=>({productCode,quantity,unitPriceVnd:productCode==="HT-000073"?0:1000,lineTotalVnd:productCode==="HT-000073"?0:quantity*1000,cartonEquivalent:quantity}),
+  };
+}
+
 Deno.test("one multiline turn builds 15 resolved lines and preserves 2 unresolved owner-review lines",async()=>{
   const repo:any=new MixedMemoryRepo();
-  const result=await processTurn(repo,{
-    turnKey:"t1",conversationId:"c1",customerAccountId:"u1",messages:[{id:"message-real",body:MULTILINE}],
-  },{
-    parseWithModel:async()=>{throw new Error("model should not own deterministic multiline fixture");},
-    resolveProduct:async(_customerId:string,raw:string)=>LOOKUPS[raw]?{...LOOKUPS[raw],confidence:1,source:"canonical"}:null,
-    commercialFacts:async(productCode:string,quantity:number)=>({productCode,quantity,unitPriceVnd:productCode==="HT-000073"?0:1000,lineTotalVnd:productCode==="HT-000073"?0:quantity*1000,cartonEquivalent:quantity}),
-  });
+  const result=await processTurn(repo,{turnKey:"t1",conversationId:"c1",customerAccountId:"u1",messages:[{id:"message-real",body:MULTILINE}]},deterministicDeps());
   assert.equal(result.kind,"owner_review");
   assert.equal(repo.lines.length,15);
   assert.equal(repo.unresolved.filter((row:any)=>row.status==="pending").length,2);
   assert.deepEqual(repo.unresolved.map((row:any)=>[row.rawText,row.reason]),[
-    ["2 bịch hướng dương","not_in_catalog"],
-    ["2 bát 1.8kg","size_mismatch"],
+    ["2 bịch hướng dương","not_in_catalog"],["2 bát 1.8kg","size_mismatch"],
   ]);
   assert.ok(repo.lines.some((row:any)=>row.productCode==="HT-000073"&&row.quantity===5&&row.quotedPriceVnd===0));
   assert.ok(repo.lines.some((row:any)=>row.productCode==="HT-000067"&&row.quantity===5));
   assert.equal(repo.materializeCalls,0);
+});
+
+Deno.test("confirm with unresolved lines returns owner review and never materializes native order",async()=>{
+  const repo:any=new MixedMemoryRepo();
+  repo.lines=[{lineKey:"HT-000063",productCode:"HT-000063",productName:"Dau lan 1",customerRawText:"cái lân 1l",quantity:2,unitHint:null,attributes:{},lineNote:"",quotedPriceVnd:495000,confidence:1,resolutionSource:"canonical"}];
+  repo.unresolved=[{id:"u1",lineKey:"m1:0",sourceMessageId:"m1",rawText:"2 bịch hướng dương",rawProductText:"hướng dương",quantity:2,unitHint:"bịch",contextFamily:null,candidateProductCodes:[],reason:"not_in_catalog",status:"pending",resolvedProductCode:null}];
+  const result=await processTurn(repo,{turnKey:"t2",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m2",body:"ok"}]},deterministicDeps());
+  assert.equal(result.kind,"owner_review");
+  assert.equal(result.unresolvedLines?.length,1);
+  assert.equal(repo.materializeCalls,0);
+  assert.equal(repo.session.salesOrderId,null);
+});
+
+Deno.test("owner review is back-office only and is never enqueued as customer reply",()=>{
+  assert.equal(shouldEnqueueCustomerReply({kind:"owner_review"}),false);
+  assert.equal(shouldEnqueueCustomerReply({kind:"ignore"}),false);
+  assert.equal(shouldEnqueueCustomerReply({kind:"order_update"}),true);
+  assert.equal(shouldEnqueueCustomerReply({kind:"clarification"}),true);
 });

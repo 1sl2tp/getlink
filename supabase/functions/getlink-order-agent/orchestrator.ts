@@ -1,5 +1,5 @@
 import { parseFastCommand } from "./rules.ts";
-import { parseWithModel } from "./llm.ts";
+import { parseWithModel, type ModelCredentials } from "./llm.ts";
 import { resolveProduct } from "./matcher.ts";
 import { buildCommercialFacts, marketComparison } from "./commerce.ts";
 import { processTurn } from "./session.ts";
@@ -58,7 +58,11 @@ async function audit(repo:any,mode:OrderAgentMode,rows:ClaimedInboxRow[],extra:R
   });
 }
 
-export async function processShadowRows(db:any,rows:ClaimedInboxRow[]):Promise<void>{
+export async function processShadowRows(
+  db:any,
+  rows:ClaimedInboxRow[],
+  modelCredentials?:Partial<ModelCredentials>|null,
+):Promise<void>{
   if(!rows.length)return;
   const repo=createSessionRepository(db);
   let lastParsed:any=null;
@@ -68,7 +72,7 @@ export async function processShadowRows(db:any,rows:ClaimedInboxRow[]):Promise<v
   try{
     for(const row of rows){
       let parsed=parseFastCommand(row.message_body);
-      if(!parsed)parsed=await parseWithModel({customerText:row.message_body});
+      if(!parsed)parsed=await parseWithModel({customerText:row.message_body},fetch,modelCredentials);
       lastParsed=parsed;
       if(parsed&&["add_item","change_qty","remove_item","price_query"].includes(parsed.intent)&&parsed.raw_product_text){
         const resolution=await resolveProduct(db,row.customer_account_id,parsed.raw_product_text);
@@ -105,7 +109,12 @@ async function learnConfirmedLines(db:any,turn:any,lines:any[]){
   await promoteEligibleStoreAliases(db);
 }
 
-export async function processLiveRows(db:any,rows:ClaimedInboxRow[],mode:"pilot"|"on"):Promise<void>{
+export async function processLiveRows(
+  db:any,
+  rows:ClaimedInboxRow[],
+  mode:"pilot"|"on",
+  modelCredentials?:Partial<ModelCredentials>|null,
+):Promise<void>{
   if(!rows.length)return;
   const repo=createSessionRepository(db);
   const turn=claimedTurn(rows);
@@ -114,7 +123,7 @@ export async function processLiveRows(db:any,rows:ClaimedInboxRow[],mode:"pilot"
   let followOutbox:any=null;
   try{
     result=await processTurn(repo,turn,{
-      parseWithModel,
+      parseWithModel:(input)=>parseWithModel(input,fetch,modelCredentials),
       resolveProduct:(customerId:string,rawText:string)=>resolveProduct(db,customerId,rawText),
       commercialFacts:(productCode:string,quantity:number)=>commercialFactsWithMarket(db,productCode,quantity),
     });
@@ -159,6 +168,7 @@ export async function recoverySweep(
   db:any,
   mode:OrderAgentMode,
   pilotCustomerIds:Set<string>,
+  modelCredentials?:Partial<ModelCredentials>|null,
 ):Promise<{claimed:number;flushed:number}>{
   if(mode==="off")return {claimed:0,flushed:0};
   let claimed=0;
@@ -173,8 +183,8 @@ export async function recoverySweep(
     if(!rows.length)continue;
     claimed+=rows.length;
     const customerId=String(rows[0].customer_account_id||"");
-    if(mode==="shadow")await processShadowRows(db,rows);
-    else if(mode==="on"||(mode==="pilot"&&pilotCustomerIds.has(customerId)))await processLiveRows(db,rows,mode as "pilot"|"on");
+    if(mode==="shadow")await processShadowRows(db,rows,modelCredentials);
+    else if(mode==="on"||(mode==="pilot"&&pilotCustomerIds.has(customerId)))await processLiveRows(db,rows,mode as "pilot"|"on",modelCredentials);
     else{
       const repo=createSessionRepository(db);
       await repo.markRowsProcessed(rows);

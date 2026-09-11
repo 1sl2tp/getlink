@@ -205,6 +205,10 @@ export function createSessionRepository(db:any):OrderAgentRepository{
 
     async materializePendingOrder(session:AgentSession,lines:DraftLine[]){
       if(session.salesOrderId)return session.salesOrderId;
+      const {data:pendingUnresolved,error:uError}=await db.from("getlink_ai_unresolved_draft_lines")
+        .select("id").eq("session_id",session.id).eq("status","pending");
+      if(uError)throw uError;
+      if((pendingUnresolved||[]).length)throw new Error("unresolved_items_pending");
       if(!lines.length)throw new Error("empty_order");
       const codes=[...new Set(lines.map(line=>line.productCode))];
       const {data:products,error:pError}=await db.from("getlink_supplier_products")

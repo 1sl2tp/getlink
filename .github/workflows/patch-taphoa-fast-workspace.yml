@@ -73,15 +73,29 @@ jobs:
       - name: Patch runtime
         run: python tools/patch_taphoa_fast_workspace.py
       - name: Focused RED to GREEN contracts
+        id: focused
         run: |
+          set +e
           python -m unittest \
             tests.test_taphoa_fast_workspace_flow \
             tests.test_order_submit_single_owner \
             tests.test_order_manager_work_nav \
-            tests.test_getlink_native_sales_core -v
-          node --check app.js
-          node --check order-management.js
-          node tests/test_money_display.mjs
+            tests.test_getlink_native_sales_core -v 2>&1 | tee focused-contracts.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          node --check app.js 2>&1 | tee -a focused-contracts.log
+          node --check order-management.js 2>&1 | tee -a focused-contracts.log
+          node tests/test_money_display.mjs 2>&1 | tee -a focused-contracts.log
+      - name: Upload focused contract log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: focused-contracts-log-${{ github.sha }}
+          path: focused-contracts.log
+          if-no-files-found: error
+          retention-days: 1
       - name: Stamp static build
         run: |
           python tools/stamp_static_build.py

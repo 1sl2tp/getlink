@@ -165,7 +165,9 @@ export async function recoverySweep(
   let flushed=0;
   const {data:pending,error:pError}=await db.rpc("getlink_ai_pending_dispatches",{p_limit:100});
   if(pError)throw pError;
-  const conversations=[...new Set((pending||[]).map((row:any)=>String(row.conversation_id)).filter(Boolean))];
+  const conversations:string[]=[...new Set<string>((pending||[])
+    .map((row:any)=>String(row.conversation_id||""))
+    .filter((value:string)=>value.length>0))];
   for(const conversationId of conversations){
     const rows=await claimTurn(db,conversationId);
     if(!rows.length)continue;

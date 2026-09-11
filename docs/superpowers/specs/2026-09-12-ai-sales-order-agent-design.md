@@ -35,7 +35,7 @@ Misspellings, missing accents, abbreviations, customer nicknames, and short form
 
 ### Live order session
 
-Each customer/conversation has at most one open AI order session. Incoming customer messages are debounced for about 4 seconds so several consecutive lines are processed as one conversational turn. The 4-second debounce is **not** an order timeout; the open session continues until it is confirmed, deliberately closed, or replaced by an explicit new-order intent.
+Each customer/conversation has at most one open AI order session. Incoming customer messages are debounced for 4 seconds so several consecutive lines are processed as one conversational turn. The 4-second debounce is **not** an order timeout; the open session continues until it is confirmed, deliberately closed, or replaced by an explicit new-order intent.
 
 When a customer sends another line later, it updates the same open session. Examples:
 
@@ -104,16 +104,18 @@ Comparison is allowed only when all of these are true:
 
 - a store Tạp hóa product has a high-confidence supermarket reference match;
 - the comparison is normalized to the same product and equivalent pack/unit quantity;
-- the reference price is fresh enough for a `hôm nay` statement (target: within 24 hours);
+- the reference price was updated within the previous 24 hours;
 - the source price is valid and non-zero.
 
-If these gates fail, the assistant omits the comparison rather than guessing.
+When those gates pass, the reply includes the relative market position every time the customer asks that product's price or the product appears in the checkout comparison. If the two prices differ by less than 1%, wording should say they are `gần tương đương`; otherwise it should state whether the store is higher or lower and by how much when useful.
+
+If the gates fail, the assistant omits the comparison rather than guessing.
 
 Example when the store is more expensive:
 
 `Dạ Hảo Hảo bên em hôm nay 188.000/thùng ạ. Giá siêu thị em đang tham khảo khoảng 185.000/thùng, hôm nay bên em hơi cao hơn chút, chị cân đối giúp em nhé ạ 😅`
 
-Example when the store is materially cheaper:
+Example when the store is cheaper:
 
 `Dạ giá bên em hôm nay đang thấp hơn giá siêu thị tham khảo khá nhiều ạ 😄 Chị cân đối giá bán nhỉnh thêm chút vẫn ổn nhé.`
 
@@ -127,7 +129,7 @@ For v1, round carton targets are the next multiple of 5: `5, 10, 15, 20, 25, ...
 
 Trigger only when:
 
-- the current draft has a meaningful carton count;
+- the current draft has at least 5 cartons in carton-equivalent lines;
 - the next target is 1–3 cartons away;
 - no round-number suggestion has already been declined for this order session.
 
@@ -218,7 +220,7 @@ Resolution priority:
 
 `customer alias → store alias → canonical product name/code → fuzzy candidates → LLM-assisted choice`
 
-A manual admin correction is stronger evidence than an AI guess. A customer alias can be promoted to store scope only after repeated successful confirmations from multiple customers and no active conflict.
+A manual admin correction is stronger evidence than an AI guess. A customer alias may be promoted to store scope only after successful confirmation by at least 3 distinct customers and no conflicting correction for that alias/product pair.
 
 ### `getlink_ai_corrections`
 
@@ -363,7 +365,7 @@ Do not store chain-of-thought or ask the model to expose it.
 6. Customer asks `555 hôm nay?`; assistant returns the live Tạp hóa price and recent change signal when available.
 7. Customer asks `gửi giá sữa`; assistant sends the current Sữa list/price-list view and remembers its row context for follow-up references.
 8. Customer asks `báo giá toàn bộ`; assistant returns a compact all-catalog price-list view, not hundreds of chat lines.
-9. At checkout, market comparison is mentioned only for exact/fresh/equivalent supermarket matches; supermarket data never enters the order.
+9. On every eligible price query and checkout comparison, fresh/equivalent supermarket reference data is reported truthfully; supermarket data never enters the order.
 10. A 17-carton draft receives at most one gentle suggestion to reach 20; a declined suggestion is not repeated.
 11. Customer confirms the draft; backend materializes it through the existing GETLINK native order path and recomputes current authoritative prices.
 12. Retrying the same Chat message/event cannot create a second draft mutation, second order, or duplicate auto-reply.

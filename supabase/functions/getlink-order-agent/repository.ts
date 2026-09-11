@@ -61,6 +61,26 @@ async function activeAdminForConversation(db:any,conversationId:string):Promise<
   return String(id);
 }
 
+async function loadPriceListProducts(db:any):Promise<any[]>{
+  const rows:any[]=[];
+  const pageSize=1000;
+  for(let start=0;start<10000;start+=pageSize){
+    const {data,error}=await db.from("getlink_supplier_products")
+      .select("product_code,product_name,display_price_vnd,primary_packaging,retail_packaging,stock_status,is_active,updated_at")
+      .eq("is_active",true)
+      .neq("stock_status","inactive")
+      .range(start,start+pageSize-1);
+    if(error)throw error;
+    const page=Array.isArray(data)?data:[];
+    rows.push(...page);
+    if(page.length<pageSize)break;
+  }
+  return rows
+    .filter(row=>String(row?.stock_status||"")!=="out_of_stock")
+    .filter(row=>row?.display_price_vnd!==null&&row?.display_price_vnd!==undefined)
+    .sort((a,b)=>String(a?.product_name||"").localeCompare(String(b?.product_name||""),"vi")||String(a?.product_code||"").localeCompare(String(b?.product_code||""),"vi"));
+}
+
 export function createSessionRepository(db:any):SessionRepository&{
   markRowsProcessed(rows:any[]):Promise<void>;
   markRowsFailed(rows:any[],errorCode:string):Promise<void>;
@@ -141,21 +161,22 @@ export function createSessionRepository(db:any):SessionRepository&{
     async listPriceScope(scope:string){
       const normalized=normalizeCustomerText(scope);
       const all=["toan bo","tat ca","all","bang gia"].includes(normalized);
-      let query=db.from("getlink_supplier_products")
-        .select("product_code,product_name,display_price_vnd,primary_packaging,retail_packaging,updated_at")
-        .eq("is_active",true)
-        .neq("stock_status","inactive")
-        .order("product_name",{ascending:true})
-        .limit(all?500:80);
-      if(!all&&normalized)query=query.ilike("product_name",`%${clean(scope).replace(/[%_]/g,"\\$&")}%`);
-      const {data,error}=await query;
-      if(error)throw error;
-      const items=(data||[]).map((row:any,index:number)=>({
+      const rows=await loadPriceListProducts(db);
+      const mapped=rows.map((row:any,index:number)=>({
         code:`P${String(index+1).padStart(2,"0")}`,
-        productCode:String(row.product_code),productName:String(row.product_name),
-        priceVnd:Number(row.display_price_vnd)||0,unitLabel:clean(row.primary_packaging||row.retail_packaging),updatedAt:row.updated_at,
+        productCode:String(row.product_code),
+        productName:String(row.product_name),
+        priceVnd:Number(row.display_price_vnd)||0,
+        unitLabel:clean(row.primary_packaging||row.retail_packaging),
+        updatedAt:row.updated_at,
       }));
-      return {scope:all?"toàn bộ":clean(scope),count:items.length,items};
+      const items=all||!normalized
+        ?mapped
+        :mapped.filter(item=>normalizeCustomerText(item.productName).includes(normalized));
+      const url=all
+        ?"https://get.taphoa.xyz/price-list.html?scope=all"
+        :`https://get.taphoa.xyz/price-list.html?scope=group&name=${encodeURIComponent(clean(scope))}`;
+      return {scope:all?"toàn bộ":clean(scope),count:items.length,url,items};
     },
 
     async materializePendingOrder(session:AgentSession,lines:DraftLine[]){

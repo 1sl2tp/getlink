@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light">
+  <meta name="theme-color" content="#ffffff">
+  <title>Bảng giá Tạp hóa</title>
+  <link rel="stylesheet" href="./price-list.css">
+</head>
+<body>
+  <main class="price-page" aria-live="polite">
+    <header class="price-head">
+      <div>
+        <p class="eyebrow">TẠP HÓA</p>
+        <h1 id="priceTitle">Bảng giá hôm nay</h1>
+      </div>
+      <p id="priceMeta" class="price-meta">Đang tải…</p>
+    </header>
+
+    <section class="price-tools" aria-label="Tìm trong bảng giá">
+      <input id="priceSearch" type="search" inputmode="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Tìm tên hàng hoặc mã P…">
+    </section>
+
+    <section id="priceStatus" class="price-status" hidden></section>
+    <section id="priceRows" class="price-rows" aria-label="Danh sách giá"></section>
+  </main>
+
+  <script src="./config.js"></script>
+  <script src="./price-list.js" defer></script>
+</body>
+</html>

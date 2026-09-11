@@ -577,6 +577,11 @@
     return "";
   }
   function orderRef(order){return order.orderNo?"#"+order.orderNo:String(order.id||"")}
+  function orderItemPriceMarkup(item){
+    const sale=escapeHtml(compactMoney(item?.price));
+    const bargainPrice=Number(item?.bargainPrice||0);
+    return `<span class="order-item-prices"><span>Giá bán ${sale}</span>${bargainPrice>0?`<span> · Mặc cả ${escapeHtml(compactMoney(bargainPrice))}</span>`:""}</span>`;
+  }
   function orderRecencyValue(order){
     if(order.status==="returned")return order.returnedAt||order.deliveredAt||order.orderedAt||0;
     if(order.status==="delivered")return order.deliveredAt||order.orderedAt||0;
@@ -751,7 +756,7 @@
         <div class="order-card-head"><div><strong class="order-card-customer">${escapeHtml(order.customerName||"Khách hàng")}</strong><small class="order-card-meta">${escapeHtml(dateTime(orderRecencyValue(order)))} · ${items.length+" dòng"} · ${escapeHtml(orderRef(order))}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
         ${preview?`<div class="order-card-preview">${escapeHtml(preview)}</div>`:""}
         <button type="button" class="order-card-detail-toggle" data-order-detail data-order-id="${escapeHtml(id)}">${expanded?"Thu gọn":"Xem đơn"}</button>
-        ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(compactMoney(item.price))}</small></div>`).join("")}</div>`:""}
+        ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${orderItemPriceMarkup(item)}</small></div>`).join("")}</div>`:""}
         ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
@@ -808,7 +813,7 @@
     list.innerHTML=`<section class="debt-linked-order">
       <button type="button" class="debt-linked-back" data-debt-order-back>← Công nợ</button>
       <div class="debt-linked-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(order.customerName||"Khách hàng")} · ${escapeHtml(dateTime(order.orderedAt))}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
-      <div class="debt-linked-lines">${items.map((item,index)=>`<div><span><small>${index+1}.</small>${escapeHtml(item.name)}</span><span>${Number(item.qty||0)} × ${escapeHtml(compactMoney(item.price))}</span><strong>${escapeHtml(compactMoney(Number(item.qty||0)*Number(item.price||0)))}</strong></div>`).join("")}</div>
+      <div class="debt-linked-lines">${items.map((item,index)=>`<div><span><small>${index+1}.</small>${escapeHtml(item.name)}</span><span>${Number(item.qty||0)} × ${orderItemPriceMarkup(item)}</span><strong>${escapeHtml(compactMoney(Number(item.qty||0)*Number(item.price||0)))}</strong></div>`).join("")}</div>
       <div class="debt-linked-total"><span>Tổng ${qty} SP</span><strong>${escapeHtml(compactMoney(order.total))}</strong></div>
       ${orderActions(debtLinkedOrder)}
     </section>`;
@@ -903,7 +908,11 @@
   function selectedOrderPayload(){
     const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
     if(!Array.isArray(selected)||selected.length===0)return null;
-    return selected.map(item=>({url:item.row.canonical_url,qty:item.qty}));
+    return selected.map(item=>({
+      url:item.row.canonical_url,
+      qty:item.qty,
+      bargainPriceVnd:Math.max(0,Math.round(Number(item.bargain||0)))
+    }));
   }
   function afterCartMutation(){
     window.setTimeout(()=>{ensureCartActions();syncCartActions();syncCustomerControls();},0);

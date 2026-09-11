@@ -116,6 +116,7 @@ export async function parseWithModel(
   const body={
     model,
     store:false,
+    max_output_tokens:350,
     instructions:[
       "Bạn là bộ phân tích ý định đặt hàng tiếng Việt cho cửa hàng tạp hóa.",
       "Chỉ phân tích lời khách thành JSON đúng schema; không tự tạo giá, tổng tiền, tồn kho hoặc product id.",

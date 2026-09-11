@@ -191,7 +191,7 @@
   color:#185b37;
 }
 
-/* One order = one visual unit. The order number leads; amount is the second anchor. */
+/* One order = one visual unit. Customer leads; amount is the second anchor. */
 .order-card{
   border-radius:9px;
   box-shadow:none;

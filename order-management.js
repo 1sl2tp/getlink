@@ -1122,7 +1122,7 @@
     if(workView){
       taphoaWorkView=String(workView.dataset.taphoaWorkView||"sales");
       activeView=taphoaWorkView==="debts"?"debts":"orders";
-      sourceDrillSource="";debtLinkedOrder=null;
+      debtLinkedOrder=null;
       if(taphoaWorkView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
       else if(taphoaWorkView!=="debts")debtCustomerId="";
       debtDetail=null;syncTaphoaWorkspace();syncManagerView();

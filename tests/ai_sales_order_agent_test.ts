@@ -66,3 +66,93 @@ Deno.test("validateParsedIntent accepts structured add item and rejects invalid 
   assert.equal(valid.quantity, 2);
   assert.throws(() => mod.validateParsedIntent({ ...valid, quantity: -1 }));
 });
+
+Deno.test("parseWithModel uses Responses structured output and returns a validated correction", async () => {
+  const mod = await loadModule("../supabase/functions/getlink-order-agent/llm.ts");
+  const oldKey=Deno.env.get("OPENAI_API_KEY");
+  const oldModel=Deno.env.get("ORDER_AGENT_MODEL");
+  Deno.env.set("OPENAI_API_KEY","test-key");
+  Deno.env.set("ORDER_AGENT_MODEL","test-model");
+  let requestBody:any=null;
+  try {
+    const result=await mod.parseWithModel({
+      customerText:"milo lấy 3 thôi",
+      recentContext:[{role:"customer",text:"milo 5"}],
+      candidates:[{productCode:"MILO180",productName:"Milo 180ml"}],
+    },async (_url:string,init:RequestInit)=>{
+      requestBody=JSON.parse(String(init.body||"{}"));
+      return new Response(JSON.stringify({
+        status:"completed",
+        output:[{type:"message",content:[{type:"output_text",text:JSON.stringify({
+          intent:"change_qty",
+          raw_product_text:"milo",
+          quantity:3,
+          unit_hint:null,
+          attributes:{},
+          line_note:"",
+          reference_target:"MILO180",
+          needs_clarification:false,
+          clarification_question_hint:null,
+        })}]}],
+      }),{status:200,headers:{"content-type":"application/json"}});
+    });
+    assert.equal(result.intent,"change_qty");
+    assert.equal(result.quantity,3);
+    assert.equal(requestBody.store,false);
+    assert.equal(requestBody.text.format.type,"json_schema");
+    assert.equal(requestBody.text.format.strict,true);
+    assert.equal(requestBody.model,"test-model");
+  } finally {
+    oldKey==null?Deno.env.delete("OPENAI_API_KEY"):Deno.env.set("OPENAI_API_KEY",oldKey);
+    oldModel==null?Deno.env.delete("ORDER_AGENT_MODEL"):Deno.env.set("ORDER_AGENT_MODEL",oldModel);
+  }
+});
+
+Deno.test("parseWithModel can interpret an answer to an awaiting color clarification", async () => {
+  const mod = await loadModule("../supabase/functions/getlink-order-agent/llm.ts");
+  const oldKey=Deno.env.get("OPENAI_API_KEY");
+  const oldModel=Deno.env.get("ORDER_AGENT_MODEL");
+  Deno.env.set("OPENAI_API_KEY","test-key");
+  Deno.env.set("ORDER_AGENT_MODEL","test-model");
+  try {
+    const result=await mod.parseWithModel({
+      customerText:"1 đỏ 1 xanh",
+      awaitingClarification:{attribute:"color",productName:"Bi bé"},
+    },async ()=>new Response(JSON.stringify({
+      status:"completed",
+      output_text:JSON.stringify({
+        intent:"clarification_answer",
+        raw_product_text:"",
+        quantity:null,
+        unit_hint:null,
+        attributes:{color:"1 đỏ 1 xanh"},
+        line_note:"1 đỏ, 1 xanh",
+        reference_target:null,
+        needs_clarification:false,
+        clarification_question_hint:null,
+      }),
+    }),{status:200,headers:{"content-type":"application/json"}}));
+    assert.equal(result.intent,"clarification_answer");
+    assert.equal(result.attributes.color,"1 đỏ 1 xanh");
+  } finally {
+    oldKey==null?Deno.env.delete("OPENAI_API_KEY"):Deno.env.set("OPENAI_API_KEY",oldKey);
+    oldModel==null?Deno.env.delete("ORDER_AGENT_MODEL"):Deno.env.set("ORDER_AGENT_MODEL",oldModel);
+  }
+});
+
+Deno.test("parseWithModel rejects invalid or incomplete model output", async () => {
+  const mod = await loadModule("../supabase/functions/getlink-order-agent/llm.ts");
+  const oldKey=Deno.env.get("OPENAI_API_KEY");
+  const oldModel=Deno.env.get("ORDER_AGENT_MODEL");
+  Deno.env.set("OPENAI_API_KEY","test-key");
+  Deno.env.set("ORDER_AGENT_MODEL","test-model");
+  try {
+    await assert.rejects(
+      ()=>mod.parseWithModel({customerText:"cái kia lấy 2"},async ()=>new Response(JSON.stringify({status:"completed",output_text:"not-json"}),{status:200})),
+      (error:any)=>error?.code==="model_unavailable_or_invalid",
+    );
+  } finally {
+    oldKey==null?Deno.env.delete("OPENAI_API_KEY"):Deno.env.set("OPENAI_API_KEY",oldKey);
+    oldModel==null?Deno.env.delete("ORDER_AGENT_MODEL"):Deno.env.set("ORDER_AGENT_MODEL",oldModel);
+  }
+});

@@ -26,6 +26,17 @@ class TaphoaOrderFlowPolishTest(unittest.TestCase):
         self.assertRegex(defaults, r'pending[\s\S]*all')
         self.assertRegex(defaults, r'delivered[\s\S]*today|status!=="pending"[\s\S]*today')
 
+    def test_time_filter_uses_the_status_recency_timestamp(self):
+        recency = function_block("orderRecencyValue")
+        filtered = function_block("filterOrdersForReport")
+        self.assertIsNotNone(recency)
+        self.assertIsNotNone(filtered)
+        self.assertIn("returnedAt", recency)
+        self.assertIn("deliveredAt", recency)
+        self.assertIn("submittedAt", recency)
+        self.assertIn("localDateKey(orderRecencyValue(order))", filtered)
+        self.assertNotIn("localDateKey(order.orderedAt)", filtered)
+
     def test_time_filter_is_one_compact_preset_control_and_dates_only_show_for_custom(self):
         block = function_block("orderReportControlsMarkup")
         self.assertIsNotNone(block)

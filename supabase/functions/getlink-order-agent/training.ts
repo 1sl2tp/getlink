@@ -46,9 +46,7 @@ function levenshtein(a:string,b:string):number{
   if(!b.length)return a.length;
   const prev=Array.from({length:b.length+1},(_,i)=>i);
   for(let i=1;i<=a.length;i++){
-    let left=i;
-    let diagonal=prev[0];
-    prev[0]=i;
+    let left=i;let diagonal=prev[0];prev[0]=i;
     for(let j=1;j<=b.length;j++){
       const above=prev[j];
       const next=Math.min(above+1,left+1,diagonal+(a[i-1]===b[j-1]?0:1));
@@ -90,14 +88,11 @@ function savedExample(message:TrainingMessage,item:{rawText:string;productName:s
 
 export async function processTrainingMessage(message:TrainingMessage,deps:TrainingDeps):Promise<TrainingResult>{
   const learnedExamples=await deps.loadExamples(message.customerAccountId,message.body);
-  // Groq learns language/order from examples. Product authority is checked only after Groq returns.
   const translation=await deps.translate({customerText:message.body,catalog:[],learnedExamples});
   const learned:TrainingSavedExample[]=[];
   let pendingConfirmation:TrainingPendingConfirmation|null=null;
 
-  if(translation.kind==="conversation"){
-    return {reply:clean(translation.replyText),translation,learned,pendingConfirmation};
-  }
+  if(translation.kind==="conversation")return {reply:clean(translation.replyText),translation,learned,pendingConfirmation};
 
   const catalog=await deps.loadCatalog(message.customerAccountId,message.body);
 
@@ -114,15 +109,11 @@ export async function processTrainingMessage(message:TrainingMessage,deps:Traini
 
       const similar=similarCatalogProduct(catalog,item.productName);
       if(similar&&!pendingConfirmation){
-        pendingConfirmation={
-          rawText:item.rawText,productName:similar.productName,productCode:similar.productCode,
-          quantity:item.quantity,unitHint:item.unitHint,
-        };
+        pendingConfirmation={rawText:item.rawText,productName:similar.productName,productCode:similar.productCode,quantity:item.quantity,unitHint:item.unitHint};
         replies.push(`Có phải ${itemReply(pendingConfirmation)} không?\n1. Đúng\n2. Sai / bỏ qua`);
         continue;
       }
 
-      // No catalog match: keep Groq's language example, but do not invent a product code.
       const example=savedExample(message,{...item,productCode:null},"auto");
       await deps.saveExample(example);learned.push(example);replies.push(itemReply(item));
     }
@@ -131,14 +122,7 @@ export async function processTrainingMessage(message:TrainingMessage,deps:Traini
 
   for(const teaching of translation.teachings){
     const exact=exactCatalogProduct(catalog,teaching.productName);
-    const canonical={
-      rawText:teaching.rawText,
-      productName:exact?.productName||teaching.productName,
-      productCode:exact?.productCode||null,
-      quantity:null,
-      unitHint:null,
-      confidence:1,
-    };
+    const canonical={rawText:teaching.rawText,productName:exact?.productName||teaching.productName,productCode:exact?.productCode||null,quantity:null,unitHint:null,confidence:1};
     const example=savedExample(message,canonical,"corrected");
     await deps.saveExample(example);learned.push(example);
   }
@@ -148,8 +132,7 @@ export async function processTrainingMessage(message:TrainingMessage,deps:Traini
 
 export async function loadTrainingCatalog(db:any):Promise<TrainingCatalogItem[]>{
   const {data,error}=await db.from("getlink_supplier_products")
-    .select("product_code,product_name,is_active,stock_status")
-    .eq("is_active",true).order("product_code",{ascending:true}).range(0,599);
+    .select("product_code,product_name,is_active,stock_status").eq("is_active",true).order("product_code",{ascending:true}).range(0,599);
   if(error)throw error;
   return (Array.isArray(data)?data:[])
     .filter((row:any)=>row?.product_code&&row?.product_name&&String(row?.stock_status||"")!=="inactive")
@@ -188,11 +171,73 @@ export async function saveTrainingExample(db:any,example:TrainingSavedExample):P
   return data;
 }
 
+async function loadTrainingSession(db:any,conversationId:string):Promise<any|null>{
+  const {data,error}=await db.from("getlink_ai_order_sessions")
+    .select("id,awaiting_context").eq("conversation_id",conversationId)
+    .in("state",["collecting","awaiting_clarification","quoted","confirmed"])
+    .order("created_at",{ascending:false}).limit(1).maybeSingle();
+  if(error)throw error;
+  return data||null;
+}
+
+async function setTrainingAwaitingContext(db:any,sessionId:string,context:Record<string,unknown>):Promise<void>{
+  const {error}=await db.from("getlink_ai_order_sessions")
+    .update({awaiting_context:context,updated_at:new Date().toISOString()}).eq("id",sessionId);
+  if(error)throw error;
+}
+
+function pendingFromContext(value:any):TrainingPendingConfirmation|null{
+  if(!value||value.kind!=="training_candidate")return null;
+  const quantity=Number(value.quantity);
+  if(!clean(value.rawText)||!clean(value.productName)||!clean(value.productCode)||!Number.isFinite(quantity)||quantity<=0)return null;
+  return {rawText:clean(value.rawText),productName:clean(value.productName),productCode:clean(value.productCode),quantity,unitHint:value.unitHint?clean(value.unitHint):null};
+}
+
 export async function processDbTrainingMessage(db:any,message:TrainingMessage,modelCredentials?:Partial<ModelCredentials>|null,fetchImpl:typeof fetch=fetch):Promise<TrainingResult>{
-  return await processTrainingMessage(message,{
+  const session=await loadTrainingSession(db,message.conversationId);
+  const pending=pendingFromContext(session?.awaiting_context);
+  const decision=normalizeCustomerText(message.body);
+
+  if(pending&&(decision==="1"||decision==="2")){
+    await setTrainingAwaitingContext(db,String(session.id),{});
+    if(decision==="2"){
+      return {
+        reply:"Đã bỏ qua.",
+        translation:{kind:"conversation",items:[],teachings:[],replyText:"Đã bỏ qua."},
+        learned:[],pendingConfirmation:null,
+      };
+    }
+    const example:TrainingSavedExample={
+      customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
+      rawText:pending.rawText,productName:pending.productName,productCode:pending.productCode,
+      quantity:pending.quantity,unitHint:pending.unitHint,status:"corrected",confidence:1,
+    };
+    await saveTrainingExample(db,example);
+    return {
+      reply:itemReply(pending),
+      translation:{kind:"teaching",items:[],teachings:[{rawText:pending.rawText,productName:pending.productName,productCode:pending.productCode}],replyText:""},
+      learned:[example],pendingConfirmation:null,
+    };
+  }
+
+  if(pending&&session?.id)await setTrainingAwaitingContext(db,String(session.id),{});
+
+  const result=await processTrainingMessage(message,{
     loadCatalog:async()=>await loadTrainingCatalog(db),
     loadExamples:async()=>await loadTrainingExamples(db,message.customerAccountId,message.conversationId),
     translate:async(input)=>await translateTrainingMessageWithModel(input,fetchImpl,modelCredentials),
     saveExample:async(example)=>await saveTrainingExample(db,example),
   });
+
+  if(result.pendingConfirmation&&session?.id){
+    await setTrainingAwaitingContext(db,String(session.id),{
+      kind:"training_candidate",
+      rawText:result.pendingConfirmation.rawText,
+      productName:result.pendingConfirmation.productName,
+      productCode:result.pendingConfirmation.productCode,
+      quantity:result.pendingConfirmation.quantity,
+      unitHint:result.pendingConfirmation.unitHint,
+    });
+  }
+  return result;
 }

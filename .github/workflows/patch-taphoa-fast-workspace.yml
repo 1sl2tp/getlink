@@ -68,6 +68,12 @@ jobs:
           if old not in s:
               raise SystemExit('manager-mode patch anchor missing in helper')
           s=s.replace(old,new,1)
+
+          css_anchor='''/* TAPHOA fast workspace — UI UX Pro Max + Taste Scan→Diagnose→Fix */\n.taphoa-work-nav[hidden]{display:none!important}'''
+          css_fixed='''/* TAPHOA fast workspace — UI UX Pro Max + Taste Scan→Diagnose→Fix */\n.taphoa-workspace-panel{width:100%;min-width:0}\n.taphoa-work-nav[hidden]{display:none!important}'''
+          if css_anchor not in s:
+              raise SystemExit('taphoa workspace CSS anchor missing in helper')
+          s=s.replace(css_anchor,css_fixed,1)
           p.write_text(s,encoding='utf-8')
           PY
       - name: Patch runtime

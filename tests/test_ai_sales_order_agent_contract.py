@@ -118,6 +118,12 @@ class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
         self.assertNotIn('Deno.env.get("ORDER_AGENT_PILOT_CUSTOMER_IDS")', text)
         self.assertNotIn('Deno.env.get("ORDER_AGENT_WEBHOOK_SECRET")', text)
 
+    def test_requested_pilot_stays_off_until_all_runtime_dependencies_exist(self):
+        text = AGENT_INDEX.read_text(encoding="utf-8").replace(" ", "")
+        self.assertIn("constreadyForPilot=Boolean(", text)
+        self.assertIn("modelName&&webhookSecret&&openaiApiKey&&pilotCustomerIds.size>0", text)
+        self.assertIn('requested==="pilot"&&readyForPilot?"pilot":"off"', text)
+
     def test_existing_native_sales_edge_remains_authoritative(self):
         text = ORDERS_EDGE.read_text(encoding="utf-8")
         self.assertIn('db.from("getlink_supplier_products")', text)

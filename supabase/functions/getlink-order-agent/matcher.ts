@@ -4,8 +4,6 @@ import type { ProductResolution, ResolutionSource } from "./types.ts";
 export const STORE_ALIAS_PROMOTION_CUSTOMERS=3;
 const CATALOG_PAGE_SIZE=1000;
 const CATALOG_MAX_ROWS=10000;
-const TYPO_MIN_SCORE=0.8;
-const TYPO_MIN_MARGIN=0.08;
 
 const RANK:Record<ResolutionSource,number>={
   customer_alias:0,
@@ -15,15 +13,6 @@ const RANK:Record<ResolutionSource,number>={
   llm:4,
   clarification:5,
   admin_edit:6,
-};
-
-export type ProductCandidate={
-  productCode:string;
-  productName:string;
-  confidence:number;
-  source:"fuzzy";
-  requiresConfirmation:true;
-  editDistance:number;
 };
 
 export function resolutionSourceRank(source:ResolutionSource):number{
@@ -54,62 +43,6 @@ async function loadCompleteActiveCatalog(db:any):Promise<{rows:any[];complete:bo
     if(page.length<CATALOG_PAGE_SIZE)return {rows,complete:true};
   }
   return {rows,complete:false};
-}
-
-function compactName(value:unknown):string{
-  return normalizeCustomerText(value).replace(/[^a-z0-9]+/g,"");
-}
-
-function levenshtein(a:string,b:string):number{
-  if(a===b)return 0;
-  if(!a.length)return b.length;
-  if(!b.length)return a.length;
-  let previous=Array.from({length:b.length+1},(_,index)=>index);
-  for(let i=1;i<=a.length;i+=1){
-    const current=new Array<number>(b.length+1);
-    current[0]=i;
-    for(let j=1;j<=b.length;j+=1){
-      const cost=a[i-1]===b[j-1]?0:1;
-      current[j]=Math.min(
-        current[j-1]+1,
-        previous[j]+1,
-        previous[j-1]+cost,
-      );
-    }
-    previous=current;
-  }
-  return previous[b.length];
-}
-
-export async function suggestProductCandidate(db:any,rawText:string):Promise<ProductCandidate|null>{
-  const q=compactName(rawText);
-  if(q.length<4)return null;
-  const catalog=await loadCompleteActiveCatalog(db);
-  if(!catalog.complete)return null;
-  const ranked=catalog.rows
-    .filter((row:any)=>String(row?.stock_status||"")!=="inactive")
-    .map((row:any)=>{
-      const key=compactName(row?.product_name);
-      if(!key)return null;
-      const distance=levenshtein(q,key);
-      const maxLength=Math.max(q.length,key.length);
-      const confidence=maxLength?1-(distance/maxLength):0;
-      return {row,key,distance,confidence};
-    })
-    .filter((entry:any)=>entry&&entry.confidence>=TYPO_MIN_SCORE&&entry.distance<=Math.max(2,Math.ceil(Math.max(q.length,entry.key.length)*0.25)))
-    .sort((a:any,b:any)=>b.confidence-a.confidence||a.distance-b.distance||Math.abs(a.key.length-q.length)-Math.abs(b.key.length-q.length));
-  if(!ranked.length)return null;
-  const best=ranked[0]!;
-  const second=ranked[1]??null;
-  if(second&&best.confidence-second.confidence<TYPO_MIN_MARGIN)return null;
-  return {
-    productCode:String(best.row.product_code),
-    productName:String(best.row.product_name||best.row.product_code),
-    confidence:Number(best.confidence.toFixed(4)),
-    source:"fuzzy",
-    requiresConfirmation:true,
-    editDistance:best.distance,
-  };
 }
 
 export async function resolveProduct(

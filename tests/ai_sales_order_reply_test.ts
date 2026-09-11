@@ -52,9 +52,11 @@ Deno.test("clarification asks only the missing color politely",async()=>{
 Deno.test("round suggestion is a separate gentle follow-up",async()=>{
   const {composeReply}=await loadReply();
   const reply=composeReply({kind:"order_update",lines:[{productName:"Hảo Hảo",quantity:17,quotedPriceVnd:188000}],roundSuggestion:{target:20,gap:3}});
-  assert.equal(reply.followUp.replyKind,"round_suggestion");
-  assert.match(reply.followUp.body,/thêm 3 thùng/);
-  assert.match(reply.followUp.body,/tròn 20/);
+  const followUp=reply.followUp;
+  assert.ok(followUp);
+  assert.equal(followUp.replyKind,"round_suggestion");
+  assert.match(followUp.body,/thêm 3 thùng/);
+  assert.match(followUp.body,/tròn 20/);
 });
 
 Deno.test("enqueueReply uses outbox uniqueness and flush uses ai client id",async()=>{

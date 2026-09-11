@@ -111,8 +111,8 @@ class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
     def test_agent_reads_rollout_config_from_service_rpc(self):
         text = AGENT_INDEX.read_text(encoding="utf-8")
         self.assertIn('db.rpc("getlink_ai_runtime_config")', text)
-        self.assertIn('openaiApiKey:clean(row?.openai_api_key)', text)
-        self.assertIn('modelName:clean(row?.model_name)', text)
+        self.assertIn('const openaiApiKey=clean(row?.openai_api_key)', text)
+        self.assertIn('const modelName=clean(row?.model_name)', text)
         self.assertIn('processLiveRows(db,rows,"pilot",modelCredentials)', text)
         self.assertNotIn('Deno.env.get("ORDER_AGENT_MODE")', text)
         self.assertNotIn('Deno.env.get("ORDER_AGENT_PILOT_CUSTOMER_IDS")', text)

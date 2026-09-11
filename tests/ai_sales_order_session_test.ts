@@ -13,6 +13,15 @@ function intent(overrides:Partial<ParsedIntent>):ParsedIntent{
   };
 }
 
+const priceListItems=Array.from({length:5},(_,index)=>({
+  code:`P${String(index+1).padStart(2,"0")}`,
+  productCode:index===3?"MILK04":`PRICE${index+1}`,
+  productName:index===3?"Sữa test số 4":`Sản phẩm giá ${index+1}`,
+  priceVnd:(index+1)*1000,
+  unitLabel:"thùng",
+  updatedAt:"2026-09-12T00:00:00Z",
+}));
+
 class MemoryRepo{
   session:any={
     id:"s1",customerAccountId:"u1",conversationId:"c1",state:"collecting",awaitingContext:{},
@@ -32,7 +41,7 @@ class MemoryRepo{
   async getProductHint(productCode:string){
     return productCode==="BI-BE"?{askAttribute:"color"}:null;
   }
-  async listPriceScope(scope:string){return {scope,items:[]};}
+  async listPriceScope(scope:string){return {scope,count:priceListItems.length,items:priceListItems.map(x=>({...x}))};}
   async materializePendingOrder(){this.materializeCalls+=1;return "order-1";}
 }
 
@@ -116,4 +125,31 @@ Deno.test("17 cartons offers 20 once and decline suppresses further upsell",asyn
   assert.equal(repo.session.roundUpsellDeclined,true);
   const third=await processTurn(repo,{turnKey:"t3",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m3",body:"hảo hảo 1 thùng"}]},deps());
   assert.equal(third.roundSuggestion,null);
+});
+
+Deno.test("price list stores the exact visible P-code mapping in session context",async()=>{
+  const {processTurn}=await loadSession();
+  const repo=new MemoryRepo();
+  const result=await processTurn(repo,{turnKey:"t1",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m1",body:"gửi giá sữa"}]},deps());
+  assert.equal(result.kind,"price_list");
+  assert.equal(result.priceList.items[3].code,"P04");
+  assert.equal(repo.session.lastPriceListContext.items[3].productCode,"MILK04");
+});
+
+Deno.test("price-list references mã P04 and cái số 4 resolve deterministically",async()=>{
+  const {processTurn}=await loadSession();
+
+  const byCode=new MemoryRepo();
+  await processTurn(byCode,{turnKey:"t1",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m1",body:"báo giá toàn bộ"}]},deps());
+  await processTurn(byCode,{turnKey:"t2",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m2",body:"mã P04 2"}]},deps());
+  assert.equal(byCode.lines.length,1);
+  assert.equal(byCode.lines[0].productCode,"MILK04");
+  assert.equal(byCode.lines[0].quantity,2);
+
+  const byNumber=new MemoryRepo();
+  await processTurn(byNumber,{turnKey:"t1",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m1",body:"gửi giá sữa"}]},deps());
+  await processTurn(byNumber,{turnKey:"t2",conversationId:"c1",customerAccountId:"u1",messages:[{id:"m2",body:"cái số 4 lấy 3"}]},deps());
+  assert.equal(byNumber.lines.length,1);
+  assert.equal(byNumber.lines[0].productCode,"MILK04");
+  assert.equal(byNumber.lines[0].quantity,3);
 });

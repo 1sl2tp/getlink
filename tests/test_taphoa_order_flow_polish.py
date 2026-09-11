@@ -55,6 +55,18 @@ class TaphoaOrderFlowPolishTest(unittest.TestCase):
         self.assertIn("orderReportFilter=orderReportFilters[activeStatus]", block)
         self.assertIn("setActiveOrderStatus(String(tab.dataset.orderStatus", ORDER)
 
+    def test_returning_to_orders_preserves_the_current_order_browsing_state(self):
+        match = re.search(
+            r'const workView=target\.closest\?\.\("\[data-taphoa-work-view\]"\);\s*if\(workView\)\{([\s\S]*?)\n\s*return;',
+            ORDER,
+        )
+        self.assertIsNotNone(match)
+        body = match.group(1)
+        self.assertIn('activeView=taphoaWorkView==="debts"?"debts":"orders"', body)
+        self.assertNotIn('sourceDrillSource=""', body)
+        self.assertNotIn('setActiveOrderStatus(', body)
+        self.assertIn('sourceDrillSource="";setActiveOrderStatus(String(tab.dataset.orderStatus', ORDER)
+
     def test_order_card_prioritizes_customer_and_keeps_order_number_as_metadata(self):
         block = function_block("renderOrders")
         self.assertIsNotNone(block)

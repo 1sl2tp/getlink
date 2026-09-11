@@ -19,6 +19,7 @@
   };
 
   let activeView="orders";
+  let taphoaWorkView="sales";
   let activeStatus="pending";
   let expandedOrderId="";
   let editingOrderId="";
@@ -43,9 +44,11 @@
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
   }
-  function moneyVnd(value){
+  function compactMoney(value){
     const n=Number(value||0);
-    return Number.isFinite(n)?Math.round(n).toLocaleString("vi-VN")+" ₫":"—";
+    if(!Number.isFinite(n))return "—";
+    const compact=Math.round(n/500)*.5;
+    return new Intl.NumberFormat("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:1}).format(compact);
   }
   function dateTime(value){
     const d=new Date(value||0);
@@ -106,7 +109,8 @@
     };
   }
   function emitAccessChange(){
-    syncWorkManagerNav();
+    ensureTaphoaWorkspaceNav();
+    syncTaphoaWorkspace();
     syncCartActions();
     document.dispatchEvent(new CustomEvent("getlink-access-change",{detail:accessSnapshot()}));
   }
@@ -212,65 +216,116 @@
     return false;
   }
 
-  function workManagerNavMarkup(kind){
-    return '<nav class="order-work-nav '+kind+'" aria-label="Quản lý mua hàng">'+
-      '<span class="order-work-nav-label">Quản lý</span>'+
-      '<button type="button" data-order-work-view="orders">Đơn của tôi</button>'+
-      '<button type="button" data-order-work-view="debts">Công nợ</button>'+
+  function taphoaWorkspaceNavMarkup(kind){
+    return '<nav class="taphoa-work-nav '+kind+'" aria-label="Tạp hóa">'+
+      '<button type="button" data-taphoa-work-view="sales">Bán</button>'+
+      '<button type="button" data-taphoa-work-view="orders">Đơn</button>'+
+      '<button type="button" data-taphoa-work-view="debts">Công nợ</button>'+
     '</nav>';
   }
-  function syncWorkManagerNav(){
-    const admin=currentRole()==="admin";
-    document.querySelectorAll('[data-order-work-view="orders"]').forEach(button=>{
-      button.textContent=admin?"Đơn hàng":"Đơn của tôi";
-    });
-    document.querySelectorAll("[data-order-work-view]").forEach(button=>{
-      const on=String(button.dataset.orderWorkView)===activeView;
-      button.classList.toggle("active",on);
-      button.setAttribute("aria-pressed",on?"true":"false");
-    });
+  function isTaphoaWorkspaceActive(){
+    const home=document.getElementById("userWorkHome");
+    if(!home||home.hidden)return false;
+    if(window.matchMedia("(max-width:639px)").matches){
+      const buttons=[...document.querySelectorAll("#mobileUserSourceTabs button")];
+      const active=buttons.find(button=>button.classList.contains("active")||button.getAttribute("aria-pressed")==="true");
+      if(!active)return true;
+      return normalizedSearch(active.textContent).includes("tap hoa");
+    }
+    const active=document.querySelector('.user-work-jump-button.active,.user-work-jump-button[aria-pressed="true"]');
+    return !active||String(active.dataset.workTarget||"mine")==="mine";
   }
-  function ensureWorkManagerNav(){
-    const desktopJump=document.querySelector(".user-work-jump");
-    if(desktopJump){
-      const desktopTop=desktopJump.closest(".user-work-top");
-      if(desktopTop&&!desktopTop.parentElement?.querySelector(".order-work-nav.desktop")){
-        desktopTop.insertAdjacentHTML("afterend",workManagerNavMarkup("desktop"));
-      }
+  function activeTaphoaWorkspaceHost(){
+    return window.matchMedia("(max-width:639px)").matches
+      ?document.getElementById("mobileUserWork")
+      :document.querySelector(".user-work-desktop");
+  }
+  function renderSalesContext(){
+    const panel=document.getElementById("taphoaSalesContext");
+    const preview=document.getElementById("taphoaSalesPreview");
+    if(!panel||!preview)return;
+    const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
+    preview.innerHTML=selected.length?selected.slice(0,12).map((item,index)=>{
+      const row=item.row||{};
+      const name=String(row.product_name||row.name||row.source_name||row.canonical_url||"Sản phẩm");
+      return '<div class="taphoa-sales-preview-row"><span><small>'+(index+1)+'.</small>'+escapeHtml(name)+'</span><strong>×'+Number(item.qty||0)+'</strong></div>';
+    }).join("")+(selected.length>12?'<div class="taphoa-sales-preview-more">+'+(selected.length-12)+' sản phẩm</div>':""):'<div class="taphoa-sales-preview-empty">Chưa chọn sản phẩm</div>';
+    panel.classList.toggle("has-items",selected.length>0);
+  }
+  function ensureSalesContextPanel(){
+    const mine=document.getElementById("userWorkMine");
+    const wrap=mine?.querySelector(".user-work-order-wrap");
+    const foot=mine?.querySelector(".user-work-order-foot");
+    if(!mine||!wrap||!foot)return;
+    mine.classList.add("taphoa-sales-grid");
+    let panel=document.getElementById("taphoaSalesContext");
+    if(!panel){
+      panel=document.createElement("aside");
+      panel.id="taphoaSalesContext";
+      panel.className="taphoa-sales-context";
+      panel.innerHTML='<div class="taphoa-sales-context-head"><strong>Xem đơn nhanh</strong><small>Khách · hàng đã chọn · thao tác</small></div><div id="taphoaSalesPreview" class="taphoa-sales-preview"></div>';
+      wrap.insertAdjacentElement("afterend",panel);
     }
-    const mobileSource=document.querySelector(".mobile-user-source-row");
-    if(mobileSource&&!mobileSource.parentElement?.querySelector(".order-work-nav.mobile")){
-      mobileSource.insertAdjacentHTML("afterend",workManagerNavMarkup("mobile"));
+    if(foot.parentElement!==panel)panel.appendChild(foot);
+    renderSalesContext();
+  }
+  function ensureTaphoaWorkspaceNav(){
+    const desktopTop=document.querySelector(".user-work-top");
+    if(desktopTop&&!desktopTop.parentElement?.querySelector(".taphoa-work-nav.desktop")){
+      desktopTop.insertAdjacentHTML("afterend",taphoaWorkspaceNavMarkup("desktop"));
     }
-    syncWorkManagerNav();
+    const mobileToolbar=document.querySelector(".mobile-user-toolbar");
+    if(mobileToolbar&&!mobileToolbar.parentElement?.querySelector(".taphoa-work-nav.mobile")){
+      mobileToolbar.insertAdjacentHTML("afterend",taphoaWorkspaceNavMarkup("mobile"));
+    }
+    ensureSalesContextPanel();
+  }
+  function syncTaphoaWorkspace(){
+    const active=isTaphoaWorkspaceActive();
+    const sales=taphoaWorkView==="sales";
+    const mobile=window.matchMedia("(max-width:639px)").matches;
+    document.querySelectorAll(".taphoa-work-nav").forEach(nav=>{
+      nav.hidden=!active;
+      nav.querySelectorAll("[data-taphoa-work-view]").forEach(button=>{
+        const on=String(button.dataset.taphoaWorkView)===taphoaWorkView;
+        button.classList.toggle("active",on);
+        button.setAttribute("aria-pressed",on?"true":"false");
+      });
+    });
+    const desktop=document.querySelector(".user-work-desktop");
+    const mobileRoot=document.getElementById("mobileUserWork");
+    if(desktop)desktop.dataset.taphoaView=active&&!mobile?taphoaWorkView:"sales";
+    if(mobileRoot)mobileRoot.dataset.taphoaView=active&&mobile?taphoaWorkView:"sales";
+    if(active&&!mobile){
+      const mine=document.getElementById("userWorkMine");
+      const categories=document.getElementById("userWorkDesktopCategories");
+      if(mine)mine.hidden=!sales;
+      if(categories)categories.hidden=!sales;
+    }
+    const manager=document.getElementById("orderManager");
+    const host=activeTaphoaWorkspaceHost();
+    if(manager&&host&&manager.parentElement!==host)host.appendChild(manager);
+    if(manager){
+      manager.hidden=!(active&&!sales);
+      manager.setAttribute("aria-hidden",manager.hidden?"true":"false");
+    }
+    const title=document.getElementById("orderManagerTitle");
+    if(title)title.textContent=taphoaWorkView==="debts"?"Công nợ":"Đơn hàng";
+    renderSalesContext();
   }
 
   function injectUi(){
-    ensureWorkManagerNav();
+    ensureTaphoaWorkspaceNav();
     ensureCartActions();
     if(document.getElementById("orderManager"))return;
-    const roleSwitch=document.querySelector(".role-switch");
-    if(roleSwitch){
-      const button=document.createElement("button");
-      button.id="orderManagerButton";
-      button.className="order-manager-entry";
-      button.type="button";
-      button.textContent="Đơn hàng";
-      roleSwitch.insertBefore(button,document.getElementById("roleAdminButton")||null);
-    }
     document.body.insertAdjacentHTML("beforeend",`
-      <div id="orderManager" class="order-manager" hidden aria-hidden="true">
-        <section class="order-manager-panel" role="dialog" aria-modal="true" aria-labelledby="orderManagerTitle">
+      <section id="orderManager" class="order-manager taphoa-workspace-panel" hidden aria-hidden="true" aria-labelledby="orderManagerTitle">
+        <section class="order-manager-panel">
           <header class="order-manager-head">
-            <div><h2 id="orderManagerTitle">Bán hàng</h2><small id="orderManagerIdentity"></small></div>
-            <button id="orderManagerClose" type="button" aria-label="Đóng">×</button>
+            <div><h2 id="orderManagerTitle">Đơn hàng</h2><small id="orderManagerIdentity"></small></div>
           </header>
           <div id="orderManagerGate" class="order-manager-message" hidden></div>
           <div id="orderManagerBody" class="order-manager-body">
-            <nav class="order-manager-modes" aria-label="Quản lý bán hàng">
-              <button type="button" data-manager-view="orders" class="active">Đơn hàng</button>
-              <button type="button" data-manager-view="debts">Công nợ</button>
-            </nav>
             <nav id="orderManagerTabs" class="order-manager-tabs" aria-label="Trạng thái đơn">
               <button type="button" data-order-status="pending" class="active">Đơn tạm <small>0</small></button>
               <button type="button" data-order-status="delivered">Đã giao <small>0</small></button>
@@ -282,7 +337,6 @@
                 <button id="debtBackButton" type="button" hidden>Khách hàng</button>
                 <button id="orderDeleteAllPendingButton" type="button" data-order-batch="delete-pending" hidden>Xóa tất cả</button>
                 <button id="orderReturnAllDeliveredButton" type="button" data-order-batch="return-delivered" hidden>Xóa tất cả đã giao</button>
-                <button id="orderCustomerPickerButton" type="button" hidden>Chọn khách hàng</button>
               </div>
             </div>
             <div id="orderManagerList" class="order-manager-list"></div>
@@ -299,9 +353,12 @@
             <div id="orderCustomerList" class="order-customer-list"></div>
           </div>
         </section>
-      </div>`);
+      </section>`);
+    const picker=document.getElementById("orderCustomerPicker");
+    if(picker&&picker.parentElement!==document.body)document.body.appendChild(picker);
     syncCustomerControls();
     syncManagerView();
+    syncTaphoaWorkspace();
   }
 
   function ensureInlineCustomerButtons(){
@@ -337,6 +394,7 @@
       send.parentElement?.insertBefore(wrap,send);
     }
     syncCartActions();
+    renderSalesContext();
   }
   function syncCartActions(){
     const admin=currentRole()==="admin";
@@ -373,26 +431,16 @@
       button.textContent=customer?"Khách · "+customer.name:"Chọn khách";
       button.title=customer?(customer.name+(customer.username?" · @"+customer.username:"")):"Chọn khách hàng trước khi gửi đơn";
     }
-    const picker=document.getElementById("orderCustomerPickerButton");
-    if(picker){
-      picker.hidden=!(admin&&activeView==="orders"&&!editingOrderId);
-      picker.textContent=customer?"Khách · "+customer.name:"Chọn khách hàng";
-    }
   }
   function syncManagerView(){
-    document.querySelectorAll("[data-manager-view]").forEach(button=>{
-      const on=String(button.dataset.managerView)===activeView;
-      button.classList.toggle("active",on);
-      button.setAttribute("aria-pressed",on?"true":"false");
-    });
     const tabs=document.getElementById("orderManagerTabs");
     if(tabs)tabs.hidden=activeView!=="orders";
     const back=document.getElementById("debtBackButton");
     if(back)back.hidden=activeView!=="debts"||currentRole()!=="admin"||!debtCustomerId;
-    syncWorkManagerNav();
     syncCustomerControls();
     syncBatchControls();
     syncCartActions();
+    syncTaphoaWorkspace();
   }
 
   function setMainStatus(message){
@@ -403,6 +451,7 @@
   }
   function setManagerGate(message){
     injectUi();
+    if(taphoaWorkView==="sales"){setMainStatus(message);return;}
     const host=document.getElementById("orderManager");
     const gate=document.getElementById("orderManagerGate");
     const body=document.getElementById("orderManagerBody");
@@ -418,15 +467,14 @@
   }
   function openManager(){
     injectUi();
-    const host=document.getElementById("orderManager");
-    host.hidden=false;host.setAttribute("aria-hidden","false");
+    taphoaWorkView=activeView==="debts"?"debts":"orders";
+    syncTaphoaWorkspace();
     void refreshManager();
   }
   function closeManager(){
     closeCustomerPicker();
-    const host=document.getElementById("orderManager");
-    if(!host)return;
-    host.hidden=true;host.setAttribute("aria-hidden","true");
+    taphoaWorkView="sales";
+    syncTaphoaWorkspace();
   }
   function updateIdentity(){
     const node=document.getElementById("orderManagerIdentity");
@@ -462,9 +510,6 @@
     if(!(await requireChatAuth()))return false;
     if(currentRole()!=="admin")return false;
     injectUi();
-    const host=document.getElementById("orderManager");
-    if(host?.hidden){host.hidden=false;host.setAttribute("aria-hidden","false");}
-    clearManagerGate();
     const picker=document.getElementById("orderCustomerPicker");
     if(!picker)return false;
     picker.hidden=false;picker.setAttribute("aria-hidden","false");
@@ -530,6 +575,20 @@
     return "";
   }
   function orderRef(order){return order.orderNo?"#"+order.orderNo:String(order.id||"")}
+  function orderRecency(order){
+    if(order.status==="returned")return Date.parse(order.returnedAt||order.deliveredAt||order.orderedAt||0)||0;
+    if(order.status==="delivered")return Date.parse(order.deliveredAt||order.orderedAt||0)||0;
+    return Date.parse(order.submittedAt||order.orderedAt||0)||0;
+  }
+  function sortOrdersNewestFirst(rows){
+    return [...(rows||[])].sort((a,b)=>orderRecency(b)-orderRecency(a)||Number(b.orderNo||0)-Number(a.orderNo||0));
+  }
+  function sortDebtCustomersNewestFirst(rows){
+    return [...(rows||[])].sort((a,b)=>(Date.parse(b.lastOccurredAt||0)||0)-(Date.parse(a.lastOccurredAt||0)||0));
+  }
+  function newestDebtTimeline(rows){
+    return [...(rows||[])].sort((a,b)=>(Date.parse(b.occurredAt||0)||0)-(Date.parse(a.occurredAt||0)||0));
+  }
   function localDateKey(value){
     const d=value instanceof Date?new Date(value):new Date(value||0);
     if(!Number.isFinite(d.getTime()))return "";
@@ -592,7 +651,7 @@
   function sourceSummaryMarkup(rows){
     const summary=summarizeOrdersBySource(rows),admin=currentRole()==="admin";
     if(!summary.rows.length)return '<section class="order-source-summary"><div class="order-source-empty">Không có dữ liệu nguồn trong phạm vi này.</div></section>';
-    const value=(n,known=true)=>known?moneyVnd(n):"—";
+    const value=(n,known=true)=>known?compactMoney(n):"—";
     return `<section class="order-source-summary">
       <div class="order-source-grid order-source-head"><span>NGUỒN</span><span>SL</span><span>CHI</span><span>THU</span><span>LÃI</span></div>
       ${summary.rows.map(row=>`<button type="button" class="order-source-grid order-source-row" data-order-source-open="${escapeHtml(row.source)}"><span>${escapeHtml(row.source)}</span><span>${row.qty}</span><span>${escapeHtml(value(row.expenseVnd,admin&&row.costKnown))}</span><span>${escapeHtml(value(row.revenue))}</span><span>${escapeHtml(value(row.profit,admin&&row.costKnown))}</span></button>`).join("")}
@@ -638,7 +697,7 @@
   }
   function renderOrders(){
     renderTabs();
-    const visible=filterOrdersForReport(orders),statusCount=orders.filter(order=>order.status===activeStatus).length;
+    const visible=sortOrdersNewestFirst(filterOrdersForReport(orders)),statusCount=orders.filter(order=>order.status===activeStatus).length;
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
     const summary=document.getElementById("orderManagerSummary");
@@ -652,9 +711,9 @@
       const expanded=expandedOrderId===String(order.id);
       const secondary=currentRole()==="admin"?String(order.customerName||"Khách hàng")+" · "+dateTime(order.orderedAt):dateTime(order.orderedAt);
       return `<article class="order-card ${expanded?"expanded":""}" data-order-id="${escapeHtml(order.id)}">
-        <div class="order-card-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(secondary)} · ${items.length+" dòng"}</small></div><b>${escapeHtml(moneyVnd(order.total))}</b></div>
+        <div class="order-card-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(secondary)} · ${items.length+" dòng"}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
         <button type="button" class="order-card-detail-toggle" data-order-detail data-order-id="${escapeHtml(id)}">${expanded?"Thu gọn":"Xem đơn"}</button>
-        ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</small></div>`).join("")}</div>`:""}
+        ${expanded?`<div class="order-card-items">${items.map(item=>`<div><span>${escapeHtml(item.name)}</span><small>${Number(item.qty||0)} × ${escapeHtml(compactMoney(item.price))}</small></div>`).join("")}</div>`:""}
         ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
@@ -678,13 +737,14 @@
     const empty=document.getElementById("orderManagerEmpty");
     const summary=document.getElementById("orderManagerSummary");
     const total=debtSummaries.reduce((sum,row)=>sum+Number(row.balanceVnd||0),0);
-    if(summary)summary.textContent="Công nợ · "+debtSummaries.length+" khách · "+moneyVnd(total);
+    if(summary)summary.textContent="Công nợ · "+debtSummaries.length+" khách · "+compactMoney(total);
     if(empty){empty.hidden=debtSummaries.length!==0;empty.textContent="Chưa có khách hàng hoặc công nợ.";}
     if(!list)return;
-    list.innerHTML=debtSummaries.map(row=>`
+    const recent=sortDebtCustomersNewestFirst(debtSummaries);
+    list.innerHTML=recent.map(row=>`
       <button type="button" class="debt-customer-card" data-debt-customer-id="${escapeHtml(row.customerId)}">
         <span><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.username?"@"+escapeHtml(row.username):""}${row.lastOccurredAt?" · "+escapeHtml(dateTime(row.lastOccurredAt)):""}</small></span>
-        <b>${escapeHtml(moneyVnd(row.balanceVnd))}</b>
+        <b>${escapeHtml(compactMoney(row.balanceVnd))}</b>
       </button>`).join("");
   }
   function paymentForm(customerId){
@@ -709,9 +769,9 @@
     if(empty)empty.hidden=true;if(!list)return;
     list.innerHTML=`<section class="debt-linked-order">
       <button type="button" class="debt-linked-back" data-debt-order-back>← Công nợ</button>
-      <div class="debt-linked-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(order.customerName||"Khách hàng")} · ${escapeHtml(dateTime(order.orderedAt))}</small></div><b>${escapeHtml(moneyVnd(order.total))}</b></div>
-      <div class="debt-linked-lines">${items.map((item,index)=>`<div><span><small>${index+1}.</small>${escapeHtml(item.name)}</span><span>${Number(item.qty||0)} × ${escapeHtml(moneyVnd(item.price))}</span><strong>${escapeHtml(moneyVnd(Number(item.qty||0)*Number(item.price||0)))}</strong></div>`).join("")}</div>
-      <div class="debt-linked-total"><span>Tổng ${qty} SP</span><strong>${escapeHtml(moneyVnd(order.total))}</strong></div>
+      <div class="debt-linked-head"><div><strong>${escapeHtml(orderRef(order))}</strong><small>${escapeHtml(order.customerName||"Khách hàng")} · ${escapeHtml(dateTime(order.orderedAt))}</small></div><b>${escapeHtml(compactMoney(order.total))}</b></div>
+      <div class="debt-linked-lines">${items.map((item,index)=>`<div><span><small>${index+1}.</small>${escapeHtml(item.name)}</span><span>${Number(item.qty||0)} × ${escapeHtml(compactMoney(item.price))}</span><strong>${escapeHtml(compactMoney(Number(item.qty||0)*Number(item.price||0)))}</strong></div>`).join("")}</div>
+      <div class="debt-linked-total"><span>Tổng ${qty} SP</span><strong>${escapeHtml(compactMoney(order.total))}</strong></div>
       ${orderActions(debtLinkedOrder)}
     </section>`;
   }
@@ -723,17 +783,17 @@
     if(!debtDetail){renderDebtSummaries();return;}
     const customer=debtDetail.customer||{};
     const timeline=Array.isArray(debtDetail.timeline)?debtDetail.timeline:[];
-    if(summary)summary.textContent=(customer.name||"Khách hàng")+" · Dư nợ "+moneyVnd(debtDetail.balanceVnd);
+    if(summary)summary.textContent=(customer.name||"Khách hàng")+" · Dư nợ "+compactMoney(debtDetail.balanceVnd);
     if(empty)empty.hidden=true;
     if(!list)return;
     list.innerHTML=`
-      <section class="debt-detail-head"><div><strong>${escapeHtml(customer.name||customer.username||"Khách hàng")}</strong><small>${customer.username?"@"+escapeHtml(customer.username):""}</small></div><b>${escapeHtml(moneyVnd(debtDetail.balanceVnd))}</b></section>
+      <section class="debt-detail-head"><div><strong>${escapeHtml(customer.name||customer.username||"Khách hàng")}</strong><small>${customer.username?"@"+escapeHtml(customer.username):""}</small></div><b>${escapeHtml(compactMoney(debtDetail.balanceVnd))}</b></section>
       ${paymentForm(customer.id||debtCustomerId)}
-      <div class="debt-timeline">${timeline.length?timeline.map(row=>`
+      <div class="debt-timeline">${timeline.length?newestDebtTimeline(timeline).map(row=>`
         <button type="button" class="debt-txn ${row.direction==="decrease"?"decrease":"increase"}" ${row.orderId?`data-debt-order-id="${escapeHtml(row.orderId)}"`:"disabled"}>
-          <div class="debt-txn-main"><span><strong>${escapeHtml(DEBT_EVENT_LABELS[row.eventType]||row.eventType)}</strong><small>${escapeHtml(dateTime(row.occurredAt))}${row.orderNo?" · Đơn #"+escapeHtml(row.orderNo):""}</small></span><b>${debtEventSign(row)}${escapeHtml(moneyVnd(row.amountVnd))}</b></div>
+          <div class="debt-txn-main"><span><strong>${escapeHtml(DEBT_EVENT_LABELS[row.eventType]||row.eventType)}</strong><small>${escapeHtml(dateTime(row.occurredAt))}${row.orderNo?" · Đơn #"+escapeHtml(row.orderNo):""}</small></span><b>${debtEventSign(row)}${escapeHtml(compactMoney(row.amountVnd))}</b></div>
           ${row.note?`<div class="debt-txn-note">${escapeHtml(row.note)}</div>`:""}
-          <div class="debt-balance-after">Dư nợ sau giao dịch <strong>${escapeHtml(moneyVnd(row.balanceAfterVnd))}</strong></div>
+          <div class="debt-balance-after">Dư nợ sau giao dịch <strong>${escapeHtml(compactMoney(row.balanceAfterVnd))}</strong></div>
         </button>`).join(""):'<div class="order-manager-message">Chưa có giao dịch công nợ.</div>'}</div>`;
   }
   async function refreshDebts(){
@@ -785,6 +845,23 @@
   }
 
 
+  function setSalesBusyState(kind,on){
+    const labels={send:"Gửi đơn",quick:"Bán nhanh",update:editingOrderStatus==="delivered"?"Cập nhật đã giao":"Cập nhật đơn"};
+    const busyLabels={send:"Đang gửi…",quick:"Đang bán…",update:"Đang cập nhật…"};
+    const buttons=[...document.querySelectorAll('#userWorkSendOrder,#mobileUserSendOrder,[data-order-cart-action="clear"],[data-order-cart-action="quick"],[data-order-cart-action="cancel-edit"],[data-order-cart-action="update"]')];
+    for(const button of buttons){
+      const buttonKind=button.matches('[data-order-cart-action="quick"]')?"quick":button.matches('[data-order-cart-action="update"]')?"update":button.matches('#userWorkSendOrder,#mobileUserSendOrder')?"send":"other";
+      const active=Boolean(on&&buttonKind===kind);
+      button.disabled=Boolean(on);
+      button.setAttribute("aria-busy",active?"true":"false");
+      if(buttonKind==="send"){
+        const label=button.querySelector("span");
+        if(label)label.textContent=active?busyLabels.send:labels.send;
+      }else if(buttonKind!=="other")button.textContent=active?busyLabels[buttonKind]:labels[buttonKind];
+    }
+    if(!on)syncCartActions();
+  }
+
   function selectedOrderPayload(){
     const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
     if(!Array.isArray(selected)||selected.length===0)return null;
@@ -811,14 +888,14 @@
     }
     editingOrderId=String(order.id);editingOrderStatus=status;
     window.loadUserWorkOrderSelection(order);
-    closeManager();syncCartActions();syncCustomerControls();
+    taphoaWorkView="sales";syncTaphoaWorkspace();syncCartActions();syncCustomerControls();
     setMainStatus("Đang sửa đơn "+orderRef(order)+(status==="delivered"?" · Đã giao":"")+".");
   }
   function cancelEditOrder(){
     if(!editingOrderId)return;
     const label=orderRef(orders.find(row=>String(row.id)===String(editingOrderId))||{id:editingOrderId});
     editingOrderId="";editingOrderStatus="";clearCurrentCart();
-    if(currentRole()==="admin")clearSelectedCustomer();
+    taphoaWorkView="sales";syncTaphoaWorkspace();
     syncCartActions();syncCustomerControls();setMainStatus("Đã hủy sửa đơn "+label+".");
   }
   async function updateEditingOrder(){
@@ -826,17 +903,16 @@
     if(!(await requireChatAuth()))return;
     const items=selectedOrderPayload();if(!items){setMainStatus("Đơn phải có ít nhất một sản phẩm.");return;}
     const id=editingOrderId,previousStatus=editingOrderStatus||"pending";
-    busy=true;setMainStatus("Đang cập nhật đơn...");
+    busy=true;setSalesBusyState("update",true);setMainStatus("Đang cập nhật đơn...");
     try{
       const data=await orderFetch("/orders/"+encodeURIComponent(id),{method:"PUT",body:JSON.stringify({items})});
       editingOrderId="";editingOrderStatus="";clearCurrentCart();
-      if(currentRole()==="admin")clearSelectedCustomer();
       const label=data?.order?.orderNo?"#"+data.order.orderNo:String(id);
       setMainStatus("Đã cập nhật đơn "+label+".");
       expandedOrderId=String(id);activeView="orders";activeStatus=String(data?.order?.status||previousStatus);debtLinkedOrder=null;
-      openManager();
+      taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){handleAuthError(error);setMainStatus(String(error?.message||error));}
-    finally{busy=false;syncCartActions();syncCustomerControls();}
+    finally{busy=false;setSalesBusyState("update",false);syncCartActions();syncCustomerControls();}
   }
 
   async function submitQuickSale(){
@@ -846,19 +922,19 @@
     if(!items){setMainStatus("Chưa chọn sản phẩm.");return;}
     if(!selectedCustomerId){setMainStatus("Chưa chọn khách hàng.");await openCustomerPicker();return;}
     const customerId=selectedCustomerId;
-    busy=true;setMainStatus("Đang bán nhanh...");
+    busy=true;setSalesBusyState("quick",true);setMainStatus("Đang bán nhanh...");
     try{
       const data=await orderFetch("/orders",{method:"POST",body:JSON.stringify({items,customerId,mode:"quick"})});
       clearCurrentCart();
       const label=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
-      clearSelectedCustomer();
       setMainStatus("Đã bán nhanh đơn "+label+" · Đã giao.");
       expandedOrderId="";activeView="orders";activeStatus="delivered";
-      openManager();
+      taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){
       handleAuthError(error);setMainStatus(String(error?.message||error));
-    }finally{busy=false;syncCartActions();syncCustomerControls();}
+    }finally{busy=false;setSalesBusyState("quick",false);syncCartActions();syncCustomerControls();}
   }
+
   async function deleteAllPendingOrders(){
     if(busy)return;
     const count=orders.filter(order=>order.status==="pending").length;
@@ -916,7 +992,7 @@
       body=JSON.stringify({items,customerId});
     }else body=JSON.stringify({items});
 
-    busy=true;setMainStatus("Đang gửi đơn...");
+    busy=true;setSalesBusyState("send",true);setMainStatus("Đang gửi đơn...");
     try{
       const data=await orderFetch("/orders",{method:"POST",body});
       if(typeof window.clearUserWorkOrderSelection==="function"){
@@ -927,12 +1003,11 @@
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");
       expandedOrderId="";activeView="orders";activeStatus="pending";
       debtCustomerId="";debtDetail=null;
-      if(currentRole()==="admin")clearSelectedCustomer();
-      openManager();
+      taphoaWorkView="sales";syncTaphoaWorkspace();
     }catch(error){
       handleAuthError(error);
       setMainStatus(String(error?.message||error));
-    }finally{busy=false;}
+    }finally{busy=false;setSalesBusyState("send",false);}
   }
 
   async function performAdminAction(action,id){
@@ -1009,21 +1084,26 @@
     if(target.closest?.("[data-order-source-share]")){await shareOrderSource();return;}
     if(target.closest?.("[data-debt-order-back]")){debtLinkedOrder=null;renderDebtDetail();return;}
     const debtOrder=target.closest?.("[data-debt-order-id]");if(debtOrder){await openDebtLinkedOrder(String(debtOrder.dataset.debtOrderId||""));return;}
-    const workView=target.closest?.("[data-order-work-view]");
-    if(workView){activeView=String(workView.dataset.orderWorkView||"orders");sourceDrillSource="";debtLinkedOrder=null;if(activeView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");else debtCustomerId="";debtDetail=null;syncManagerView();if(await requireChatAuth())openManager();return;}
-    if(target.closest?.("#orderManagerButton")){if(await requireChatAuth())openManager();return;}
-    if(target.closest?.("#orderManagerClose")){closeManager();return;}
-    if(target.id==="orderManager"){closeManager();return;}
+    const workView=target.closest?.("[data-taphoa-work-view]");
+    if(workView){
+      taphoaWorkView=String(workView.dataset.taphoaWorkView||"sales");
+      activeView=taphoaWorkView==="debts"?"debts":"orders";
+      sourceDrillSource="";debtLinkedOrder=null;
+      if(taphoaWorkView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
+      else if(taphoaWorkView!=="debts")debtCustomerId="";
+      debtDetail=null;syncTaphoaWorkspace();syncManagerView();
+      if(taphoaWorkView!=="sales"&&await requireChatAuth())await refreshManager();
+      return;
+    }
     if(target.closest?.("#orderCustomerPickerClose")){closeCustomerPicker();return;}
-    if(target.closest?.("#orderCustomerPickerButton,[data-order-customer-select]")){await openCustomerPicker();return;}
+    if(target.closest?.("[data-order-customer-select]")){await openCustomerPicker();return;}
     if(target.closest?.("#debtBackButton")){debtCustomerId="";debtDetail=null;debtLinkedOrder=null;syncManagerView();await refreshDebts();return;}
-    const mode=target.closest?.("[data-manager-view]");
-    if(mode){activeView=String(mode.dataset.managerView||"orders");sourceDrillSource="";debtLinkedOrder=null;if(activeView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");else if(activeView==="orders")debtCustomerId="";debtDetail=null;syncManagerView();await refreshManager();return;}
     const debtCustomer=target.closest?.("[data-debt-customer-id]");if(debtCustomer){debtLinkedOrder=null;await openDebtCustomer(String(debtCustomer.dataset.debtCustomerId||""));return;}
     const customerOption=target.closest?.("[data-order-customer-id]");if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
     const tab=target.closest?.("[data-order-status]");if(tab){expandedOrderId="";sourceDrillSource="";activeStatus=String(tab.dataset.orderStatus||"pending");renderOrders();return;}
     const detail=target.closest?.("[data-order-detail]");if(detail){const id=String(detail.dataset.orderId||"");expandedOrderId=expandedOrderId===id?"":id;renderOrders();return;}
-    const action=target.closest?.("[data-order-action]");if(action)await performOrderAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));
+    const action=target.closest?.("[data-order-action]");if(action){await performOrderAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));return;}
+    if(target.closest?.(".user-work-jump-button,#mobileUserSourceTabs button"))window.setTimeout(()=>{if(!isTaphoaWorkspaceActive())taphoaWorkView="sales";ensureTaphoaWorkspaceNav();syncTaphoaWorkspace();},0);
   });
 
   document.addEventListener("submit",async event=>{
@@ -1051,7 +1131,9 @@
   injectUi();
   emitAccessChange();
   requestChatAuth();
-  window.setInterval(()=>{ensureWorkManagerNav();ensureInlineCustomerButtons();ensureCartActions();syncCustomerControls();},1500);
+  document.addEventListener("getlink-cart-change",()=>{ensureSalesContextPanel();renderSalesContext();});
+  window.addEventListener("resize",()=>{ensureTaphoaWorkspaceNav();syncTaphoaWorkspace();});
+  window.setInterval(()=>{ensureTaphoaWorkspaceNav();ensureInlineCustomerButtons();ensureCartActions();syncCustomerControls();syncTaphoaWorkspace();},1500);
   window.setInterval(()=>{void checkRemoteRevision();},ORDER_SYNC_MS);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkRemoteRevision();});
   window.addEventListener("focus",()=>{void checkRemoteRevision();});

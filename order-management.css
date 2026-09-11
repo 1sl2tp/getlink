@@ -1,8 +1,8 @@
 .order-manager-entry{height:34px;padding:0 11px;border:1px solid #d7dce3;border-radius:9px;background:#fff;color:#273142;font:600 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer;white-space:nowrap}
 .order-manager-entry:hover{background:#f6f8fa}
 .order-manager[hidden]{display:none!important}
-.order-manager{position:fixed;inset:0;z-index:12000;background:rgba(18,24,33,.28);display:flex;justify-content:flex-end;align-items:stretch}
-.order-manager-panel{width:min(600px,100%);height:100%;background:#fff;box-shadow:-10px 0 34px rgba(25,33,45,.16);display:flex;flex-direction:column;overflow:hidden}
+.order-manager{position:relative;inset:auto;z-index:auto;width:100%;min-width:0;background:transparent;display:block}
+.order-manager-panel{width:100%;height:auto;min-height:0;background:#fff;box-shadow:none;display:flex;flex-direction:column;overflow:visible}
 .order-manager-head{min-height:64px;padding:11px 14px 10px 16px;border-bottom:1px solid #e5e8ec;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .order-manager-head h2{margin:0;font-size:18px;line-height:1.25;color:#18202b}
 .order-manager-head small{display:block;margin-top:3px;color:#707987;font-size:12px}
@@ -20,7 +20,7 @@
 .order-manager-tools{min-height:38px;padding:7px 13px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid #edf0f3;color:#697383;font-size:12px}
 .order-manager-tool-actions{display:flex;align-items:center;gap:7px}
 .order-manager-tool-actions button{min-height:30px;padding:0 9px;border:1px solid #d9dee5;border-radius:8px;background:#fff;color:#47617f;font:600 11px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;cursor:pointer}
-.order-manager-list{min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px 12px 20px;display:grid;align-content:start;gap:9px;background:#f6f7f9}
+.order-manager-list{min-height:0;overflow:visible;padding:10px 12px 20px;display:grid;align-content:start;gap:9px;background:#f6f7f9}
 .order-card{border:1px solid #e2e5e9;border-radius:12px;background:#fff;overflow:hidden}
 .order-card-head{padding:11px 12px 9px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;border-bottom:1px solid #f0f1f3}
 .order-card-head>div{min-width:0}
@@ -99,56 +99,6 @@
 }
 
 
-/* Visible order/debt navigation inside Chat Công việc */
-.order-work-nav{
-  min-height:36px;
-  display:flex;
-  align-items:center;
-  justify-content:flex-end;
-  gap:6px;
-  padding:4px 0 8px;
-}
-.order-work-nav-label{
-  margin-right:2px;
-  color:#7a8491;
-  font:650 11px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-}
-.order-work-nav button{
-  min-height:32px;
-  padding:0 10px;
-  border:1px solid #dde3e8;
-  border-radius:8px;
-  background:#fff;
-  color:#4f5b68;
-  font:650 12px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  cursor:pointer;
-  white-space:nowrap;
-}
-.order-work-nav button:hover{background:#f6f8f7}
-.order-work-nav button.active{
-  border-color:#a7d5bc;
-  background:#edf8f2;
-  color:#087a40;
-}
-.order-work-nav.mobile{
-  justify-content:flex-start;
-  padding:6px 0 0;
-}
-@media(max-width:639px){
-  .order-work-nav{
-    width:100%;
-    min-height:34px;
-    gap:5px;
-  }
-  .order-work-nav-label{font-size:10.5px}
-  .order-work-nav button{
-    min-height:30px;
-    padding:0 9px;
-    font-size:11px;
-  }
-}
-
-
 /* Order list is summary-first; product lines are detail. */
 .order-card-detail-toggle{
   width:100%;min-height:34px;padding:0 12px;border:0;border-top:1px solid #eef0f2;
@@ -182,7 +132,7 @@
   --order-selected:#2d7a4d;
 }
 .order-manager,
-.order-work-nav,
+.taphoa-work-nav,
 .order-cart-actions{
   --order-list-gap:8px;
 }
@@ -192,7 +142,7 @@
 .order-manager-tabs button,
 .order-card-detail-toggle,
 .order-card-actions button,
-.order-work-nav button,
+.taphoa-work-nav button,
 .order-cart-actions button,
 .order-manager-entry,
 .order-customer-inline,
@@ -207,7 +157,7 @@
 #orderManagerClose{min-width:var(--order-touch)}
 
 .order-manager button,
-.order-work-nav button,
+.taphoa-work-nav button,
 .order-cart-actions button,
 .order-manager-entry,
 .order-customer-inline{
@@ -310,7 +260,7 @@
   .order-work-nav.mobile{padding-top:4px}
   .order-card-detail-toggle,
   .order-card-actions button,
-  .order-work-nav button,
+  .taphoa-work-nav button,
   .order-cart-actions button,
   .order-manager-tabs button{
     min-height:var(--order-touch);
@@ -319,7 +269,7 @@
 
 @media(prefers-reduced-motion:reduce){
   .order-manager button,
-  .order-work-nav button,
+  .taphoa-work-nav button,
   .order-cart-actions button,
   .order-manager-entry,
   .order-customer-inline{
@@ -357,3 +307,84 @@
 .debt-txn{width:100%;padding:0;text-align:left;font:inherit}.debt-txn[data-debt-order-id]{cursor:pointer}.debt-txn[data-debt-order-id]:hover{background:#fbfcfd}.debt-txn:disabled{cursor:default;color:inherit}
 .debt-linked-order{display:grid;gap:8px}.debt-linked-back{justify-self:start}.debt-linked-head,.debt-linked-total{min-height:58px;padding:10px 12px;border:1px solid #e1e5e9;border-radius:11px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px}.debt-linked-head strong{display:block;color:#202936;font-size:15px}.debt-linked-head small{display:block;margin-top:3px;color:#7a8491;font-size:11px}.debt-linked-head>b,.debt-linked-total strong{font-size:14px;font-variant-numeric:tabular-nums;white-space:nowrap}.debt-linked-lines{border:1px solid #e1e5e9;border-radius:11px;background:#fff;overflow:hidden}.debt-linked-lines>div{min-height:44px;padding:7px 10px;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;border-bottom:1px solid #eef0f2;font-size:11.5px}.debt-linked-lines>div:last-child{border-bottom:0}.debt-linked-lines span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.debt-linked-lines small{margin-right:5px;color:#89929d}.debt-linked-lines strong{font-variant-numeric:tabular-nums;white-space:nowrap}.debt-linked-total{min-height:48px;font-size:12px}
 @media(max-width:639px){.order-report-controls{padding:8px;gap:6px}.order-report-time,.order-report-quick{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.order-report-time label{display:grid;grid-template-columns:auto 1fr}.order-report-time input{width:100%;min-width:0}.order-source-grid{grid-template-columns:minmax(72px,1.2fr) .45fr .8fr .8fr .8fr;padding:6px;font-size:10.5px}.order-source-head{font-size:9px}.debt-linked-lines>div{grid-template-columns:minmax(0,1fr) auto}.debt-linked-lines>div>strong{grid-column:2}.debt-linked-lines>div>span:nth-child(2){font-size:10px;color:#78838f}}
+
+
+/* TAPHOA fast workspace — UI UX Pro Max + Taste Scan→Diagnose→Fix */
+.taphoa-workspace-panel{width:100%;min-width:0}
+.taphoa-work-nav[hidden]{display:none!important}
+.taphoa-work-nav{
+  min-height:52px;display:flex;align-items:center;gap:8px;padding:6px 10px;
+  border-bottom:1px solid #e8ece9;background:#fff;
+}
+.taphoa-work-nav button{
+  min-width:72px;min-height:var(--order-touch);padding:0 14px;border:1px solid transparent;
+  border-radius:9px;background:transparent;color:#596472;font:650 13px/1 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  cursor:pointer;white-space:nowrap;
+}
+.taphoa-work-nav button:hover{background:#f6f8f7}
+.taphoa-work-nav button.active{border-color:#a9d4ba;background:#edf8f2;color:#087a40}
+.taphoa-work-nav button:active,.order-card-detail-toggle:active,.debt-customer-card:active{transform:translateY(1px)}
+.taphoa-work-nav button:focus-visible,.order-card-detail-toggle:focus-visible,.debt-customer-card:focus-visible{
+  outline:2px solid var(--order-focus);outline-offset:2px;
+}
+.order-manager-head{min-height:54px;padding:10px 12px;border-bottom:1px solid #e8ece9}
+.order-manager-head h2{font-size:17px}
+.order-manager-body{width:100%}
+.order-manager-tool-actions button,.order-manager-tabs button,.order-card-actions button,.order-card-detail-toggle{min-height:var(--order-touch)}
+.order-manager-modes,#orderManagerClose,.order-manager-entry{display:none!important}
+.order-cart-actions button:disabled,#userWorkSendOrder:disabled,#mobileUserSendOrder:disabled{cursor:progress;opacity:.62}
+.order-cart-actions button[aria-busy="true"],#userWorkSendOrder[aria-busy="true"],#mobileUserSendOrder[aria-busy="true"]{min-width:7.5em}
+.order-card-head>b,.order-source-grid span:not(:first-child),.debt-customer-card>b,.debt-txn-main>b,.debt-balance-after strong{font-variant-numeric:tabular-nums;text-align:right}
+
+.taphoa-sales-context{
+  min-width:0;border:1px solid #e1e6e3;border-radius:11px;background:#fff;overflow:hidden;
+}
+.taphoa-sales-context-head{padding:11px 12px 9px;border-bottom:1px solid #edf0ee}
+.taphoa-sales-context-head strong{display:block;color:#26322c;font-size:13px}
+.taphoa-sales-context-head small{display:block;margin-top:2px;color:#7a847f;font-size:11px}
+.taphoa-sales-preview{max-height:280px;overflow:auto;padding:6px 10px}
+.taphoa-sales-preview-row{min-height:34px;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;border-bottom:1px solid #f0f2f1}
+.taphoa-sales-preview-row:last-child{border-bottom:0}
+.taphoa-sales-preview-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3e4944;font-size:12px}
+.taphoa-sales-preview-row small{margin-right:5px;color:#98a19d;font-size:10px}
+.taphoa-sales-preview-row strong{font-size:12px;font-variant-numeric:tabular-nums;color:#1f633e}
+.taphoa-sales-preview-empty,.taphoa-sales-preview-more{padding:12px 2px;color:#89928e;font-size:11px}
+.taphoa-sales-context .user-work-order-foot{margin:0;padding:10px;border-top:1px solid #e8ece9;display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.taphoa-sales-context .user-work-order-foot>#userWorkSelectedCount{width:100%;color:#6d7772;font-size:11px}
+.taphoa-sales-context .order-customer-inline{order:2;max-width:none;flex:1 1 100%}
+.taphoa-sales-context .order-cart-actions{order:3;display:flex;flex:1 1 auto}
+.taphoa-sales-context .user-work-send-order{order:4;min-height:var(--order-touch);flex:1 1 92px}
+
+@media(min-width:1000px){
+  .user-work-mine.taphoa-sales-grid{display:grid;grid-template-columns:minmax(0,1fr) 286px;align-items:start;gap:12px;min-width:0}
+  .user-work-mine.taphoa-sales-grid>.user-work-section-head{grid-column:1/-1}
+  .user-work-mine.taphoa-sales-grid>.user-work-order-wrap{grid-column:1;min-width:0}
+  .user-work-mine.taphoa-sales-grid>.taphoa-sales-context{grid-column:2;position:sticky;top:8px}
+  .order-lifecycle-list:has(.order-card.expanded){display:grid;grid-template-columns:minmax(300px,.88fr) minmax(360px,1.12fr);align-items:start;gap:8px}
+  .order-lifecycle-list:has(.order-card.expanded) .order-card{grid-column:1}
+  .order-lifecycle-list:has(.order-card.expanded) .order-card.expanded{grid-column:2;grid-row:1/span 999;position:sticky;top:8px}
+}
+@media(max-width:999px) and (min-width:640px){
+  .taphoa-sales-context{margin-top:10px}
+}
+@media(max-width:639px){
+  .taphoa-work-nav{min-height:48px;padding:4px 8px;gap:6px;position:sticky;top:0;z-index:8}
+  .taphoa-work-nav.desktop{display:none!important}
+  .taphoa-work-nav.mobile button{min-width:0;flex:1;padding:0 9px;font-size:12px}
+  #mobileUserWork[data-taphoa-view="orders"] .mobile-user-search,
+  #mobileUserWork[data-taphoa-view="debts"] .mobile-user-search,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileUserResults,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileUserResults,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileUserEmpty,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileUserEmpty,
+  #mobileUserWork[data-taphoa-view="orders"] .mobile-user-order-bar,
+  #mobileUserWork[data-taphoa-view="debts"] .mobile-user-order-bar{display:none!important}
+  .order-manager{width:100%;background:#fff}
+  .order-manager-panel{width:100%;height:auto;border-radius:0;box-shadow:none;overflow:visible}
+  .order-manager-list{padding:8px 8px 18px;overflow:visible}
+  .taphoa-sales-context{display:none!important}
+}
+@media(min-width:640px){.taphoa-work-nav.mobile{display:none!important}}
+@media(prefers-reduced-motion:reduce){
+  .taphoa-work-nav button,.order-card-detail-toggle,.debt-customer-card{transition:none!important;transform:none!important}
+}

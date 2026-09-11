@@ -6,24 +6,28 @@ JS = ROOT / "order-management.js"
 
 
 class OrderManagerWorkNavContract(unittest.TestCase):
-    def test_work_view_exposes_order_and_debt_management(self):
+    def test_taphoa_work_view_exposes_sales_orders_and_debt(self):
         text = JS.read_text(encoding="utf-8")
 
-        self.assertIn("function ensureWorkManagerNav()", text)
-        self.assertIn('document.querySelector(".user-work-jump")', text)
-        self.assertIn('document.querySelector(".mobile-user-source-row")', text)
-        self.assertIn('data-order-work-view="orders"', text)
-        self.assertIn('data-order-work-view="debts"', text)
-        self.assertIn("Đơn của tôi", text)
-        self.assertIn("Công nợ", text)
+        self.assertIn("function ensureTaphoaWorkspaceNav()", text)
+        self.assertIn("function isTaphoaWorkspaceActive()", text)
+        self.assertIn('data-taphoa-work-view="sales"', text)
+        self.assertIn('data-taphoa-work-view="orders"', text)
+        self.assertIn('data-taphoa-work-view="debts"', text)
+        self.assertIn(">Bán<", text)
+        self.assertIn(">Đơn<", text)
+        self.assertIn(">Công nợ<", text)
+        self.assertNotIn("function ensureWorkManagerNav()", text)
+        self.assertNotIn("workManagerNavMarkup", text)
 
-    def test_work_nav_opens_existing_scoped_manager(self):
+    def test_taphoa_nav_reuses_existing_scoped_manager_state(self):
         text = JS.read_text(encoding="utf-8")
 
-        self.assertIn('[data-order-work-view]', text)
-        self.assertIn('activeView=String(workView.dataset.orderWorkView||"orders")', text)
+        self.assertIn('[data-taphoa-work-view]', text)
+        self.assertIn('taphoaWorkView=String(workView.dataset.taphoaWorkView||"sales")', text)
+        self.assertIn('activeView=taphoaWorkView==="debts"?"debts":"orders"', text)
         self.assertIn('debtCustomerId=String(currentAccount()?.id||"")', text)
-        self.assertIn("openManager();", text)
+        self.assertIn("syncTaphoaWorkspace();", text)
 
 
 if __name__ == "__main__":

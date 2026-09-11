@@ -87,11 +87,13 @@ class NativeSalesFrontendContractTests(unittest.TestCase):
         self.assertIn('/deliver', text)
         self.assertNotIn('/approve', text)
 
-    def test_frontend_money_is_full_vnd(self):
+    def test_frontend_compact_display_does_not_change_full_vnd_authority(self):
         text = self.js_text()
-        self.assertIn("moneyVnd", text)
+        edge = self.edge_text() if hasattr(self, "edge_text") else EDGE.read_text(encoding="utf-8")
+        self.assertIn("function compactMoney(", text)
         self.assertNotIn("moneyFromCore", text)
         self.assertNotIn("Number(value||0)*1000", text.replace(" ", ""))
+        self.assertNotIn("/1000", edge.replace(" ", ""), "server/database VND authority must stay full-value")
 
     def test_frontend_has_debt_view_contract(self):
         text = self.js_text()

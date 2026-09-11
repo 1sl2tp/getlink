@@ -49,7 +49,7 @@ class TapHoaSalesCompletionContract(unittest.TestCase):
             'pending:"Đơn tạm"',
             'delivered:"Đã giao"',
             'returned:"Đã hoàn"',
-            'data-manager-view="debts"',
+            'data-taphoa-work-view="debts"',
             '/deliver',
             '/return',
             '/payments',

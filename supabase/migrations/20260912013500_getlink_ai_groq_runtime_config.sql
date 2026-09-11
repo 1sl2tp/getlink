@@ -1,5 +1,7 @@
 begin;
 
+drop function if exists public.getlink_ai_runtime_config();
+
 create or replace function public.getlink_ai_runtime_config()
 returns table(
   mode text,

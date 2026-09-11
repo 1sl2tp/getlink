@@ -14,7 +14,7 @@ type RuntimeConfig={
   mode:OrderAgentMode;
   modelName:string;
   webhookSecret:string;
-  openaiApiKey:string;
+  groqApiKey:string;
   pilotCustomerIds:Set<string>;
 };
 
@@ -27,18 +27,18 @@ async function loadRuntimeConfig():Promise<RuntimeConfig>{
   const requested=clean(row?.mode).toLowerCase();
   const modelName=clean(row?.model_name);
   const webhookSecret=clean(row?.webhook_secret);
-  const openaiApiKey=clean(row?.openai_api_key);
+  const groqApiKey=clean(row?.groq_api_key);
   const ids=Array.isArray(row?.pilot_customer_ids)?row.pilot_customer_ids:[];
   const pilotCustomerIds=new Set<string>(
     ids.map((value:unknown)=>clean(value)).filter((value:string)=>Boolean(value)),
   );
-  const readyForPilot=Boolean(modelName&&webhookSecret&&openaiApiKey&&pilotCustomerIds.size>0);
+  const readyForPilot=Boolean(modelName&&webhookSecret&&groqApiKey&&pilotCustomerIds.size>0);
   const mode:OrderAgentMode=requested==="pilot"&&readyForPilot?"pilot":"off";
   return {
     mode,
     modelName,
     webhookSecret,
-    openaiApiKey,
+    groqApiKey,
     pilotCustomerIds,
   };
 }
@@ -56,7 +56,7 @@ Deno.serve(async (req:Request)=>{
   try{config=await loadRuntimeConfig();}
   catch(error){return unavailable(error);}
 
-  const modelCredentials={apiKey:config.openaiApiKey,model:config.modelName};
+  const modelCredentials={apiKey:config.groqApiKey,model:config.modelName};
   const handler=createOrderAgentHandler({
     mode:config.mode,
     webhookSecret:config.webhookSecret,
@@ -70,7 +70,8 @@ Deno.serve(async (req:Request)=>{
       database_configured:Boolean(SUPABASE_URL&&SERVICE_ROLE),
       runtime_configured:true,
       webhook_configured:Boolean(config.webhookSecret),
-      model_configured:Boolean(config.openaiApiKey&&config.modelName),
+      model_configured:Boolean(config.groqApiKey&&config.modelName),
+      model_provider:"groq",
       pilot_customer_count:config.pilotCustomerIds.size,
       debounce_ms:TURN_DEBOUNCE_MS,
       market_max_age_ms:MARKET_MAX_AGE_MS,

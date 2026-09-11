@@ -23,7 +23,9 @@ jobs:
       - name: Install verify requirements
         run: pip install -r scraper/requirements.txt
       - name: Apply scoped production patch
-        run: python tools/patch_taphoa_order_flow.py
+        run: |
+          python tools/patch_taphoa_order_flow.py
+          python tools/patch_taphoa_order_return_state.py
       - name: Focused RED to GREEN contract
         run: python -m unittest tests.test_taphoa_order_flow_polish -v
       - name: Stamp static build

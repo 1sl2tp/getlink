@@ -5045,6 +5045,7 @@ function updateUserWorkOrderSummary(){
   const unavailable=selected.length===0;
   if(send)send.setAttribute("aria-disabled",unavailable?"true":"false");
   if(mobileSend)mobileSend.setAttribute("aria-disabled",unavailable?"true":"false");
+  document.dispatchEvent(new CustomEvent("getlink-cart-change",{detail:{count:selected.length}}));
 }
 
 function saveUserWorkOrderDraft(){

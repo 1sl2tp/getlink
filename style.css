@@ -15399,3 +15399,10 @@ body.news-quick-open{overflow:hidden!important}
 
 /* News scope isolation v62 — product categories never overlap the news reader. */
 .user-work-category-panel[hidden]{display:none!important}
+
+
+/* Tạp hóa fast workspace host: keep global source navigation stable while child workspace changes. */
+.user-work-desktop[data-taphoa-view="orders"] .user-work-search,
+.user-work-desktop[data-taphoa-view="debts"] .user-work-search{visibility:hidden;pointer-events:none}
+.user-work-desktop[data-taphoa-view="orders"],
+.user-work-desktop[data-taphoa-view="debts"]{min-width:0}

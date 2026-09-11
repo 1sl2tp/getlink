@@ -17,6 +17,7 @@ PRICE_LIST_HTML = ROOT / "price-list.html"
 PRICE_LIST_JS = ROOT / "price-list.js"
 PRICE_LIST_CSS = ROOT / "price-list.css"
 VERIFY = ROOT / ".github/workflows/verify.yml"
+SMOKE = ROOT / ".github/workflows/smoke-supabase.yml"
 
 
 class AiSalesOrderAgentSchemaContractTests(unittest.TestCase):
@@ -100,6 +101,14 @@ class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
         text = VERIFY.read_text(encoding="utf-8")
         self.assertIn("deno test -A tests/ai_sales_order_agent_test.ts", text)
         self.assertIn("deno check supabase/functions/getlink-order-agent/index.ts", text)
+
+    def test_smoke_workflow_reads_order_agent_health_only(self):
+        text = SMOKE.read_text(encoding="utf-8")
+        self.assertIn('supabase/functions/getlink-order-agent/**', text)
+        self.assertIn('getlink-order-agent/health', text)
+        self.assertIn("model_configured", text)
+        self.assertIn("webhook_configured", text)
+        self.assertNotIn('-X POST "$AGENT', text)
 
     def test_price_list_static_surface_exists(self):
         for path in (PRICE_LIST_HTML, PRICE_LIST_JS, PRICE_LIST_CSS):

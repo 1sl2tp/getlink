@@ -2,6 +2,8 @@ import { normalizeCustomerText } from "./normalize.ts";
 import type { ProductResolution, ResolutionSource } from "./types.ts";
 
 export const STORE_ALIAS_PROMOTION_CUSTOMERS=3;
+const CATALOG_PAGE_SIZE=1000;
+const CATALOG_MAX_ROWS=10000;
 
 const RANK:Record<ResolutionSource,number>={
   customer_alias:0,
@@ -25,6 +27,22 @@ function productResolution(row:any,source:ResolutionSource,confidence:number):Pr
     confidence,
     source,
   };
+}
+
+async function loadCompleteActiveCatalog(db:any):Promise<{rows:any[];complete:boolean}>{
+  const rows:any[]=[];
+  for(let start=0;start<CATALOG_MAX_ROWS;start+=CATALOG_PAGE_SIZE){
+    const {data,error}=await db.from("getlink_supplier_products")
+      .select("product_code,product_name,is_active,stock_status")
+      .eq("is_active",true)
+      .order("product_code",{ascending:true})
+      .range(start,start+CATALOG_PAGE_SIZE-1);
+    if(error)throw error;
+    const page=Array.isArray(data)?data:[];
+    rows.push(...page);
+    if(page.length<CATALOG_PAGE_SIZE)return {rows,complete:true};
+  }
+  return {rows,complete:false};
 }
 
 export async function resolveProduct(
@@ -71,18 +89,17 @@ export async function resolveProduct(
     .maybeSingle();
   if(exactCode?.product_code)return productResolution(exactCode,"canonical",0.99);
 
-  const {data:rows}=await db.from("getlink_supplier_products")
-    .select("product_code,product_name,is_active,stock_status")
-    .eq("is_active",true)
-    .limit(250);
-  const candidates=(Array.isArray(rows)?rows:[])
+  const catalog=await loadCompleteActiveCatalog(db);
+  if(!catalog.complete)return null;
+  const candidates=catalog.rows
+    .filter((row:any)=>String(row?.stock_status||"")!=="inactive")
     .map((row:any)=>({row,key:normalizeCustomerText(row.product_name)}))
     .filter((x:any)=>x.key===q||x.key.includes(q)||q.includes(x.key))
     .sort((a:any,b:any)=>Math.abs(a.key.length-q.length)-Math.abs(b.key.length-q.length));
   if(!candidates.length)return null;
-  const first=candidates[0];
-  const exact=first.key===q;
-  if(exact)return productResolution(first.row,"canonical",0.98);
-  if(candidates.length===1)return productResolution(first.row,"fuzzy",0.86);
+  const exactCandidates=candidates.filter((candidate:any)=>candidate.key===q);
+  if(exactCandidates.length===1)return productResolution(exactCandidates[0].row,"canonical",0.98);
+  if(exactCandidates.length>1)return null;
+  if(candidates.length===1)return productResolution(candidates[0].row,"fuzzy",0.86);
   return null;
 }

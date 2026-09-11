@@ -5,6 +5,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 ORDER_CSS = (ROOT / "order-management.css").read_text(encoding="utf-8")
+ORDER_JS = (ROOT / "order-management.js").read_text(encoding="utf-8")
 APP_JS = (ROOT / "app.js").read_text(encoding="utf-8")
 
 
@@ -49,10 +50,14 @@ class TapHoaUiUxPassTests(unittest.TestCase):
         self.assertIn(".mobile-user-product-card.is-selected", ORDER_CSS)
         self.assertIn(".user-work-order-row.is-selected", ORDER_CSS)
 
-    def test_order_number_is_the_primary_visual_anchor(self):
-        self.assertIn(".order-card-head strong", ORDER_CSS)
-        self.assertIn("font-variant-numeric:tabular-nums", ORDER_CSS)
-        self.assertIn("letter-spacing:", ORDER_CSS)
+    def test_customer_is_the_primary_order_visual_anchor(self):
+        self.assertIn(".order-card-customer", ORDER_CSS)
+        self.assertIn("font-weight:750", ORDER_CSS)
+        self.assertIn('class="order-card-customer"', ORDER_JS)
+        self.assertIn('class="order-card-meta"', ORDER_JS)
+        customer = ORDER_JS.index('class="order-card-customer"')
+        ref = ORDER_JS.index('orderRef(order)', customer)
+        self.assertLess(customer, ref)
 
     def test_dense_mobile_layout_keeps_touch_size_without_extra_card_noise(self):
         self.assertIn("@media(max-width:639px)", ORDER_CSS)

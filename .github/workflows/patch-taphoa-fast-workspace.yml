@@ -110,7 +110,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app.js style.css order-management.js order-management.css order-customer-picker.css index.html version.json service-worker.js
+          git add app.js style.css order-management.js order-management.css order-customer-picker.css index.html version.json
           git commit -m "feat: make Tạp hóa a fast inline workspace"
           git push origin HEAD:feature/taphoa-fast-workspace-flow
       - name: Remove one-shot helpers

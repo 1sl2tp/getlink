@@ -9,6 +9,11 @@ export type ModelParseInput={
   listContext?:Array<{code:string;productCode:string;productName:string}>;
 };
 
+export type ModelCredentials={
+  apiKey:string;
+  model:string;
+};
+
 export class ModelParseError extends Error{
   code="model_unavailable_or_invalid";
   constructor(message="model_unavailable_or_invalid"){
@@ -93,9 +98,10 @@ function extractOutputText(payload:any):string{
 export async function parseWithModel(
   input:ModelParseInput,
   fetchImpl:typeof fetch=fetch,
+  credentials?:Partial<ModelCredentials>|null,
 ):Promise<ParsedIntent>{
-  const apiKey=String(Deno.env.get("OPENAI_API_KEY")||"").trim();
-  const model=String(Deno.env.get("ORDER_AGENT_MODEL")||"").trim();
+  const apiKey=String(credentials?.apiKey??Deno.env.get("OPENAI_API_KEY")??"").trim();
+  const model=String(credentials?.model??Deno.env.get("ORDER_AGENT_MODEL")??"").trim();
   if(!apiKey||!model)throw new ModelParseError("model_configuration_missing");
   const safe=sanitizedInput(input);
   if(!safe.customer_text)throw new ModelParseError("customer_text_required");

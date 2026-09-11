@@ -1,37 +1,44 @@
 import type { AgentSession, DraftLine, SessionRepository } from "./session.ts";
+import type { UnresolvedDraftLine, UnresolvedDraftStatus } from "./unresolved.ts";
 import { normalizeCustomerText } from "./normalize.ts";
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim();}
 function asObject(value:unknown):Record<string,unknown>{return value&&typeof value==="object"&&!Array.isArray(value)?value as Record<string,unknown>:{};}
+function asStringArray(value:unknown):string[]{return Array.isArray(value)?value.map(clean).filter(Boolean):[];}
 
 function mapSession(row:any):AgentSession{
   return {
-    id:String(row.id),
-    customerAccountId:String(row.customer_account_id),
-    conversationId:String(row.conversation_id),
-    state:String(row.state||"collecting"),
-    awaitingContext:asObject(row.awaiting_context),
-    lastPriceListContext:asObject(row.last_price_list_context),
-    roundUpsellOffered:Boolean(row.round_upsell_offered),
-    roundUpsellDeclined:Boolean(row.round_upsell_declined),
+    id:String(row.id),customerAccountId:String(row.customer_account_id),conversationId:String(row.conversation_id),
+    state:String(row.state||"collecting"),awaitingContext:asObject(row.awaiting_context),lastPriceListContext:asObject(row.last_price_list_context),
+    roundUpsellOffered:Boolean(row.round_upsell_offered),roundUpsellDeclined:Boolean(row.round_upsell_declined),
     salesOrderId:row.sales_order_id?String(row.sales_order_id):null,
   };
 }
 
 function mapLine(row:any):DraftLine{
   return {
-    lineKey:String(row.line_key),
-    productCode:String(row.product_code),
-    productName:String(row.product_name||row.product_code),
-    customerRawText:String(row.customer_raw_text||""),
-    quantity:Number(row.quantity)||0,
-    unitHint:row.unit_hint?String(row.unit_hint):null,
-    attributes:asObject(row.attributes),
-    lineNote:String(row.line_note||""),
-    quotedPriceVnd:row.quoted_price_vnd==null?null:Number(row.quoted_price_vnd),
-    confidence:Number(row.matcher_confidence)||0,
-    resolutionSource:String(row.resolution_source||"canonical"),
+    lineKey:String(row.line_key),productCode:String(row.product_code),productName:String(row.product_name||row.product_code),
+    customerRawText:String(row.customer_raw_text||""),quantity:Number(row.quantity)||0,unitHint:row.unit_hint?String(row.unit_hint):null,
+    attributes:asObject(row.attributes),lineNote:String(row.line_note||""),quotedPriceVnd:row.quoted_price_vnd==null?null:Number(row.quoted_price_vnd),
+    confidence:Number(row.matcher_confidence)||0,resolutionSource:String(row.resolution_source||"canonical"),
     sourceMessageId:row.source_message_id?String(row.source_message_id):null,
+  };
+}
+
+function mapUnresolvedLine(row:any):UnresolvedDraftLine{
+  return {
+    id:row?.id?String(row.id):undefined,
+    lineKey:String(row?.line_key||""),
+    sourceMessageId:row?.source_message_id?String(row.source_message_id):null,
+    rawText:String(row?.raw_text||""),
+    rawProductText:String(row?.raw_product_text||""),
+    quantity:row?.quantity==null?null:Number(row.quantity),
+    unitHint:row?.unit_hint?String(row.unit_hint):null,
+    contextFamily:row?.context_family?String(row.context_family):null,
+    candidateProductCodes:asStringArray(row?.candidate_product_codes),
+    reason:String(row?.reason||"other") as UnresolvedDraftLine["reason"],
+    status:String(row?.status||"pending") as UnresolvedDraftStatus,
+    resolvedProductCode:row?.resolved_product_code?String(row.resolved_product_code):null,
   };
 }
 
@@ -48,8 +55,7 @@ function sessionPatch(patch:Record<string,unknown>){
 }
 
 async function activeAdminForConversation(db:any,conversationId:string):Promise<string>{
-  const {data:conversation,error:cError}=await db.from("v21_conversations")
-    .select("member_a,member_b").eq("id",conversationId).maybeSingle();
+  const {data:conversation,error:cError}=await db.from("v21_conversations").select("member_a,member_b").eq("id",conversationId).maybeSingle();
   if(cError)throw cError;
   if(!conversation)throw new Error("conversation_not_found");
   const ids=[conversation.member_a,conversation.member_b].filter(Boolean).map(String);
@@ -67,9 +73,7 @@ async function loadPriceListProducts(db:any):Promise<any[]>{
   for(let start=0;start<10000;start+=pageSize){
     const {data,error}=await db.from("getlink_supplier_products")
       .select("product_code,product_name,display_price_vnd,primary_packaging,retail_packaging,stock_status,is_active,updated_at")
-      .eq("is_active",true)
-      .neq("stock_status","inactive")
-      .range(start,start+pageSize-1);
+      .eq("is_active",true).neq("stock_status","inactive").range(start,start+pageSize-1);
     if(error)throw error;
     const page=Array.isArray(data)?data:[];
     rows.push(...page);
@@ -81,17 +85,20 @@ async function loadPriceListProducts(db:any):Promise<any[]>{
     .sort((a,b)=>String(a?.product_name||"").localeCompare(String(b?.product_name||""),"vi")||String(a?.product_code||"").localeCompare(String(b?.product_code||""),"vi"));
 }
 
-export function createSessionRepository(db:any):SessionRepository&{
+export type OrderAgentRepository=SessionRepository&{
+  listUnresolvedLines(sessionId:string,status?:UnresolvedDraftStatus|null):Promise<UnresolvedDraftLine[]>;
+  saveUnresolvedLine(sessionId:string,line:UnresolvedDraftLine):Promise<UnresolvedDraftLine>;
+  markUnresolvedResolved(id:string,productCode:string):Promise<UnresolvedDraftLine>;
   markRowsProcessed(rows:any[]):Promise<void>;
   markRowsFailed(rows:any[],errorCode:string):Promise<void>;
   auditTurn(input:Record<string,unknown>):Promise<void>;
-}{
+};
+
+export function createSessionRepository(db:any):OrderAgentRepository{
   return {
     async loadOrCreateSession(customerAccountId:string,conversationId:string){
-      const {data:existing,error}=await db.from("getlink_ai_order_sessions")
-        .select("*")
-        .eq("conversation_id",conversationId)
-        .in("state",["collecting","awaiting_clarification","quoted","confirmed"])
+      const {data:existing,error}=await db.from("getlink_ai_order_sessions").select("*")
+        .eq("conversation_id",conversationId).in("state",["collecting","awaiting_clarification","quoted","confirmed"])
         .order("created_at",{ascending:false}).limit(1).maybeSingle();
       if(error)throw error;
       if(existing)return mapSession(existing);
@@ -104,35 +111,22 @@ export function createSessionRepository(db:any):SessionRepository&{
 
     async listDraftLines(sessionId:string){
       const {data,error}=await db.from("getlink_ai_order_draft_lines")
-        .select("*,getlink_supplier_products!inner(product_name)")
-        .eq("session_id",sessionId).order("created_at",{ascending:true});
+        .select("*,getlink_supplier_products!inner(product_name)").eq("session_id",sessionId).order("created_at",{ascending:true});
       if(error)throw error;
       return (data||[]).map((row:any)=>mapLine({
         ...row,
-        product_name:Array.isArray(row.getlink_supplier_products)
-          ?row.getlink_supplier_products[0]?.product_name
-          :row.getlink_supplier_products?.product_name,
+        product_name:Array.isArray(row.getlink_supplier_products)?row.getlink_supplier_products[0]?.product_name:row.getlink_supplier_products?.product_name,
       }));
     },
 
     async saveLine(sessionId:string,line:DraftLine){
       const payload={
-        session_id:sessionId,
-        line_key:line.lineKey,
-        product_code:line.productCode,
-        customer_raw_text:line.customerRawText,
-        quantity:line.quantity,
-        unit_hint:line.unitHint,
-        attributes:line.attributes||{},
-        line_note:line.lineNote||"",
-        quoted_price_vnd:line.quotedPriceVnd,
-        matcher_confidence:line.confidence,
-        resolution_source:line.resolutionSource,
-        source_message_id:line.sourceMessageId||null,
-        updated_at:new Date().toISOString(),
+        session_id:sessionId,line_key:line.lineKey,product_code:line.productCode,customer_raw_text:line.customerRawText,
+        quantity:line.quantity,unit_hint:line.unitHint,attributes:line.attributes||{},line_note:line.lineNote||"",
+        quoted_price_vnd:line.quotedPriceVnd,matcher_confidence:line.confidence,resolution_source:line.resolutionSource,
+        source_message_id:line.sourceMessageId||null,updated_at:new Date().toISOString(),
       };
-      const {data,error}=await db.from("getlink_ai_order_draft_lines")
-        .upsert(payload,{onConflict:"session_id,line_key"}).select("*").single();
+      const {data,error}=await db.from("getlink_ai_order_draft_lines").upsert(payload,{onConflict:"session_id,line_key"}).select("*").single();
       if(error)throw error;
       return data;
     },
@@ -142,9 +136,47 @@ export function createSessionRepository(db:any):SessionRepository&{
       if(error)throw error;
     },
 
+    async listUnresolvedLines(sessionId:string,status:UnresolvedDraftStatus|null="pending"){
+      let query=db.from("getlink_ai_unresolved_draft_lines").select("*").eq("session_id",sessionId);
+      if(status)query=query.eq("status",status);
+      const {data,error}=await query.order("created_at",{ascending:true});
+      if(error)throw error;
+      return (data||[]).map(mapUnresolvedLine);
+    },
+
+    async saveUnresolvedLine(sessionId:string,line:UnresolvedDraftLine){
+      const payload={
+        session_id:sessionId,
+        line_key:line.lineKey,
+        source_message_id:line.sourceMessageId||null,
+        raw_text:clean(line.rawText),
+        raw_product_text:clean(line.rawProductText),
+        quantity:line.quantity,
+        unit_hint:line.unitHint||null,
+        context_family:line.contextFamily||null,
+        candidate_product_codes:line.candidateProductCodes||[],
+        reason:line.reason,
+        status:line.status||"pending",
+        resolved_product_code:line.resolvedProductCode||null,
+        updated_at:new Date().toISOString(),
+      };
+      const {data,error}=await db.from("getlink_ai_unresolved_draft_lines")
+        .upsert(payload,{onConflict:"session_id,line_key"}).select("*").single();
+      if(error)throw error;
+      return mapUnresolvedLine(data);
+    },
+
+    async markUnresolvedResolved(id:string,productCode:string){
+      const {data,error}=await db.from("getlink_ai_unresolved_draft_lines")
+        .update({status:"resolved",resolved_product_code:productCode,updated_at:new Date().toISOString()})
+        .eq("id",id).select("*").single();
+      if(error)throw error;
+      if(!data)throw new Error("unresolved_line_not_found");
+      return mapUnresolvedLine(data);
+    },
+
     async updateSession(sessionId:string,patch:Record<string,unknown>){
-      const {data,error}=await db.from("getlink_ai_order_sessions")
-        .update(sessionPatch(patch)).eq("id",sessionId).select("*").single();
+      const {data,error}=await db.from("getlink_ai_order_sessions").update(sessionPatch(patch)).eq("id",sessionId).select("*").single();
       if(error)throw error;
       return mapSession(data);
     },
@@ -163,19 +195,11 @@ export function createSessionRepository(db:any):SessionRepository&{
       const all=["toan bo","tat ca","all","bang gia"].includes(normalized);
       const rows=await loadPriceListProducts(db);
       const mapped=rows.map((row:any,index:number)=>({
-        code:`P${String(index+1).padStart(2,"0")}`,
-        productCode:String(row.product_code),
-        productName:String(row.product_name),
-        priceVnd:Number(row.display_price_vnd)||0,
-        unitLabel:clean(row.primary_packaging||row.retail_packaging),
-        updatedAt:row.updated_at,
+        code:`P${String(index+1).padStart(2,"0")}`,productCode:String(row.product_code),productName:String(row.product_name),
+        priceVnd:Number(row.display_price_vnd)||0,unitLabel:clean(row.primary_packaging||row.retail_packaging),updatedAt:row.updated_at,
       }));
-      const items=all||!normalized
-        ?mapped
-        :mapped.filter(item=>normalizeCustomerText(item.productName).includes(normalized));
-      const url=all
-        ?"https://get.taphoa.xyz/price-list.html?scope=all"
-        :`https://get.taphoa.xyz/price-list.html?scope=group&name=${encodeURIComponent(clean(scope))}`;
+      const items=all||!normalized?mapped:mapped.filter(item=>normalizeCustomerText(item.productName).includes(normalized));
+      const url=all?"https://get.taphoa.xyz/price-list.html?scope=all":`https://get.taphoa.xyz/price-list.html?scope=group&name=${encodeURIComponent(clean(scope))}`;
       return {scope:all?"toàn bộ":clean(scope),count:items.length,url,items};
     },
 
@@ -202,10 +226,7 @@ export function createSessionRepository(db:any):SessionRepository&{
       const totalAmountVnd=Math.round(items.reduce((sum:number,item:any)=>sum+item.unitPriceVnd*item.quantity,0));
       const totalCostVnd=Math.round(items.reduce((sum:number,item:any)=>sum+item.unitCostVnd*item.quantity,0));
       const {data,error}=await db.rpc("getlink_sales_create_order",{
-        p_order:{
-          customerAccountId:session.customerAccountId,createdByAccountId:adminId,createdByRole:"admin",
-          totalAmountVnd,totalCostVnd,submittedAt:new Date().toISOString(),
-        },
+        p_order:{customerAccountId:session.customerAccountId,createdByAccountId:adminId,createdByRole:"admin",totalAmountVnd,totalCostVnd,submittedAt:new Date().toISOString()},
         p_items:items,
       });
       if(error)throw error;

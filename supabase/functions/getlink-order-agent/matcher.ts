@@ -99,8 +99,8 @@ export async function suggestProductCandidate(db:any,rawText:string):Promise<Pro
     .filter((entry:any)=>entry&&entry.confidence>=TYPO_MIN_SCORE&&entry.distance<=Math.max(2,Math.ceil(Math.max(q.length,entry.key.length)*0.25)))
     .sort((a:any,b:any)=>b.confidence-a.confidence||a.distance-b.distance||Math.abs(a.key.length-q.length)-Math.abs(b.key.length-q.length));
   if(!ranked.length)return null;
-  const best=ranked[0];
-  const second=ranked[1];
+  const best=ranked[0]!;
+  const second=ranked[1]??null;
   if(second&&best.confidence-second.confidence<TYPO_MIN_MARGIN)return null;
   return {
     productCode:String(best.row.product_code),

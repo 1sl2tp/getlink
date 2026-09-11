@@ -7,6 +7,7 @@ import { createSessionRepository } from "./repository.ts";
 import { composeReply } from "./reply.ts";
 import { enqueueReply, flushReply } from "./chat.ts";
 import { recordConfirmation, promoteEligibleStoreAliases } from "./learning.ts";
+import { processDbTrainingMessage } from "./training.ts";
 import type { ClaimedInboxRow, OrderAgentMode } from "./runtime.ts";
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim();}
@@ -93,10 +94,53 @@ async function learnConfirmedLines(db:any,turn:any,lines:any[]){
   await promoteEligibleStoreAliases(db);
 }
 
+export async function processPilotTrainingRows(
+  db:any,rows:ClaimedInboxRow[],modelCredentials?:Partial<ModelCredentials>|null,
+):Promise<void>{
+  if(!rows.length)return;
+  const repo=createSessionRepository(db);
+  for(const row of rows){
+    let outbox:any=null;
+    try{
+      const customerAccountId=String(row.customer_account_id);
+      const conversationId=String(row.conversation_id);
+      const session=await repo.loadOrCreateSession(customerAccountId,conversationId);
+      const result=await processDbTrainingMessage(db,{
+        customerAccountId,
+        conversationId,
+        messageId:String(row.message_id),
+        body:String(row.message_body),
+      },modelCredentials);
+      const body=clean(result.reply);
+      if(body){
+        const replyKind=result.translation.kind==="order"?"draft_update":"fallback";
+        const messageTurnKey=`${row.turn_key}:${row.message_id}`;
+        outbox=await enqueueReply(db,session.id,messageTurnKey,replyKind,body);
+      }
+      await audit(repo,"pilot",[row],{
+        result_kind:`training_${result.translation.kind}`,
+        parsed_intent:{
+          kind:result.translation.kind,
+          items:result.translation.items,
+          teachings:result.translation.teachings,
+        },
+        reply_outbox_id:outbox?.id||null,
+      });
+      await repo.markRowsProcessed([row]);
+      if(outbox)try{await flushReply(db,outbox);}catch{/* recovery sweep owns retry */}
+    }catch(error){
+      const code=errorCode(error);
+      try{await audit(repo,"pilot",[row],{result_kind:"training_error",error_code:code,reply_outbox_id:outbox?.id||null});}catch{/* preserve primary error */}
+      await repo.markRowsFailed([row],code);
+    }
+  }
+}
+
 export async function processLiveRows(
   db:any,rows:ClaimedInboxRow[],mode:"pilot"|"on",modelCredentials?:Partial<ModelCredentials>|null,
 ):Promise<void>{
   if(!rows.length)return;
+  if(mode==="pilot")return await processPilotTrainingRows(db,rows,modelCredentials);
   const repo=createSessionRepository(db);
   const turn=claimedTurn(rows);
   let result:any=null;

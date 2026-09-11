@@ -5,6 +5,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260912013000_getlink_ai_sales_order_agent.sql"
 PILOT_GATE_MIGRATION = ROOT / "supabase/migrations/20260912013300_getlink_ai_pilot_gate.sql"
+RUNTIME_CONFIG_MIGRATION = ROOT / "supabase/migrations/20260912013400_getlink_ai_runtime_config.sql"
 AGENT_DIR = ROOT / "supabase/functions/getlink-order-agent"
 AGENT_INDEX = AGENT_DIR / "index.ts"
 AGENT_TYPES = AGENT_DIR / "types.ts"
@@ -62,6 +63,19 @@ class AiSalesOrderAgentSchemaContractTests(unittest.TestCase):
         self.assertNotIn("username='test'", text.replace(" ", ""))
         self.assertNotIn('username="test"', text.replace(" ", ""))
 
+    def test_runtime_config_is_service_only_and_reads_vault(self):
+        self.assertTrue(RUNTIME_CONFIG_MIGRATION.exists(), "runtime config migration must exist")
+        text = RUNTIME_CONFIG_MIGRATION.read_text(encoding="utf-8").lower()
+        self.assertIn("getlink_ai_runtime_settings", text)
+        self.assertIn("getlink_ai_runtime_config", text)
+        self.assertIn("vault.decrypted_secrets", text)
+        self.assertIn("getlink_order_agent_webhook_secret", text)
+        self.assertIn("getlink_order_agent_openai_api_key", text)
+        self.assertIn("getlink_ai_pilot_customers", text)
+        self.assertIn("grant execute on function public.getlink_ai_runtime_config() to service_role", text)
+        self.assertRegex(text, r"revoke all on function public\.getlink_ai_runtime_config\(\) from public, anon, authenticated")
+        self.assertRegex(text, r"mode text not null default 'off'[\s\S]*check \(mode in \('off','pilot'\)\)")
+
 
 class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
     def agent_text(self):
@@ -93,6 +107,13 @@ class AiSalesOrderAgentRuntimeContractTests(unittest.TestCase):
             "ROUND_MAX_GAP=3",
         ):
             self.assertIn(required, text)
+
+    def test_agent_reads_rollout_config_from_service_rpc(self):
+        text = AGENT_INDEX.read_text(encoding="utf-8")
+        self.assertIn('db.rpc("getlink_ai_runtime_config")', text)
+        self.assertNotIn('Deno.env.get("ORDER_AGENT_MODE")', text)
+        self.assertNotIn('Deno.env.get("ORDER_AGENT_PILOT_CUSTOMER_IDS")', text)
+        self.assertNotIn('Deno.env.get("ORDER_AGENT_WEBHOOK_SECRET")', text)
 
     def test_existing_native_sales_edge_remains_authoritative(self):
         text = ORDERS_EDGE.read_text(encoding="utf-8")

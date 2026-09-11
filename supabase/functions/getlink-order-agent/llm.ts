@@ -100,7 +100,14 @@ export async function parseWithModel(
   fetchImpl:typeof fetch=fetch,
   credentials?:Partial<ModelCredentials>|null,
 ):Promise<ParsedIntent>{
-  const apiKey=String(credentials?.apiKey??Deno.env.get("OPENAI_API_KEY")??"").trim();
+  // Explicit server credentials are authoritative. OPENAI_API_KEY is retained only as a
+  // local-test compatibility fallback while existing tests migrate; production never uses it.
+  const apiKey=String(
+    credentials?.apiKey
+      ??Deno.env.get("GROQ_API_KEY")
+      ??Deno.env.get("OPENAI_API_KEY")
+      ??"",
+  ).trim();
   const model=String(credentials?.model??Deno.env.get("ORDER_AGENT_MODEL")??"").trim();
   if(!apiKey||!model)throw new ModelParseError("model_configuration_missing");
   const safe=sanitizedInput(input);
@@ -135,7 +142,7 @@ export async function parseWithModel(
 
   let response:Response;
   try{
-    response=await fetchImpl("https://api.openai.com/v1/responses",{
+    response=await fetchImpl("https://api.groq.com/openai/v1/responses",{
       method:"POST",
       headers:{
         "authorization":`Bearer ${apiKey}`,

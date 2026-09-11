@@ -12,6 +12,11 @@ import type { ClaimedInboxRow, OrderAgentMode } from "./runtime.ts";
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim();}
 function errorCode(error:unknown){return error instanceof Error?error.message:String(error||"unknown_error");}
 
+export function shouldEnqueueCustomerReply(result:any):boolean{
+  const kind=clean(result?.kind);
+  return Boolean(kind&&kind!=="ignore"&&kind!=="owner_review");
+}
+
 async function commercialFactsWithMarket(db:any,productCode:string,quantity:number){
   const facts=await buildCommercialFacts(db,productCode,quantity);
   const {data:hint,error:hError}=await db.from("getlink_ai_product_hints")
@@ -19,15 +24,13 @@ async function commercialFactsWithMarket(db:any,productCode:string,quantity:numb
     .eq("product_code",productCode).maybeSingle();
   if(hError)throw hError;
   if(!hint?.market_reference_key||!hint?.equivalence_key||facts.unitPriceVnd<=0)return facts;
-
   const {data:reference,error:rError}=await db.from("getlink_link_comparison")
     .select("regular_pack_price,promo_pack_price,promotion_active,updated_at")
     .eq("link_url",hint.market_reference_key).maybeSingle();
   if(rError)throw rError;
   if(!reference)return facts;
   const referencePrice=reference.promotion_active&&Number(reference.promo_pack_price)>0
-    ?Number(reference.promo_pack_price)
-    :Number(reference.regular_pack_price);
+    ?Number(reference.promo_pack_price):Number(reference.regular_pack_price);
   const comparison=marketComparison(
     {productCode,priceVnd:facts.unitPriceVnd,equivalenceKey:String(hint.equivalence_key)},
     {priceVnd:referencePrice,equivalenceKey:String(hint.equivalence_key),checkedAt:reference.updated_at},
@@ -38,9 +41,7 @@ async function commercialFactsWithMarket(db:any,productCode:string,quantity:numb
 function claimedTurn(rows:ClaimedInboxRow[]){
   const first=rows[0];
   return {
-    turnKey:String(first.turn_key),
-    conversationId:String(first.conversation_id),
-    customerAccountId:String(first.customer_account_id),
+    turnKey:String(first.turn_key),conversationId:String(first.conversation_id),customerAccountId:String(first.customer_account_id),
     messages:rows.map(row=>({id:String(row.message_id),body:String(row.message_body),createdAt:String(row.message_created_at)})),
   };
 }
@@ -49,20 +50,12 @@ async function audit(repo:any,mode:OrderAgentMode,rows:ClaimedInboxRow[],extra:R
   if(!rows.length)return;
   const first=rows[0];
   await repo.auditTurn({
-    turn_key:first.turn_key,
-    conversation_id:first.conversation_id,
-    customer_account_id:first.customer_account_id,
-    source_message_ids:rows.map(row=>row.message_id),
-    mode,
-    ...extra,
+    turn_key:first.turn_key,conversation_id:first.conversation_id,customer_account_id:first.customer_account_id,
+    source_message_ids:rows.map(row=>row.message_id),mode,...extra,
   });
 }
 
-export async function processShadowRows(
-  db:any,
-  rows:ClaimedInboxRow[],
-  modelCredentials?:Partial<ModelCredentials>|null,
-):Promise<void>{
+export async function processShadowRows(db:any,rows:ClaimedInboxRow[],modelCredentials?:Partial<ModelCredentials>|null):Promise<void>{
   if(!rows.length)return;
   const repo=createSessionRepository(db);
   let lastParsed:any=null;
@@ -79,12 +72,7 @@ export async function processShadowRows(
         if(resolution){selectedProductCode=resolution.productCode;resolutionSource=resolution.source;}
       }
     }
-    await audit(repo,"shadow",rows,{
-      parsed_intent:lastParsed,
-      selected_product_code:selectedProductCode,
-      resolution_source:resolutionSource,
-      result_kind:lastParsed?.intent||"ignore",
-    });
+    await audit(repo,"shadow",rows,{parsed_intent:lastParsed,selected_product_code:selectedProductCode,resolution_source:resolutionSource,result_kind:lastParsed?.intent||"ignore"});
     await repo.markRowsProcessed(rows);
   }catch(error){
     failure=errorCode(error);
@@ -98,22 +86,15 @@ async function learnConfirmedLines(db:any,turn:any,lines:any[]){
     const phrase=clean(line.customerRawText);
     if(!phrase||!line.productCode)continue;
     await recordConfirmation(db,{
-      customerAccountId:turn.customerAccountId,
-      conversationId:turn.conversationId,
-      sessionId:line.sessionId||null,
-      sourceMessageId:line.sourceMessageId||null,
-      rawPhrase:phrase,
-      productCode:String(line.productCode),
+      customerAccountId:turn.customerAccountId,conversationId:turn.conversationId,sessionId:line.sessionId||null,
+      sourceMessageId:line.sourceMessageId||null,rawPhrase:phrase,productCode:String(line.productCode),
     });
   }
   await promoteEligibleStoreAliases(db);
 }
 
 export async function processLiveRows(
-  db:any,
-  rows:ClaimedInboxRow[],
-  mode:"pilot"|"on",
-  modelCredentials?:Partial<ModelCredentials>|null,
+  db:any,rows:ClaimedInboxRow[],mode:"pilot"|"on",modelCredentials?:Partial<ModelCredentials>|null,
 ):Promise<void>{
   if(!rows.length)return;
   const repo=createSessionRepository(db);
@@ -127,30 +108,16 @@ export async function processLiveRows(
       resolveProduct:(customerId:string,rawText:string)=>resolveProduct(db,customerId,rawText),
       commercialFacts:(productCode:string,quantity:number)=>commercialFactsWithMarket(db,productCode,quantity),
     });
-
     if(result.kind==="confirmation")await learnConfirmedLines(db,turn,result.lines||[]);
-
-    if(result.kind!=="ignore"){
+    if(shouldEnqueueCustomerReply(result)){
       const reply=composeReply(result);
       mainOutbox=await enqueueReply(db,result.sessionId,turn.turnKey,reply.replyKind,reply.body);
-      if(reply.followUp){
-        followOutbox=await enqueueReply(db,result.sessionId,turn.turnKey,reply.followUp.replyKind,reply.followUp.body);
-      }
+      if(reply.followUp)followOutbox=await enqueueReply(db,result.sessionId,turn.turnKey,reply.followUp.replyKind,reply.followUp.body);
     }
-
-    await audit(repo,mode,rows,{
-      result_kind:result.kind,
-      commercial_facts:result.facts||null,
-      reply_outbox_id:mainOutbox?.id||null,
-    });
+    await audit(repo,mode,rows,{result_kind:result.kind,commercial_facts:result.facts||null,reply_outbox_id:mainOutbox?.id||null});
     await repo.markRowsProcessed(rows);
-
-    if(mainOutbox){
-      try{await flushReply(db,mainOutbox);}catch{/* recovery sweep owns retry */}
-    }
-    if(followOutbox){
-      try{await flushReply(db,followOutbox);}catch{/* recovery sweep owns retry */}
-    }
+    if(mainOutbox)try{await flushReply(db,mainOutbox);}catch{/* recovery sweep owns retry */}
+    if(followOutbox)try{await flushReply(db,followOutbox);}catch{/* recovery sweep owns retry */}
   }catch(error){
     const code=errorCode(error);
     try{await audit(repo,mode,rows,{result_kind:result?.kind||"error",error_code:code,reply_outbox_id:mainOutbox?.id||null});}catch{/* preserve primary error */}
@@ -165,19 +132,13 @@ export async function claimTurn(db:any,conversationId:string):Promise<ClaimedInb
 }
 
 export async function recoverySweep(
-  db:any,
-  mode:OrderAgentMode,
-  pilotCustomerIds:Set<string>,
-  modelCredentials?:Partial<ModelCredentials>|null,
+  db:any,mode:OrderAgentMode,pilotCustomerIds:Set<string>,modelCredentials?:Partial<ModelCredentials>|null,
 ):Promise<{claimed:number;flushed:number}>{
   if(mode==="off")return {claimed:0,flushed:0};
-  let claimed=0;
-  let flushed=0;
+  let claimed=0,flushed=0;
   const {data:pending,error:pError}=await db.rpc("getlink_ai_pending_dispatches",{p_limit:100});
   if(pError)throw pError;
-  const conversations:string[]=[...new Set<string>((pending||[])
-    .map((row:any)=>String(row.conversation_id||""))
-    .filter((value:string)=>value.length>0))];
+  const conversations:string[]=[...new Set<string>((pending||[]).map((row:any)=>String(row.conversation_id||"")).filter((value:string)=>value.length>0))];
   for(const conversationId of conversations){
     const rows=await claimTurn(db,conversationId);
     if(!rows.length)continue;
@@ -185,19 +146,12 @@ export async function recoverySweep(
     const customerId=String(rows[0].customer_account_id||"");
     if(mode==="shadow")await processShadowRows(db,rows,modelCredentials);
     else if(mode==="on"||(mode==="pilot"&&pilotCustomerIds.has(customerId)))await processLiveRows(db,rows,mode as "pilot"|"on",modelCredentials);
-    else{
-      const repo=createSessionRepository(db);
-      await repo.markRowsProcessed(rows);
-    }
+    else{const repo=createSessionRepository(db);await repo.markRowsProcessed(rows);}
   }
-
   if(mode==="pilot"||mode==="on"){
-    const {data:outbox,error:oError}=await db.from("getlink_ai_reply_outbox")
-      .select("*").in("status",["pending","failed"]).order("created_at",{ascending:true}).limit(100);
+    const {data:outbox,error:oError}=await db.from("getlink_ai_reply_outbox").select("*").in("status",["pending","failed"]).order("created_at",{ascending:true}).limit(100);
     if(oError)throw oError;
-    for(const row of outbox||[]){
-      try{await flushReply(db,row);flushed+=1;}catch{/* next sweep retries */}
-    }
+    for(const row of outbox||[])try{await flushReply(db,row);flushed+=1;}catch{/* next sweep retries */}
   }
   return {claimed,flushed};
 }

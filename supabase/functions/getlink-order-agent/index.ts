@@ -29,7 +29,9 @@ async function loadRuntimeConfig():Promise<RuntimeConfig>{
   const webhookSecret=clean(row?.webhook_secret);
   const openaiApiKey=clean(row?.openai_api_key);
   const ids=Array.isArray(row?.pilot_customer_ids)?row.pilot_customer_ids:[];
-  const pilotCustomerIds=new Set(ids.map((value:unknown)=>clean(value)).filter(Boolean));
+  const pilotCustomerIds=new Set<string>(
+    ids.map((value:unknown)=>clean(value)).filter((value:string)=>Boolean(value)),
+  );
   const readyForPilot=Boolean(modelName&&webhookSecret&&openaiApiKey&&pilotCustomerIds.size>0);
   const mode:OrderAgentMode=requested==="pilot"&&readyForPilot?"pilot":"off";
   return {

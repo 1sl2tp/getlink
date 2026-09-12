@@ -35,6 +35,7 @@ jobs:
       - run: deno check supabase/functions/getlink-orders/index.ts
       - run: deno test -A tests/ai_sales_order_agent_test.ts tests/ai_sales_order_session_test.ts tests/ai_sales_order_reply_test.ts tests/ai_sales_order_runtime_test.ts tests/ai_training_name_translation_test.ts tests/ai_training_knowledge_test.ts
       - run: deno check supabase/functions/getlink-order-agent/index.ts
+      - run: deno check supabase/functions/getlink-order-agent/pilot_training_index.ts
       - run: node tests/test_money_display.mjs
       - run: node tests/test_bhx_edge_contract.mjs
       - run: node tests/test_go_edge_contract.mjs

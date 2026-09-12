@@ -61,6 +61,8 @@ export async function translateTrainingMessageWithModel(
     "Nhiệm vụ là tách một hoặc nhiều dòng hàng từ tin nhắn lộn xộn thành tên sản phẩm khách đang nói, số lượng và đơn vị/quy cách nếu có.",
     "Bỏ qua câu trò chuyện không phải đặt hàng.",
     "knowledge_rules là kiến thức/quy tắc đã được người dùng dạy từ trước; phải ưu tiên áp dụng khi hiểu tin mới, nhưng không được biến chúng thành mã hàng nếu catalog không có.",
+    "Khi knowledge_rules mô tả cây tên hàng, phải suy luận theo Nhóm → Tên đầu tiên → Hãng → Cha → Mẹ → Con → Cháu; không ghép cả cụm tin nhắn thành một tên và không hard-code một từ viết tắt nếu kiến thức chưa dạy.",
+    "Nếu một tin có dạng 'cha: 4 biến thể A, 2 biến thể B', số đứng trước từng biến thể là số lượng của chính biến thể đó và các biến thể dùng chung cha.",
     "Nếu người dùng đang giải thích quy tắc dùng cho các tin sau, cách suy luận nhóm/hãng/quy cách/đơn vị, hoặc yêu cầu bot phải luôn xử lý theo một nguyên tắc thì kind=knowledge và tách thành các quy tắc nguyên tử ngắn gọn trong knowledge.",
     "Ví dụ loại knowledge: luôn trả tên sản phẩm + số lượng; bát là cách gọi mì chính; dầu ăn có các hãng Simply/Neptune/Meizan/Cái Lân; 1L/2L là dung tích và thường là chai.",
     "Không đánh dấu một đơn hàng thông thường là knowledge chỉ vì nó chứa tên nhóm hàng hoặc đơn vị.",

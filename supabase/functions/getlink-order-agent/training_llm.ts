@@ -12,10 +12,10 @@ const C=(v:unknown,n=1000)=>String(v??"").replace(/\s+/g," ").trim().slice(0,n);
 function outputText(payload:any):string{
   const direct=typeof payload?.output_text==="string"?payload.output_text.trim():"";
   if(direct)return direct;
-  for(const item of Array.isArray(payload?.output)?payload.output:[]){
-    for(const content of Array.isArray(item?.content)?item.content:[]){
-      if(content?.type==="refusal")throw new TrainingModelError("model_refused");
-      if(content?.type==="output_text"&&typeof content.text==="string"&&content.text.trim())return content.text.trim();
+  for(const step of Array.isArray(payload?.steps)?payload.steps:[]){
+    if(step?.type!=="model_output")continue;
+    for(const content of Array.isArray(step?.content)?step.content:[]){
+      if(content?.type==="text"&&typeof content.text==="string"&&content.text.trim())return content.text.trim();
     }
   }
   throw new TrainingModelError("model_output_missing");
@@ -26,7 +26,7 @@ function schema(){return {
   properties:{
     kind:{type:"string",enum:["order","teaching","conversation"]},
     items:{type:"array",items:{type:"object",additionalProperties:false,properties:{
-      raw_text:{type:"string"},product_name:{type:"string"},quantity:{type:"number"},unit_hint:{type:["string","null"]},product_code:{type:["string","null"]},confidence:{type:"number"},
+      raw_text:{type:"string"},product_name:{type:"string"},quantity:{type:"number",minimum:0.000001},unit_hint:{type:["string","null"]},product_code:{type:["string","null"]},confidence:{type:"number",minimum:0,maximum:1},
     },required:["raw_text","product_name","quantity","unit_hint","product_code","confidence"]}},
     teachings:{type:"array",items:{type:"object",additionalProperties:false,properties:{
       raw_text:{type:"string"},product_name:{type:"string"},product_code:{type:["string","null"]},quantity:{type:["number","null"]},unit_hint:{type:["string","null"]},
@@ -44,38 +44,48 @@ export async function translateTrainingMessageWithModel(
   if(!apiKey||!model)throw new TrainingModelError("model_configuration_missing");
   const safe={
     customer_text:C(input.customerText,8000),
-    learned_examples:(input.learnedExamples||[]).slice(0,40).map(r=>({
+    learned_examples:(input.learnedExamples||[]).slice(0,80).map(r=>({
       raw_text:C(r.rawText,500),product_name:C(r.productName,300),product_code:r.productCode,
       quantity:r.quantity,unit_hint:r.unitHint,status:r.status,
     })),
-    candidate_catalog:(input.candidates||[]).slice(0,20).map(r=>({product_code:C(r.productCode,120),product_name:C(r.productName,300)})),
+    candidate_catalog:(input.candidates||[]).slice(0,80).map(r=>({product_code:C(r.productCode,120),product_name:C(r.productName,300)})),
   };
+  const systemInstruction=[
+    "Bạn là bộ phân tích tin nhắn đặt hàng tiếng Việt cho cửa hàng tạp hóa.",
+    "Nhiệm vụ là tách một hoặc nhiều dòng hàng từ tin nhắn lộn xộn thành tên sản phẩm khách đang nói, số lượng và đơn vị/quy cách nếu có.",
+    "Bỏ qua câu trò chuyện không phải đặt hàng.",
+    "learned_examples có status corrected là bằng chứng mạnh nhất về cách khách gọi hàng.",
+    "candidate_catalog chỉ là tên hàng thật của cửa hàng. Nếu một candidate phù hợp rõ ràng thì product_name phải dùng đúng tên canonical đó; tuyệt đối không tự tạo product_code.",
+    "Nếu chưa đủ chắc chắn để map vào catalog, giữ product_name theo cách hiểu ngắn gọn của câu khách; backend sẽ đối chiếu tiếp.",
+    "Nếu người dùng đang dạy hoặc sửa cách gọi theo dạng A = B thì kind=teaching và tách từng quan hệ thành teaching riêng.",
+    "Teaching chung để quantity=null, unit_hint=null; teaching sửa dòng hàng cụ thể phải giữ quantity và unit_hint.",
+    "Không tạo giá, mã hàng, tồn kho hay thông tin thương mại không có trong dữ liệu đầu vào.",
+    "Chỉ dùng tin hiện tại và dữ liệu được cung cấp.",
+  ].join(" ");
   const body={
-    model,store:false,max_output_tokens:900,
-    instructions:[
-      "Đọc tin nhắn bán hàng và tách tên sản phẩm + số lượng.",
-      "learned_examples corrected ưu tiên hơn auto.",
-      "Nếu candidate_catalog có tên phù hợp thì product_name phải dùng đúng tên canonical đó; không tự tạo product_code.",
-      "Nếu người dùng dạy hoặc sửa cách gọi thì kind=teaching.",
-      "Một câu dạy có nhiều quan hệ hoặc tên tắt thì tách từng quan hệ thành teaching riêng.",
-      "Teaching chung để quantity=null, unit_hint=null; teaching sửa dòng hàng cụ thể phải giữ quantity và unit_hint.",
-      "Chỉ dùng tin hiện tại và dữ liệu được cung cấp.",
-    ].join(" "),
-    input:[{role:"user",content:[{type:"input_text",text:JSON.stringify(safe)}]}],
-    text:{format:{type:"json_schema",name:"training",strict:true,schema:schema()}},
+    model,
+    store:false,
+    system_instruction:systemInstruction,
+    input:JSON.stringify(safe),
+    generation_config:{max_output_tokens:1200,thinking_level:"minimal"},
+    response_format:{type:"text",mime_type:"application/json",schema:schema()},
   };
 
   let response:Response;
   try{
-    response=await fetchImpl("https://api.groq.com/openai/v1/responses",{
-      method:"POST",headers:{authorization:`Bearer ${apiKey}`,"content-type":"application/json"},body:JSON.stringify(body),
+    response=await fetchImpl("https://generativelanguage.googleapis.com/v1beta/interactions",{
+      method:"POST",
+      headers:{"x-goog-api-key":apiKey,"content-type":"application/json"},
+      body:JSON.stringify(body),
     });
   }catch{throw new TrainingModelError("model_request_failed");}
 
   let payload:any;
   try{payload=await response.json();}
   catch{throw new TrainingModelError("model_response_not_json");}
-  if(!response.ok||payload?.status==="failed"||payload?.status==="incomplete")throw new TrainingModelError("model_request_failed");
+  if(!response.ok||["failed","incomplete","cancelled","budget_exceeded"].includes(String(payload?.status||""))){
+    throw new TrainingModelError("model_request_failed");
+  }
 
   let parsed:any;
   try{parsed=JSON.parse(outputText(payload));}

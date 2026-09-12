@@ -5,24 +5,72 @@ async function loadModule(path:string):Promise<any>{
   catch(error){assert.fail(`required training module is missing or invalid: ${path}\n${String(error)}`);}
 }
 
-Deno.test("training model accepts Responses nested output_text instead of requiring top-level output_text",async()=>{
+Deno.test("training model uses Gemini Interactions structured JSON",async()=>{
   const mod=await loadModule("../supabase/functions/getlink-order-agent/training_llm.ts");
+  let requestUrl="";
+  let requestHeaders=new Headers();
+  let requestBody:any=null;
   const result=await mod.translateTrainingMessageWithModel(
-    {customerText:"AKIKO 10",learnedExamples:[]},
-    async()=>new Response(JSON.stringify({
-      status:"completed",
-      output:[{type:"message",content:[{type:"output_text",text:JSON.stringify({
-        kind:"order",
-        items:[{raw_text:"AKIKO 10",product_name:"Akiko",quantity:10,unit_hint:null,product_code:null,confidence:1}],
-        teachings:[],
-        reply_text:"",
-      })}]}],
-    }),{status:200,headers:{"content-type":"application/json"}}),
-    {apiKey:"test-key",model:"test-model"},
+    {customerText:"AKIKO 10",learnedExamples:[],candidates:[{productCode:"HT-000004",productName:"Akiko"}]},
+    async(url:string|URL|Request,init?:RequestInit)=>{
+      requestUrl=String(url);
+      requestHeaders=new Headers(init?.headers);
+      requestBody=JSON.parse(String(init?.body||"{}"));
+      return new Response(JSON.stringify({
+        status:"completed",
+        model:"gemini-3.8-flash",
+        steps:[{type:"model_output",content:[{type:"text",text:JSON.stringify({
+          kind:"order",
+          items:[{raw_text:"AKIKO 10",product_name:"Akiko",quantity:10,unit_hint:null,product_code:null,confidence:1}],
+          teachings:[],
+          reply_text:"",
+        })}]}],
+      }),{status:200,headers:{"content-type":"application/json"}});
+    },
+    {apiKey:"gemini-test-key",model:"gemini-3.8-flash"},
   );
+  assert.equal(requestUrl,"https://generativelanguage.googleapis.com/v1beta/interactions");
+  assert.equal(requestHeaders.get("x-goog-api-key"),"gemini-test-key");
+  assert.equal(requestHeaders.get("authorization"),null);
+  assert.equal(requestBody.model,"gemini-3.8-flash");
+  assert.equal(requestBody.store,false);
+  assert.equal(requestBody.response_format.type,"text");
+  assert.equal(requestBody.response_format.mime_type,"application/json");
+  assert.equal(requestBody.response_format.schema.type,"object");
+  assert.match(requestBody.system_instruction,/tên sản phẩm/i);
+  assert.match(String(requestBody.input),/HT-000004/);
   assert.equal(result.kind,"order");
   assert.equal(result.items[0].productName,"Akiko");
   assert.equal(result.items[0].quantity,10);
+});
+
+Deno.test("Gemini structured output can split a messy multi-item customer block",async()=>{
+  const mod=await loadModule("../supabase/functions/getlink-order-agent/training_llm.ts");
+  const text="10 thùng indomie 5 thùng miliket 1 sài gòn bấm";
+  const result=await mod.translateTrainingMessageWithModel(
+    {customerText:text,learnedExamples:[],candidates:[
+      {productCode:"HT-000105",productName:"Mi indi"},
+      {productCode:"HT-000110",productName:"Mi miket"},
+    ]},
+    async()=>new Response(JSON.stringify({
+      status:"completed",
+      steps:[{type:"model_output",content:[{type:"text",text:JSON.stringify({
+        kind:"order",
+        items:[
+          {raw_text:"10 thùng indomie",product_name:"indomie",quantity:10,unit_hint:"thùng",product_code:null,confidence:.98},
+          {raw_text:"5 thùng miliket",product_name:"miliket",quantity:5,unit_hint:"thùng",product_code:null,confidence:.98},
+          {raw_text:"1 sài gòn bấm",product_name:"sài gòn bấm",quantity:1,unit_hint:null,product_code:null,confidence:.9},
+        ],
+        teachings:[],reply_text:"",
+      })}]}],
+    }),{status:200,headers:{"content-type":"application/json"}}),
+    {apiKey:"gemini-test-key",model:"gemini-3.8-flash"},
+  );
+  assert.equal(result.kind,"order");
+  assert.equal(result.items.length,3);
+  assert.equal(result.items[0].quantity,10);
+  assert.equal(result.items[1].quantity,5);
+  assert.equal(result.items[2].productName,"sài gòn bấm");
 });
 
 Deno.test("simple order parser understands quantity, carton unit and product wording",async()=>{

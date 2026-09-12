@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { processDbTrainingMessage } from "../supabase/functions/getlink-order-agent/training.ts";
+import { parseInputOnly } from "../supabase/functions/getlink-order-agent/input_only.ts";
 
 function noDataDb(){
   return {
@@ -74,5 +75,39 @@ Deno.test("quantity at either outer edge preserves numeric labels inside the pro
     assert.equal(result.reply,reply,body);
     assert.equal(result.translation.kind,"order",body);
     assert.equal(result.translation.items.length,1,body);
+  }
+});
+
+Deno.test("pilot runtime parser stays raw and does not emit cigarette unit teaching",()=>{
+  const cases=[
+    [
+      "1 cung, 1 mem, 1 det, 1 melon, 1 sg bam",
+      "cung × 1\nmem × 1\ndet × 1\nmelon × 1\nsg bam × 1",
+    ],
+    [
+      "1 cung, 1 mem, 1 det, 1 sai gon bam",
+      "cung × 1\nmem × 1\ndet × 1\nsai gon bam × 1",
+    ],
+  ] as const;
+
+  for(const [body,reply] of cases){
+    const result=parseInputOnly(body);
+    assert.equal(result.kind,"order",body);
+    assert.equal(result.reply,reply,body);
+    assert.equal(result.reply.includes("thùng"),false,body);
+    assert.equal(result.reply.includes("cây"),false,body);
+    assert.equal(result.reply.includes("="),false,body);
+  }
+});
+
+Deno.test("pilot runtime parser is silent for unseparated multi-item and teaching-shaped text",()=>{
+  for(const body of [
+    "cung 1 det 1 mem 1",
+    "1 cung 1 det 1 mem",
+    "1 Sg bam 1 Cung — 1 = thùng, 0 = cây",
+  ]){
+    const result=parseInputOnly(body);
+    assert.equal(result.kind,"silent",body);
+    assert.equal(result.reply,"",body);
   }
 });

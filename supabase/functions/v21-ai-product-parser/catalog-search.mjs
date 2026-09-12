@@ -13,6 +13,18 @@ function normalize(value){
     .trim();
 }
 
+const SEARCH_WORD_DICTIONARY=new Map([
+  ['ko','khong'],
+]);
+
+function normalizeSearch(value){
+  return normalize(value)
+    .split(' ')
+    .filter(Boolean)
+    .map(token=>SEARCH_WORD_DICTIONARY.get(token)||token)
+    .join(' ');
+}
+
 function tokens(value){
   return normalize(value).split(' ').filter(Boolean);
 }
@@ -35,7 +47,7 @@ function uniqueNameMatch(rows){
 }
 
 export function findCatalogProduct(productText,catalog=[]){
-  const query=normalize(productText);
+  const query=normalizeSearch(productText);
   if(!query)return null;
 
   const rows=(Array.isArray(catalog)?catalog:[]).filter(row=>clean(row?.product_name??row?.productName));

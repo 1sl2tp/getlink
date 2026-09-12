@@ -7,6 +7,7 @@ export class TrainingModelError extends Error{
   constructor(public code:string){super(code);this.name="TrainingModelError";}
 }
 
+const GEMINI_INTERACTIONS_URL="https://generativelanguage.googleapis.com/v1beta/interactions";
 const C=(v:unknown,n=1000)=>String(v??"").replace(/\s+/g," ").trim().slice(0,n);
 
 function outputText(payload:any):string{
@@ -73,7 +74,7 @@ export async function translateTrainingMessageWithModel(
 
   let response:Response;
   try{
-    response=await fetchImpl("https://generativelanguage.googleapis.com/v1beta/interactions",{
+    response=await fetchImpl(GEMINI_INTERACTIONS_URL,{
       method:"POST",
       headers:{"x-goog-api-key":apiKey,"content-type":"application/json"},
       body:JSON.stringify(body),

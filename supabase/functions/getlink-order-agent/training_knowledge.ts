@@ -3,6 +3,7 @@ import type { TrainingKnowledgeRule } from "./training_llm.ts";
 
 const clean=(value:unknown)=>String(value??"").replace(/\s+/g," ").trim();
 const normalize=(value:unknown)=>normalizeCustomerText(value);
+const dedupKey=(value:unknown)=>normalize(value).replace(/[^a-z0-9]+/g," ").trim();
 
 export async function loadKnowledgeRules(db:any,customerAccountId:string):Promise<TrainingKnowledgeRule[]>{
   const result=await db.from("getlink_ai_knowledge_rules")
@@ -28,8 +29,9 @@ export async function saveKnowledgeRules(
     const ruleText=clean(rule.ruleText);
     const ruleType=clean(rule.ruleType).toLowerCase();
     const ruleNormalized=normalize(ruleText);
-    if(!ruleText||!ruleType||!ruleNormalized||seen.has(ruleNormalized))continue;
-    seen.add(ruleNormalized);
+    const key=dedupKey(ruleText);
+    if(!ruleText||!ruleType||!ruleNormalized||!key||seen.has(key))continue;
+    seen.add(key);
     rows.push({
       customer_account_id:input.customerAccountId,
       rule_type:ruleType,

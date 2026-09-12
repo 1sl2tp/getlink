@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { parseCustomerTextDetailed } from "./parser-core.mjs";
+import { resolveParsedLinesWithCatalog } from "./catalog-search.mjs";
 
 const SUPABASE_URL=String(Deno.env.get("SUPABASE_URL")||"").trim();
 const SERVICE_KEY=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"").trim();
@@ -16,6 +17,19 @@ async function runtimeConfig(){
     secret:clean(row?.webhook_secret,500),
     pilotIds:new Set<string>((row?.pilot_customer_ids||[]).map((v:unknown)=>clean(v,100)).filter(Boolean)),
   };
+}
+
+async function loadActiveCatalog(){
+  const result=await db.from("getlink_supplier_products")
+    .select("product_code,product_name")
+    .eq("is_active",true)
+    .is("deleted_at",null)
+    .limit(2000);
+  if(result.error){
+    console.warn("[v21-ai-product-parser] catalog lookup failed",result.error.message);
+    return [];
+  }
+  return Array.isArray(result.data)?result.data:[];
 }
 
 async function activeAdminId(conversationId:string){
@@ -85,13 +99,21 @@ async function processConversation(conversationId:string,cfg:any){
   try{
     const customerText=rows.map((row:any)=>String(row.message_body||"").trim()).filter(Boolean).join("\n");
     const parsed=parseCustomerTextDetailed(customerText);
-    const output=parsed.lines.map((row:any)=>row.line);
+    const catalog=parsed.lines.length?await loadActiveCatalog():[];
+    const resolved=resolveParsedLinesWithCatalog(parsed.lines,catalog);
+    const output=resolved.map((row:any)=>row.line);
     if(output.length){
       const body=output.join("\n");
       await sendChatReply(conversationId,clean(rows[0]?.turn_key,100)||String(rows[0]?.message_id||Date.now()),body);
     }
     await markInbox(inboxIds,"processed");
-    return {claimed:rows.length,replied:output.length>0,items:parsed.lines.length,confirmations:0};
+    return {
+      claimed:rows.length,
+      replied:output.length>0,
+      items:resolved.length,
+      catalog_matches:resolved.filter((row:any)=>row.catalogMatched).length,
+      confirmations:0,
+    };
   }catch(error){
     await markInbox(inboxIds,"failed",String(error).slice(0,500));
     throw error;
@@ -106,6 +128,8 @@ Deno.serve(async(req:Request)=>{
         ok:true,
         chat_parser:true,
         input_only:true,
+        catalog_sync:true,
+        catalog_source:"getlink_supplier_products",
         order_workflow:false,
         external_api:false,
         output:"SL + Tên",

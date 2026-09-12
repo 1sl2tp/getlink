@@ -25,6 +25,10 @@ assert.deepEqual(lines('cung 1 det 1 mem 1'),[]);
 assert.deepEqual(lines('sim: 1 den, 2 xanh'),[]);
 assert.deepEqual(lines('cung = cung, 2 sim'),[]);
 
+// If one explicitly separated segment is invalid, do not return only the remaining fragments.
+assert.deepEqual(lines('cung, 2 sim'),[]);
+assert.deepEqual(lines('2 sim / mem'),[]);
+
 // Comma is a product separator unless it is really a decimal comma.
 assert.deepEqual(lines('1 cung,1 mem'),['1 Cung','1 Mem']);
 assert.deepEqual(lines('1,5 sim'),['1.5 Sim']);

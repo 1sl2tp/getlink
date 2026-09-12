@@ -1,5 +1,6 @@
 import { normalizeCustomerText } from "./normalize.ts";
 import { TrainingModelError,translateTrainingMessageWithModel,type ModelCredentials } from "./training_llm.ts";
+import { loadKnowledgeRules,saveKnowledgeRules } from "./training_knowledge.ts";
 import {
   parseSimpleOrderLine,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,
   type TrainingAlias,type TrainingCatalogItem,
@@ -112,7 +113,7 @@ async function setContext(db:any,id:string,value:any){
 }
 
 function unresolvedReply(productText:string,quantity?:number|null,unitHint?:string|null){
-  const suffix=quantity?` × ${Q(quantity)}${unitHint?` ${unitHint}`:""}`:"";
+  const suffix=quantity?` × ${Q(quantity)}${unitHint?` ${unitHint}`:""}:"";
   return `Em chưa khớp “${C(productText)}” với tên hàng của mình${suffix}. Nhắn “Tên của mình = tên khách gọi” để em học ạ.`;
 }
 
@@ -127,7 +128,7 @@ export async function processDbTrainingMessage(
   const normalizedBody=K(message.body);
   if(pending&&(normalizedBody==="1"||normalizedBody==="2")){
     await setContext(db,String(s.id),{});
-    if(normalizedBody==="2")return {reply:"Đã bỏ qua.",translation:{kind:"conversation",items:[],teachings:[],replyText:""}};
+    if(normalizedBody==="2")return {reply:"Đã bỏ qua.",translation:{kind:"conversation",items:[],teachings:[],knowledge:[],replyText:""}};
     const e={
       customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
       rawText:C(pending.rawText),productName:C(pending.productName),productCode:C(pending.productCode),quantity:Number(pending.quantity),
@@ -135,7 +136,7 @@ export async function processDbTrainingMessage(
     };
     await saveExample(db,e);
     if(pending.aliasText)await saveCustomerAlias(db,{...message,sessionId:String(s.id),aliasDisplay:C(pending.aliasText),productCode:C(pending.productCode)});
-    return {reply:R(e),translation:{kind:"teaching",items:[],teachings:[e],replyText:""}};
+    return {reply:R(e),translation:{kind:"teaching",items:[],teachings:[e],knowledge:[],replyText:""}};
   }
   if(pending&&s?.id)await setContext(db,String(s.id),{});
 
@@ -150,7 +151,7 @@ export async function processDbTrainingMessage(
       rawText:equation.aliasDisplay,productName:equation.productName,productCode:equation.productCode,quantity:null,unitHint:null,status:"corrected",confidence:1,
     };
     await saveExample(db,e);
-    return {reply:`${equation.aliasDisplay} → ${equation.productName}`,translation:{kind:"teaching",items:[],teachings:[e],replyText:""}};
+    return {reply:`${equation.aliasDisplay} → ${equation.productName}`,translation:{kind:"teaching",items:[],teachings:[e],knowledge:[],replyText:""}};
   }
 
   const simple=parseSimpleOrderLine(message.body);
@@ -163,21 +164,31 @@ export async function processDbTrainingMessage(
         unitHint:simple.unitHint,status:"auto",confidence:resolved.source.includes("alias")?1:resolved.source==="canonical"?.99:.88,
       };
       await saveExample(db,e);
-      return {reply:R(e),translation:{kind:"order",items:[e],teachings:[],replyText:""}};
+      return {reply:R(e),translation:{kind:"order",items:[e],teachings:[],knowledge:[],replyText:""}};
     }
   }
 
   const learned=await examples(db,message.customerAccountId,message.conversationId);
+  const knowledgeRules=await loadKnowledgeRules(db,message.customerAccountId);
   const candidateSeed=simple?.productText||message.body;
   const candidates=rankTrainingCandidates(candidateSeed,cat,20).map(({productCode,productName})=>({productCode,productName}));
   let translation:any;
   try{
-    translation=await translateTrainingMessageWithModel({customerText:message.body,learnedExamples:learned,candidates},fetchImpl,credentials);
+    translation=await translateTrainingMessageWithModel({customerText:message.body,learnedExamples:learned,candidates,knowledgeRules},fetchImpl,credentials);
   }catch(error){
     if(error instanceof TrainingModelError){
-      return {reply:unresolvedReply(simple?.productText||message.body,simple?.quantity,simple?.unitHint),translation:{kind:"conversation",items:[],teachings:[],replyText:""}};
+      return {reply:unresolvedReply(simple?.productText||message.body,simple?.quantity,simple?.unitHint),translation:{kind:"conversation",items:[],teachings:[],knowledge:[],replyText:""}};
     }
     throw error;
+  }
+
+  if(translation.kind==="knowledge"){
+    const saved=await saveKnowledgeRules(db,{
+      customerAccountId:message.customerAccountId,
+      sourceMessageId:message.messageId,
+      rules:translation.knowledge,
+    });
+    return {reply:saved?`Đã học ${saved} quy tắc.`:"Không có quy tắc mới để lưu.",translation};
   }
 
   const replies:string[]=[];
@@ -203,7 +214,8 @@ export async function processDbTrainingMessage(
       }
       const e={
         customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
-        rawText:item.rawText,productName:item.productName,productCode:null,quantity:item.quantity,unitHint:item.unitHint,status:"auto",confidence:item.confidence,
+        rawText:item.rawText,productName:item.productName,productCode:null,quantity:item.quantity,
+        unitHint:item.unitHint,status:"auto",confidence:item.confidence,
       };
       await saveExample(db,e);replies.push(unresolvedReply(phrase,item.quantity,item.unitHint));
     }

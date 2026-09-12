@@ -31,7 +31,13 @@ export type TrainingItem={
   productCode:string|null;
   confidence:number;
 };
-export type TrainingTeaching={rawText:string;productName:string;productCode:string|null};
+export type TrainingTeaching={
+  rawText:string;
+  productName:string;
+  productCode:string|null;
+  quantity?:number|null;
+  unitHint?:string|null;
+};
 export type TrainingTranslation={
   kind:"order"|"teaching"|"conversation";
   items:TrainingItem[];
@@ -90,8 +96,11 @@ const trainingSchema={
       type:"array",maxItems:20,
       items:{
         type:"object",additionalProperties:false,
-        properties:{raw_text:{type:"string"},product_name:{type:"string"},product_code:{type:["string","null"]}},
-        required:["raw_text","product_name","product_code"],
+        properties:{
+          raw_text:{type:"string"},product_name:{type:"string"},product_code:{type:["string","null"]},
+          quantity:{type:["number","null"],exclusiveMinimum:0},unit_hint:{type:["string","null"]},
+        },
+        required:["raw_text","product_name","product_code","quantity","unit_hint"],
       },
     },
     reply_text:{type:"string"},
@@ -177,7 +186,13 @@ function validateTrainingTranslation(input:any,catalog:TrainingCatalogItem[]):Tr
     let productCode=row?.product_code==null?null:boundedText(row.product_code,120)||null;
     if(productCode&&!catalogByCode.has(productCode))productCode=null;
     if(productCode)productName=String(catalogByCode.get(productCode)?.productName||productName);
-    return {rawText,productName,productCode} as TrainingTeaching;
+    let quantity:number|null=null;
+    if(row?.quantity!==null&&row?.quantity!==undefined&&row?.quantity!==""){
+      quantity=Number(row.quantity);
+      if(!Number.isFinite(quantity)||quantity<=0)throw new ModelParseError("model_output_invalid");
+    }
+    const unitHint=row?.unit_hint==null?null:boundedText(row.unit_hint,80)||null;
+    return {rawText,productName,productCode,quantity,unitHint} as TrainingTeaching;
   });
   return {kind,items,teachings,replyText:boundedText(input.reply_text,2000)};
 }
@@ -213,6 +228,8 @@ export async function translateTrainingMessageWithModel(input:TrainingModelInput
       "learned_examples là các ví dụ người dùng đã dạy; ưu tiên corrected hơn auto khi có xung đột và khái quát cách hiểu sang câu mới.",
       "Không có catalog trong bước này. Không tự chọn product_code; luôn để product_code=null. Chỉ trả tên sản phẩm mà bạn hiểu từ câu và số lượng.",
       "Nếu người dùng đang dạy/sửa cách hiểu, kind=teaching. Nếu là hội thoại không phải mặt hàng, kind=conversation. Nếu là đơn, kind=order.",
+      "Khi một câu dạy chứa nhiều quan hệ hoặc nhiều tên tắt, tách mỗi quan hệ thành một teaching riêng; không gom cả câu dạy thành một sản phẩm.",
+      "Teaching kiến thức chung như tên tắt hoặc thương hiệu để quantity=null và unit_hint=null. Teaching sửa một dòng hàng cụ thể phải giữ quantity và unit_hint nếu người dùng đã nêu.",
       "Mỗi mặt hàng là một item riêng và chỉ lấy từ tin hiện tại; không kéo mặt hàng của tin trước vào.",
       "Chỉ trả JSON đúng schema, không thêm giải thích ngoài JSON.",
     ].join(" "),

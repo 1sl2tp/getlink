@@ -5,6 +5,7 @@ export type TrainingAlias={aliasNormalized:string;productCode:string;scope?:"cus
 export type TrainingResolution={productCode:string;productName:string;source:"customer_alias"|"store_alias"|"canonical"|"fuzzy"};
 export type SimpleOrderLine={rawText:string;productText:string;quantity:number;unitHint:string|null};
 export type GroupedVariantOrder={parentText:string;items:Array<{quantity:number;label:string}>};
+export type TrainingKnowledgeLike={ruleType?:string;ruleText:string};
 
 const GENERIC_TOKENS=new Set([
   "mi","bia","dau","an","sua","banh","nuoc","bot","tuong","xuc","xich","keo","mam","nem","cf","ca","chai","lon","hop","goi","bich","tui","thung",
@@ -75,6 +76,44 @@ function candidateScore(query:string,item:TrainingCatalogItem):number{
 
 function catalogByCode(catalog:TrainingCatalogItem[],code:string):TrainingCatalogItem|null{
   return catalog.find(row=>String(row.productCode)===String(code))||null;
+}
+
+function namingPairs(rules:TrainingKnowledgeLike[]=[]):Array<{from:string;to:string}>{
+  const out:Array<{from:string;to:string}>=[];
+  const seen=new Set<string>();
+  for(const rule of rules){
+    if(rule.ruleType&&normalized(rule.ruleType)!=="naming")continue;
+    const text=clean(rule.ruleText);
+    const match=text.match(/^([^=]{1,80})\s*=\s*([^=]{1,120})$/u);
+    if(!match)continue;
+    const from=normalized(match[1]),to=normalized(match[2]);
+    const key=`${from}=>${to}`;
+    if(!from||!to||from===to||seen.has(key))continue;
+    seen.add(key);out.push({from,to});
+  }
+  return out.sort((a,b)=>b.from.length-a.from.length);
+}
+
+export function applyKnowledgeNaming(value:unknown,rules:TrainingKnowledgeLike[]=[]):string{
+  let out=normalized(value);
+  for(const pair of namingPairs(rules)){
+    const fromTokens=pair.from.split(/\s+/).filter(Boolean);
+    if(!fromTokens.length)continue;
+    const pattern=new RegExp(`(^|\\s)${fromTokens.map(token=>token.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")).join("\\s+")}(?=\\s|$)`,"g");
+    out=out.replace(pattern,(_whole:string,prefix:string)=>`${prefix}${pair.to}`).replace(/\s+/g," ").trim();
+  }
+  return out;
+}
+
+export function scopeCatalogByParent(parentText:string,catalog:TrainingCatalogItem[]):TrainingCatalogItem[]{
+  const parentTokens=distinctiveTokens(parentText);
+  const required=parentTokens.length?parentTokens:wordTokens(parentText).filter(token=>!/^\d/.test(token));
+  if(!required.length)return [];
+  const scoped=catalog.filter(row=>{
+    const tokens=wordTokens(row.productName);
+    return required.every(requiredToken=>tokens.some(token=>token===requiredToken||prefixRelated(token,requiredToken)));
+  });
+  return scoped;
 }
 
 export function rankTrainingCandidates(rawText:string,catalog:TrainingCatalogItem[],limit=12):Array<TrainingCatalogItem&{score:number}>{

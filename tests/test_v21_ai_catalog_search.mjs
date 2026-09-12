@@ -7,6 +7,7 @@ const catalog=[
   {product_code:'HT-000201',product_name:'Mì Hảo Hảo tôm chua cay 75g'},
   {product_code:'HT-000202',product_name:'Sữa tươi Vinamilk có đường 180ml'},
   {product_code:'HT-000203',product_name:'Sữa tươi TH true MILK có đường 180ml'},
+  {product_code:'HT-000204',product_name:'Sữa chua không đường'},
 ];
 
 function line(productName,quantity=1){
@@ -23,6 +24,12 @@ assert.deepEqual(
 assert.deepEqual(
   resolveParsedLinesWithCatalog([line('hao hao tom chua cay',2)],catalog).map(row=>row.line),
   ['2 Mì Hảo Hảo tôm chua cay 75g (hao hao tom chua cay)'],
+);
+
+// Search shorthand is expanded only for lookup; the original customer wording remains for review.
+assert.deepEqual(
+  resolveParsedLinesWithCatalog([line('sua chua ko duong',3)],catalog).map(row=>row.line),
+  ['3 Sữa chua không đường (sua chua ko duong)'],
 );
 
 // Ambiguous search must keep the parser result unchanged.

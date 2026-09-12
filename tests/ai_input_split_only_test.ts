@@ -64,6 +64,8 @@ Deno.test("quantity at either outer edge preserves numeric labels inside the pro
     ["2 Sim 1","sim 1 × 2"],
     ["sim 2","sim × 2"],
     ["ngua 2","ngua × 2"],
+    ["sim 1 den 2 3","sim 1 den 2 × 3"],
+    ["3 sim 1 den 2","sim 1 den 2 × 3"],
   ] as const;
 
   for(let i=0;i<cases.length;i++){

@@ -4,6 +4,7 @@ export type TrainingCatalogItem={productCode:string;productName:string};
 export type TrainingAlias={aliasNormalized:string;productCode:string;scope?:"customer"|"store"};
 export type TrainingResolution={productCode:string;productName:string;source:"customer_alias"|"store_alias"|"canonical"|"fuzzy"};
 export type SimpleOrderLine={rawText:string;productText:string;quantity:number;unitHint:string|null};
+export type GroupedVariantOrder={parentText:string;items:Array<{quantity:number;label:string}>};
 
 const GENERIC_TOKENS=new Set([
   "mi","bia","dau","an","sua","banh","nuoc","bot","tuong","xuc","xich","keo","mam","nem","cf","ca","chai","lon","hop","goi","bich","tui","thung",
@@ -104,8 +105,9 @@ export function resolveTrainingProduct(rawText:string,catalog:TrainingCatalogIte
 }
 
 export function parseSimpleOrderLine(value:unknown):SimpleOrderLine|null{
-  const rawText=clean(value);
-  if(!rawText||rawText.includes("=")||rawText.includes("\n"))return null;
+  const original=String(value??"").replace(/\r\n?/g,"\n").trim();
+  if(!original||original.includes("=")||original.includes("\n"))return null;
+  const rawText=clean(original);
   const unitPattern=new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT_KEYS})\\s+(.+)$`,"i");
   const normalizedRaw=normalized(rawText);
   let match=normalizedRaw.match(unitPattern);
@@ -125,6 +127,33 @@ export function parseSimpleOrderLine(value:unknown):SimpleOrderLine|null{
     if(quantity>0)return {rawText,productText:clean(match[1]),quantity,unitHint:match[3]?UNIT_DISPLAY[match[3].toLowerCase()]||match[3]:null};
   }
   return null;
+}
+
+export function parseSimpleOrderLines(value:unknown):SimpleOrderLine[]{
+  const lines=String(value??"").replace(/\r\n?/g,"\n").split("\n").map(line=>line.trim()).filter(Boolean);
+  if(lines.length<2)return [];
+  const parsed=lines.map(line=>parseSimpleOrderLine(line));
+  if(parsed.some(row=>!row))return [];
+  return parsed as SimpleOrderLine[];
+}
+
+export function parseGroupedVariantOrder(value:unknown):GroupedVariantOrder|null{
+  const original=String(value??"").replace(/\r\n?/g,"\n").trim();
+  if(!original||original.includes("\n")||original.includes("="))return null;
+  const match=original.match(/^(.+?)\s*:\s*(.+)$/);
+  if(!match)return null;
+  const parentText=clean(match[1]);
+  const chunks=match[2].split(/[,;]+/).map(clean).filter(Boolean);
+  if(!parentText||chunks.length<2)return null;
+  const items=[] as Array<{quantity:number;label:string}>;
+  for(const chunk of chunks){
+    const item=chunk.match(/^(\d+(?:[.,]\d+)?)\s+(.+)$/);
+    if(!item)return null;
+    const quantity=numberValue(item[1]),label=clean(item[2]);
+    if(!(quantity>0)||!label)return null;
+    items.push({quantity,label});
+  }
+  return {parentText,items};
 }
 
 function exactCatalog(value:string,catalog:TrainingCatalogItem[]):TrainingCatalogItem|null{

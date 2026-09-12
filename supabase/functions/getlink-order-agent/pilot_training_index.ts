@@ -8,7 +8,7 @@ const clean=(v:unknown)=>String(v??"").replace(/\s+/g," ").trim();
 const sleep=(ms:number)=>new Promise<void>(resolve=>setTimeout(resolve,ms));
 
 async function config(){
-  const result=await db.rpc("getlink_ai_runtime_config");
+  const result=await db.rpc("getlink_ai_runtime_config_gemini");
   if(result.error)throw result.error;
   const row=Array.isArray(result.data)?result.data[0]:result.data;
   const ids=new Set<string>((row?.pilot_customer_ids||[]).map((v:unknown)=>clean(v)));
@@ -16,7 +16,7 @@ async function config(){
     mode:clean(row?.mode)==="pilot"?"pilot":"off",
     model:clean(row?.model_name),
     secret:clean(row?.webhook_secret),
-    key:clean(row?.groq_api_key),
+    key:clean(row?.gemini_api_key),
     ids,
   };
 }
@@ -71,7 +71,7 @@ async function processConversation(conversationId:string,cfg:any){
 Deno.serve(async req=>{
   const cfg=await config();
   const url=new URL(req.url);
-  if(req.method==="GET")return new Response(JSON.stringify({ok:true,mode:cfg.mode,training_only:true,name_translation:true}));
+  if(req.method==="GET")return new Response(JSON.stringify({ok:true,mode:cfg.mode,training_only:true,name_translation:true,provider:"gemini",model:cfg.model,model_configured:Boolean(cfg.key&&cfg.model)}),{headers:{"content-type":"application/json"}});
   if(req.headers.get("x-order-agent-secret")!==cfg.secret)return new Response("unauthorized",{status:401});
   let body:any={};
   try{body=await req.json();}catch{body={};}

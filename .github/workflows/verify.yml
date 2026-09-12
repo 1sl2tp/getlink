@@ -36,6 +36,7 @@ jobs:
       - run: deno test -A tests/ai_sales_order_agent_test.ts tests/ai_sales_order_session_test.ts tests/ai_sales_order_reply_test.ts tests/ai_sales_order_runtime_test.ts tests/ai_training_name_translation_test.ts tests/ai_training_knowledge_test.ts tests/ai_input_split_only_test.ts
       - run: deno check supabase/functions/getlink-order-agent/index.ts
       - run: deno check supabase/functions/getlink-order-agent/pilot_training_index.ts
+      - run: deno check supabase/functions/v21-ai-product-parser/index.ts
       - run: node tests/test_v21_ai_product_parser.mjs
       - run: node tests/test_money_display.mjs
       - run: node tests/test_bhx_edge_contract.mjs

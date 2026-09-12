@@ -15,6 +15,14 @@ type InputOnlyParse=
   |{kind:"order";lines:Array<{rawText:string;productText:string;quantity:number;unitHint:string|null}>}
   |{kind:"ambiguous";lines:[]};
 
+function looksLikeUnseparatedMultiItem(productText:string):boolean{
+  const tokens=K(productText).split(/\s+/).filter(Boolean);
+  const bareNumbers=tokens.filter(token=>/^\d+(?:[.,]\d+)?$/.test(token));
+  if(bareNumbers.length<2)return false;
+  const last=tokens[tokens.length-1]||"";
+  return /[a-z]/.test(last)&&!/^\d/.test(last);
+}
+
 function parseInputOnlyMessage(value:unknown):InputOnlyParse|null{
   const original=String(value??"").replace(/\r\n?/g,"\n").trim();
   if(!original||original.includes("=")||original.includes(":"))return null;
@@ -28,10 +36,10 @@ function parseInputOnlyMessage(value:unknown):InputOnlyParse|null{
     return {kind:"order",lines:parsed as Array<{rawText:string;productText:string;quantity:number;unitHint:string|null}>};
   }
 
-  const bareQuantities=K(original).match(/(?:^|\s)\d+(?:[.,]\d+)?(?=\s|$)/g)||[];
-  if(bareQuantities.length>1)return {kind:"ambiguous",lines:[]};
   const line=parseSimpleOrderLine(original);
-  return line?{kind:"order",lines:[line]}:null;
+  if(!line)return null;
+  if(looksLikeUnseparatedMultiItem(line.productText))return {kind:"ambiguous",lines:[]};
+  return {kind:"order",lines:[line]};
 }
 
 async function catalog(db:any):Promise<TrainingCatalogItem[]>{

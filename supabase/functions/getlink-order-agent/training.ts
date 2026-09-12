@@ -2,7 +2,7 @@ import { normalizeCustomerText } from "./normalize.ts";
 import { TrainingModelError,translateTrainingMessageWithModel,type ModelCredentials } from "./training_llm.ts";
 import { fallbackKnowledgeRules,loadKnowledgeRules,saveKnowledgeRules } from "./training_knowledge.ts";
 import {
-  parseSimpleOrderLine,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,
+  parseGroupedVariantOrder,parseSimpleOrderLine,parseSimpleOrderLines,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,
   type TrainingAlias,type TrainingCatalogItem,
 } from "./training_resolver.ts";
 
@@ -117,6 +117,12 @@ function unresolvedReply(productText:string,quantity?:number|null,unitHint?:stri
   return `Em chưa khớp “${C(productText)}” với tên hàng của mình${suffix}. Nhắn “Tên của mình = tên khách gọi” để em học ạ.`;
 }
 
+function groupedVariantCandidates(parentText:string,label:string):string[]{
+  const parent=C(parentText),key=K(label);
+  const expanded=key==="vq"||key==="vietquat"?"viet quat":key;
+  return [...new Set([`${parent} ${expanded}`,`${parent} mau ${expanded}`].map(C).filter(Boolean))];
+}
+
 export async function processDbTrainingMessage(
   db:any,
   message:{customerAccountId:string;conversationId:string;messageId:string;body:string},
@@ -152,6 +158,44 @@ export async function processDbTrainingMessage(
     };
     await saveExample(db,e);
     return {reply:`${equation.aliasDisplay} → ${equation.productName}`,translation:{kind:"teaching",items:[],teachings:[e],knowledge:[],replyText:""}};
+  }
+
+  const grouped=parseGroupedVariantOrder(message.body);
+  if(grouped){
+    const replies:string[]=[],items:any[]=[];
+    for(const child of grouped.items){
+      let resolved:any=null;
+      for(const candidate of groupedVariantCandidates(grouped.parentText,child.label)){
+        const found=resolveTrainingProduct(candidate,cat,knownAliases);
+        if(found&&found.source!=="fuzzy"){resolved=found;break;}
+      }
+      const rawText=`${Q(child.quantity)} ${grouped.parentText} ${child.label}`;
+      if(resolved){
+        const e={customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:child.quantity,unitHint:null,status:"auto",confidence:1};
+        await saveExample(db,e);replies.push(R(e));items.push(e);
+      }else{
+        const phrase=`${grouped.parentText} ${child.label}`;
+        replies.push(unresolvedReply(phrase,child.quantity,null));
+        items.push({rawText,productName:phrase,productCode:null,quantity:child.quantity,unitHint:null,confidence:0});
+      }
+    }
+    return {reply:replies.join("\n"),translation:{kind:"order",items,teachings:[],knowledge:[],replyText:""}};
+  }
+
+  const simpleLines=parseSimpleOrderLines(message.body);
+  if(simpleLines.length){
+    const replies:string[]=[],items:any[]=[];
+    for(const line of simpleLines){
+      const resolved=resolveTrainingProduct(line.productText,cat,knownAliases);
+      if(resolved){
+        const e={customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,rawText:line.rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:line.quantity,unitHint:line.unitHint,status:"auto",confidence:resolved.source.includes("alias")?1:resolved.source==="canonical"?.99:.88};
+        await saveExample(db,e);replies.push(R(e));items.push(e);
+      }else{
+        replies.push(unresolvedReply(line.productText,line.quantity,line.unitHint));
+        items.push({rawText:line.rawText,productName:line.productText,productCode:null,quantity:line.quantity,unitHint:line.unitHint,confidence:0});
+      }
+    }
+    return {reply:replies.join("\n"),translation:{kind:"order",items,teachings:[],knowledge:[],replyText:""}};
   }
 
   const simple=parseSimpleOrderLine(message.body);

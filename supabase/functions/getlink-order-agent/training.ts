@@ -2,8 +2,8 @@ import { normalizeCustomerText } from "./normalize.ts";
 import { TrainingModelError,translateTrainingMessageWithModel,type ModelCredentials } from "./training_llm.ts";
 import { fallbackKnowledgeRules,loadKnowledgeRules,saveKnowledgeRules } from "./training_knowledge.ts";
 import {
-  parseGroupedVariantOrder,parseSimpleOrderLine,parseSimpleOrderLines,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,
-  type TrainingAlias,type TrainingCatalogItem,
+  applyKnowledgeNaming,parseGroupedVariantOrder,parseSimpleOrderLine,parseSimpleOrderLines,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,scopeCatalogByParent,
+  type TrainingAlias,type TrainingCatalogItem,type TrainingKnowledgeLike,
 } from "./training_resolver.ts";
 
 const C=(v:unknown)=>String(v??"").replace(/\s+/g," ").trim();
@@ -119,10 +119,14 @@ function unresolvedReply(productText:string,quantity?:number|null,unitHint?:stri
   return `Em chưa khớp “${C(productText)}” với tên hàng của mình${suffix}. Nhắn “Tên của mình = tên khách gọi” để em học ạ.`;
 }
 
-function groupedVariantCandidates(parentText:string,label:string):string[]{
-  const parent=C(parentText),key=K(label);
-  const expanded=key==="vq"||key==="vietquat"?"viet quat":key;
-  return [...new Set([`${parent} ${expanded}`,`${parent} mau ${expanded}`].map(C).filter(Boolean))];
+function resolveKnownPhrase(
+  phrase:string,
+  cat:TrainingCatalogItem[],
+  knownAliases:TrainingAlias[],
+  knowledgeRules:TrainingKnowledgeLike[],
+){
+  const learnedPhrase=applyKnowledgeNaming(phrase,knowledgeRules);
+  return resolveTrainingProduct(learnedPhrase,cat,knownAliases)||resolveTrainingProduct(phrase,cat,knownAliases);
 }
 
 export async function processDbTrainingMessage(
@@ -157,6 +161,7 @@ export async function processDbTrainingMessage(
 
   const cat=await catalog(db);
   const knownAliases=await aliases(db,message.customerAccountId);
+  const knowledgeRules=await loadKnowledgeRules(db,message.customerAccountId);
 
   const equation=resolveTeachingEquation(message.body,cat);
   if(equation){
@@ -178,31 +183,65 @@ export async function processDbTrainingMessage(
 
   const grouped=parseGroupedVariantOrder(message.body);
   if(grouped){
-    const replies:string[]=[],items:any[]=[];
+    const parentCatalog=scopeCatalogByParent(grouped.parentText,cat);
+    const scopedCatalog=parentCatalog.length?parentCatalog:cat;
+    const fallbackReplies:string[]=[],fallbackItems:any[]=[];
+    let unresolvedCount=0;
     for(const child of grouped.items){
-      let resolved:any=null;
-      for(const candidate of groupedVariantCandidates(grouped.parentText,child.label)){
-        const found=resolveTrainingProduct(candidate,cat,knownAliases);
-        if(found&&found.source!=="fuzzy"){resolved=found;break;}
-      }
+      const phrase=`${grouped.parentText} ${child.label}`;
+      const resolved=resolveKnownPhrase(phrase,scopedCatalog,knownAliases,knowledgeRules);
       const rawText=`${Q(child.quantity)} ${grouped.parentText} ${child.label}`;
       if(resolved){
-        const e={customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:child.quantity,unitHint:null,status:"auto",confidence:1};
-        await saveExample(db,e);replies.push(R(e));items.push(e);
+        const e={customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:child.quantity,unitHint:null,status:"auto",confidence:resolved.source==="fuzzy"?.9:1};
+        fallbackReplies.push(R(e));fallbackItems.push(e);
       }else{
-        const phrase=`${grouped.parentText} ${child.label}`;
-        replies.push(unresolvedReply(phrase,child.quantity,null));
-        items.push({rawText,productName:phrase,productCode:null,quantity:child.quantity,unitHint:null,confidence:0});
+        unresolvedCount++;
+        fallbackReplies.push(unresolvedReply(phrase,child.quantity,null));
+        fallbackItems.push({rawText,productName:phrase,productCode:null,quantity:child.quantity,unitHint:null,confidence:0});
       }
     }
-    return {reply:replies.join("\n"),translation:{kind:"order",items,teachings:[],knowledge:[],replyText:""}};
+    if(!unresolvedCount){
+      for(const item of fallbackItems)await saveExample(db,item);
+      return {reply:fallbackReplies.join("\n"),translation:{kind:"order",items:fallbackItems,teachings:[],knowledge:[],replyText:""}};
+    }
+
+    try{
+      const learned=await examples(db,message.customerAccountId,message.conversationId);
+      const candidates=(parentCatalog.length?parentCatalog:rankTrainingCandidates(grouped.parentText,cat,30)).slice(0,40).map(({productCode,productName})=>({productCode,productName}));
+      const translation=await translateTrainingMessageWithModel({customerText:message.body,learnedExamples:learned,candidates,knowledgeRules},fetchImpl,credentials);
+      if(translation.kind==="order"&&translation.items.length){
+        const replies:string[]=[],items:any[]=[];
+        for(const item of translation.items){
+          const parsed=parseSimpleOrderLine(item.rawText);
+          const phrase=parsed?.productText||item.productName;
+          const resolved=resolveKnownPhrase(item.productName,scopedCatalog,knownAliases,knowledgeRules)
+            ||resolveKnownPhrase(phrase,scopedCatalog,knownAliases,knowledgeRules);
+          if(resolved){
+            const e={
+              customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
+              rawText:item.rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:item.quantity,
+              unitHint:item.unitHint,status:"auto",confidence:Math.max(Number(item.confidence)||0,resolved.source==="fuzzy"?.9:.99),
+            };
+            await saveExample(db,e);replies.push(R(e));items.push(e);
+          }else{
+            replies.push(unresolvedReply(phrase,item.quantity,item.unitHint));
+            items.push({...item,productCode:null});
+          }
+        }
+        return {reply:replies.join("\n"),translation:{...translation,items}};
+      }
+    }catch(error){
+      if(!(error instanceof TrainingModelError))throw error;
+    }
+    for(const item of fallbackItems){if(item.productCode)await saveExample(db,item);}
+    return {reply:fallbackReplies.join("\n"),translation:{kind:"order",items:fallbackItems,teachings:[],knowledge:[],replyText:""}};
   }
 
   const simpleLines=parseSimpleOrderLines(message.body);
   if(simpleLines.length){
     const replies:string[]=[],items:any[]=[];
     for(const line of simpleLines){
-      const resolved=resolveTrainingProduct(line.productText,cat,knownAliases);
+      const resolved=resolveKnownPhrase(line.productText,cat,knownAliases,knowledgeRules);
       if(resolved){
         const e={customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,rawText:line.rawText,productName:resolved.productName,productCode:resolved.productCode,quantity:line.quantity,unitHint:line.unitHint,status:"auto",confidence:resolved.source.includes("alias")?1:resolved.source==="canonical"?.99:.88};
         await saveExample(db,e);replies.push(R(e));items.push(e);
@@ -216,7 +255,7 @@ export async function processDbTrainingMessage(
 
   const simple=parseSimpleOrderLine(message.body);
   if(simple){
-    const resolved=resolveTrainingProduct(simple.productText,cat,knownAliases);
+    const resolved=resolveKnownPhrase(simple.productText,cat,knownAliases,knowledgeRules);
     if(resolved){
       const e={
         customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
@@ -229,8 +268,7 @@ export async function processDbTrainingMessage(
   }
 
   const learned=await examples(db,message.customerAccountId,message.conversationId);
-  const knowledgeRules=await loadKnowledgeRules(db,message.customerAccountId);
-  const candidateSeed=simple?.productText||message.body;
+  const candidateSeed=applyKnowledgeNaming(simple?.productText||message.body,knowledgeRules);
   const candidates=rankTrainingCandidates(candidateSeed,cat,20).map(({productCode,productName})=>({productCode,productName}));
   let translation:any;
   try{
@@ -263,7 +301,7 @@ export async function processDbTrainingMessage(
     for(const item of translation.items){
       const parsed=parseSimpleOrderLine(item.rawText);
       const phrase=parsed?.productText||item.productName;
-      const resolved=resolveTrainingProduct(phrase,cat,knownAliases)||resolveTrainingProduct(item.productName,cat,knownAliases);
+      const resolved=resolveKnownPhrase(phrase,cat,knownAliases,knowledgeRules)||resolveKnownPhrase(item.productName,cat,knownAliases,knowledgeRules);
       if(resolved){
         const e={
           customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
@@ -272,7 +310,7 @@ export async function processDbTrainingMessage(
         };
         await saveExample(db,e);replies.push(R(e));continue;
       }
-      const ranked=rankTrainingCandidates(phrase,cat,2);
+      const ranked=rankTrainingCandidates(applyKnowledgeNaming(phrase,knowledgeRules),cat,2);
       if(ranked[0]&&!newPending&&ranked[0].score>=.68){
         newPending={rawText:item.rawText,aliasText:phrase,productName:ranked[0].productName,productCode:ranked[0].productCode,quantity:item.quantity,unitHint:item.unitHint};
         replies.push(`Có phải ${R(newPending)} không?\n1. Đúng\n2. Sai / bỏ qua`);continue;
@@ -289,7 +327,7 @@ export async function processDbTrainingMessage(
   }
 
   for(const teaching of translation.teachings){
-    const resolved=resolveTrainingProduct(teaching.productName,cat,knownAliases);
+    const resolved=resolveKnownPhrase(teaching.productName,cat,knownAliases,knowledgeRules);
     const e={
       customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
       rawText:teaching.rawText,productName:resolved?.productName||teaching.productName,productCode:resolved?.productCode||null,

@@ -113,7 +113,7 @@ async function setContext(db:any,id:string,value:any){
 }
 
 function unresolvedReply(productText:string,quantity?:number|null,unitHint?:string|null){
-  const suffix=quantity?` × ${Q(quantity)}${unitHint?` ${unitHint}`:""}:"";
+  const suffix=quantity?` × ${Q(quantity)}${unitHint?` ${unitHint}`:""}`:"";
   return `Em chưa khớp “${C(productText)}” với tên hàng của mình${suffix}. Nhắn “Tên của mình = tên khách gọi” để em học ạ.`;
 }
 

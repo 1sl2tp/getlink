@@ -90,6 +90,29 @@ Deno.test("simple order parser understands quantity, carton unit and product wor
   });
 });
 
+Deno.test("multiline order parser keeps each line and its own quantity",async()=>{
+  const mod=await loadModule("../supabase/functions/getlink-order-agent/training_resolver.ts");
+  const text="2 probi be mau dua\n3 probi be mau it\n4 probi lo 700ml";
+  assert.equal(mod.parseSimpleOrderLine(text),null);
+  assert.deepEqual(mod.parseSimpleOrderLines(text),[
+    {rawText:"2 probi be mau dua",productText:"probi be mau dua",quantity:2,unitHint:null},
+    {rawText:"3 probi be mau it",productText:"probi be mau it",quantity:3,unitHint:null},
+    {rawText:"4 probi lo 700ml",productText:"probi lo 700ml",quantity:4,unitHint:null},
+  ]);
+});
+
+Deno.test("grouped variant parser keeps shared parent and child quantities",async()=>{
+  const mod=await loadModule("../supabase/functions/getlink-order-agent/training_resolver.ts");
+  assert.deepEqual(mod.parseGroupedVariantOrder("Probi to : 4 có, 2 ít, 1 vq"),{
+    parentText:"Probi to",
+    items:[
+      {quantity:4,label:"có"},
+      {quantity:2,label:"ít"},
+      {quantity:1,label:"vq"},
+    ],
+  });
+});
+
 Deno.test("customer alias translates customer wording to canonical own product",async()=>{
   const mod=await loadModule("../supabase/functions/getlink-order-agent/training_resolver.ts");
   const catalog=[

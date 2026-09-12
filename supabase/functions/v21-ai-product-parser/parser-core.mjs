@@ -33,8 +33,23 @@ const UNIT='(?:t|th|thùng|thung|bao|ba0|bịch|bich|gói|goi|chai|lốc|loc|h�
 const startUnit=new RegExp(`^(\\d+(?:[.,]\\d+)?)\\s*(${UNIT})\\s+(.+)$`,'iu');
 const endUnit=new RegExp(`^(.+?)\\s+(?:x\\s*)?(\\d+(?:[.,]\\d+)?)(?:\\s*(${UNIT}))?$`,'iu');
 
-// Explicit numeric-leading names. These are parsing exceptions only; no catalog/data lookup happens here.
-const NUMERIC_NAME_PREFIXES=['555','3 mien','7 up'];
+// Confirmed numeric-leading brands/names only. These are parser exceptions, not aliases or catalog mappings.
+const NUMERIC_NAME_PREFIXES=[
+  '555',
+  '333',
+  '3 mien',
+  '7 up',
+  '7up',
+  '1664 blanc',
+  '584 nha trang',
+  '3k',
+  '3 co gai',
+  '3 con tom',
+  '7days',
+  '7 days',
+  '888',
+  '2 chew',
+];
 
 function numericNamePrefix(value){
   const text=normalize(value);
@@ -71,8 +86,6 @@ function parseSegmentDetailed(raw){
   const text=clean(raw);
   if(!text||text.includes('=')||text.includes(':'))return null;
 
-  // If a segment starts with a known numeric-leading name, that leading number belongs to the name.
-  // It only becomes an order line when a separate quantity exists at the end.
   if(numericNamePrefix(text)){
     const match=text.match(endUnit);
     if(!match||!numericNamePrefix(match[1]))return null;

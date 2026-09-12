@@ -37,6 +37,13 @@ function itemReply(item:{productName:string;quantity:number;unitHint:string|null
   const unit=clean(item.unitHint);
   return `${clean(item.productName)} × ${qty(item.quantity)}${unit?` ${unit}`:""}`;
 }
+function correctedReply(example:TrainingSavedExample):string{
+  const left=clean(example.rawText);
+  if(example.quantity!=null&&Number.isFinite(Number(example.quantity))&&Number(example.quantity)>0){
+    return `${left} → ${itemReply({productName:example.productName,quantity:Number(example.quantity),unitHint:example.unitHint})}`;
+  }
+  return `${left} → ${clean(example.productName)}`;
+}
 function exactKey(value:unknown):string{return normalizeCustomerText(value).replace(/\s+/g," ").trim();}
 function compactKey(value:unknown):string{return exactKey(value).replace(/[^a-z0-9]+/g,"");}
 
@@ -122,11 +129,19 @@ export async function processTrainingMessage(message:TrainingMessage,deps:Traini
 
   for(const teaching of translation.teachings){
     const exact=exactCatalogProduct(catalog,teaching.productName);
-    const canonical={rawText:teaching.rawText,productName:exact?.productName||teaching.productName,productCode:exact?.productCode||null,quantity:null,unitHint:null,confidence:1};
+    const quantity=teaching.quantity==null?null:Number(teaching.quantity);
+    const canonical={
+      rawText:teaching.rawText,
+      productName:exact?.productName||teaching.productName,
+      productCode:exact?.productCode||null,
+      quantity:Number.isFinite(quantity)&&Number(quantity)>0?Number(quantity):null,
+      unitHint:teaching.unitHint?clean(teaching.unitHint):null,
+      confidence:1,
+    };
     const example=savedExample(message,canonical,"corrected");
     await deps.saveExample(example);learned.push(example);
   }
-  const reply=learned.map(row=>`${clean(row.rawText)} → ${clean(row.productName)}`).join("\n")||clean(translation.replyText);
+  const reply=learned.map(correctedReply).join("\n")||clean(translation.replyText);
   return {reply,translation,learned,pendingConfirmation};
 }
 
@@ -215,7 +230,7 @@ export async function processDbTrainingMessage(db:any,message:TrainingMessage,mo
     await saveTrainingExample(db,example);
     return {
       reply:itemReply(pending),
-      translation:{kind:"teaching",items:[],teachings:[{rawText:pending.rawText,productName:pending.productName,productCode:pending.productCode}],replyText:""},
+      translation:{kind:"teaching",items:[],teachings:[{rawText:pending.rawText,productName:pending.productName,productCode:pending.productCode,quantity:pending.quantity,unitHint:pending.unitHint}],replyText:""},
       learned:[example],pendingConfirmation:null,
     };
   }

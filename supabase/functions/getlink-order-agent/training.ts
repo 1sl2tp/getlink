@@ -11,6 +11,29 @@ const Q=(v:number)=>Number.isInteger(v)?String(v):String(Math.round(v*100)/100);
 const R=(i:any)=>`${C(i.productName)} × ${Q(i.quantity)}${i.unitHint?` ${C(i.unitHint)}`:""}`;
 const K=(v:unknown)=>normalizeCustomerText(v);
 
+type InputOnlyParse=
+  |{kind:"order";lines:Array<{rawText:string;productText:string;quantity:number;unitHint:string|null}>}
+  |{kind:"ambiguous";lines:[]};
+
+function parseInputOnlyMessage(value:unknown):InputOnlyParse|null{
+  const original=String(value??"").replace(/\r\n?/g,"\n").trim();
+  if(!original||original.includes("=")||original.includes(":"))return null;
+
+  const explicitSeparator=/(?:\/|;|\n|,(?!\d))/u;
+  if(explicitSeparator.test(original)){
+    const chunks=original.split(/\s*(?:\/|;|\n|,(?!\d))\s*/u).map(C).filter(Boolean);
+    if(chunks.length<2)return null;
+    const parsed=chunks.map(chunk=>parseSimpleOrderLine(chunk));
+    if(parsed.some(line=>!line))return {kind:"ambiguous",lines:[]};
+    return {kind:"order",lines:parsed as Array<{rawText:string;productText:string;quantity:number;unitHint:string|null}>};
+  }
+
+  const bareQuantities=K(original).match(/(?:^|\s)\d+(?:[.,]\d+)?(?=\s|$)/g)||[];
+  if(bareQuantities.length>1)return {kind:"ambiguous",lines:[]};
+  const line=parseSimpleOrderLine(original);
+  return line?{kind:"order",lines:[line]}:null;
+}
+
 async function catalog(db:any):Promise<TrainingCatalogItem[]>{
   const out:TrainingCatalogItem[]=[];
   for(let from=0;from<5000;from+=1000){
@@ -135,6 +158,22 @@ export async function processDbTrainingMessage(
   credentials?:Partial<ModelCredentials>|null,
   fetchImpl:typeof fetch=fetch,
 ){
+  const inputOnly=parseInputOnlyMessage(message.body);
+  if(inputOnly?.kind==="ambiguous"){
+    return {reply:"",translation:{kind:"conversation",items:[],teachings:[],knowledge:[],replyText:""}};
+  }
+  if(inputOnly?.kind==="order"){
+    const items=inputOnly.lines.map(line=>({
+      rawText:line.rawText,
+      productName:line.productText,
+      productCode:null,
+      quantity:line.quantity,
+      unitHint:line.unitHint,
+      confidence:1,
+    }));
+    return {reply:items.map(R).join("\n"),translation:{kind:"order",items,teachings:[],knowledge:[],replyText:""}};
+  }
+
   const s=await session(db,message.conversationId);
   const pending=s?.awaiting_context?.kind==="training_candidate"?s.awaiting_context:null;
   const normalizedBody=K(message.body);

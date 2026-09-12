@@ -5,6 +5,15 @@ const clean=(value:unknown)=>String(value??"").replace(/\s+/g," ").trim();
 const normalize=(value:unknown)=>normalizeCustomerText(value);
 const dedupKey=(value:unknown)=>normalize(value).replace(/[^a-z0-9]+/g," ").trim();
 
+export function fallbackKnowledgeRules(value:unknown):TrainingKnowledgeRule[]{
+  const ruleText=clean(value);
+  const n=normalize(ruleText);
+  if(ruleText.length<20)return [];
+  const explicit=["luon ","quy tac","phai hieu","ghi nho","kien thuc","de suy luan","tu bo sung"].some(token=>n.includes(token));
+  if(!explicit)return [];
+  return [{ruleType:"behavior",ruleText:ruleText.slice(0,1800)}];
+}
+
 export async function loadKnowledgeRules(db:any,customerAccountId:string):Promise<TrainingKnowledgeRule[]>{
   const result=await db.from("getlink_ai_knowledge_rules")
     .select("rule_type,rule_text")
@@ -13,10 +22,8 @@ export async function loadKnowledgeRules(db:any,customerAccountId:string):Promis
     .order("updated_at",{ascending:false})
     .limit(120);
   if(result.error)throw result.error;
-  return (result.data||[]).map((row:any)=>({
-    ruleType:clean(row.rule_type),
-    ruleText:clean(row.rule_text),
-  })).filter((row:TrainingKnowledgeRule)=>row.ruleType&&row.ruleText);
+  return (result.data||[]).map((row:any)=>({ruleType:clean(row.rule_type),ruleText:clean(row.rule_text)}))
+    .filter((row:TrainingKnowledgeRule)=>row.ruleType&&row.ruleText);
 }
 
 export async function saveKnowledgeRules(
@@ -32,15 +39,7 @@ export async function saveKnowledgeRules(
     const key=dedupKey(ruleText);
     if(!ruleText||!ruleType||!ruleNormalized||!key||seen.has(key))continue;
     seen.add(key);
-    rows.push({
-      customer_account_id:input.customerAccountId,
-      rule_type:ruleType,
-      rule_text:ruleText,
-      rule_normalized:ruleNormalized,
-      source_message_id:input.sourceMessageId,
-      is_active:true,
-      updated_at:new Date().toISOString(),
-    });
+    rows.push({customer_account_id:input.customerAccountId,rule_type:ruleType,rule_text:ruleText,rule_normalized:ruleNormalized,source_message_id:input.sourceMessageId,is_active:true,updated_at:new Date().toISOString()});
   }
   if(!rows.length)return 0;
   const result=await db.from("getlink_ai_knowledge_rules").upsert(rows,{onConflict:"customer_account_id,rule_normalized"});

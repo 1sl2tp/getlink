@@ -68,7 +68,7 @@ export async function translateTrainingMessageWithModel(
     store:false,
     system_instruction:systemInstruction,
     input:JSON.stringify(safe),
-    generation_config:{max_output_tokens:1200,thinking_level:"minimal"},
+    generation_config:{max_output_tokens:1200,thinking_level:"low"},
     response_format:{type:"text",mime_type:"application/json",schema:schema()},
   };
 

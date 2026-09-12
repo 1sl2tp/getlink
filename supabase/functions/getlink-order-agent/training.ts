@@ -37,9 +37,11 @@ async function aliases(db:any,customerId:string):Promise<TrainingAlias[]>{
     .select("alias_normalized,product_code,scope")
     .eq("scope","store").limit(500);
   if(store.error)throw store.error;
-  return [...(customer.data||[]),...(store.data||[])].map((r:any)=>({
-    aliasNormalized:String(r.alias_normalized||""),productCode:String(r.product_code||""),scope:r.scope==="store"?"store":"customer",
-  })).filter((r:TrainingAlias)=>r.aliasNormalized&&r.productCode);
+  return [...(customer.data||[]),...(store.data||[])].map((r:any):TrainingAlias=>({
+    aliasNormalized:String(r.alias_normalized||""),
+    productCode:String(r.product_code||""),
+    scope:r.scope==="store"?"store":"customer",
+  })).filter((r:TrainingAlias)=>Boolean(r.aliasNormalized&&r.productCode));
 }
 
 async function examples(db:any,userId:string,conversationId:string){
@@ -141,7 +143,14 @@ export async function processDbTrainingMessage(
       unitHint:pending.unitHint?C(pending.unitHint):null,status:"corrected",confidence:1,
     };
     await saveExample(db,e);
-    if(pending.aliasText)await saveCustomerAlias(db,{...message,sessionId:String(s.id),aliasDisplay:C(pending.aliasText),productCode:C(pending.productCode)});
+    if(pending.aliasText)await saveCustomerAlias(db,{
+      customerAccountId:message.customerAccountId,
+      conversationId:message.conversationId,
+      sourceMessageId:message.messageId,
+      sessionId:String(s.id),
+      aliasDisplay:C(pending.aliasText),
+      productCode:C(pending.productCode),
+    });
     return {reply:R(e),translation:{kind:"teaching",items:[],teachings:[e],knowledge:[],replyText:""}};
   }
   if(pending&&s?.id)await setContext(db,String(s.id),{});
@@ -151,7 +160,14 @@ export async function processDbTrainingMessage(
 
   const equation=resolveTeachingEquation(message.body,cat);
   if(equation){
-    await saveCustomerAlias(db,{...message,sessionId:s?.id?String(s.id):null,aliasDisplay:equation.aliasDisplay,productCode:equation.productCode});
+    await saveCustomerAlias(db,{
+      customerAccountId:message.customerAccountId,
+      conversationId:message.conversationId,
+      sourceMessageId:message.messageId,
+      sessionId:s?.id?String(s.id):null,
+      aliasDisplay:equation.aliasDisplay,
+      productCode:equation.productCode,
+    });
     const e={
       customerAccountId:message.customerAccountId,conversationId:message.conversationId,sourceMessageId:message.messageId,
       rawText:equation.aliasDisplay,productName:equation.productName,productCode:equation.productCode,quantity:null,unitHint:null,status:"corrected",confidence:1,

@@ -72,7 +72,7 @@ async function processConversation(conversationId:string,cfg:any){
 Deno.serve(async req=>{
   const cfg=await config();
   const url=new URL(req.url);
-  if(req.method==="GET")return new Response(JSON.stringify({ok:true,mode:cfg.mode,training_only:true,name_translation:true,provider:"gemini",model:cfg.model,model_configured:Boolean(cfg.key&&cfg.model)}),{headers:{"content-type":"application/json"}});
+  if(req.method==="GET")return new Response(JSON.stringify({ok:true,mode:cfg.mode,training_only:true,name_translation:true,knowledge_learning:true,provider:"gemini",model:cfg.model,model_configured:Boolean(cfg.key&&cfg.model)}),{headers:{"content-type":"application/json"}});
   if(req.headers.get("x-order-agent-secret")!==cfg.secret)return new Response("unauthorized",{status:401});
   let body:any={};
   try{body=await req.json();}catch{body={};}

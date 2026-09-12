@@ -121,3 +121,57 @@ Deno.test("an explicit teaching message stores a corrected exact catalog mapping
   assert.equal(saved[0].status,"corrected");
   assert.equal(saved[0].productCode,"HT-MIKET");
 });
+
+Deno.test("general brand teaching asks Groq for one independent teaching row per alias",async()=>{
+  const {translateTrainingMessageWithModel}=await loadModel();
+  let requestBody:any=null;
+  const result=await translateTrainingMessageWithModel({
+    customerText:"Dầu ăn có simply, neptune, meizan, cái lân, gọi tắt sim nep zan lan",
+    learnedExamples:[],
+  },async (_url:string,init:RequestInit)=>{
+    requestBody=JSON.parse(String(init.body||"{}"));
+    return new Response(JSON.stringify({
+      status:"completed",
+      output_text:JSON.stringify({
+        kind:"teaching",
+        items:[],
+        teachings:[
+          {raw_text:"sim",product_name:"Simply",product_code:null,quantity:null,unit_hint:null},
+          {raw_text:"nep",product_name:"Neptune",product_code:null,quantity:null,unit_hint:null},
+          {raw_text:"zan",product_name:"Meizan",product_code:null,quantity:null,unit_hint:null},
+          {raw_text:"lan",product_name:"Cái Lân",product_code:null,quantity:null,unit_hint:null},
+        ],
+        reply_text:"",
+      }),
+    }),{status:200,headers:{"content-type":"application/json"}});
+  },{apiKey:"groq-test-key",model:"qwen/qwen3.8-27b"});
+
+  assert.equal(result.kind,"teaching");
+  assert.equal(result.teachings.length,4);
+  assert.deepEqual(result.teachings.map((row:any)=>row.rawText),["sim","nep","zan","lan"]);
+  assert.match(JSON.stringify(requestBody),/mỗi quan hệ|mỗi tên tắt|từng tên tắt/i);
+});
+
+Deno.test("specific corrected order teaching preserves quantity and unit in corrected memory",async()=>{
+  const {processTrainingMessage}=await loadTraining();
+  const saved:any[]=[];
+  const result=await processTrainingMessage({
+    customerAccountId:"u-test",conversationId:"c-test",messageId:"m-zan",body:"Phải ghi là dau zan 1l x2",
+  },{
+    loadCatalog:async()=>[{productCode:"HT-ZAN-1",productName:"Dau zan 1"}],
+    loadExamples:async()=>[],
+    translate:async()=>({
+      kind:"teaching",items:[],
+      teachings:[{rawText:"dau zan 1l x2",productName:"Dau zan 1",productCode:null,quantity:2,unitHint:"l"}],
+      replyText:"",
+    } as any),
+    saveExample:async(example:any)=>{saved.push(example);},
+  });
+
+  assert.equal(result.reply,"dau zan 1l x2 → Dau zan 1 × 2 l");
+  assert.equal(saved.length,1);
+  assert.equal(saved[0].status,"corrected");
+  assert.equal(saved[0].productCode,"HT-ZAN-1");
+  assert.equal(saved[0].quantity,2);
+  assert.equal(saved[0].unitHint,"l");
+});

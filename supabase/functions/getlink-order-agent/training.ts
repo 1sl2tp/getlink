@@ -1,6 +1,6 @@
 import { normalizeCustomerText } from "./normalize.ts";
 import { TrainingModelError,translateTrainingMessageWithModel,type ModelCredentials } from "./training_llm.ts";
-import { loadKnowledgeRules,saveKnowledgeRules } from "./training_knowledge.ts";
+import { fallbackKnowledgeRules,loadKnowledgeRules,saveKnowledgeRules } from "./training_knowledge.ts";
 import {
   parseSimpleOrderLine,rankTrainingCandidates,resolveTeachingEquation,resolveTrainingProduct,
   type TrainingAlias,type TrainingCatalogItem,
@@ -177,6 +177,11 @@ export async function processDbTrainingMessage(
     translation=await translateTrainingMessageWithModel({customerText:message.body,learnedExamples:learned,candidates,knowledgeRules},fetchImpl,credentials);
   }catch(error){
     if(error instanceof TrainingModelError){
+      const fallbackRules=fallbackKnowledgeRules(message.body);
+      if(fallbackRules.length){
+        const saved=await saveKnowledgeRules(db,{customerAccountId:message.customerAccountId,sourceMessageId:message.messageId,rules:fallbackRules});
+        return {reply:saved?`Đã lưu ${saved} hướng dẫn để dùng lại.`:"Hướng dẫn này đã có trong kiến thức.",translation:{kind:"knowledge",items:[],teachings:[],knowledge:fallbackRules,replyText:""}};
+      }
       return {reply:unresolvedReply(simple?.productText||message.body,simple?.quantity,simple?.unitHint),translation:{kind:"conversation",items:[],teachings:[],knowledge:[],replyText:""}};
     }
     throw error;

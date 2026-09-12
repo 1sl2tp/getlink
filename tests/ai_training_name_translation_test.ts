@@ -134,3 +134,11 @@ Deno.test("teaching equation learns alias against the canonical side instead of 
     productName:"Mi indi",
   });
 });
+
+Deno.test("reply normalization preserves one product per line",async()=>{
+  const mod=await loadModule("../supabase/functions/getlink-order-agent/reply_text.ts");
+  assert.equal(
+    mod.normalizeReplyText("  Mi indi × 10 thùng  \n  Mi miket × 5 thùng\r\nDau nep 2 × 5 thùng  "),
+    "Mi indi × 10 thùng\nMi miket × 5 thùng\nDau nep 2 × 5 thùng",
+  );
+});

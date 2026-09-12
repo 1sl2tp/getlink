@@ -1,5 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
 import { processDbTrainingMessage } from "./training.ts";
+import { normalizeReplyText } from "./reply_text.ts";
 
 const SUPABASE_URL=String(Deno.env.get("SUPABASE_URL")||"").trim();
 const SERVICE_KEY=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"").trim();
@@ -44,7 +45,7 @@ async function processConversation(conversationId:string,cfg:any){
         customerAccountId:String(row.customer_account_id),conversationId,
         messageId:String(row.message_id),body:String(row.message_body),
       },{apiKey:cfg.key,model:cfg.model});
-      const body=clean(result.reply);
+      const body=normalizeReplyText(result.reply);
       if(body){
         const outbox=await db.from("getlink_ai_reply_outbox").upsert({
           session_id:String(session.data.id),turn_key:`${row.turn_key}:${row.message_id}`,

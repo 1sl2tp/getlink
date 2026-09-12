@@ -1,6 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2.57.4";
-import { processDbTrainingMessage } from "./training.ts";
-import { normalizeReplyText } from "./reply_text.ts";
+import { parseInputOnly } from "./input_only.ts";
 
 const SUPABASE_URL=String(Deno.env.get("SUPABASE_URL")||"").trim();
 const SERVICE_KEY=String(Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")||"").trim();
@@ -22,15 +21,30 @@ async function config(){
   };
 }
 
+async function markProcessed(inboxId:string){
+  const done=await db.from("getlink_ai_message_inbox").update({
+    status:"processed",processed_at:new Date().toISOString(),last_error:null,
+  }).eq("id",inboxId);
+  if(done.error)throw done.error;
+}
+
 async function processConversation(conversationId:string,cfg:any){
   const claimed=await db.rpc("getlink_ai_claim_turn",{p_conversation_id:conversationId});
   if(claimed.error)throw claimed.error;
+
   for(const row of claimed.data||[]){
     if(!cfg.ids.has(String(row.customer_account_id))){
-      await db.from("getlink_ai_message_inbox").update({status:"processed",processed_at:new Date().toISOString()}).eq("id",row.inbox_id);
+      await markProcessed(String(row.inbox_id));
       continue;
     }
+
     try{
+      const parsed=parseInputOnly(row.message_body);
+      if(parsed.kind!=="order"||!parsed.reply){
+        await markProcessed(String(row.inbox_id));
+        continue;
+      }
+
       let session=await db.from("getlink_ai_order_sessions").select("*")
         .eq("conversation_id",conversationId).in("state",["collecting","awaiting_clarification","quoted","confirmed"])
         .order("created_at",{ascending:false}).limit(1).maybeSingle();
@@ -41,25 +55,18 @@ async function processConversation(conversationId:string,cfg:any){
         }).select("*").single();
         if(session.error)throw session.error;
       }
-      const result=await processDbTrainingMessage(db,{
-        customerAccountId:String(row.customer_account_id),conversationId,
-        messageId:String(row.message_id),body:String(row.message_body),
-      },{apiKey:cfg.key,model:cfg.model});
-      const body=normalizeReplyText(result.reply);
-      if(body){
-        const outbox=await db.from("getlink_ai_reply_outbox").upsert({
-          session_id:String(session.data.id),turn_key:`${row.turn_key}:${row.message_id}`,
-          reply_kind:result.translation.kind==="order"?"draft_update":"fallback",body,
-        },{onConflict:"session_id,turn_key,reply_kind"}).select("*").single();
-        if(outbox.error)throw outbox.error;
-        const sent=await db.rpc("getlink_ai_send_chat_message",{
-          p_outbox_id:String(outbox.data.id),p_body:body,p_client_id:`ai:${outbox.data.id}`,
-        });
-        if(sent.error)throw sent.error;
-      }
-      await db.from("getlink_ai_message_inbox").update({
-        status:"processed",processed_at:new Date().toISOString(),last_error:null,
-      }).eq("id",row.inbox_id);
+
+      const outbox=await db.from("getlink_ai_reply_outbox").upsert({
+        session_id:String(session.data.id),turn_key:`${row.turn_key}:${row.message_id}`,
+        reply_kind:"draft_update",body:parsed.reply,
+      },{onConflict:"session_id,turn_key,reply_kind"}).select("*").single();
+      if(outbox.error)throw outbox.error;
+
+      const sent=await db.rpc("getlink_ai_send_chat_message",{
+        p_outbox_id:String(outbox.data.id),p_body:parsed.reply,p_client_id:`ai:${outbox.data.id}`,
+      });
+      if(sent.error)throw sent.error;
+      await markProcessed(String(row.inbox_id));
     }catch(error){
       await db.from("getlink_ai_message_inbox").update({
         status:"failed",processed_at:new Date().toISOString(),last_error:String(error).slice(0,500),
@@ -72,10 +79,26 @@ async function processConversation(conversationId:string,cfg:any){
 Deno.serve(async req=>{
   const cfg=await config();
   const url=new URL(req.url);
-  if(req.method==="GET")return new Response(JSON.stringify({ok:true,mode:cfg.mode,training_only:true,name_translation:true,knowledge_learning:true,provider:"gemini",model:cfg.model,model_configured:Boolean(cfg.key&&cfg.model)}),{headers:{"content-type":"application/json"}});
+
+  if(req.method==="GET")return new Response(JSON.stringify({
+    ok:true,
+    mode:cfg.mode,
+    training_only:true,
+    input_only:true,
+    name_translation:false,
+    knowledge_learning:false,
+    provider:"none",
+    model:cfg.model,
+    database_configured:Boolean(SUPABASE_URL&&SERVICE_KEY),
+    model_configured:Boolean(cfg.key&&cfg.model),
+    webhook_configured:Boolean(cfg.secret),
+    pilot_customer_count:cfg.ids.size,
+  }),{headers:{"content-type":"application/json"}});
+
   if(req.headers.get("x-order-agent-secret")!==cfg.secret)return new Response("unauthorized",{status:401});
   let body:any={};
   try{body=await req.json();}catch{body={};}
+
   if(url.pathname.endsWith("/message")){
     await sleep(4000);
     return new Response(JSON.stringify({ok:true,claimed:await processConversation(clean(body.conversation_id),cfg)}),{headers:{"content-type":"application/json"}});

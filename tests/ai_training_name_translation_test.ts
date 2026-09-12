@@ -34,6 +34,7 @@ Deno.test("training model uses Gemini Interactions structured JSON",async()=>{
   assert.equal(requestHeaders.get("authorization"),null);
   assert.equal(requestBody.model,"gemini-3.8-flash");
   assert.equal(requestBody.store,false);
+  assert.equal(requestBody.generation_config.thinking_level,"low");
   assert.equal(requestBody.response_format.type,"text");
   assert.equal(requestBody.response_format.mime_type,"application/json");
   assert.equal(requestBody.response_format.schema.type,"object");

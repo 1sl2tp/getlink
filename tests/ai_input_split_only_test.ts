@@ -56,3 +56,21 @@ Deno.test("multiple quantity clusters without a separator stay silent instead of
   assert.equal(result.translation.kind,"conversation");
   assert.deepEqual(result.translation.items,[]);
 });
+
+Deno.test("quantity at either outer edge preserves numeric labels inside the product name",async()=>{
+  const cases=[
+    ["sim 1 2","sim 1 × 2"],
+    ["2 sim 1","sim 1 × 2"],
+    ["2 Sim 1","sim 1 × 2"],
+    ["sim 2","sim × 2"],
+    ["ngua 2","ngua × 2"],
+  ] as const;
+
+  for(let i=0;i<cases.length;i++){
+    const [body,reply]=cases[i];
+    const result=await processDbTrainingMessage(noDataDb(),message(body,`edge-${i}`));
+    assert.equal(result.reply,reply,body);
+    assert.equal(result.translation.kind,"order",body);
+    assert.equal(result.translation.items.length,1,body);
+  }
+});

@@ -22,3 +22,23 @@
   .order-index-card{padding-right:86px!important}
   .order-index-count{right:7px;font-size:9px}
 }
+
+
+/* ORDER_LIST_DETAIL_SPLIT_20260914 */
+.order-index-pane{display:flex!important;flex-direction:column!important}
+.order-index-pane-head{
+  flex:0 0 auto;
+  min-height:34px;
+  padding:0 11px;
+  border-bottom:1px solid #dfe5e1;
+  background:#f3f7f5;
+  color:#617068;
+  display:flex;
+  align-items:center;
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.order-index-scroll{flex:1 1 auto!important;height:auto!important;min-height:0!important}
+.order-detail-pane{box-shadow:inset 1px 0 0 #eef1ef}

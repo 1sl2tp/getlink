@@ -508,33 +508,42 @@ function installCartLifecycleFast(){
   }
 
   function moveOrderSourceLeft(){
-    const nav=document.getElementById("workspaceNav");
-    const manager=document.getElementById("orderManager");
-    if(!nav)return;
-    let slot=nav.querySelector(".taphoa-source-left-slot");
-    if(!slot){
-      slot=document.createElement("div");
-      slot.className="taphoa-source-left-slot";
-      slot.hidden=true;
-      nav.appendChild(slot);
-    }
-    const fresh=document.querySelector(".order-workspace-v2 .order-source-report");
-    if(fresh&&fresh.parentElement!==slot)slot.replaceChildren(fresh);
-    const report=fresh||slot.querySelector(".order-source-report");
-    const visible=Boolean(manager&&!manager.hidden&&manager.getClientRects().length&&report);
-    slot.hidden=!visible;
+  const desktop=document.querySelector(".user-work-desktop");
+  const left=document.getElementById("userWorkDesktopCategories");
+  const manager=document.getElementById("orderManager");
+  if(!desktop||!left)return;
+  let slot=left.querySelector(".taphoa-source-left-slot");
+  if(!slot){
+    slot=document.createElement("div");
+    slot.className="taphoa-source-left-slot";
+    slot.hidden=true;
+    left.appendChild(slot);
   }
+  const ordersActive=desktop.dataset.taphoaView==="orders";
+  if(ordersActive&&left.hidden)left.hidden=false;
+  const fresh=document.querySelector(".order-workspace-v2 .order-source-report");
+  if(fresh&&fresh.parentElement!==slot)slot.replaceChildren(fresh);
+  const report=fresh||slot.querySelector(".order-source-report");
+  const shouldHide=!Boolean(ordersActive&&manager&&!manager.hidden&&manager.getClientRects().length&&report);
+  if(slot.hidden!==shouldHide)slot.hidden=shouldHide;
+}
 
-  function installSourceRailWatcher(){
-    if(sourceRailObserver)return;
-    const host=document.querySelector(".workspace-list");
-    if(host){
-      sourceRailObserver=new NativeMutationObserver(()=>requestAnimationFrame(moveOrderSourceLeft));
-      sourceRailObserver.observe(host,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class"]});
-    }
-    document.addEventListener("click",()=>requestAnimationFrame(moveOrderSourceLeft),true);
-    moveOrderSourceLeft();
+function installSourceRailWatcher(){
+  if(sourceRailObserver)return;
+  const host=document.querySelector(".user-work-desktop");
+  if(host){
+    sourceRailObserver=new NativeMutationObserver(records=>{
+      const relevant=records.some(record=>{
+        const target=elementTarget(record);
+        return !target?.closest?.(".order-detail-pane,.order-index-list");
+      });
+      if(relevant)requestAnimationFrame(moveOrderSourceLeft);
+    });
+    sourceRailObserver.observe(host,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class","data-taphoa-view"]});
   }
+  document.addEventListener("click",()=>requestAnimationFrame(moveOrderSourceLeft),true);
+  moveOrderSourceLeft();
+}
 
   function patchGlobals(){
     if(patched)return true;

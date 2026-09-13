@@ -383,7 +383,7 @@
       const mine=document.getElementById("userWorkMine");
       const categories=document.getElementById("userWorkDesktopCategories");
       if(mine)mine.hidden=!sales;
-      if(categories)categories.hidden=!sales;
+      if(categories)categories.hidden=!(sales||taphoaWorkView==="orders");
     }
     const manager=document.getElementById("orderManager");
     const host=activeTaphoaWorkspaceHost();

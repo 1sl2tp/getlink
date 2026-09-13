@@ -70,6 +70,17 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
             "replacing order index buttons must not trigger the feedback observer again",
         )
 
+    def test_order_click_only_updates_selection_state_and_detail_pane(self):
+        js = (ROOT / "taphoa-workspace-feedback.js").read_text(encoding="utf-8")
+        start = js.index("function renderOrderWorkspaceSelection")
+        end = js.index("function syncOrderWorkspaceV2", start)
+        block = js[start:end]
+        self.assertIn("row.classList.toggle(\"selected\",selected)", block)
+        self.assertIn("detail.innerHTML=orderInvoiceMarkup", block)
+        self.assertNotIn("row.replaceWith", block, "clicking one order must not replace every list button")
+        self.assertNotIn("orderIndexCardMarkup(order,index,selected)", block, "selection render must not rebuild list cards")
+        self.assertNotIn("template", block, "selection render must not create replacement DOM for list rows")
+
     def test_quick_add_inserts_returned_product_without_catalog_reload(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
         self.assertIn("insertManualProduct", js)
@@ -90,6 +101,22 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
             css,
             "Theo nguồn must remain visible until it is actually moved into the left rail",
         )
+
+    def test_order_source_report_uses_live_taphoa_desktop_left_owner(self):
+        js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
+        order_js = (ROOT / "order-management.js").read_text(encoding="utf-8")
+        css = (ROOT / "taphoa-hot-path-runtime.css").read_text(encoding="utf-8")
+        move_start = js.index("function moveOrderSourceLeft")
+        move_end = js.index("function installSourceRailWatcher", move_start)
+        move_block = js[move_start:move_end]
+        watch_start = move_end
+        watch_end = js.index("function patchGlobals", watch_start)
+        watch_block = js[watch_start:watch_end]
+        self.assertIn('document.getElementById("userWorkDesktopCategories")', move_block)
+        self.assertNotIn('document.getElementById("workspaceNav")', move_block)
+        self.assertIn('document.querySelector(".user-work-desktop")', watch_block)
+        self.assertIn('sales||taphoaWorkView==="orders"', order_js)
+        self.assertIn('[data-taphoa-view="orders"] #userWorkDesktopCategories', css)
 
 
 if __name__ == "__main__":

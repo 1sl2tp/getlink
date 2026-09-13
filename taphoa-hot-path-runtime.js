@@ -29,6 +29,7 @@
       const target=elementTarget(record);
       if(!target)return true;
       if(target.closest?.(".order-detail-pane"))return false;
+      if(target.closest?.(".order-index-list"))return false;
       if(target.closest?.(".taphoa-sales-preview"))return false;
       if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;
       if(target.matches?.(".user-work-order-qty b,.mobile-user-qty b"))return false;

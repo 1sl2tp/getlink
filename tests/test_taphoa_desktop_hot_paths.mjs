@@ -12,6 +12,7 @@ const block=(text,start,end)=>{
 
 const sales=read("taphoa-desktop-sales.js");
 const orders=read("taphoa-desktop-orders.js");
+const data=read("taphoa-desktop-data.js");
 const workspace=read("taphoa-desktop-workspace.js");
 const config=read("config.js");
 
@@ -25,6 +26,15 @@ assert.ok(!qty.includes("renderMaster"),"quantity click must not rebuild product
 assert.ok(!qty.includes("searchProducts"),"quantity click must not re-run product search");
 assert.ok(sales.includes("insertAdjacentHTML(\"beforeend\""),"infinite load must append rows");
 assert.ok(!sales.includes("scrollTop=0"),"sales must not reset scroll position");
+
+const price=block(sales,"function price(row)", "function qc(row)");
+assert.ok(price.includes("row?.price_vnd"),"manual quick-add result must show its returned price immediately");
+const editUpdate=block(sales,"async function updateEditing", "function editOrder");
+assert.ok(editUpdate.includes('TaphoaDesktopWorkspace?.view==="sales"'),"edit completion must not repaint Sales after switching back to Orders");
+
+const ensureIndex=block(data,"function ensureProductIndex", "function allProducts");
+assert.ok(ensureIndex.includes("libraryCache"),"product index must notice when the app library cache arrives or changes");
+assert.ok(ensureIndex.includes("indexSource"),"product index must track the source cache identity");
 
 const select=block(orders,"function selectOrder", "async function loadCustomers");
 assert.ok(select.includes("classList.remove"));

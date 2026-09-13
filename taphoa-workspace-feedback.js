@@ -42,7 +42,7 @@
     if(!prices||prices.length<2)return;
     const primary=prices[0],secondary=prices[1];
     if(isEmptyPrice(primary)&&!isEmptyPrice(secondary))primary.innerHTML=secondary.innerHTML;
-    secondary.setAttribute("aria-hidden","true");
+    if(secondary.getAttribute("aria-hidden")!=="true")secondary.setAttribute("aria-hidden","true");
   }
   function syncSalesHeader(){
     const head=document.querySelector("#userWorkMine .user-work-order-head");
@@ -51,8 +51,8 @@
     if(spans.length<5)return;
     const labels=[SALES_HEADERS[0],SALES_HEADERS[1],"",SALES_HEADERS[2],SALES_HEADERS[3]];
     spans.forEach((span,index)=>{
-      if(index<labels.length)span.textContent=labels[index];
-      if(index===2)span.setAttribute("aria-hidden","true");
+      if(index<labels.length&&span.textContent!==labels[index])span.textContent=labels[index];
+      if(index===2&&span.getAttribute("aria-hidden")!=="true")span.setAttribute("aria-hidden","true");
     });
     head.dataset.taphoaFeedback="1";
   }
@@ -92,10 +92,12 @@
       if(!order||!Array.isArray(order.items))return;
       const lines=[...card.querySelectorAll(".order-card-items>div")];
       lines.forEach((line,index)=>{
-        line.querySelector(".order-item-note")?.remove();
         const note=String(order.items[index]?.note||"").trim();
-        if(!note)return;
-        line.insertAdjacentHTML("beforeend",'<em class="order-item-note">Ghi chú: '+escapeHtml(note)+"</em>");
+        const current=line.querySelector(".order-item-note");
+        if(!note){if(current)current.remove();return;}
+        const text="Ghi chú: "+note;
+        if(current){if(current.textContent!==text)current.textContent=text;return;}
+        line.insertAdjacentHTML("beforeend",'<em class="order-item-note">'+escapeHtml(text)+"</em>");
       });
     });
   }
@@ -110,7 +112,7 @@
     const originalSelected=selected;
     window.userWorkSelectedItems=function(){
       const rows=originalSelected.apply(this,arguments);
-      return Array.isArray(rows)?rows.map(item=>({...item,lineNote:noteFor(item?.row?.canonical_url)})):rows;
+      return Array.isArray(rows)?rows.map(item=>({...item,bargain:0,lineNote:noteFor(item?.row?.canonical_url)})):rows;
     };
 
     const originalLoad=load;
@@ -143,6 +145,7 @@
     if(!body||typeof body!=="object"||!Array.isArray(body.items))return body;
     return {...body,items:body.items.map(item=>({
       ...item,
+      bargainPriceVnd:0,
       lineNote:noteFor(item?.url)
     }))};
   }

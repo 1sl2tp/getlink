@@ -29,6 +29,7 @@
       const target=elementTarget(record);
       if(!target)return true;
       if(target.closest?.(".order-detail-pane"))return false;
+      if(target.closest?.(".taphoa-sales-preview"))return false;
       if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;
       if(target.matches?.(".user-work-order-qty b,.mobile-user-qty b"))return false;
       return true;
@@ -175,6 +176,56 @@
     try{userWorkSelectedItems=selectedItemsFast;}catch{}
     window.userWorkSelectedItems=selectedItemsFast;
   }
+
+  let cartLoadWrapper=null;
+let cartClearWrapper=null;
+function syncQtyStateFromStorage(){
+  qtyState.clear();
+  qtyHydrated=false;
+  hydrateQtyState();
+}
+function clearSelectedNotes(items){
+  try{
+    const notes=JSON.parse(localStorage.getItem(NOTE_KEY)||"{}");
+    let changed=false;
+    for(const item of Array.isArray(items)?items:[]){
+      const key=String(item?.row?.canonical_url||"").trim().toLowerCase();
+      if(key&&Object.prototype.hasOwnProperty.call(notes,key)){delete notes[key];changed=true;}
+    }
+    if(changed)localStorage.setItem(NOTE_KEY,JSON.stringify(notes));
+  }catch{}
+}
+function installCartLifecycleFast(){
+  const currentLoad=window.loadUserWorkOrderSelection;
+  if(typeof currentLoad==="function"&&currentLoad!==cartLoadWrapper){
+    const baseLoad=currentLoad;
+    cartLoadWrapper=function(order){
+      const result=baseLoad.apply(this,arguments);
+      syncQtyStateFromStorage();
+      updateSummaryFast();
+      return result;
+    };
+    window.loadUserWorkOrderSelection=cartLoadWrapper;
+  }
+  const currentClear=window.clearUserWorkOrderSelection;
+  if(typeof currentClear==="function"&&currentClear!==cartClearWrapper){
+    const baseClear=currentClear;
+    cartClearWrapper=function(){
+      const selected=selectedItemsFast();
+      clearSelectedNotes(selected);
+      qtyState.clear();
+      qtyHydrated=true;
+      persistQtyState();
+      const result=baseClear.apply(this,arguments);
+      qtyState.clear();
+      qtyHydrated=true;
+      persistQtyState();
+      updateSummaryFast();
+      return result;
+    };
+    window.clearUserWorkOrderSelection=cartClearWrapper;
+  }
+}
 
   function taphoaRowsForQuery(categoryKey=""){
     const indexed=buildTaphoaIndex(false);
@@ -491,12 +542,17 @@
       installQtyFunctions();
       installTaphoaRowsScope();
       installSelectedItemsFast();
+      installCartLifecycleFast();
       patchDesktopAutoload();
       patchMobileAutoload();
       buildTaphoaIndex(true);
       installSourceRailWatcher();
       updateSummaryFast();
       patched=true;
+      [50,250,1000,2000].forEach(delay=>setTimeout(()=>{
+        installSelectedItemsFast();
+        installCartLifecycleFast();
+      },delay));
       return true;
     }catch{return false;}
   }

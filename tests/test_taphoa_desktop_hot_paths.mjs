@@ -48,6 +48,15 @@ assert.ok(orderRows.includes(".taphoa-order-list"),"order filtering must target 
 assert.ok(!orderRows.includes("slots.master.innerHTML"),"order search/filter must preserve toolbar input");
 assert.ok(orders.includes('state.query=String(e.target.value||"");state.source="";state.selectedId="";renderSourceRail();renderOrderRows()'),"order search must stay local");
 
+assert.ok(orders.includes('data-td-order-batch="pending"'),"pending tab must expose its Xóa tất cả action");
+assert.ok(orders.includes('data-td-order-batch="delivered"'),"delivered tab must expose its scoped return-all action");
+const batchOrders=block(orders,"async function batchCurrentOrders", "function bind");
+assert.ok(batchOrders.includes('orderRequest("/orders/pending",{method:"DELETE"})'),"pending batch must use the existing delete-all endpoint");
+assert.ok(batchOrders.includes('orderRequest("/orders/return-batch"'),"delivered batch must use the existing return-batch endpoint");
+assert.ok(batchOrders.includes("visibleRows()"),"delivered batch must respect the current visible scope");
+assert.ok(batchOrders.includes("map(o=>String(o.id"),"delivered batch must submit visible order ids");
+assert.ok(batchOrders.includes('state.status==="returned"'),"returned history must not expose a destructive batch action");
+
 assert.ok(workspace.includes("taphoa-new-desktop-active"),"fresh shell must suppress legacy desktop visual owners");
 assert.ok(workspace.includes("event.stopImmediatePropagation()"),"fresh shell events must not fall through to legacy document handlers");
 assert.ok(!workspace.includes("MutationObserver"),"fresh shell must not coordinate with mutation observers");

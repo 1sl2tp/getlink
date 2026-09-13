@@ -11,7 +11,11 @@
   let fastSearchTimer=0;
   let searchKeyPatched=false;
   let searchKeyCache=new WeakMap();
+  let orderWorkspaceSelectedId="";
+  let customerReassignOrderId="";
+  let customerReassignBusy=false;
   // TAPHOA_FAST_SEARCH_20260913
+  // TAPHOA_ORDER_WORKSPACE_V2_20260913
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
@@ -197,6 +201,202 @@
   function currentChatOrderAuth(){
     try{return JSON.parse(sessionStorage.getItem("getlink:chat-order-auth")||"null")||null}catch{return null}
   }
+
+  function orderSelectionCounts(selected=[]){
+    const rows=Array.isArray(selected)?selected:[];
+    return {
+      lines:rows.length,
+      products:rows.reduce((sum,item)=>sum+Math.max(0,Number(item?.qty||0)),0)
+    };
+  }
+  function orderProductCount(order){
+    const items=Array.isArray(order?.items)?order.items:[];
+    return items.reduce((sum,item)=>sum+Math.max(0,Number(item?.qty||0)),0);
+  }
+  function orderWorkspaceRole(){return String(currentChatOrderAuth()?.account?.role||"")}
+  function orderWorkspaceMoney(value){
+    const n=Number(value||0);
+    if(!Number.isFinite(n))return "—";
+    const compact=Math.round(n/500)*.5;
+    return new Intl.NumberFormat("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:1}).format(compact);
+  }
+  function orderWorkspaceDate(value){
+    const d=new Date(value||0);
+    if(!Number.isFinite(d.getTime()))return "";
+    return new Intl.DateTimeFormat("vi-VN",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}).format(d);
+  }
+  function orderWorkspaceDateValue(order){
+    if(order?.status==="returned")return order.returnedAt||order.deliveredAt||order.orderedAt||0;
+    if(order?.status==="delivered")return order.deliveredAt||order.orderedAt||0;
+    return order?.submittedAt||order?.orderedAt||0;
+  }
+  function orderWorkspaceCode(order){return order?.orderNo?"#"+order.orderNo:String(order?.id||"")}
+  function orderWorkspaceStatus(order){
+    return {pending:"Đơn tạm",delivered:"Đã giao",returned:"Đã hoàn"}[String(order?.status||"")]||String(order?.status||"");
+  }
+  function orderIndexCardMarkup(order,index,selected=false){
+    const items=Array.isArray(order?.items)?order.items:[];
+    const products=orderProductCount(order);
+    return '<button type="button" class="order-index-card '+(selected?'selected':'')+'" data-order-list-item data-order-id="'+escapeAttr(order?.id)+'">'+
+      '<span class="order-index-primary"><strong>'+escapeHtml(order?.customerName||"Khách hàng")+'</strong><b>'+escapeHtml(orderWorkspaceMoney(order?.total))+'</b></span>'+
+      '<span class="order-index-meta"><small>STT '+(index+1)+'</small><small>Mã đơn '+escapeHtml(orderWorkspaceCode(order))+'</small><small>'+escapeHtml(orderWorkspaceDate(orderWorkspaceDateValue(order)))+'</small></span>'+
+      '<span class="order-index-count">'+items.length+' dòng · '+products+' SP</span>'+
+    '</button>';
+  }
+  function orderInvoiceActionsMarkup(order){
+    const admin=orderWorkspaceRole()==="admin";
+    const id=escapeAttr(order?.id);
+    if(order?.status==="pending")return '<div class="order-invoice-actions">'+
+      '<button type="button" class="order-action-secondary" data-order-action="edit" data-order-id="'+id+'">Sửa</button>'+
+      (admin?'<button type="button" class="order-action-primary" data-order-action="deliver" data-order-id="'+id+'">Đã giao</button>':'')+
+      '<button type="button" class="order-action-danger" data-order-action="delete" data-order-id="'+id+'">Xóa</button>'+
+    '</div>';
+    if(order?.status==="delivered"&&admin)return '<div class="order-invoice-actions">'+
+      '<button type="button" class="order-action-secondary" data-order-action="edit" data-order-id="'+id+'">Sửa</button>'+
+      '<button type="button" class="order-action-danger" data-order-action="return" data-order-id="'+id+'">Xóa</button>'+
+    '</div>';
+    return '<div class="order-invoice-actions order-invoice-actions-empty"><span>Đơn đã hoàn · chỉ xem</span></div>';
+  }
+  function orderInvoiceMarkup(order,index){
+    if(!order)return '<div class="order-invoice-empty">Chọn một đơn để xem hóa đơn.</div>';
+    const items=Array.isArray(order.items)?order.items:[];
+    const products=orderProductCount(order);
+    const admin=orderWorkspaceRole()==="admin";
+    const canChangeCustomer=admin&&(order.status==="pending"||order.status==="delivered");
+    const lines=items.map((item,lineIndex)=>{
+      const qty=Number(item?.qty||0),price=Number(item?.price||0),note=String(item?.note||"").trim();
+      return '<div class="order-invoice-line">'+
+        '<span class="order-invoice-line-no">'+(lineIndex+1)+'</span>'+
+        '<span class="order-invoice-product"><strong>'+escapeHtml(item?.name||"Sản phẩm")+'</strong>'+(note?'<small>Ghi chú: '+escapeHtml(note)+'</small>':'')+'</span>'+
+        '<span class="order-invoice-qty">'+qty+' × '+escapeHtml(orderWorkspaceMoney(price))+'</span>'+
+        '<strong class="order-invoice-line-total">'+escapeHtml(orderWorkspaceMoney(qty*price))+'</strong>'+
+      '</div>';
+    }).join('');
+    return '<section class="order-invoice" data-order-invoice-id="'+escapeAttr(order.id)+'">'+
+      '<header class="order-invoice-head">'+
+        '<button type="button" class="order-invoice-back" data-order-back>← Danh sách đơn</button>'+
+        '<div class="order-invoice-title"><span>HÓA ĐƠN</span><strong>'+escapeHtml(orderWorkspaceStatus(order))+'</strong></div>'+
+        '<div class="order-invoice-customer"><span><strong>'+escapeHtml(order.customerName||"Khách hàng")+'</strong><small>STT '+(index+1)+' · Mã đơn '+escapeHtml(orderWorkspaceCode(order))+' · '+escapeHtml(orderWorkspaceDate(orderWorkspaceDateValue(order)))+'</small></span>'+
+          (canChangeCustomer?'<button type="button" data-order-customer-change data-order-customer-select data-order-id="'+escapeAttr(order.id)+'">Đổi khách</button>':'')+
+        '</div>'+
+      '</header>'+
+      '<div class="order-invoice-scroll">'+
+        '<div class="order-invoice-table-head"><span>STT</span><span>Sản phẩm</span><span>Số lượng × giá</span><span>Thành tiền</span></div>'+
+        '<div class="order-invoice-lines">'+(lines||'<div class="order-invoice-empty-line">Không có sản phẩm.</div>')+'</div>'+
+        '<footer class="order-invoice-total"><span><small>'+items.length+' dòng · '+orderProductCount(order)+' sản phẩm</small><strong>Tổng cộng</strong></span><b>'+escapeHtml(orderWorkspaceMoney(order.total))+'</b></footer>'+
+      '</div>'+
+      orderInvoiceActionsMarkup(order)+
+    '</section>';
+  }
+  function syncSalesSelectionCopy(){
+    if(typeof window.userWorkSelectedItems!=="function")return;
+    const selected=window.userWorkSelectedItems();
+    const counts=orderSelectionCounts(selected);
+    const count=document.getElementById("userWorkSelectedCount");
+    if(count)count.textContent="Đã chọn "+counts.lines+" dòng · "+counts.products+" sản phẩm";
+    const previewMore=document.querySelector("#taphoaSalesPreview .taphoa-sales-preview-more");
+    if(previewMore&&counts.lines>12)previewMore.textContent="+"+(counts.lines-12)+" dòng khác";
+    const contextCopy=document.querySelector("#taphoaSalesContext .taphoa-sales-context-head small");
+    if(contextCopy)contextCopy.textContent=counts.lines?"Khách · "+counts.lines+" dòng · "+counts.products+" sản phẩm":"Khách · chưa chọn hàng";
+  }
+  function visibleOrderIdsFromSource(source){
+    return [...(source?.querySelectorAll?.(".order-card[data-order-id]")||[])].map(card=>String(card.dataset.orderId||"")).filter(Boolean);
+  }
+  function renderOrderWorkspaceSelection(){
+    const workspace=document.querySelector(".order-workspace-v2");
+    if(!workspace)return;
+    const ids=[...workspace.querySelectorAll("[data-order-list-item]")].map(row=>String(row.dataset.orderId||""));
+    if(orderWorkspaceSelectedId&&!ids.includes(orderWorkspaceSelectedId))orderWorkspaceSelectedId="";
+    const wide=window.matchMedia("(min-width:1000px)").matches;
+    if(wide&&!orderWorkspaceSelectedId&&ids.length)orderWorkspaceSelectedId=ids[0];
+    workspace.classList.toggle("has-selection",Boolean(orderWorkspaceSelectedId));
+    workspace.querySelectorAll("[data-order-list-item]").forEach((row,index)=>{
+      const selected=String(row.dataset.orderId||"")===orderWorkspaceSelectedId;
+      row.classList.toggle("selected",selected);
+      row.setAttribute("aria-pressed",selected?"true":"false");
+      const order=orderCache.get(String(row.dataset.orderId||""));
+      if(order){
+        const refreshed=document.createElement("template");
+        refreshed.innerHTML=orderIndexCardMarkup(order,index,selected);
+        const next=refreshed.content.firstElementChild;
+        if(next)row.replaceWith(next);
+      }
+    });
+    const detail=workspace.querySelector(".order-detail-pane");
+    if(!detail)return;
+    const index=ids.indexOf(orderWorkspaceSelectedId);
+    const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
+    detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
+  }
+  function syncOrderWorkspaceV2(){
+    const list=document.getElementById("orderManagerList");
+    const source=list?.querySelector?.(".order-lifecycle-list");
+    if(!list||!source)return;
+    const existing=list.querySelector(".order-workspace-v2");
+    if(existing){renderOrderWorkspaceSelection();return;}
+    const ids=visibleOrderIdsFromSource(source);
+    const rows=ids.map(id=>orderCache.get(id)).filter(Boolean);
+    if(ids.length&&rows.length!==ids.length)return;
+    if(orderWorkspaceSelectedId&&!ids.includes(orderWorkspaceSelectedId))orderWorkspaceSelectedId="";
+    const wide=window.matchMedia("(min-width:1000px)").matches;
+    if(wide&&!orderWorkspaceSelectedId&&ids.length)orderWorkspaceSelectedId=ids[0];
+    source.dataset.taphoaV2Source="1";
+    source.hidden=true;
+    const workspace=document.createElement("section");
+    workspace.className="order-workspace-v2"+(orderWorkspaceSelectedId?" has-selection":"");
+    workspace.innerHTML='<aside class="order-index-pane"><div class="order-index-scroll">'+
+      '<div class="order-index-list">'+rows.map((order,index)=>orderIndexCardMarkup(order,index,String(order.id)===orderWorkspaceSelectedId)).join('')+'</div>'+
+      '</div></aside><div class="order-detail-pane"></div>';
+    const scroll=workspace.querySelector(".order-index-scroll");
+    const sourceSummary=list.querySelector(":scope > .order-source-summary");
+    const sourceDrill=list.querySelector(":scope > .order-source-detail");
+    if(scroll&&(sourceSummary||sourceDrill)){
+      const report=document.createElement("details");
+      report.className="order-source-report";
+      report.innerHTML='<summary>Theo nguồn</summary><div class="order-source-report-body"></div>';
+      const body=report.querySelector(".order-source-report-body");
+      if(sourceSummary)body?.appendChild(sourceSummary);
+      if(sourceDrill)body?.appendChild(sourceDrill);
+      scroll.insertBefore(report,scroll.firstChild);
+    }
+    source.insertAdjacentElement("afterend",workspace);
+    renderOrderWorkspaceSelection();
+  }
+  function orderCustomerEndpoint(){
+    const base=String(window.GETLINK_API_BASE||"").replace(/\/+$/,"");
+    return base.replace(/\/getlink-api$/,"/getlink-order-customer");
+  }
+  async function reassignOrderCustomer(orderId,customerId){
+    if(customerReassignBusy)return;
+    const auth=currentChatOrderAuth();
+    const token=String(auth?.accessToken||"");
+    if(!token||auth?.account?.role!=="admin")return;
+    const endpoint=orderCustomerEndpoint();
+    if(!endpoint||endpoint.endsWith("getlink-api"))return;
+    customerReassignBusy=true;
+    const status=document.getElementById("userWorkOrderStatus");
+    if(status)status.textContent="Đang đổi khách hàng...";
+    try{
+      const headers={"content-type":"application/json","authorization":"Bearer "+token};
+      const apiKey=String(window.GETLINK_API_KEY||"");
+      if(apiKey)headers.apikey=apiKey;
+      const response=await fetch(endpoint,{method:"PUT",headers,body:JSON.stringify({orderId,customerId})});
+      const data=await response.json().catch(()=>({}));
+      if(!response.ok)throw new Error(data.detail||data.error||"Chưa đổi được khách hàng.");
+      const current=orderCache.get(String(orderId));
+      if(current&&data?.customer){
+        orderCache.set(String(orderId),{...current,customerId:String(data.customer.id||customerId),customerName:String(data.customer.name||current.customerName||"Khách hàng")});
+      }
+      const picker=document.getElementById("orderCustomerPicker");
+      if(picker){picker.hidden=true;picker.setAttribute("aria-hidden","true");}
+      customerReassignOrderId="";
+      renderOrderWorkspaceSelection();
+      if(status)status.textContent="Đã đổi khách hàng của đơn "+orderWorkspaceCode(current||{id:orderId})+".";
+    }catch(error){
+      if(status)status.textContent=String(error?.message||error||"Chưa đổi được khách hàng.");
+    }finally{customerReassignBusy=false;}
+  }
+
   function manualProductSources(){
     try{
       if(typeof mobileSupplierSources==="function")return mobileSupplierSources();
@@ -411,6 +611,8 @@
     syncSalesRows();
     syncOrderNotes();
     syncExactEditActions();
+    syncSalesSelectionCopy();
+    syncOrderWorkspaceV2();
   }
   function queueSync(){
     if(syncFrame)return;
@@ -436,6 +638,37 @@
   },true);
 
   document.addEventListener("click",event=>{
+    const listItem=event.target?.closest?.("[data-order-list-item]");
+    if(listItem){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      orderWorkspaceSelectedId=String(listItem.dataset.orderId||"");
+      renderOrderWorkspaceSelection();
+      return;
+    }
+    if(event.target?.closest?.("[data-order-back]")){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      orderWorkspaceSelectedId="";
+      renderOrderWorkspaceSelection();
+      return;
+    }
+    const customerChange=event.target?.closest?.("[data-order-customer-change]");
+    if(customerChange){
+      customerReassignOrderId=String(customerChange.dataset.orderId||"");
+      return;
+    }
+    if(event.target?.closest?.("#orderCustomerPickerClose")){
+      customerReassignOrderId="";
+      return;
+    }
+    const customerOption=event.target?.closest?.("[data-order-customer-id]");
+    if(customerOption&&customerReassignOrderId){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void reassignOrderCustomer(customerReassignOrderId,String(customerOption.dataset.orderCustomerId||""));
+      return;
+    }
     const qty=event.target?.closest?.("[data-work-qty]");
     if(!qty)return;
     window.setTimeout(()=>{
@@ -445,6 +678,7 @@
         const input=row?.querySelector("[data-work-note]");
         if(input){setNote(input.dataset.workNote,"");input.value="";}
       }
+      queueSync();
     },0);
   },true);
 
@@ -460,6 +694,7 @@
       attempts+=1;
       if((exportsPatched&&searchKeyPatched)||attempts>80)clearInterval(timer);
     },100);
+    window.addEventListener("resize",queueSync,{passive:true});
   }
   if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",boot,{once:true});else boot();
 })();

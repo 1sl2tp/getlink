@@ -10,6 +10,13 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       if(version)url.searchParams.set("v",version);
       return url.toString();
     };
+    if(!document.getElementById("getlinkTaphoaDesktopWorkspaceCss")){
+      const link=document.createElement("link");
+      link.id="getlinkTaphoaDesktopWorkspaceCss";
+      link.rel="stylesheet";
+      link.href=asset("taphoa-desktop-workspace.css");
+      document.head.appendChild(link);
+    }
     if(!document.getElementById("getlinkTaphoaHotPathCss")){
       const link=document.createElement("link");
       link.id="getlinkTaphoaHotPathCss";
@@ -30,6 +37,13 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       link.rel="stylesheet";
       link.href=asset("taphoa-order-workspace-v2.css");
       document.head.appendChild(link);
+    }
+    if(!document.getElementById("getlinkTaphoaDesktopWorkspaceJs")){
+      const script=document.createElement("script");
+      script.id="getlinkTaphoaDesktopWorkspaceJs";
+      script.src=asset("taphoa-desktop-workspace.js");
+      script.async=false;
+      document.head.appendChild(script);
     }
     if(!document.getElementById("getlinkTaphoaHotPathJs")){
       const script=document.createElement("script");

@@ -1,6 +1,6 @@
 {
   "version": "GETLINK",
-  "build_id": "fa8642c4fe958dc524f1613b5d86325240385d9aa557fa03f4ae3d178f60d976",
+  "build_id": "9fdd3c05b2dbd2ec0272826f6a5736c31a4a26d0ab60f3477485cb129cd85c6b",
   "update_policy": "auto-when-safe",
   "published_from": "github-main",
   "assets": [
@@ -10,6 +10,8 @@
     "app.js",
     "order-management.js",
     "order-management.css",
+    "taphoa-desktop-workspace.js",
+    "taphoa-desktop-workspace.css",
     "taphoa-workspace-feedback.js",
     "taphoa-workspace-feedback.css",
     "taphoa-order-workspace-v2.css",

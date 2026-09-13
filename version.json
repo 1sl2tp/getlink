@@ -1,6 +1,6 @@
 {
   "version": "GETLINK",
-  "build_id": "1fa33d1fa76de1735b3e5b3936068091f79c2ac74d6a27d9262bac77aad3af56",
+  "build_id": "1747eb93bc63f4f3fcf390dc2e20f8e99cb69bc1637a642b20fe93cebc61be9d",
   "update_policy": "auto-when-safe",
   "published_from": "github-main",
   "assets": [
@@ -13,6 +13,9 @@
     "taphoa-desktop-workspace.js",
     "taphoa-desktop-workspace.css",
     "taphoa-desktop-data.js",
+    "taphoa-desktop-sales.js",
+    "taphoa-desktop-orders.js",
+    "taphoa-desktop-debts.js",
     "taphoa-workspace-feedback.js",
     "taphoa-workspace-feedback.css",
     "taphoa-order-workspace-v2.css",

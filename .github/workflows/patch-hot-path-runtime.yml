@@ -26,28 +26,17 @@ jobs:
           path=Path('taphoa-hot-path-runtime.js')
           text=path.read_text('utf-8')
 
-          old='''      if(target.closest?.(".order-detail-pane"))return false;
-          if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;'''
-          new='''      if(target.closest?.(".order-detail-pane"))return false;
-          if(target.closest?.(".taphoa-sales-preview"))return false;
-          if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;'''
           if '.taphoa-sales-preview' not in text:
-              if old not in text:
+              needle='if(target.closest?.(".order-detail-pane"))return false;'
+              if needle not in text:
                   raise SystemExit('observer patch anchor not found')
-              text=text.replace(old,new,1)
+              text=text.replace(needle,needle+'\n      if(target.closest?.(".taphoa-sales-preview"))return false;',1)
 
-          anchor='''  function installSelectedItemsFast(){
-            try{userWorkSelectedItems=selectedItemsFast;}catch{}
-            window.userWorkSelectedItems=selectedItemsFast;
-          }
-
-          function taphoaRowsForQuery(categoryKey=""){'''
-          lifecycle='''  function installSelectedItemsFast(){
-            try{userWorkSelectedItems=selectedItemsFast;}catch{}
-            window.userWorkSelectedItems=selectedItemsFast;
-          }
-
-          let cartLoadWrapper=null;
+          if 'function installCartLifecycleFast()' not in text:
+              marker='  function taphoaRowsForQuery(categoryKey=""){' 
+              if marker not in text:
+                  raise SystemExit('cart lifecycle marker not found')
+              lifecycle='''  let cartLoadWrapper=null;
           let cartClearWrapper=null;
           function syncQtyStateFromStorage(){
             qtyState.clear();
@@ -97,38 +86,20 @@ jobs:
             }
           }
 
-          function taphoaRowsForQuery(categoryKey=""){'''
-          if 'function installCartLifecycleFast()' not in text:
-              if anchor not in text:
-                  raise SystemExit('cart lifecycle anchor not found')
-              text=text.replace(anchor,lifecycle,1)
+          '''
+              text=text.replace(marker,lifecycle+marker,1)
 
-          old_patch='''      installTaphoaRowsScope();
-              installSelectedItemsFast();
-              patchDesktopAutoload();'''
-          new_patch='''      installTaphoaRowsScope();
-              installSelectedItemsFast();
-              installCartLifecycleFast();
-              patchDesktopAutoload();'''
+          call_anchor='      installSelectedItemsFast();\n      patchDesktopAutoload();'
           if 'installSelectedItemsFast();\n      installCartLifecycleFast();' not in text:
-              if old_patch not in text:
-                  raise SystemExit('patchGlobals anchor not found')
-              text=text.replace(old_patch,new_patch,1)
+              if call_anchor not in text:
+                  raise SystemExit('patchGlobals call anchor not found')
+              text=text.replace(call_anchor,'      installSelectedItemsFast();\n      installCartLifecycleFast();\n      patchDesktopAutoload();',1)
 
-          old_done='''      updateSummaryFast();
-              patched=true;
-              return true;'''
-          new_done='''      updateSummaryFast();
-              patched=true;
-              [50,250,1000,2000].forEach(delay=>setTimeout(()=>{
-                installSelectedItemsFast();
-                installCartLifecycleFast();
-              },delay));
-              return true;'''
           if '[50,250,1000,2000]' not in text:
-              if old_done not in text:
+              done_anchor='      patched=true;\n      return true;'
+              if done_anchor not in text:
                   raise SystemExit('reconcile anchor not found')
-              text=text.replace(old_done,new_done,1)
+              text=text.replace(done_anchor,'      patched=true;\n      [50,250,1000,2000].forEach(delay=>setTimeout(()=>{\n        installSelectedItemsFast();\n        installCartLifecycleFast();\n      },delay));\n      return true;',1)
 
           path.write_text(text,'utf-8')
       - name: Stamp static build

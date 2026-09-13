@@ -15,7 +15,7 @@ The current Tạp hóa desktop UI visually resembles a three-column workspace, b
 - scroll ownership is split across nested wrappers, so rebuilding or moving DOM can cause visible jank or jumps;
 - the Tạp hóa hot path can still inherit catalog-wide state even though Siêu thị and Tin tức are unrelated to the current sales interaction.
 
-This architecture replaces those implicit relationships with one explicit desktop shell and three permanent slots.
+The business workflows themselves are already known and mostly correct. The problem is the visual architecture. Therefore the implementation will build a fresh Tạp hóa desktop UI shell and reuse existing business APIs/data helpers rather than keep patching the current visual DOM.
 
 ## 2. Locked desktop shell
 
@@ -227,20 +227,20 @@ Forbidden uses in hot paths:
 
 The end state should use explicit calls/events from the actual owner rather than observer-driven synchronization.
 
-## 9. Migration strategy
+## 9. Build-new implementation strategy
 
-Implementation should be incremental but architecture-first:
+This is a fresh desktop visual implementation, not another patch layer.
 
-1. Add the permanent three-column shell and fixed bottom nav without changing backend business logic.
-2. Move Bán into the shell using existing product/cart functions as data sources.
-3. Move Đơn into the shell; render `Theo nguồn` directly in the left rail, compact order index in master, invoice in detail.
-4. Move Công nợ into the shell.
-5. Remove compatibility DOM-moving code and broad observers made obsolete by the shell.
-6. Remove duplicate/legacy visual owners only after each view has parity tests.
+1. Start from `main`, not from `fix/order-source-left-owner` or any other experimental hotfix branch.
+2. Create new focused Tạp hóa desktop UI files that own the shell, state, and three views.
+3. Reuse existing backend endpoints and stable business helpers for orders, debt, customer permissions, prices, and manual product creation.
+4. Do not reuse legacy visual DOM as the new layout. It may be hidden or used temporarily as a compatibility data source while each new view reaches parity.
+5. Build Bán, Đơn, and Công nợ into the new shell in that order, each with its own contract tests.
+6. Only after a view passes parity tests, disable its legacy desktop visual owner.
+7. When all three views pass, remove or stop loading obsolete desktop patch runtimes (`taphoa-workspace-feedback*`, `taphoa-order-workspace-v2.css`, and desktop parts of `taphoa-hot-path-runtime*`) while preserving any helpers still required by mobile.
+8. The final desktop Tạp hóa UI must work without DOM re-parenting between columns and without broad MutationObserver orchestration.
 
-Do not keep the current experimental approach of stacking more runtime hotfix layers onto legacy visual ownership.
-
-The existing `fix/order-source-left-owner` PR is considered an experimental diagnostic branch, not the implementation base for this architecture.
+The existing experimental PR/branch for source-left fixes is diagnostic only and must not be merged as the architecture implementation.
 
 ## 10. Mobile boundary
 

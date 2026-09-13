@@ -39,6 +39,15 @@ class OrderWorkspaceLayoutScrollFeedbackTest(unittest.TestCase):
         self.assertIn("order-invoice-actions", js)
         self.assertNotIn('class="order-card-detail-toggle"', js)
 
+    def test_order_index_keeps_line_and_product_count_visible(self):
+        js = read("taphoa-workspace-feedback.js")
+        css = read("taphoa-order-workspace-v2.css")
+        config = read("config.js")
+        self.assertRegex(js, r"dòng · [^\n]{0,60}SP")
+        self.assertIn("taphoa-order-workspace-v2.css", config)
+        self.assertIn("clip:auto!important", css)
+        self.assertIn("overflow:visible!important", css)
+
     def test_order_detail_counts_lines_and_total_products(self):
         js = read("taphoa-workspace-feedback.js")
         self.assertIn("function orderProductCount", js)

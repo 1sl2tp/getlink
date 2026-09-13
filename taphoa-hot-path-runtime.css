@@ -9,5 +9,4 @@
   #workspaceNav{min-height:0;display:flex;flex-direction:column}
   #workspaceNav .category-tabs{min-height:0;overflow:auto}
   #workspaceNav .taphoa-source-left-slot{flex:1 1 auto;max-height:48vh}
-  .order-index-scroll>.order-source-report{display:none!important}
 }

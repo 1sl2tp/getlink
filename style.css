@@ -15406,3 +15406,6 @@ body.news-quick-open{overflow:hidden!important}
 .user-work-desktop[data-taphoa-view="debts"] .user-work-search{visibility:hidden;pointer-events:none}
 .user-work-desktop[data-taphoa-view="orders"],
 .user-work-desktop[data-taphoa-view="debts"]{min-width:0}
+
+.taphoa-chat-order-context{display:flex;min-width:0;max-width:100%;align-items:center;gap:6px;padding:7px 9px;border:1px solid var(--line,#dfe5e2);border-radius:10px;background:#f7faf8;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
+.taphoa-chat-order-context[data-state="deferred"]{font-style:italic}

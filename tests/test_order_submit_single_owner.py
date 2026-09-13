@@ -90,10 +90,13 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
         self.assertIn("syncTaphoaWorkspace()", submit)
 
         post = submit.index('await orderFetch("/orders",{method:"POST",body})')
+        notify = submit.index("notifyChatOrderCreated(")
         clear = submit.index("window.clearUserWorkOrderSelection();")
         sales = submit.index('taphoaWorkView="sales"')
-        self.assertLess(post, clear)
+        self.assertLess(post, notify)
+        self.assertLess(notify, clear)
         self.assertLess(clear, sales)
+        self.assertNotIn("notifyChatOrderCreated(", submit[:post])
         self.assertNotIn("clearUserWorkOrderSelection", submit[:post])
 
 

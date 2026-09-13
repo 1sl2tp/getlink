@@ -67,6 +67,16 @@ assert.ok(orders.includes('id="taphoaOrderFrom"'),"custom report range needs a f
 assert.ok(orders.includes('id="taphoaOrderTo"'),"custom report range needs a to date");
 assert.ok(orders.includes("supplierSources"),"order source labels must use supplier display names when available");
 
+assert.ok(orders.includes("function sourceSummary"),"fresh Orders must calculate source qty/revenue/cost/profit locally");
+assert.ok(orders.includes("function sourceDetailRows"),"fresh Orders must expose source detail rows");
+assert.ok(orders.includes("function combinedSourceRows"),"fresh Orders must group repeated products for a combined source report");
+assert.ok(orders.includes('data-td-source-mode="detail"'),"source drill-down needs a detail mode");
+assert.ok(orders.includes('data-td-source-mode="combined"'),"source drill-down needs a combined mode");
+assert.ok(orders.includes("async function shareSourceReport"),"source report must support share/copy");
+const share=block(orders,"async function shareSourceReport", "async function batchCurrentOrders");
+assert.ok(share.includes("navigator.share"),"source report should use native share when available");
+assert.ok(share.includes("navigator.clipboard.writeText"),"source report should fall back to clipboard copy");
+
 assert.ok(debts.includes('data-td-debt-order="'),"order-linked debt transactions must expose an order drill-down control");
 assert.ok(debts.includes("async function loadLinkedOrder"),"debt workspace must fetch a linked order on demand");
 const linked=block(debts,"async function loadLinkedOrder", "async function loadDetail");

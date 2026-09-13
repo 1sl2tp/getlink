@@ -42,6 +42,8 @@
   let busy=false;
   let pickerBusy=false;
   let bridgeSeq=0;
+  let chatWorkContext=null;
+  let pendingChatWorkContext=null;
 
   function escapeHtml(value){
     return String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
@@ -118,6 +120,68 @@
   }
   function currentRole(){return currentAccessState()}
   function selectedCustomer(){return customers.find(row=>String(row.id)===String(selectedCustomerId))||null}
+  function normalizeChatWorkContext(message){
+    if(!message||message.type!=="taphoa-chat-work-context")return null;
+    const contactId=String(message.contactId||"").trim();
+    if(!contactId)return null;
+    const sourceMessageIds=Array.from(new Set(
+      (Array.isArray(message.sourceMessageIds)?message.sourceMessageIds:[])
+        .map(value=>String(value||"").trim())
+        .filter(Boolean)
+    )).slice(0,100);
+    return {
+      contactId,
+      customerName:String(message.customerName||"").trim(),
+      sourceMessageIds,
+      preset:String(message.preset||"today").trim()||"today",
+      from:String(message.from||"").trim(),
+      to:String(message.to||"").trim(),
+    };
+  }
+  function currentSelectedCart(){
+    const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
+    return Array.isArray(selected)?selected:[];
+  }
+  function applyChatWorkContext(context){
+    if(!context?.contactId)return "ignored";
+    const cart=currentSelectedCart();
+    const changingCustomer=selectedCustomerId&&String(selectedCustomerId)!==String(context.contactId);
+    if(changingCustomer&&cart.length){
+      pendingChatWorkContext=context;
+      setMainStatus("Không đổi khách vì đơn đang có hàng. Gửi/xóa đơn hiện tại rồi chuyển khách.");
+      renderChatWorkContext();
+      return "deferred";
+    }
+    chatWorkContext=context;
+    pendingChatWorkContext=null;
+    if(currentRole()==="admin"){
+      selectedCustomerId=context.contactId;
+      sessionStorage.setItem(SELECTED_CUSTOMER_KEY,selectedCustomerId);
+      syncCustomerControls();
+    }
+    renderChatWorkContext();
+    return "applied";
+  }
+  function applyPendingChatWorkContextIfSafe(){
+    if(!pendingChatWorkContext||currentSelectedCart().length)return false;
+    const next=pendingChatWorkContext;
+    pendingChatWorkContext=null;
+    return applyChatWorkContext(next)==="applied";
+  }
+  function notifyChatOrderCreated({orderId="",orderNo="",contactId=""}={}){
+    if(!isEmbeddedInChat()||!chatWorkContext)return false;
+    const targetContact=String(contactId||"").trim();
+    if(!targetContact||String(chatWorkContext.contactId)!==targetContact)return false;
+    if(!chatWorkContext.sourceMessageIds.length)return false;
+    window.parent.postMessage({
+      type:"taphoa-work-order-created",
+      contactId:targetContact,
+      sourceMessageIds:[...chatWorkContext.sourceMessageIds],
+      orderId:String(orderId||""),
+      orderNo:String(orderNo||""),
+    },CHAT_ORIGIN);
+    return true;
+  }
 
   function authHeaders(token,jsonBody=false){
     const h=new Headers();
@@ -180,8 +244,14 @@
   window.addEventListener("message",event=>{
     if(event.origin!==CHAT_ORIGIN)return;
     const message=event.data;
-    if(!message||message.type!=="taphoa-chat-auth")return;
-    void acceptChatBridge(message);
+    if(message?.type==="taphoa-chat-auth"){
+      void acceptChatBridge(message);
+      return;
+    }
+    if(message?.type==="taphoa-chat-work-context"){
+      const context=normalizeChatWorkContext(message);
+      if(context)applyChatWorkContext(context);
+    }
   });
 
   function isEmbeddedInChat(){return window.parent!==window}
@@ -242,6 +312,16 @@
       ?document.getElementById("mobileUserWork")
       :document.querySelector(".user-work-desktop");
   }
+  function renderChatWorkContext(){
+    const host=document.getElementById("taphoaChatOrderContext");
+    if(!host)return;
+    const context=pendingChatWorkContext||chatWorkContext;
+    if(!context){host.hidden=true;host.textContent="";return;}
+    host.hidden=false;
+    const waiting=Boolean(pendingChatWorkContext);
+    host.textContent=(waiting?"Đang chờ chuyển sang · ":"Nguồn Chat · ")+(context.customerName||"Khách hàng");
+    host.dataset.state=waiting?"deferred":"applied";
+  }
   function renderSalesContext(){
     const panel=document.getElementById("taphoaSalesContext");
     const preview=document.getElementById("taphoaSalesPreview");
@@ -253,6 +333,7 @@
       return '<div class="taphoa-sales-preview-row"><span><small>'+(index+1)+'.</small>'+escapeHtml(name)+'</span><strong>×'+Number(item.qty||0)+'</strong></div>';
     }).join("")+(selected.length>12?'<div class="taphoa-sales-preview-more">+'+(selected.length-12)+' sản phẩm</div>':""):'<div class="taphoa-sales-preview-empty">Chưa chọn sản phẩm</div>';
     panel.classList.toggle("has-items",selected.length>0);
+    renderChatWorkContext();
   }
   function ensureSalesContextPanel(){
     const mine=document.getElementById("userWorkMine");
@@ -265,7 +346,7 @@
       panel=document.createElement("aside");
       panel.id="taphoaSalesContext";
       panel.className="taphoa-sales-context";
-      panel.innerHTML='<div class="taphoa-sales-context-head"><strong>Xem đơn nhanh</strong><small>Khách · hàng đã chọn · thao tác</small></div><div id="taphoaSalesPreview" class="taphoa-sales-preview"></div>';
+      panel.innerHTML='<div class="taphoa-sales-context-head"><strong>Xem đơn nhanh</strong><small>Khách · hàng đã chọn · thao tác</small></div><div id="taphoaChatOrderContext" class="taphoa-chat-order-context" hidden></div><div id="taphoaSalesPreview" class="taphoa-sales-preview"></div>';
       wrap.insertAdjacentElement("afterend",panel);
     }
     if(foot.parentElement!==panel)panel.appendChild(foot);
@@ -919,6 +1000,7 @@
   }
   function clearCurrentCart(){
     if(typeof window.clearUserWorkOrderSelection==="function")window.clearUserWorkOrderSelection();
+    applyPendingChatWorkContextIfSafe();
     afterCartMutation();
   }
   async function startEditOrder(id){
@@ -1028,23 +1110,32 @@
     const selected=typeof window.userWorkSelectedItems==="function"?window.userWorkSelectedItems():[];
     if(!Array.isArray(selected)||selected.length===0){setMainStatus("Chưa chọn sản phẩm.");return;}
     const items=selected.map(item=>({url:item.row.canonical_url,qty:item.qty}));
+    const submittedCustomerId=currentRole()==="admin"
+      ?String(selectedCustomerId||"").trim()
+      :String(currentAccount()?.id||"").trim();
     let body;
     if(currentRole()==="admin"){
-      if(!selectedCustomerId){
+      if(!submittedCustomerId){
         setMainStatus("Chưa chọn khách hàng.");
         await openCustomerPicker();
         return;
       }
-      const customerId=selectedCustomerId;
-      body=JSON.stringify({items,customerId});
+      body=JSON.stringify({items,customerId:submittedCustomerId});
     }else body=JSON.stringify({items});
 
     busy=true;setSalesBusyState("send",true);setMainStatus("Đang gửi đơn...");
     try{
       const data=await orderFetch("/orders",{method:"POST",body});
+      const notified=notifyChatOrderCreated({
+        orderId:String(data?.order?.id||""),
+        orderNo:String(data?.order?.orderNo||""),
+        contactId:submittedCustomerId,
+      });
+      if(notified)chatWorkContext=null;
       if(typeof window.clearUserWorkOrderSelection==="function"){
         window.clearUserWorkOrderSelection();
       }
+      applyPendingChatWorkContextIfSafe();
       const customerName=currentRole()==="admin"?(selectedCustomer()?.name||""):"";
       const orderLabel=data?.order?.orderNo?"#"+data.order.orderNo:String(data?.order?.id||"");
       setMainStatus("Đã gửi đơn "+orderLabel+(customerName?" · "+customerName:"")+" · Đơn tạm.");

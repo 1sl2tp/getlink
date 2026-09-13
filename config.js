@@ -10,6 +10,13 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       if(version)url.searchParams.set("v",version);
       return url.toString();
     };
+    if(!document.getElementById("getlinkTaphoaHotPathCss")){
+      const link=document.createElement("link");
+      link.id="getlinkTaphoaHotPathCss";
+      link.rel="stylesheet";
+      link.href=asset("taphoa-hot-path-runtime.css");
+      document.head.appendChild(link);
+    }
     if(!document.getElementById("getlinkTaphoaFeedbackCss")){
       const link=document.createElement("link");
       link.id="getlinkTaphoaFeedbackCss";
@@ -23,6 +30,13 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       link.rel="stylesheet";
       link.href=asset("taphoa-order-workspace-v2.css");
       document.head.appendChild(link);
+    }
+    if(!document.getElementById("getlinkTaphoaHotPathJs")){
+      const script=document.createElement("script");
+      script.id="getlinkTaphoaHotPathJs";
+      script.src=asset("taphoa-hot-path-runtime.js");
+      script.async=false;
+      document.head.appendChild(script);
     }
     if(!document.getElementById("getlinkTaphoaFeedbackJs")){
       const script=document.createElement("script");

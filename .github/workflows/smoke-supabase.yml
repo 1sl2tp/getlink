@@ -12,6 +12,7 @@ on:
     paths:
       - "config.js"
       - "supabase/functions/getlink-api/**"
+      - "supabase/functions/getlink-order-agent/**"
       - "supabase/migrations/**"
       - ".github/workflows/smoke-supabase.yml"
   workflow_dispatch:
@@ -30,13 +31,27 @@ jobs:
           test -n "$API"
           test -n "$KEY"
 
-          curl --fail --silent --show-error             -H "apikey: $KEY"             "$API/health" > /tmp/health.json
+          curl --fail --silent --show-error \
+            -H "apikey: $KEY" \
+            "$API/health" > /tmp/health.json
           jq . /tmp/health.json
           test "$(jq -r '.ok' /tmp/health.json)" = "true"
           test "$(jq -r '.mode' /tmp/health.json)" = "supabase-only"
           jq -e '.stale_jobs_cleaned | type=="number"' /tmp/health.json >/dev/null
 
-          LIBRARY_CODE="$(curl --silent --show-error --output /tmp/library.json --write-out '%{http_code}'             -H "apikey: $KEY"             "$API/api/library?view=search&limit=10&include_hidden=1")"
+          AGENT="${API%/getlink-api}/getlink-order-agent/health"
+          curl --fail --silent --show-error "$AGENT" > /tmp/order-agent-health.json
+          jq . /tmp/order-agent-health.json
+          test "$(jq -r '.ok' /tmp/order-agent-health.json)" = "true"
+          jq -e '.mode | IN("off","shadow","pilot","on")' /tmp/order-agent-health.json >/dev/null
+          jq -e '.database_configured | type=="boolean"' /tmp/order-agent-health.json >/dev/null
+          jq -e '.model_configured | type=="boolean"' /tmp/order-agent-health.json >/dev/null
+          jq -e '.webhook_configured | type=="boolean"' /tmp/order-agent-health.json >/dev/null
+          jq -e '.pilot_customer_count | type=="number"' /tmp/order-agent-health.json >/dev/null
+
+          LIBRARY_CODE="$(curl --silent --show-error --output /tmp/library.json --write-out '%{http_code}' \
+            -H "apikey: $KEY" \
+            "$API/api/library?view=search&limit=10&include_hidden=1")"
           if [ "$LIBRARY_CODE" != "200" ]; then
             echo "Library HTTP $LIBRARY_CODE"
             cat /tmp/library.json
@@ -49,10 +64,11 @@ jobs:
           jq -e 'all(.products[]; has("supplier_expected_profit_vnd")|not)' /tmp/library.json >/dev/null
           jq -e 'all(.products[]; has("supplier_applied_profit_vnd")|not)' /tmp/library.json >/dev/null
 
-          CODE="$(curl --silent --output /tmp/source-manager.json --write-out '%{http_code}'             -H "apikey: $KEY"             "$API/api/library?view=source-manager")"
+          CODE="$(curl --silent --output /tmp/source-manager.json --write-out '%{http_code}' \
+            -H "apikey: $KEY" \
+            "$API/api/library?view=source-manager")"
           test "$CODE" = "401"
           test "$(jq -r '.error' /tmp/source-manager.json)" = "admin_locked"
-
 
       - name: Reject customer GETLINK without admin session
         shell: bash
@@ -75,5 +91,9 @@ jobs:
           set -euo pipefail
           API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
           KEY="$(sed -n 's/^window.GETLINK_API_KEY="\([^"]*\)";/\1/p' config.js)"
-          CODE="$(curl --silent --output /tmp/write.json --write-out '%{http_code}'             -H "apikey: $KEY"             -H 'content-type: application/json'             -X POST "$API/api/preference"             --data '{}')"
+          CODE="$(curl --silent --output /tmp/write.json --write-out '%{http_code}' \
+            -H "apikey: $KEY" \
+            -H 'content-type: application/json' \
+            -X POST "$API/api/preference" \
+            --data '{}')"
           test "$CODE" = "403"

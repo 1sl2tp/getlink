@@ -34,7 +34,7 @@ const editUpdate=block(sales,"async function updateEditing", "function editOrder
 assert.ok(editUpdate.includes('TaphoaDesktopWorkspace?.view==="sales"'),"edit completion must not repaint Sales after switching back to Orders");
 
 const ensureIndex=block(data,"function ensureProductIndex", "function allProducts");
-assert.ok(ensureIndex.includes("libraryCache"),"product index must notice when the app library cache arrives or changes");
+assert.ok(ensureIndex.includes("currentLibraryRows"),"product index must notice when the app library cache arrives or changes");
 assert.ok(ensureIndex.includes("indexSource"),"product index must track the source cache identity");
 
 const select=block(orders,"function selectOrder", "async function loadCustomers");

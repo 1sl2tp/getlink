@@ -45,7 +45,8 @@ class ChatOrderSourceHandoffContract(unittest.TestCase):
         self.assertIn('taphoaChatOrderContext',self.text)
         self.assertIn('Nguồn Chat',self.text)
         self.assertIn('Đang chờ chuyển sang',self.text)
-        self.assertIn('chatWorkContext.customerName',self.text)
+        self.assertIn('pendingChatWorkContext||chatWorkContext',self.compact)
+        self.assertIn('context.customerName',self.text)
         style=STYLE.read_text(encoding='utf-8')
         self.assertIn('.taphoa-chat-order-context',style)
 

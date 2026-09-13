@@ -3,10 +3,12 @@
 
   // TAPHOA_HOT_PATHS_V1
   const QTY_KEY="getlink:user-work-order-qty";
+  const NOTE_KEY="getlink:work-order-line-notes-v1";
   const NativeMutationObserver=window.MutationObserver;
   const qtyState=new Map();
   let qtyHydrated=false;
   let taphoaIndex=[];
+  let taphoaIndexByUrl=new Map();
   let taphoaIndexSource=null;
   let taphoaIndexLength=-1;
   let searchTimer=0;
@@ -33,8 +35,6 @@
     });
   }
 
-  // The feedback layer observes documentElement. Ignore local mutations that it
-  // created itself, otherwise the invoice detail can schedule itself forever.
   if(typeof NativeMutationObserver==="function"){
     window.MutationObserver=class TaphoaMutationObserver extends NativeMutationObserver{
       constructor(callback){
@@ -78,6 +78,13 @@
 
   function isTaphoaQtyKey(key){
     return String(key||"").includes("get.taphoa.xyz/nguon-hang/");
+  }
+
+  function noteForUrl(url){
+    try{
+      const notes=JSON.parse(localStorage.getItem(NOTE_KEY)||"{}");
+      return String(notes&&notes[String(url||"").trim().toLowerCase()]||"").slice(0,160);
+    }catch{return "";}
   }
 
   function updateSummaryFast(){
@@ -127,6 +134,7 @@
         return next;
       };
       updateUserWorkOrderSummary=updateSummaryFast;
+      window.updateUserWorkOrderSummary=updateSummaryFast;
     }catch{}
   }
 
@@ -143,9 +151,29 @@
       .map((row,index)=>({
         row,
         index,
+        key:qtyKey(row?.canonical_url),
         hay:(()=>{try{return userWorkSearchKey(row);}catch{return normalizeText([row?.canonical_product_name,row?.product_name,row?.supplier_source_name].filter(Boolean).join(" "));}})()
       }));
+    taphoaIndexByUrl=new Map(taphoaIndex.filter(item=>item.key).map(item=>[item.key,item.row]));
     return taphoaIndex;
+  }
+
+  function selectedItemsFast(){
+    hydrateQtyState();
+    buildTaphoaIndex(false);
+    const selected=[];
+    for(const [key,qty] of qtyState){
+      if(!qty||!isTaphoaQtyKey(key))continue;
+      const row=taphoaIndexByUrl.get(key);
+      if(!row)continue;
+      selected.push({row,qty,bargain:0,lineNote:noteForUrl(row?.canonical_url)});
+    }
+    return selected;
+  }
+
+  function installSelectedItemsFast(){
+    try{userWorkSelectedItems=selectedItemsFast;}catch{}
+    window.userWorkSelectedItems=selectedItemsFast;
   }
 
   function taphoaRowsForQuery(categoryKey=""){
@@ -438,18 +466,20 @@
       slot.hidden=true;
       nav.appendChild(slot);
     }
-    const report=document.querySelector(".order-workspace-v2 .order-source-report");
-    if(report&&report.parentElement!==slot){
-      slot.replaceChildren(report);
-    }
-    const visible=Boolean(manager&&!manager.hidden&&report);
+    const fresh=document.querySelector(".order-workspace-v2 .order-source-report");
+    if(fresh&&fresh.parentElement!==slot)slot.replaceChildren(fresh);
+    const report=fresh||slot.querySelector(".order-source-report");
+    const visible=Boolean(manager&&!manager.hidden&&manager.getClientRects().length&&report);
     slot.hidden=!visible;
   }
 
   function installSourceRailWatcher(){
     if(sourceRailObserver)return;
-    sourceRailObserver=new NativeMutationObserver(()=>requestAnimationFrame(moveOrderSourceLeft));
-    sourceRailObserver.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class"]});
+    const host=document.querySelector(".workspace-list");
+    if(host){
+      sourceRailObserver=new NativeMutationObserver(()=>requestAnimationFrame(moveOrderSourceLeft));
+      sourceRailObserver.observe(host,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class"]});
+    }
     document.addEventListener("click",()=>requestAnimationFrame(moveOrderSourceLeft),true);
     moveOrderSourceLeft();
   }
@@ -460,6 +490,7 @@
       if(typeof libraryCache==="undefined"||typeof isMineRow!=="function"||typeof userWorkMineRow!=="function")return false;
       installQtyFunctions();
       installTaphoaRowsScope();
+      installSelectedItemsFast();
       patchDesktopAutoload();
       patchMobileAutoload();
       buildTaphoaIndex(true);

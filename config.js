@@ -17,6 +17,13 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       link.href=asset("taphoa-workspace-feedback.css");
       document.head.appendChild(link);
     }
+    if(!document.getElementById("getlinkTaphoaOrderWorkspaceV2Css")){
+      const link=document.createElement("link");
+      link.id="getlinkTaphoaOrderWorkspaceV2Css";
+      link.rel="stylesheet";
+      link.href=asset("taphoa-order-workspace-v2.css");
+      document.head.appendChild(link);
+    }
     if(!document.getElementById("getlinkTaphoaFeedbackJs")){
       const script=document.createElement("script");
       script.id="getlinkTaphoaFeedbackJs";

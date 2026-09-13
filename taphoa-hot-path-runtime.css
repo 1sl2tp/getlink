@@ -1,0 +1,13 @@
+/* TAPHOA_HOT_PATHS_V1 */
+.taphoa-source-left-slot{margin-top:10px;min-height:0;overflow:auto;overscroll-behavior:contain}
+.taphoa-source-left-slot[hidden]{display:none!important}
+.taphoa-source-left-slot .order-source-report{margin:0;border:0;border-top:1px solid #e8ecea;border-radius:0;background:transparent}
+.taphoa-source-left-slot .order-source-report>summary{padding:10px 4px 8px;font-weight:700;cursor:pointer}
+.taphoa-source-left-slot .order-source-report-body{padding:0 0 8px}
+.taphoa-source-left-slot .order-source-summary,.taphoa-source-left-slot .order-source-detail{margin:0}
+@media (min-width:1000px){
+  #workspaceNav{min-height:0;display:flex;flex-direction:column}
+  #workspaceNav .category-tabs{min-height:0;overflow:auto}
+  #workspaceNav .taphoa-source-left-slot{flex:1 1 auto;max-height:48vh}
+  .order-index-scroll>.order-source-report{display:none!important}
+}

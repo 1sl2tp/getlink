@@ -1,0 +1,24 @@
+/* Order workspace V2 refinements: counts stay visible without increasing row height. */
+.order-index-card{
+  position:relative;
+  padding-right:92px!important;
+}
+.order-index-count{
+  position:absolute!important;
+  clip:auto!important;
+  clip-path:none!important;
+  width:auto!important;
+  height:auto!important;
+  right:9px;
+  bottom:7px;
+  overflow:visible!important;
+  color:#68756e;
+  font-size:9.5px;
+  line-height:1.1;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:639px){
+  .order-index-card{padding-right:86px!important}
+  .order-index-count{right:7px;font-size:9px}
+}

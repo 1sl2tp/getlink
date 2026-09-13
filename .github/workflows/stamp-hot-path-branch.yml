@@ -1,0 +1,34 @@
+name: Stamp hot-path branch
+
+on:
+  push:
+    branches:
+      - perf/taphoa-hot-paths-scroll
+
+permissions:
+  contents: write
+
+jobs:
+  stamp:
+    if: github.event.head_commit.message != 'chore: stamp static build'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/taphoa-hot-paths-scroll
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Commit stamp
+        run: |
+          if git diff --quiet -- index.html version.json; then
+            echo 'No stamp changes'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html version.json
+          git commit -m 'chore: stamp static build'
+          git push origin HEAD:perf/taphoa-hot-paths-scroll

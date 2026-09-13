@@ -148,6 +148,18 @@
     if(!target)return;
     window.requestAnimationFrame(syncFromTopNavigation);
   },true);
+
+  // This listener is registered before legacy order-management.js. New slot handlers
+  // already ran while the event bubbled; stop the old document-level handlers here.
+  document.addEventListener("click",event=>{
+    if(!root||root.hidden)return;
+    if(event.target.closest?.("#taphoaDesktopWorkspace"))event.stopImmediatePropagation();
+  });
+
+  document.addEventListener("getlink-access-change",()=>{
+    if(root&&!root.hidden&&dependenciesReady())void activateView(currentView);
+  });
+
   window.addEventListener("resize",()=>{
     window.clearTimeout(resizeTimer);
     resizeTimer=window.setTimeout(syncFromTopNavigation,120);

@@ -92,13 +92,11 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertRegex(text, r'url\s*:\s*item\.row\.canonical_url')
         self.assertRegex(text, r'qty\s*:\s*item\.qty')
         self.assertIn('JSON.stringify({items})', text)
-        self.assertRegex(
-            text,
-            r'JSON\.stringify\(\{items,customerId:(?:customerId|submittedCustomerId)\}\)',
-        )
+        self.assertIn('submittedCustomerId', text)
+        self.assertIn('JSON.stringify({items,customerId:submittedCustomerId})', text)
         for token in ("unit_price:", "gia:", "cost:", "von:"):
             self.assertNotIn(token, text)
-        self.assertNotRegex(text, r'JSON\.stringify\(\{items(?:,customerId(?::[A-Za-z0-9_]+)?)?,customerName')
+        self.assertNotRegex(text, r'JSON\.stringify\(\{items(?:,customerId(?::submittedCustomerId)?)?,customerName')
 
     def test_frontend_has_three_native_order_status_tabs(self):
         text = self.js_text()

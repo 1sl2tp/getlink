@@ -1,0 +1,146 @@
+name: Patch hot-path runtime
+
+on:
+  push:
+    branches:
+      - perf/taphoa-hot-paths-scroll
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: perf/taphoa-hot-paths-scroll
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply hot-path patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path=Path('taphoa-hot-path-runtime.js')
+          text=path.read_text('utf-8')
+
+          old='''      if(target.closest?.(".order-detail-pane"))return false;
+          if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;'''
+          new='''      if(target.closest?.(".order-detail-pane"))return false;
+          if(target.closest?.(".taphoa-sales-preview"))return false;
+          if(target.id==="userWorkSelectedCount"||target.id==="mobileUserSelectedCount")return false;'''
+          if '.taphoa-sales-preview' not in text:
+              if old not in text:
+                  raise SystemExit('observer patch anchor not found')
+              text=text.replace(old,new,1)
+
+          anchor='''  function installSelectedItemsFast(){
+            try{userWorkSelectedItems=selectedItemsFast;}catch{}
+            window.userWorkSelectedItems=selectedItemsFast;
+          }
+
+          function taphoaRowsForQuery(categoryKey=""){'''
+          lifecycle='''  function installSelectedItemsFast(){
+            try{userWorkSelectedItems=selectedItemsFast;}catch{}
+            window.userWorkSelectedItems=selectedItemsFast;
+          }
+
+          let cartLoadWrapper=null;
+          let cartClearWrapper=null;
+          function syncQtyStateFromStorage(){
+            qtyState.clear();
+            qtyHydrated=false;
+            hydrateQtyState();
+          }
+          function clearSelectedNotes(items){
+            try{
+              const notes=JSON.parse(localStorage.getItem(NOTE_KEY)||"{}");
+              let changed=false;
+              for(const item of Array.isArray(items)?items:[]){
+                const key=String(item?.row?.canonical_url||"").trim().toLowerCase();
+                if(key&&Object.prototype.hasOwnProperty.call(notes,key)){delete notes[key];changed=true;}
+              }
+              if(changed)localStorage.setItem(NOTE_KEY,JSON.stringify(notes));
+            }catch{}
+          }
+          function installCartLifecycleFast(){
+            const currentLoad=window.loadUserWorkOrderSelection;
+            if(typeof currentLoad==="function"&&currentLoad!==cartLoadWrapper){
+              const baseLoad=currentLoad;
+              cartLoadWrapper=function(order){
+                const result=baseLoad.apply(this,arguments);
+                syncQtyStateFromStorage();
+                updateSummaryFast();
+                return result;
+              };
+              window.loadUserWorkOrderSelection=cartLoadWrapper;
+            }
+            const currentClear=window.clearUserWorkOrderSelection;
+            if(typeof currentClear==="function"&&currentClear!==cartClearWrapper){
+              const baseClear=currentClear;
+              cartClearWrapper=function(){
+                const selected=selectedItemsFast();
+                clearSelectedNotes(selected);
+                qtyState.clear();
+                qtyHydrated=true;
+                persistQtyState();
+                const result=baseClear.apply(this,arguments);
+                qtyState.clear();
+                qtyHydrated=true;
+                persistQtyState();
+                updateSummaryFast();
+                return result;
+              };
+              window.clearUserWorkOrderSelection=cartClearWrapper;
+            }
+          }
+
+          function taphoaRowsForQuery(categoryKey=""){'''
+          if 'function installCartLifecycleFast()' not in text:
+              if anchor not in text:
+                  raise SystemExit('cart lifecycle anchor not found')
+              text=text.replace(anchor,lifecycle,1)
+
+          old_patch='''      installTaphoaRowsScope();
+              installSelectedItemsFast();
+              patchDesktopAutoload();'''
+          new_patch='''      installTaphoaRowsScope();
+              installSelectedItemsFast();
+              installCartLifecycleFast();
+              patchDesktopAutoload();'''
+          if 'installSelectedItemsFast();\n      installCartLifecycleFast();' not in text:
+              if old_patch not in text:
+                  raise SystemExit('patchGlobals anchor not found')
+              text=text.replace(old_patch,new_patch,1)
+
+          old_done='''      updateSummaryFast();
+              patched=true;
+              return true;'''
+          new_done='''      updateSummaryFast();
+              patched=true;
+              [50,250,1000,2000].forEach(delay=>setTimeout(()=>{
+                installSelectedItemsFast();
+                installCartLifecycleFast();
+              },delay));
+              return true;'''
+          if '[50,250,1000,2000]' not in text:
+              if old_done not in text:
+                  raise SystemExit('reconcile anchor not found')
+              text=text.replace(old_done,new_done,1)
+
+          path.write_text(text,'utf-8')
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Commit implementation and stamp
+        run: |
+          if git diff --quiet; then
+            echo 'Patch already applied.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add taphoa-hot-path-runtime.js index.html version.json
+          git commit -m 'perf: keep cart lifecycle on hot path'
+          git push origin HEAD:perf/taphoa-hot-paths-scroll

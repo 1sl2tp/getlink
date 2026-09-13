@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   stamp:
-    if: github.event.head_commit.message != 'chore: stamp static build'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,10 +20,10 @@ jobs:
           python-version: '3.12'
       - name: Stamp static build
         run: python tools/stamp_static_build.py
-      - name: Commit stamp
+      - name: Commit stamp when needed
         run: |
           if git diff --quiet -- index.html version.json; then
-            echo 'No stamp changes'
+            echo 'Static stamp is current.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'

@@ -37,6 +37,13 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
         self.assertIn("updateSummaryFast", js)
         self.assertNotIn("userWorkSelectedItems()", js)
 
+    def test_cart_lifecycle_keeps_ram_state_in_sync(self):
+        js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
+        self.assertIn("installCartLifecycleFast", js)
+        self.assertIn("qtyState.clear()", js)
+        self.assertIn("window.loadUserWorkOrderSelection", js)
+        self.assertIn("window.clearUserWorkOrderSelection", js)
+
     def test_infinite_scroll_appends_without_full_workspace_render(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
         self.assertIn("appendTaphoaRows", js)
@@ -45,10 +52,11 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
         self.assertNotIn("renderUserWorkHome", block)
         self.assertNotIn("scrollTop=0", block)
 
-    def test_feedback_observer_ignores_invoice_self_render_loop(self):
+    def test_feedback_observer_ignores_hot_local_mutations(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
         self.assertIn("filterFeedbackObserverRecords", js)
         self.assertIn(".order-detail-pane", js)
+        self.assertIn(".taphoa-sales-preview", js)
         self.assertIn("NativeMutationObserver", js)
 
     def test_quick_add_inserts_returned_product_without_catalog_reload(self):

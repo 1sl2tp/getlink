@@ -58,8 +58,9 @@ assert.ok(batchOrders.includes("visibleRows()"),"delivered batch must respect th
 assert.ok(batchOrders.includes("map(o=>String(o.id"),"delivered batch must submit visible order ids");
 assert.ok(batchOrders.includes('state.status==="returned"'),"returned history must not expose a destructive batch action");
 
-for(const preset of ["all","today","yesterday","week","month","year","custom"]){
-  assert.ok(orders.includes(`value="${preset}"`),`missing order time preset ${preset}`);
+const timeOptions=block(orders,"function timeOptions()", "function renderOrderList");
+for(const [preset,label] of [["all","Tất cả"],["today","Hôm nay"],["yesterday","Hôm qua"],["week","Tuần này"],["month","Tháng này"],["year","Năm nay"],["custom","Tùy chọn"]]){
+  assert.ok(timeOptions.includes(`['${preset}','${label}']`),`missing order time preset ${preset}`);
 }
 assert.ok(orders.includes("function orderMatchesTime"),"order report must have one time-filter owner");
 assert.ok(orders.includes('id="taphoaOrderFrom"'),"custom report range needs a from date");

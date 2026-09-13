@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,15 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
         feedback = config.find("taphoa-workspace-feedback.js")
         self.assertGreaterEqual(hot, 0, "hot-path runtime must be loaded")
         self.assertGreater(feedback, hot, "hot-path runtime must install capture/filter guards before feedback runtime")
+
+    def test_runtime_js_syntax(self):
+        result = subprocess.run(
+            ["node", "--check", str(ROOT / "taphoa-hot-path-runtime.js")],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_taphoa_search_uses_own_ram_index(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")

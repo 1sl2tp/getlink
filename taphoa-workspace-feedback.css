@@ -183,3 +183,90 @@
   .order-report-controls:has(.order-report-custom) .order-report-time{flex-wrap:wrap;justify-content:stretch}
   .order-report-controls:has(.order-report-custom) .order-report-custom{flex:1 1 100%}
 }
+
+/* TAPHOA_REMAINING_DOC_FEEDBACK_20260913
+   Keep the sales table and the quick-order card in the same actual grid row.
+   Explicit placement avoids an implicit grid row when the section switches from
+   its base flex layout to the desktop two-column sales layout. */
+@media(min-width:1000px){
+  .user-work-mine.taphoa-sales-grid{
+    grid-template-rows:auto minmax(0,1fr)!important;
+    align-content:stretch!important;
+  }
+  .user-work-mine.taphoa-sales-grid>.user-work-section-head{
+    grid-column:1/-1!important;
+    grid-row:1!important;
+  }
+  .user-work-mine.taphoa-sales-grid>.user-work-order-wrap{
+    grid-column:1!important;
+    grid-row:2!important;
+    align-self:stretch!important;
+    min-height:0!important;
+    margin:0!important;
+  }
+  .user-work-mine.taphoa-sales-grid>.taphoa-sales-context{
+    grid-column:2!important;
+    grid-row:2!important;
+    align-self:start!important;
+    top:0!important;
+    margin:0!important;
+  }
+}
+
+.taphoa-quick-add{
+  margin:8px 0;
+  padding:12px;
+  border:1px dashed #b8cfc0;
+  border-radius:10px;
+  background:#f8fcf9;
+  color:#33433a;
+  text-align:left;
+}
+.taphoa-quick-add-copy{display:block;margin-bottom:9px}
+.taphoa-quick-add-copy strong{display:block;font-size:13px;color:#1f5136}
+.taphoa-quick-add-copy small{display:block;margin-top:2px;color:#718078;font-size:11px}
+.taphoa-quick-add-fields{
+  display:grid;
+  grid-template-columns:minmax(150px,1fr) minmax(110px,.55fr) minmax(110px,.48fr) auto;
+  gap:7px;
+  align-items:center;
+}
+.taphoa-quick-add-fields input,
+.taphoa-quick-add-fields select{
+  width:100%;
+  min-width:0;
+  min-height:40px;
+  padding:0 9px;
+  border:1px solid #d7ded9;
+  border-radius:8px;
+  background:#fff;
+  color:#2d3731;
+  font-size:12px;
+  outline:none;
+}
+.taphoa-quick-add-fields input:focus,
+.taphoa-quick-add-fields select:focus{
+  border-color:#93c0a4;
+  box-shadow:0 0 0 2px rgba(10,143,77,.07);
+}
+.taphoa-quick-add-fields button{
+  min-height:40px;
+  padding:0 13px;
+  border:1px solid #87b79a;
+  border-radius:8px;
+  background:#0a8f4d;
+  color:#fff;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.taphoa-quick-add-fields button:disabled{opacity:.62;cursor:progress}
+.taphoa-quick-add-status{display:block;min-height:16px;margin-top:7px;color:#68756e;font-size:11px}
+
+@media(max-width:760px){
+  .taphoa-quick-add{padding:9px}
+  .taphoa-quick-add-fields{grid-template-columns:minmax(0,1fr) minmax(96px,.6fr)}
+  .taphoa-quick-add-fields input[name="name"]{grid-column:1/-1}
+  .taphoa-quick-add-fields input[name="priceVnd"]{grid-column:1}
+  .taphoa-quick-add-fields button{grid-column:2}
+}

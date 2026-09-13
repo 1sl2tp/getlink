@@ -1,0 +1,185 @@
+/* Tạp hóa workspace feedback — 2026-09-13 */
+
+/* Bán: one operational price only. The underlying catalog may still retain pack-level prices. */
+#userWorkMine .user-work-order-head,
+#userWorkMineRows .user-work-order-row.product-card{
+  grid-template-columns:minmax(0,1fr) 96px 118px minmax(120px,168px)!important;
+}
+#userWorkMine .user-work-order-head>span:nth-child(3),
+#userWorkMineRows .user-work-order-row>.user-work-order-price:nth-child(3){
+  display:none!important;
+}
+#userWorkMine .user-work-order-head>span:nth-child(2){text-align:right;padding-right:10px}
+#userWorkMine .user-work-order-head>span:nth-child(4){text-align:center}
+#userWorkMine .user-work-order-head>span:nth-child(5){text-align:left;padding-left:8px}
+#userWorkMineRows .user-work-order-row>.user-work-order-price:nth-child(2){
+  justify-content:center;
+  align-items:flex-end;
+  text-align:right;
+  padding-right:10px;
+}
+#userWorkMineRows .user-work-order-bargain{
+  min-width:0;
+  padding:5px 4px 5px 8px;
+}
+#userWorkMineRows .user-work-order-bargain input[data-work-note]{
+  width:100%;
+  min-width:0;
+  height:36px;
+  padding:0 9px;
+  border:1px solid #d9dee3;
+  border-radius:8px;
+  background:#fff;
+  color:#303a35;
+  font-size:12px;
+  text-align:left;
+  outline:none;
+}
+#userWorkMineRows .user-work-order-bargain input[data-work-note]:focus{
+  border-color:#9fc6ad;
+  box-shadow:0 0 0 2px rgba(10,143,77,.07);
+}
+
+/* Left source/category rail owns the full workspace height; the Bán/Đơn/Công nợ switch stays pinned at its foot. */
+.user-work-desktop{
+  min-height:0!important;
+  height:100%;
+  overflow:hidden;
+}
+.user-work-category-panel{
+  height:100%;
+  min-height:0!important;
+  max-height:none!important;
+  padding-bottom:58px;
+  overflow:auto!important;
+  overscroll-behavior:contain;
+  align-content:start;
+  scrollbar-width:thin;
+}
+.user-work-desktop>.taphoa-work-nav.desktop{
+  grid-column:1;
+  grid-row:2;
+  align-self:end;
+  z-index:9;
+  min-width:0;
+  min-height:52px;
+  padding:5px 6px;
+  gap:4px;
+  border-top:1px solid #e8ece9;
+  border-bottom:0;
+  background:rgba(255,255,255,.97);
+}
+.user-work-desktop>.taphoa-work-nav.desktop button{
+  min-width:0;
+  flex:1 1 0;
+  padding:0 5px;
+  font-size:11px;
+}
+
+/* Đơn/Công nợ stay in the right work region. Header/tabs remain visible; list is the scroll owner. */
+.user-work-desktop>.taphoa-workspace-panel{
+  grid-column:2;
+  grid-row:2;
+  height:100%;
+  min-height:0;
+  overflow:hidden;
+}
+.taphoa-workspace-panel .order-manager-panel{
+  height:100%;
+  min-height:0;
+  max-height:100%;
+  overflow:hidden;
+}
+.taphoa-workspace-panel .order-manager-body{
+  min-height:0;
+  overflow:hidden;
+}
+.taphoa-workspace-panel .order-manager-list{
+  flex:1 1 auto;
+  min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-width:thin;
+}
+
+/* Search + the common time preset are one operational row. */
+.order-report-controls{
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:center;
+}
+.order-report-search{min-width:0}
+.order-report-time{
+  min-width:0;
+  flex-wrap:nowrap;
+  justify-content:flex-end;
+}
+.order-report-preset{
+  display:grid;
+  grid-template-columns:auto auto;
+  align-items:center;
+  gap:6px;
+  white-space:nowrap;
+}
+.order-report-preset select{
+  min-height:44px;
+  padding:0 28px 0 10px;
+  border:1px solid #d7dde4;
+  border-radius:9px;
+  background:#fff;
+  color:#27313d;
+  font-size:12px;
+}
+.order-report-custom{
+  display:flex;
+  align-items:center;
+  gap:5px;
+}
+.order-report-custom label{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.order-report-custom input{
+  min-height:44px;
+  border:1px solid #d7dde4;
+  border-radius:9px;
+  padding:0 7px;
+}
+
+.order-card-items>div>.order-item-note{
+  grid-column:1/-1;
+  display:block;
+  margin:-2px 0 5px;
+  color:#6f7a73;
+  font-size:10.5px;
+  line-height:1.35;
+  font-style:normal;
+  white-space:normal;
+}
+
+@media(max-width:999px) and (min-width:640px){
+  #userWorkMine .user-work-order-head,
+  #userWorkMineRows .user-work-order-row.product-card{
+    grid-template-columns:minmax(0,1fr) 82px 106px minmax(104px,138px)!important;
+  }
+  .user-work-desktop>.taphoa-work-nav.desktop button{font-size:10.5px;padding:0 3px}
+}
+
+@media(max-width:639px){
+  .taphoa-workspace-panel .order-manager-panel{
+    height:100%;
+    max-height:100%;
+    border-radius:0;
+  }
+  .order-report-controls{
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:6px;
+  }
+  .order-report-time{display:flex}
+  .order-report-preset{grid-template-columns:1fr}
+  .order-report-preset>span{display:none}
+  .order-report-preset select{max-width:116px}
+  .order-report-custom{
+    grid-column:1/-1;
+    width:100%;
+  }
+  .order-report-controls:has(.order-report-custom){grid-template-columns:1fr}
+  .order-report-controls:has(.order-report-custom) .order-report-time{flex-wrap:wrap;justify-content:stretch}
+  .order-report-controls:has(.order-report-custom) .order-report-custom{flex:1 1 100%}
+}

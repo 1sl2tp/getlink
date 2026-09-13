@@ -11,7 +11,7 @@ const ORDER_STATUSES=["pending","delivered","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
 type Identity={kind:"customer"|"admin";id:string;name:string;username:string;role:"user"|"admin"};
-type CreateInput={url:string;qty:number;bargainPriceVnd:number};
+type CreateInput={url:string;qty:number;bargainPriceVnd:number;lineNote:string};
 type ChatCustomer={id:string;name:string;username:string;avatarPath:string};
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim()}
@@ -98,8 +98,9 @@ function customerView(row:any):ChatCustomer{
 
 async function listCustomers(){
   const rows=await fetchAll(()=>db.from("v21_accounts")
-    .select("id,username,display_name,avatar_path,role,deleted_at,locked_at")
+    .select("id,username,display_name,avatar_path,role,contact_group,deleted_at,locked_at")
     .eq("role","user")
+    .eq("contact_group","customer")
     .is("deleted_at",null)
     .is("locked_at",null)
     .order("display_name",{ascending:true,nullsFirst:false})
@@ -110,14 +111,15 @@ async function listCustomers(){
 async function selectedCustomer(customerId:string):Promise<ChatCustomer>{
   if(!customerId)throw fail("Chưa chọn khách hàng");
   const {data,error}=await db.from("v21_accounts")
-    .select("id,username,display_name,avatar_path,role,deleted_at,locked_at")
+    .select("id,username,display_name,avatar_path,role,contact_group,deleted_at,locked_at")
     .eq("id",customerId)
     .eq("role","user")
+    .eq("contact_group","customer")
     .is("deleted_at",null)
     .is("locked_at",null)
     .maybeSingle();
   if(error)throw error;
-  if(!data)throw fail("Khách hàng không còn hoạt động",404);
+  if(!data)throw fail("Khách hàng không thuộc nhóm Tạp hóa hoặc không còn hoạt động",404);
   return customerView(data);
 }
 
@@ -142,6 +144,7 @@ function itemView(row:any,includeCost:boolean){
     qty:Number(row.quantity||0),
     price:Number(row.unit_price_vnd||0),
     bargainPrice:Number(row.bargain_price_vnd||0),
+    note:clean(row.line_note),
     sourceId:clean(row.source_key),
     url:clean(row.product_url)
   };
@@ -179,7 +182,7 @@ async function listOrders(actor:Identity){
     const batch=ids.slice(i,i+100);
     if(!batch.length)continue;
     const rows=await fetchAll(()=>db.from("getlink_sales_order_items")
-      .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,bargain_price_vnd,unit_cost_vnd,source_key")
+      .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,bargain_price_vnd,line_note,unit_cost_vnd,source_key")
       .in("order_id",batch)
       .order("line_no")
       .order("id"));
@@ -210,10 +213,12 @@ async function resolveCreateItems(raw:unknown){
     const qty=Number(entry?.qty);
     const bargainRaw=Number(entry?.bargainPriceVnd||0);
     const bargainPriceVnd=Number.isFinite(bargainRaw)?Math.max(0,Math.min(100000,Math.round(bargainRaw))):0;
+    const lineNote=clean(entry?.lineNote);
     const key=url.toLowerCase();
     if(!url||!Number.isInteger(qty)||qty<=0||qty>999)throw fail("Sản phẩm hoặc số lượng không hợp lệ");
+    if(lineNote.length>160)throw fail("Ghi chú sản phẩm tối đa 160 ký tự");
     if(seen.has(key))throw fail("Sản phẩm bị trùng trong đơn");
-    seen.add(key);requested.push({url,qty,bargainPriceVnd});
+    seen.add(key);requested.push({url,qty,bargainPriceVnd,lineNote:clean(entry?.lineNote)});
   }
   const urls=requested.map(x=>x.url);
   const {data,error}=await db.from("getlink_supplier_products")
@@ -236,6 +241,7 @@ async function resolveCreateItems(raw:unknown){
       quantity:request.qty,
       unitPriceVnd:price,
       bargainPriceVnd:request.bargainPriceVnd,
+      lineNote:request.lineNote,
       unitCostVnd:Number.isFinite(cost)?cost:0,
       sourceKey:clean(row.source_key)
     };
@@ -251,7 +257,7 @@ async function readOrder(id:string,actor:Identity){
   if(error)throw error;
   if(!order)throw fail("Không tìm thấy đơn",404);
   const {data:itemRows,error:itemError}=await db.from("getlink_sales_order_items")
-    .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,bargain_price_vnd,unit_cost_vnd,source_key")
+    .select("id,order_id,line_no,product_code,product_name,product_url,quantity,unit_price_vnd,bargain_price_vnd,line_note,unit_cost_vnd,source_key")
     .eq("order_id",id)
     .order("line_no")
     .order("id");
@@ -278,8 +284,6 @@ async function createOrder(body:any,actor:Identity,quick=false){
     :await db.rpc("getlink_sales_create_order",rpcArgs);
   if(error)throw error;
 
-  // Keep the human order number explicit at the create boundary. It is owned by
-  // the database identity column and must be immediately available to the UI.
   const {data:persisted,error:persistedError}=await db.from("getlink_sales_orders")
     .select("order_no,status")
     .eq("id",id)

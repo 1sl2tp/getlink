@@ -36,6 +36,7 @@ jobs:
       - run: deno check supabase/functions/getlink-api/index.ts
       - run: deno check supabase/functions/getlink-orders/index.ts
       - run: deno check supabase/functions/getlink-product-add/index.ts
+      - run: deno check supabase/functions/getlink-order-customer/index.ts
       - run: node tests/test_money_display.mjs
       - run: node tests/test_bhx_edge_contract.mjs
       - run: node tests/test_go_edge_contract.mjs
@@ -47,3 +48,4 @@ jobs:
           test -f supabase/functions/getlink-api/index.ts
           test -f supabase/functions/getlink-orders/index.ts
           test -f supabase/functions/getlink-product-add/index.ts
+          test -f supabase/functions/getlink-order-customer/index.ts

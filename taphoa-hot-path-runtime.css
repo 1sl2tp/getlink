@@ -6,7 +6,18 @@
 .taphoa-source-left-slot .order-source-report-body{padding:0 0 8px}
 .taphoa-source-left-slot .order-source-summary,.taphoa-source-left-slot .order-source-detail{margin:0}
 @media (min-width:1000px){
-  #workspaceNav{min-height:0;display:flex;flex-direction:column}
-  #workspaceNav .category-tabs{min-height:0;overflow:auto}
-  #workspaceNav .taphoa-source-left-slot{flex:1 1 auto;max-height:48vh}
+  .user-work-desktop[data-taphoa-view="orders"] #userWorkDesktopCategories{
+    min-height:0;
+    display:flex!important;
+    flex-direction:column;
+    overflow:auto!important;
+    padding:0 8px 8px!important;
+  }
+  .user-work-desktop[data-taphoa-view="orders"] #userWorkDesktopCategories>:not(.taphoa-source-left-slot){display:none!important}
+  .user-work-desktop[data-taphoa-view="orders"] #userWorkDesktopCategories .taphoa-source-left-slot{
+    flex:1 1 auto;
+    min-height:0;
+    margin-top:0;
+    overflow:auto;
+  }
 }

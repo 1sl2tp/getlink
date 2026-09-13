@@ -303,31 +303,25 @@
     return [...(source?.querySelectorAll?.(".order-card[data-order-id]")||[])].map(card=>String(card.dataset.orderId||"")).filter(Boolean);
   }
   function renderOrderWorkspaceSelection(){
-    const workspace=document.querySelector(".order-workspace-v2");
-    if(!workspace)return;
-    const ids=[...workspace.querySelectorAll("[data-order-list-item]")].map(row=>String(row.dataset.orderId||""));
-    if(orderWorkspaceSelectedId&&!ids.includes(orderWorkspaceSelectedId))orderWorkspaceSelectedId="";
-    const wide=window.matchMedia("(min-width:1000px)").matches;
-    if(wide&&!orderWorkspaceSelectedId&&ids.length)orderWorkspaceSelectedId=ids[0];
-    workspace.classList.toggle("has-selection",Boolean(orderWorkspaceSelectedId));
-    workspace.querySelectorAll("[data-order-list-item]").forEach((row,index)=>{
-      const selected=String(row.dataset.orderId||"")===orderWorkspaceSelectedId;
-      row.classList.toggle("selected",selected);
-      row.setAttribute("aria-pressed",selected?"true":"false");
-      const order=orderCache.get(String(row.dataset.orderId||""));
-      if(order){
-        const refreshed=document.createElement("template");
-        refreshed.innerHTML=orderIndexCardMarkup(order,index,selected);
-        const next=refreshed.content.firstElementChild;
-        if(next)row.replaceWith(next);
-      }
-    });
-    const detail=workspace.querySelector(".order-detail-pane");
-    if(!detail)return;
-    const index=ids.indexOf(orderWorkspaceSelectedId);
-    const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
-    detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
-  }
+  const workspace=document.querySelector(".order-workspace-v2");
+  if(!workspace)return;
+  const rows=[...workspace.querySelectorAll("[data-order-list-item]")];
+  const ids=rows.map(row=>String(row.dataset.orderId||""));
+  if(orderWorkspaceSelectedId&&!ids.includes(orderWorkspaceSelectedId))orderWorkspaceSelectedId="";
+  const wide=window.matchMedia("(min-width:1000px)").matches;
+  if(wide&&!orderWorkspaceSelectedId&&ids.length)orderWorkspaceSelectedId=ids[0];
+  workspace.classList.toggle("has-selection",Boolean(orderWorkspaceSelectedId));
+  rows.forEach(row=>{
+    const selected=String(row.dataset.orderId||"")===orderWorkspaceSelectedId;
+    row.classList.toggle("selected",selected);
+    row.setAttribute("aria-pressed",selected?"true":"false");
+  });
+  const detail=workspace.querySelector(".order-detail-pane");
+  if(!detail)return;
+  const index=ids.indexOf(orderWorkspaceSelectedId);
+  const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
+  detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
+}
   function syncOrderWorkspaceV2(){
     const list=document.getElementById("orderManagerList");
     const source=list?.querySelector?.(".order-lifecycle-list");
@@ -344,7 +338,7 @@
     source.hidden=true;
     const workspace=document.createElement("section");
     workspace.className="order-workspace-v2"+(orderWorkspaceSelectedId?" has-selection":"");
-    workspace.innerHTML='<aside class="order-index-pane"><div class="order-index-scroll">'+
+    workspace.innerHTML='<aside class="order-index-pane"><div class="order-index-pane-head">Danh sách đơn</div><div class="order-index-scroll">'+
       '<div class="order-index-list">'+rows.map((order,index)=>orderIndexCardMarkup(order,index,String(order.id)===orderWorkspaceSelectedId)).join('')+'</div>'+
       '</div></aside><div class="order-detail-pane"></div>';
     const scroll=workspace.querySelector(".order-index-scroll");

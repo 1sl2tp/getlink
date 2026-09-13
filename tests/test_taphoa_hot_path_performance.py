@@ -70,6 +70,17 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
             "replacing order index buttons must not trigger the feedback observer again",
         )
 
+    def test_order_click_only_updates_selection_state_and_detail_pane(self):
+        js = (ROOT / "taphoa-workspace-feedback.js").read_text(encoding="utf-8")
+        start = js.index("function renderOrderWorkspaceSelection")
+        end = js.index("function syncOrderWorkspaceV2", start)
+        block = js[start:end]
+        self.assertIn("row.classList.toggle(\"selected\",selected)", block)
+        self.assertIn("detail.innerHTML=orderInvoiceMarkup", block)
+        self.assertNotIn("row.replaceWith", block, "clicking one order must not replace every list button")
+        self.assertNotIn("orderIndexCardMarkup(order,index,selected)", block, "selection render must not rebuild list cards")
+        self.assertNotIn("template", block, "selection render must not create replacement DOM for list rows")
+
     def test_quick_add_inserts_returned_product_without_catalog_reload(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
         self.assertIn("insertManualProduct", js)

@@ -10,63 +10,37 @@ window.GETLINK_API_KEY="sb_publishable_UY3gfQ9MsntDFCUJ_uV0UA__eTYXz_w";
       if(version)url.searchParams.set("v",version);
       return url.toString();
     };
-    if(!document.getElementById("getlinkTaphoaDesktopWorkspaceCss")){
+    const addStyle=(id,name)=>{
+      if(document.getElementById(id))return;
       const link=document.createElement("link");
-      link.id="getlinkTaphoaDesktopWorkspaceCss";
-      link.rel="stylesheet";
-      link.href=asset("taphoa-desktop-workspace.css");
+      link.id=id;link.rel="stylesheet";link.href=asset(name);
       document.head.appendChild(link);
-    }
-    if(!document.getElementById("getlinkTaphoaHotPathCss")){
-      const link=document.createElement("link");
-      link.id="getlinkTaphoaHotPathCss";
-      link.rel="stylesheet";
-      link.href=asset("taphoa-hot-path-runtime.css");
-      document.head.appendChild(link);
-    }
-    if(!document.getElementById("getlinkTaphoaFeedbackCss")){
-      const link=document.createElement("link");
-      link.id="getlinkTaphoaFeedbackCss";
-      link.rel="stylesheet";
-      link.href=asset("taphoa-workspace-feedback.css");
-      document.head.appendChild(link);
-    }
-    if(!document.getElementById("getlinkTaphoaOrderWorkspaceV2Css")){
-      const link=document.createElement("link");
-      link.id="getlinkTaphoaOrderWorkspaceV2Css";
-      link.rel="stylesheet";
-      link.href=asset("taphoa-order-workspace-v2.css");
-      document.head.appendChild(link);
-    }
-    if(!document.getElementById("getlinkTaphoaDesktopWorkspaceJs")){
+    };
+    const addScript=(id,name)=>{
+      if(document.getElementById(id))return;
       const script=document.createElement("script");
-      script.id="getlinkTaphoaDesktopWorkspaceJs";
-      script.src=asset("taphoa-desktop-workspace.js");
-      script.async=false;
+      script.id=id;script.src=asset(name);script.async=false;
       document.head.appendChild(script);
-    }
-    if(!document.getElementById("getlinkTaphoaDesktopDataJs")){
-      const script=document.createElement("script");
-      script.id="getlinkTaphoaDesktopDataJs";
-      script.src=asset("taphoa-desktop-data.js");
-      script.async=false;
-      document.head.appendChild(script);
-    }
-    if(!document.getElementById("getlinkTaphoaHotPathJs")){
-      const script=document.createElement("script");
-      script.id="getlinkTaphoaHotPathJs";
-      script.src=asset("taphoa-hot-path-runtime.js");
-      script.async=false;
-      document.head.appendChild(script);
-    }
-    if(!document.getElementById("getlinkTaphoaFeedbackJs")){
-      const script=document.createElement("script");
-      script.id="getlinkTaphoaFeedbackJs";
-      script.src=asset("taphoa-workspace-feedback.js");
-      script.async=false;
-      document.head.appendChild(script);
-    }
+    };
+
+    addStyle("getlinkTaphoaDesktopWorkspaceCss","taphoa-desktop-workspace.css");
+    addScript("getlinkTaphoaDesktopWorkspaceJs","taphoa-desktop-workspace.js");
+    addScript("getlinkTaphoaDesktopDataJs","taphoa-desktop-data.js");
+    addScript("getlinkTaphoaDesktopSalesJs","taphoa-desktop-sales.js");
+    addScript("getlinkTaphoaDesktopOrdersJs","taphoa-desktop-orders.js");
+    addScript("getlinkTaphoaDesktopDebtsJs","taphoa-desktop-debts.js");
+
+    const loadLegacyMobile=()=>{
+      addStyle("getlinkTaphoaHotPathCss","taphoa-hot-path-runtime.css");
+      addStyle("getlinkTaphoaFeedbackCss","taphoa-workspace-feedback.css");
+      addStyle("getlinkTaphoaOrderWorkspaceV2Css","taphoa-order-workspace-v2.css");
+      addScript("getlinkTaphoaHotPathJs","taphoa-hot-path-runtime.js");
+      addScript("getlinkTaphoaFeedbackJs","taphoa-workspace-feedback.js");
+    };
+    const mobileMedia=window.matchMedia?.("(max-width:999px)");
+    if(!mobileMedia||mobileMedia.matches)loadLegacyMobile();
+    mobileMedia?.addEventListener?.("change",event=>{if(event.matches)loadLegacyMobile();});
   }catch(error){
-    console.debug("Tạp hóa workspace feedback runtime skipped",error);
+    console.debug("Tạp hóa workspace runtime skipped",error);
   }
 })();

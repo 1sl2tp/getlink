@@ -92,5 +92,5 @@
   function mount(s){slots=s||window.TaphoaDesktopWorkspace?.slots?.();if(!slots)return false;bind();return true}
   async function activate(){if(!mount())return false;active=true;refreshSourceNames();renderSourceRail();renderOrderList();await refresh();return true}
   function deactivate(){active=false}
-  window.TaphoaDesktopOrders={mount,activate,deactivate,refresh,renderSourceRail,renderOrderList,renderOrderRows,renderOrderDetail,selectOrder,batchCurrentOrders,get state(){return state}};
+  window.TaphoaDesktopOrders={mount,activate,deactivate,refresh,renderSourceRail,renderOrderList,renderOrderRows,renderOrderDetail,selectOrder,batchCurrentOrders,actionMarkup,performAction:mutate,get state(){return state}};
 })();

@@ -26,43 +26,11 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_once(path, old, new):
-              p=Path(path)
-              text=p.read_text('utf-8')
-              if old not in text:
-                  raise SystemExit(f'expected block not found in {path}')
-              if text.count(old)!=1:
-                  raise SystemExit(f'expected one block in {path}, found {text.count(old)}')
-              p.write_text(text.replace(old,new,1),'utf-8')
-
-          replace_once('taphoa-workspace-feedback.js', '''  function renderOrderWorkspaceSelection(){
-            const workspace=document.querySelector(".order-workspace-v2");
-            if(!workspace)return;
-            const ids=[...workspace.querySelectorAll("[data-order-list-item]")].map(row=>String(row.dataset.orderId||""));
-            if(orderWorkspaceSelectedId&&!ids.includes(orderWorkspaceSelectedId))orderWorkspaceSelectedId="";
-            const wide=window.matchMedia("(min-width:1000px)").matches;
-            if(wide&&!orderWorkspaceSelectedId&&ids.length)orderWorkspaceSelectedId=ids[0];
-            workspace.classList.toggle("has-selection",Boolean(orderWorkspaceSelectedId));
-            workspace.querySelectorAll("[data-order-list-item]").forEach((row,index)=>{
-              const selected=String(row.dataset.orderId||"")===orderWorkspaceSelectedId;
-              row.classList.toggle("selected",selected);
-              row.setAttribute("aria-pressed",selected?"true":"false");
-              const order=orderCache.get(String(row.dataset.orderId||""));
-              if(order){
-                const refreshed=document.createElement("template");
-                refreshed.innerHTML=orderIndexCardMarkup(order,index,selected);
-                const next=refreshed.content.firstElementChild;
-                if(next)row.replaceWith(next);
-              }
-            });
-            const detail=workspace.querySelector(".order-detail-pane");
-            if(!detail)return;
-            const index=ids.indexOf(orderWorkspaceSelectedId);
-            const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
-            detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
-          }
-          ''', '''  function renderOrderWorkspaceSelection(){
+          p=Path('taphoa-workspace-feedback.js')
+          text=p.read_text('utf-8')
+          new_render='''  function renderOrderWorkspaceSelection(){
             const workspace=document.querySelector(".order-workspace-v2");
             if(!workspace)return;
             const rows=[...workspace.querySelectorAll("[data-order-list-item]")];
@@ -82,45 +50,22 @@ jobs:
             const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
             detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
           }
-          ''')
+          '''
+          pattern=r'  function renderOrderWorkspaceSelection\(\)\{.*?\n  \}\n  function syncOrderWorkspaceV2\(\)\{'
+          replacement=new_render+'  function syncOrderWorkspaceV2(){'
+          text,count=re.subn(pattern,replacement,text,count=1,flags=re.S)
+          if count!=1:
+              raise SystemExit(f'renderOrderWorkspaceSelection replacement count={count}')
+          old_markup='workspace.innerHTML=\'<aside class="order-index-pane"><div class="order-index-scroll">\'+'
+          new_markup='workspace.innerHTML=\'<aside class="order-index-pane"><div class="order-index-pane-head">Danh sách đơn</div><div class="order-index-scroll">\'+'
+          if old_markup not in text:
+              raise SystemExit('order index pane markup not found')
+          text=text.replace(old_markup,new_markup,1)
+          p.write_text(text,'utf-8')
 
-          replace_once('taphoa-workspace-feedback.js', '''    workspace.innerHTML='<aside class="order-index-pane"><div class="order-index-scroll">'+
-          '<div class="order-index-list">'+rows.map((order,index)=>orderIndexCardMarkup(order,index,String(order.id)===orderWorkspaceSelectedId)).join('')+'</div>'+
-          '</div></aside><div class="order-detail-pane"></div>';
-          ''', '''    workspace.innerHTML='<aside class="order-index-pane"><div class="order-index-pane-head">Danh sách đơn</div><div class="order-index-scroll">'+
-          '<div class="order-index-list">'+rows.map((order,index)=>orderIndexCardMarkup(order,index,String(order.id)===orderWorkspaceSelectedId)).join('')+'</div>'+
-          '</div></aside><div class="order-detail-pane"></div>';
-          ''')
-
-          replace_once('taphoa-hot-path-runtime.js', '''  function moveOrderSourceLeft(){
-            const nav=document.getElementById("workspaceNav");
-            const manager=document.getElementById("orderManager");
-            if(!nav)return;
-            let slot=nav.querySelector(".taphoa-source-left-slot");
-            if(!slot){
-              slot=document.createElement("div");
-              slot.className="taphoa-source-left-slot";
-              slot.hidden=true;
-              nav.appendChild(slot);
-            }
-            const fresh=document.querySelector(".order-workspace-v2 .order-source-report");
-            if(fresh&&fresh.parentElement!==slot)slot.replaceChildren(fresh);
-            const report=fresh||slot.querySelector(".order-source-report");
-            const visible=Boolean(manager&&!manager.hidden&&manager.getClientRects().length&&report);
-            slot.hidden=!visible;
-          }
-
-          function installSourceRailWatcher(){
-            if(sourceRailObserver)return;
-            const host=document.querySelector(".workspace-list");
-            if(host){
-              sourceRailObserver=new NativeMutationObserver(()=>requestAnimationFrame(moveOrderSourceLeft));
-              sourceRailObserver.observe(host,{subtree:true,childList:true,attributes:true,attributeFilter:["hidden","class"]});
-            }
-            document.addEventListener("click",()=>requestAnimationFrame(moveOrderSourceLeft),true);
-            moveOrderSourceLeft();
-          }
-          ''', '''  function moveOrderSourceLeft(){
+          p=Path('taphoa-hot-path-runtime.js')
+          text=p.read_text('utf-8')
+          new_source='''  function moveOrderSourceLeft(){
             const desktop=document.querySelector(".user-work-desktop");
             const left=document.getElementById("userWorkDesktopCategories");
             const manager=document.getElementById("orderManager");
@@ -157,16 +102,33 @@ jobs:
             document.addEventListener("click",()=>requestAnimationFrame(moveOrderSourceLeft),true);
             moveOrderSourceLeft();
           }
-          ''')
 
-          replace_once('order-management.js', '      if(categories)categories.hidden=!sales;\n', '      if(categories)categories.hidden=!(sales||taphoaWorkView==="orders");\n')
+          '''
+          pattern=r'  function moveOrderSourceLeft\(\)\{.*?\n  function patchGlobals\(\)\{'
+          replacement=new_source+'  function patchGlobals(){'
+          text,count=re.subn(pattern,replacement,text,count=1,flags=re.S)
+          if count!=1:
+              raise SystemExit(f'source rail replacement count={count}')
+          p.write_text(text,'utf-8')
 
-          replace_once('taphoa-hot-path-runtime.css', '''@media (min-width:1000px){
-            #workspaceNav{min-height:0;display:flex;flex-direction:column}
-            #workspaceNav .category-tabs{min-height:0;overflow:auto}
-            #workspaceNav .taphoa-source-left-slot{flex:1 1 auto;max-height:48vh}
-          }
-          ''', '''@media (min-width:1000px){
+          p=Path('order-management.js')
+          text=p.read_text('utf-8')
+          old='      if(categories)categories.hidden=!sales;\n'
+          new='      if(categories)categories.hidden=!(sales||taphoaWorkView==="orders");\n'
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('category visibility owner line not found')
+              text=text.replace(old,new,1)
+              p.write_text(text,'utf-8')
+
+          Path('taphoa-hot-path-runtime.css').write_text('''/* TAPHOA_HOT_PATHS_V1 */
+          .taphoa-source-left-slot{margin-top:10px;min-height:0;overflow:auto;overscroll-behavior:contain}
+          .taphoa-source-left-slot[hidden]{display:none!important}
+          .taphoa-source-left-slot .order-source-report{margin:0;border:0;border-top:1px solid #e8ecea;border-radius:0;background:transparent}
+          .taphoa-source-left-slot .order-source-report>summary{padding:10px 4px 8px;font-weight:700;cursor:pointer}
+          .taphoa-source-left-slot .order-source-report-body{padding:0 0 8px}
+          .taphoa-source-left-slot .order-source-summary,.taphoa-source-left-slot .order-source-detail{margin:0}
+          @media (min-width:1000px){
             .user-work-desktop[data-taphoa-view="orders"] #userWorkDesktopCategories{
               min-height:0;
               display:flex!important;
@@ -182,7 +144,7 @@ jobs:
               overflow:auto;
             }
           }
-          ''')
+          ''','utf-8')
 
           p=Path('taphoa-order-workspace-v2.css')
           css=p.read_text('utf-8')

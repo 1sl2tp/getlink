@@ -6,6 +6,7 @@
   const CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/+$/,"");
   const ORDER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
   const PRODUCT_ADD_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-product-add");
+  const ORDER_CUSTOMER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-order-customer");
 
   let productIndex=[];
   let productByKey=new Map();
@@ -30,7 +31,12 @@
     try{
       if(typeof isMineRow==="function")return Boolean(isMineRow(row));
     }catch{}
-    return String(row?.source_key||row?.source||row?.supplier_source_key||"").toLowerCase()==="mine";
+    const raw=normalize([row?.source,row?.supplier_source_name,row?.canonical_product_name].filter(Boolean).join(" "));
+    if(raw.includes("tap hoa"))return true;
+    try{
+      const url=new URL(String(row?.canonical_url||""));
+      return url.hostname.toLowerCase().replace(/^www\./,"")==="get.taphoa.xyz"&&url.pathname.startsWith("/nguon-hang/");
+    }catch{return String(row?.source_key||"").toLowerCase()==="mine";}
   }
 
   function productSearchText(row){
@@ -38,6 +44,7 @@
       row?.name,
       row?.canonical_name,
       row?.source_name,
+      row?.canonical_product_name,
       row?.supplier_source_name,
       row?.manual_group_name,
       row?.group_name,
@@ -73,7 +80,7 @@
       if(!taphoaRow(row))continue;
       const key=stableProductKey(row);
       if(!key)continue;
-      const entry={row,key,searchKey:productSearchText(row),nameKey:normalize(row?.name||row?.canonical_name||"")};
+      const entry={row,key,searchKey:productSearchText(row),nameKey:normalize(row?.source_name||row?.name||row?.canonical_name||"")};
       productIndex.push(entry);
       productByKey.set(key,entry);
     }
@@ -93,10 +100,31 @@
     return productIndex;
   }
 
+  function allProducts(){
+    return ensureProductIndex().map(entry=>entry.row);
+  }
+
+  function findProduct(key){
+    ensureProductIndex();
+    return productByKey.get(String(key||"").trim().toLowerCase())?.row||null;
+  }
+
+  function supplierSources(){
+    const map=new Map();
+    for(const row of allProducts()){
+      const key=String(row?.supplier_source_key||"").trim();
+      if(!key)continue;
+      const name=String(row?.supplier_source_name||key).trim()||key;
+      if(!map.has(key))map.set(key,{key,name,count:0});
+      map.get(key).count+=1;
+    }
+    return [...map.values()].sort((a,b)=>a.name.localeCompare(b.name,"vi"));
+  }
+
   function searchProducts(query,limit=80){
     const rows=ensureProductIndex();
     const raw=normalize(query);
-    const max=Math.max(1,Math.min(300,Number(limit)||80));
+    const max=Math.max(1,Math.min(1000,Number(limit)||80));
     if(!raw)return rows.slice(0,max).map(entry=>entry.row);
     const tokens=raw.split(/\s+/).filter(Boolean);
     return rows
@@ -111,7 +139,7 @@
     if(!row||!taphoaRow(row))return false;
     const key=stableProductKey(row);
     if(!key)return false;
-    const next={row,key,searchKey:productSearchText(row),nameKey:normalize(row?.name||row?.canonical_name||"")};
+    const next={row,key,searchKey:productSearchText(row),nameKey:normalize(row?.source_name||row?.name||row?.canonical_name||"")};
     const previous=productByKey.get(key);
     if(previous){
       const index=productIndex.indexOf(previous);
@@ -149,6 +177,7 @@
     if(!response.ok){
       const error=new Error(String(data.error||data.detail||"Không thực hiện được."));
       error.status=response.status;
+      error.payload=data;
       throw error;
     }
     return data;
@@ -165,15 +194,26 @@
     });
   }
 
+  function orderCustomerRequest(payload){
+    return jsonRequest(ORDER_CUSTOMER_API,{
+      method:"PUT",
+      body:JSON.stringify(payload||{}),
+    });
+  }
+
   window.TaphoaDesktopData={
     normalize,
     stableProductKey,
     buildProductIndex,
+    allProducts,
+    findProduct,
+    supplierSources,
     searchProducts,
     upsertProduct,
     readAuth,
     orderRequest,
     productAddRequest,
+    orderCustomerRequest,
     get productCount(){return productIndex.length;},
     get indexVersion(){return indexVersion;},
   };

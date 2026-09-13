@@ -59,6 +59,17 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
         self.assertIn(".taphoa-sales-preview", js)
         self.assertIn("NativeMutationObserver", js)
 
+    def test_order_index_self_render_does_not_requeue_feedback_observer(self):
+        js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
+        start = js.index("function filterFeedbackObserverRecords")
+        end = js.index("if(typeof NativeMutationObserver", start)
+        observer_filter = js[start:end]
+        self.assertIn(
+            ".order-index-list",
+            observer_filter,
+            "replacing order index buttons must not trigger the feedback observer again",
+        )
+
     def test_quick_add_inserts_returned_product_without_catalog_reload(self):
         js = (ROOT / "taphoa-hot-path-runtime.js").read_text(encoding="utf-8")
         self.assertIn("insertManualProduct", js)
@@ -71,6 +82,14 @@ class TaphoaHotPathPerformanceContract(unittest.TestCase):
         self.assertIn("taphoa-source-left-slot", js)
         self.assertIn("order-source-report", js)
         self.assertIn(".taphoa-source-left-slot", css)
+
+    def test_order_source_report_is_not_hidden_if_left_move_is_delayed(self):
+        css = (ROOT / "taphoa-hot-path-runtime.css").read_text(encoding="utf-8")
+        self.assertNotIn(
+            ".order-index-scroll>.order-source-report{display:none!important}",
+            css,
+            "Theo nguồn must remain visible until it is actually moved into the left rail",
+        )
 
 
 if __name__ == "__main__":

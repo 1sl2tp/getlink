@@ -12,6 +12,7 @@ const block=(text,start,end)=>{
 
 const sales=read("taphoa-desktop-sales.js");
 const orders=read("taphoa-desktop-orders.js");
+const debts=read("taphoa-desktop-debts.js");
 const data=read("taphoa-desktop-data.js");
 const workspace=read("taphoa-desktop-workspace.js");
 const config=read("config.js");
@@ -64,6 +65,15 @@ assert.ok(orders.includes("function orderMatchesTime"),"order report must have o
 assert.ok(orders.includes('id="taphoaOrderFrom"'),"custom report range needs a from date");
 assert.ok(orders.includes('id="taphoaOrderTo"'),"custom report range needs a to date");
 assert.ok(orders.includes("supplierSources"),"order source labels must use supplier display names when available");
+
+assert.ok(debts.includes('data-td-debt-order="'),"order-linked debt transactions must expose an order drill-down control");
+assert.ok(debts.includes("async function loadLinkedOrder"),"debt workspace must fetch a linked order on demand");
+const linked=block(debts,"async function loadLinkedOrder", "async function loadDetail");
+assert.ok(linked.includes('orderRequest("/orders/"+encodeURIComponent'),"debt drill-down must use the scoped existing order endpoint");
+assert.ok(debts.includes("function renderLinkedOrder"),"debt workspace must render the linked invoice in the detail column");
+assert.ok(debts.includes('data-td-debt-order-back'),"linked invoice must return to the debt transaction without losing customer context");
+assert.ok(debts.includes("TaphoaDesktopOrders?.performAction"),"debt lifecycle actions must reuse the fresh Orders owner");
+assert.ok(orders.includes("performAction:mutate"),"Orders must expose its existing lifecycle owner instead of duplicating mutations");
 
 assert.ok(workspace.includes("taphoa-new-desktop-active"),"fresh shell must suppress legacy desktop visual owners");
 assert.ok(workspace.includes("event.stopImmediatePropagation()"),"fresh shell events must not fall through to legacy document handlers");

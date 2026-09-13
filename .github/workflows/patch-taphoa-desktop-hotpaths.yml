@@ -1,0 +1,122 @@
+name: Patch fresh Tạp hóa desktop hot paths
+
+on:
+  push:
+    branches:
+      - feature/taphoa-desktop-three-column-rebuild
+    paths:
+      - .github/workflows/patch-taphoa-desktop-hotpaths.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-desktop-three-column-rebuild
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch local hot paths
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_between(path,start,end,new_block):
+              p=Path(path); text=p.read_text('utf-8')
+              a=text.index(start); b=text.index(end,a)
+              p.write_text(text[:a]+new_block+text[b:],'utf-8')
+
+          sales=Path('taphoa-desktop-sales.js')
+          text=sales.read_text('utf-8')
+          start='  function renderMaster({append=false}={}){'
+          end='  function syncMoreLabel(){'
+          new='''  function renderMasterResults({append=false}={}){
+            if(!slots?.master)return;
+            refreshRows();
+            const visible=state.rows.slice(0,state.visible);
+            const list=slots.master.querySelector(".taphoa-sales-list");
+            if(!list){renderMaster();return;}
+            if(append){
+              const already=list.querySelectorAll(".taphoa-sales-row").length;
+              list.insertAdjacentHTML("beforeend",visible.slice(already).map(rowMarkup).join(""));
+            }else{
+              list.innerHTML=visible.length?visible.map(rowMarkup).join(""):manualAddMarkup();
+            }
+            syncMoreLabel();
+          }
+
+          function renderMaster(){
+            if(!slots?.master)return;
+            refreshRows();
+            const visible=state.rows.slice(0,state.visible);
+            slots.master.innerHTML='<section class="taphoa-master-frame taphoa-sales-master">'+
+              '<header class="taphoa-master-head"><input id="taphoaSalesSearch" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Tìm sản phẩm Tạp hóa" value="'+attr(state.query)+'"><small class="taphoa-master-count">'+visible.length+' / '+state.rows.length+'</small></header>'+
+              '<div class="taphoa-sales-list">'+(visible.length?visible.map(rowMarkup).join(""):manualAddMarkup())+'</div>'+
+              '<div class="taphoa-load-more" data-sales-more '+(visible.length>=state.rows.length?'hidden':'')+'>Cuộn để xem thêm · '+visible.length+' / '+state.rows.length+'</div>'+
+            '</section>';
+          }
+'''
+          a=text.index(start); b=text.index(end,a); text=text[:a]+new+text[b:]
+          text=text.replace('state.sourceKey=String(button.dataset.salesSource||"");state.visible=PAGE_SIZE;renderCategories();renderMaster();', 'state.sourceKey=String(button.dataset.salesSource||"");state.visible=PAGE_SIZE;renderCategories();renderMasterResults();')
+          text=text.replace('state.query=String(event.target.value||"");state.visible=PAGE_SIZE;renderMaster();return;', 'state.query=String(event.target.value||"");state.visible=PAGE_SIZE;renderMasterResults();return;')
+          text=text.replace('state.visible=Math.min(state.rows.length,state.visible+PAGE_SIZE);renderMaster({append:true});', 'state.visible=Math.min(state.rows.length,state.visible+PAGE_SIZE);renderMasterResults({append:true});')
+          text=text.replace('function clearCart(){state.qty.clear();state.notes.clear();persistCart();renderMaster();renderDetail()}', 'function clearCart(){state.qty.clear();state.notes.clear();persistCart();renderMasterResults();renderDetail()}')
+          text=text.replace('state.status="Đã thêm sản phẩm.";state.query=name;state.visible=PAGE_SIZE;\n      renderCategories();renderMaster();renderDetail();', 'state.status="Đã thêm sản phẩm.";state.query=name;state.visible=PAGE_SIZE;\n      renderCategories();const search=slots?.master?.querySelector?.("#taphoaSalesSearch");if(search)search.value=name;renderMasterResults();renderDetail();')
+          text=text.replace('window.TaphoaDesktopSales={mount,activate,deactivate,editOrder,renderCategories,renderMaster,renderDetail,updateQtyRow,get selectedItems(){return selectedItems();}};', 'window.TaphoaDesktopSales={mount,activate,deactivate,editOrder,renderCategories,renderMaster,renderMasterResults,renderDetail,updateQtyRow,get selectedItems(){return selectedItems();}};')
+          sales.write_text(text,'utf-8')
+
+          orders=Path('taphoa-desktop-orders.js')
+          text=orders.read_text('utf-8')
+          marker='  function renderOrderList(){'
+          insert='''  function renderOrderRows(){
+            if(!slots?.master)return;
+            const rows=visibleOrders();
+            if(state.selectedId&&!rows.some(order=>String(order.id)===state.selectedId))state.selectedId="";
+            if(!state.selectedId&&rows.length)state.selectedId=String(rows[0].id||"");
+            const list=slots.master.querySelector(".taphoa-order-list");
+            if(!list){renderOrderList();return;}
+            list.innerHTML=rows.length?rows.map(orderRowMarkup).join(''):'<div class="taphoa-empty">Chưa có đơn phù hợp.</div>';
+            const summary=slots.master.querySelector(".taphoa-order-list-summary");
+            if(summary)summary.innerHTML='<span>'+rows.length+' đơn</span><small>'+rows.reduce((sum,row)=>sum+lineCount(row),0)+' dòng · '+rows.reduce((sum,row)=>sum+productCount(row),0)+' sản phẩm</small>';
+            renderOrderDetail(state.selectedId);
+          }
+
+'''
+          text=text.replace(marker,insert+marker,1)
+          text=text.replace('state.source=String(button.dataset.orderSource||"");renderSourceRail();renderOrderList();', 'state.source=String(button.dataset.orderSource||"");renderSourceRail();renderOrderRows();')
+          text=text.replace('if(status){state.status=String(status.dataset.orderStatus||"pending");state.source="";state.selectedId="";renderSourceRail();renderOrderList();return;}', 'if(status){state.status=String(status.dataset.orderStatus||"pending");state.source="";state.selectedId="";slots.master.querySelectorAll("[data-order-status]").forEach(button=>button.classList.toggle("active",button===status));renderSourceRail();renderOrderRows();return;}')
+          text=text.replace('state.query=String(event.target.value||"");state.source="";state.selectedId="";renderSourceRail();renderOrderList();', 'state.query=String(event.target.value||"");state.source="";state.selectedId="";renderSourceRail();renderOrderRows();')
+          text=text.replace('state.timePreset=String(event.target.value||"today");state.source="";state.selectedId="";renderSourceRail();renderOrderList();', 'state.timePreset=String(event.target.value||"today");state.source="";state.selectedId="";renderSourceRail();renderOrderRows();')
+          text=text.replace('state.statusText="";await refresh();\n    }catch(error)', 'state.statusText="";state.busy=false;await refresh();return;\n    }catch(error)',1)
+          text=text.replace('window.TaphoaDesktopOrders={mount,activate,deactivate,refresh,renderSourceRail,renderOrderList,renderOrderDetail,selectOrder,get state(){return state;}};', 'window.TaphoaDesktopOrders={mount,activate,deactivate,refresh,renderSourceRail,renderOrderList,renderOrderRows,renderOrderDetail,selectOrder,get state(){return state;}};')
+          orders.write_text(text,'utf-8')
+
+          debts=Path('taphoa-desktop-debts.js')
+          text=debts.read_text('utf-8')
+          text=text.replace('state.statusText="Đã ghi nhận thanh toán.";await refresh();', 'state.statusText="Đã ghi nhận thanh toán.";state.busy=false;await refresh();return;',1)
+          debts.write_text(text,'utf-8')
+          PY
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Focused checks
+        run: |
+          python -m unittest tests.test_taphoa_desktop_workspace -v
+          node --check taphoa-desktop-workspace.js
+          node --check taphoa-desktop-data.js
+          node --check taphoa-desktop-sales.js
+          node --check taphoa-desktop-orders.js
+          node --check taphoa-desktop-debts.js
+          python tools/stamp_static_build.py --check
+      - name: Commit patch
+        shell: bash
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add taphoa-desktop-sales.js taphoa-desktop-orders.js taphoa-desktop-debts.js index.html version.json
+          git commit -m "fix: keep Tạp hóa desktop hot paths local"
+          git push origin HEAD:feature/taphoa-desktop-three-column-rebuild

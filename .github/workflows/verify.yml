@@ -28,8 +28,14 @@ jobs:
       - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py
       - run: node --check app.js
       - run: node --check order-management.js
+      - run: node --check taphoa-desktop-workspace.js
+      - run: node --check taphoa-desktop-data.js
+      - run: node --check taphoa-desktop-sales.js
+      - run: node --check taphoa-desktop-orders.js
+      - run: node --check taphoa-desktop-debts.js
       - run: node --check taphoa-workspace-feedback.js
       - run: node --check relay/src/index.js
+      - run: node tests/test_taphoa_desktop_hot_paths.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x

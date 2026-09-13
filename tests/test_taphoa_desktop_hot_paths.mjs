@@ -57,6 +57,14 @@ assert.ok(batchOrders.includes("visibleRows()"),"delivered batch must respect th
 assert.ok(batchOrders.includes("map(o=>String(o.id"),"delivered batch must submit visible order ids");
 assert.ok(batchOrders.includes('state.status==="returned"'),"returned history must not expose a destructive batch action");
 
+for(const preset of ["all","today","yesterday","week","month","year","custom"]){
+  assert.ok(orders.includes(`value="${preset}"`),`missing order time preset ${preset}`);
+}
+assert.ok(orders.includes("function orderMatchesTime"),"order report must have one time-filter owner");
+assert.ok(orders.includes('id="taphoaOrderFrom"'),"custom report range needs a from date");
+assert.ok(orders.includes('id="taphoaOrderTo"'),"custom report range needs a to date");
+assert.ok(orders.includes("supplierSources"),"order source labels must use supplier display names when available");
+
 assert.ok(workspace.includes("taphoa-new-desktop-active"),"fresh shell must suppress legacy desktop visual owners");
 assert.ok(workspace.includes("event.stopImmediatePropagation()"),"fresh shell events must not fall through to legacy document handlers");
 assert.ok(!workspace.includes("MutationObserver"),"fresh shell must not coordinate with mutation observers");

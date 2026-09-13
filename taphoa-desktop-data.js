@@ -11,6 +11,9 @@
   let productIndex=[];
   let productByKey=new Map();
   let indexVersion=0;
+  let indexSource=null;
+  let indexSourceLength=-1;
+  let indexLibraryVersion=-1;
 
   function normalize(value){
     return String(value||"")
@@ -72,6 +75,14 @@
     return score;
   }
 
+  function currentLibraryRows(){
+    return typeof libraryCache!=="undefined"&&Array.isArray(libraryCache)?libraryCache:[];
+  }
+
+  function currentLibraryVersion(){
+    return typeof libraryRenderVersion!=="undefined"?Number(libraryRenderVersion)||0:0;
+  }
+
   function buildTaphoaIndex(rows){
     const source=Array.isArray(rows)?rows:[];
     productIndex=[];
@@ -84,19 +95,27 @@
       productIndex.push(entry);
       productByKey.set(key,entry);
     }
+    indexSource=source;
+    indexSourceLength=source.length;
+    indexLibraryVersion=currentLibraryVersion();
     indexVersion+=1;
     return productIndex.length;
   }
 
   function buildProductIndex(rows){
-    const source=Array.isArray(rows)
-      ?rows
-      :(typeof libraryCache!=="undefined"&&Array.isArray(libraryCache)?libraryCache:[]);
+    const source=Array.isArray(rows)?rows:currentLibraryRows();
     return buildTaphoaIndex(source);
   }
 
   function ensureProductIndex(){
-    if(!productIndex.length)buildProductIndex();
+    const source=currentLibraryRows();
+    const version=currentLibraryVersion();
+    if(
+      !productIndex.length||
+      source!==indexSource||
+      source.length!==indexSourceLength||
+      version!==indexLibraryVersion
+    )buildTaphoaIndex(source);
     return productIndex;
   }
 
@@ -214,7 +233,7 @@
     orderRequest,
     productAddRequest,
     orderCustomerRequest,
-    get productCount(){return productIndex.length;},
+    get productCount(){return ensureProductIndex().length;},
     get indexVersion(){return indexVersion;},
   };
 })();

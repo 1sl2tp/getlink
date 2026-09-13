@@ -1,0 +1,55 @@
+name: Patch order workspace regression
+
+on:
+  push:
+    branches:
+      - fix/order-workspace-click-source
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'ci: apply order workspace regression fix'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/order-workspace-click-source
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply minimal regression fix
+        shell: python
+        run: |
+          from pathlib import Path
+
+          js_path = Path('taphoa-hot-path-runtime.js')
+          js = js_path.read_text(encoding='utf-8')
+          old = '      if(target.closest?.(".order-detail-pane"))return false;\n      if(target.closest?.(".taphoa-sales-preview"))return false;'
+          new = '      if(target.closest?.(".order-detail-pane"))return false;\n      if(target.closest?.(".order-index-list"))return false;\n      if(target.closest?.(".taphoa-sales-preview"))return false;'
+          if old not in js:
+              raise SystemExit('observer filter anchor not found')
+          js = js.replace(old, new, 1)
+          js_path.write_text(js, encoding='utf-8')
+
+          css_path = Path('taphoa-hot-path-runtime.css')
+          css = css_path.read_text(encoding='utf-8')
+          bad = '  .order-index-scroll>.order-source-report{display:none!important}\n'
+          if bad not in css:
+              raise SystemExit('source hide rule not found')
+          css = css.replace(bad, '', 1)
+          css_path.write_text(css, encoding='utf-8')
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Verify focused regression contract
+        run: python -m unittest tests.test_taphoa_hot_path_performance -v
+      - name: Verify runtime syntax
+        run: node --check taphoa-hot-path-runtime.js
+      - name: Commit fix and stamp
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add taphoa-hot-path-runtime.js taphoa-hot-path-runtime.css index.html version.json
+          git commit -m 'fix: restore order clicks and source fallback'
+          git push origin HEAD:fix/order-workspace-click-source

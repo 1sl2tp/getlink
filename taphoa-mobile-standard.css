@@ -177,3 +177,36 @@
   .mobile-standard-cart-columns,.mobile-standard-cart-line{grid-template-columns:minmax(0,1fr) 58px 86px 66px;gap:4px}
   .mobile-user-mine-card{grid-template-columns:minmax(0,1fr) auto!important}
 }
+
+/* Embedded iOS interaction owner: keep one definite-height scroll region inside the iframe. */
+@media(max-width:639px){
+  html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
+    display:flex!important;
+    flex-direction:column!important;
+    height:100dvh!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  html[data-getlink-embed="1"] #mobileUserWork{
+    flex:1 1 0!important;
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  html[data-getlink-embed="1"] #mobileUserResults{
+    flex:1 1 0!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+    overscroll-behavior-y:contain;
+  }
+  html[data-getlink-embed="1"] .mobile-user-toolbar,
+  html[data-getlink-embed="1"] .mobile-user-search,
+  html[data-getlink-embed="1"] #mobileUserSearch{
+    position:relative;
+    pointer-events:auto!important;
+    touch-action:manipulation;
+  }
+}

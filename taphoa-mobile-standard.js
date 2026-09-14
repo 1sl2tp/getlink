@@ -7,6 +7,10 @@
   const CART_BAR_ID="mobileStandardCartBar";
   const CART_SHEET_ID="mobileStandardCartSheet";
   const DEBT_SEARCH_ID="mobileStandardDebtSearch";
+  const DEBT_AUTH_KEY="getlink:chat-order-auth";
+  const DEBT_API_KEY=String(window.GETLINK_API_KEY||"");
+  const DEBT_CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/+$/,"");
+  const DEBT_ORDER_API=DEBT_CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
   let mounted=false;
   let cartOpen=false;
   let syncQueued=false;
@@ -23,7 +27,28 @@
     if(!Number.isFinite(compact)||compact<=0)return null;
     return Math.round(compact*2)/2*1000;
   }
-  function isAdmin(){return String(window.TaphoaDesktopData?.readAuth?.()?.account?.role||"")==="admin"}
+  function isAdmin(){return String(window.GETLINK_ACCESS_CONTEXT?.snapshot?.()?.state||"")==="admin"}
+  function debtAuth(){
+    try{
+      const value=JSON.parse(sessionStorage.getItem(DEBT_AUTH_KEY)||"null");
+      return value?.source==="chat"&&value?.accessToken?value:null;
+    }catch{return null;}
+  }
+  async function debtRequest(path,options={}){
+    const auth=debtAuth();
+    const headers=new Headers(options.headers||{});
+    if(DEBT_API_KEY)headers.set("apikey",DEBT_API_KEY);
+    if(auth?.accessToken)headers.set("authorization","Bearer "+auth.accessToken);
+    if(options.body)headers.set("content-type","application/json");
+    const response=await fetch(DEBT_ORDER_API+path,{...options,headers});
+    const data=await response.json().catch(()=>({}));
+    if(!response.ok){
+      const error=new Error(String(data.error||"Không thực hiện được."));
+      error.status=response.status;
+      throw error;
+    }
+    return data;
+  }
   function normalized(value){
     return clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
   }
@@ -312,7 +337,7 @@
     if(status)status.textContent=debt?"Đang ghi nợ...":"Đang thu tiền...";
     let failed="";
     try{
-      await window.TaphoaDesktopData.orderRequest("/debts/"+encodeURIComponent(customerId)+"/"+endpoint,{
+      await debtRequest("/debts/"+encodeURIComponent(customerId)+"/"+endpoint,{
         method:"POST",
         body:JSON.stringify({amountVnd:Math.round(amountVnd),note:clean(form.elements.note?.value||"")})
       });

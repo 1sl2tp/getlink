@@ -6,21 +6,20 @@ JS = ROOT.joinpath("taphoa-workspace-feedback.js").read_text("utf-8")
 
 
 class MobileOrderDetailSourceOwner(unittest.TestCase):
-    def test_source_summary_is_resolved_from_stable_results_owner(self):
+    def test_source_summary_is_resolved_from_stable_results_owner_for_wide_workspace(self):
         self.assertIn('const resultsOwner=source.closest(".order-report-results")||list', JS)
         self.assertIn('resultsOwner.querySelector(":scope > .order-source-summary")', JS)
         self.assertIn('resultsOwner.querySelector(":scope > .order-source-detail")', JS)
         self.assertNotIn('list.querySelector(":scope > .order-source-summary")', JS)
 
-    def test_mobile_order_row_tap_selects_directly_without_synthetic_click_dependency(self):
-        self.assertIn('function selectOrderWorkspaceItem(listItem)', JS)
-        self.assertIn('function beginMobileOrderTap(event)', JS)
-        self.assertIn('function finishMobileOrderTap(event)', JS)
-        self.assertIn('selectOrderWorkspaceItem(tap.target)', JS)
-        self.assertIn('document.addEventListener("pointerdown",beginMobileOrderTap,true)', JS)
-        self.assertIn('document.addEventListener("pointerup",finishMobileOrderTap,true)', JS)
+    def test_mobile_returns_to_canonical_order_owner(self):
+        self.assertIn('function mobileUsesCanonicalOrderOwner()', JS)
+        self.assertIn('function restoreCanonicalMobileOrders()', JS)
+        self.assertIn('if(mobileUsesCanonicalOrderOwner()){restoreCanonicalMobileOrders();return;}', JS)
+        self.assertNotIn('function beginMobileOrderTap(event)', JS)
+        self.assertNotIn('function finishMobileOrderTap(event)', JS)
 
-    def test_source_report_stays_expanded_on_mobile_index(self):
+    def test_wide_source_report_remains_available(self):
         self.assertIn('report.open=!window.matchMedia("(min-width:1000px)").matches', JS)
 
 

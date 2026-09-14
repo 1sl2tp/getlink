@@ -71,7 +71,6 @@ def main():
             print('version.json build metadata is stale',file=sys.stderr)
             ok=False
         if not ok:
-            print(f'expected build_id={build_id}',file=sys.stderr)
             raise SystemExit(1)
         print(f'GETLINK static build PASS build_id={build_id}')
         return

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 
 // Desktop baseline from “giao diện chuẩn”: when PC/iframe width allows it,
 // supporting panels stay visible instead of collapsing the workflow into mobile-like popups.
-// This contract is also the post-patch CI trigger after the one-time alignment workflow is removed.
+// Final branch verification runs this contract after all one-time patch workflows are removed.
 const read=name=>fs.readFileSync(new URL(`../${name}`,import.meta.url),"utf8");
 const block=(text,start,end)=>{
   const a=text.indexOf(start);

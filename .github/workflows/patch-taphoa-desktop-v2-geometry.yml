@@ -1,0 +1,75 @@
+name: Patch Tạp hóa desktop v2 geometry
+
+on:
+  push:
+    branches:
+      - feature/taphoa-desktop-layout-v2
+    paths:
+      - .github/workflows/patch-taphoa-desktop-v2-geometry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-desktop-layout-v2
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Add red geometry contracts
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tests/test_taphoa_desktop_layout_v2.mjs')
+          s=p.read_text('utf-8')
+          needle='assert.ok(styles.includes("font-size:12px"),"desktop supporting text must not default to 9px-era sizing");'
+          add='''assert.ok(styles.includes('.taphoa-manual-add input[name="name"]{grid-column:1/-1}'),"manual product add must give the product name a full row on narrow desktop");\nassert.ok(styles.includes('grid-template-columns:minmax(0,1fr) auto'),"debt payment form must keep the primary action visible in a narrow detail pane");\nassert.ok(styles.includes('.taphoa-debt-payment input[name="note"]{grid-column:1/-1;grid-row:2}'),"debt payment note must move to its own row instead of squeezing the action off-screen");\n\n'''
+          if add.strip() not in s:
+              s=s.replace(needle,add+needle)
+          p.write_text(s,'utf-8')
+          PY
+          if node tests/test_taphoa_desktop_layout_v2.mjs; then
+            echo 'Expected geometry contract to fail before CSS fix' >&2
+            exit 1
+          fi
+      - name: Fix narrow desktop forms
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-desktop-workspace.css')
+          s=p.read_text('utf-8')
+          old='.taphoa-manual-add{margin:12px;padding:12px;border:1px dashed #becdc4;border-radius:8px;background:#fafcfa;display:grid;grid-template-columns:minmax(0,1fr) 130px 110px auto;gap:7px;align-items:end}'
+          new='.taphoa-manual-add{margin:12px;padding:12px;border:1px dashed #becdc4;border-radius:8px;background:#fafcfa;display:grid;grid-template-columns:minmax(0,1fr) 110px auto;gap:7px;align-items:end}'
+          if old not in s:
+              raise SystemExit('manual-add geometry source not found')
+          s=s.replace(old,new,1)
+          marker='.taphoa-manual-add>div{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px}'
+          extra='\n  .taphoa-manual-add input[name="name"]{grid-column:1/-1}'
+          if extra.strip() not in s:
+              s=s.replace(marker,marker+extra,1)
+          old_pay='''  .taphoa-debt-payment{margin:12px 0;display:grid;grid-template-columns:1fr 1fr auto;gap:7px}\n  .taphoa-debt-payment input,.taphoa-debt-payment button{height:36px;border:1px solid #d6dfda;border-radius:6px;padding:0 8px;font:inherit;font-size:12px}\n  .taphoa-debt-payment button{background:#176b3b;color:#fff;border-color:#176b3b;font-weight:700;cursor:pointer}'''
+          new_pay='''  .taphoa-debt-payment{margin:12px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}\n  .taphoa-debt-payment input,.taphoa-debt-payment button{height:36px;border:1px solid #d6dfda;border-radius:6px;padding:0 8px;font:inherit;font-size:12px}\n  .taphoa-debt-payment input[name="amountVnd"]{grid-column:1;grid-row:1}\n  .taphoa-debt-payment button{grid-column:2;grid-row:1;background:#176b3b;color:#fff;border-color:#176b3b;font-weight:700;cursor:pointer;white-space:nowrap}\n  .taphoa-debt-payment input[name="note"]{grid-column:1/-1;grid-row:2}'''
+          if old_pay not in s:
+              raise SystemExit('debt-payment geometry source not found')
+          s=s.replace(old_pay,new_pay,1)
+          p.write_text(s,'utf-8')
+          PY
+          node tests/test_taphoa_desktop_layout_v2.mjs
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Commit patch and remove one-time workflow
+        shell: bash
+        run: |
+          git rm .github/workflows/patch-taphoa-desktop-v2-geometry.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add taphoa-desktop-workspace.css tests/test_taphoa_desktop_layout_v2.mjs index.html version.json
+          git commit -m "fix: finish narrow desktop form geometry"
+          git push origin HEAD:feature/taphoa-desktop-layout-v2

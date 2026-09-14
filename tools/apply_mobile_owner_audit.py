@@ -177,7 +177,7 @@ if marker not in css:
 write("taphoa-mobile-standard.css", css)
 
 
-# Replace the old test that required moving controls with the new stable-host contract.
+# Replace old tests that locked the previous DOM-reparent/click-through hacks.
 test_path = ROOT / "tests" / "test_mobile_standard_document_layout.py"
 test = test_path.read_text(encoding="utf-8")
 old_test = '''        self.assertIn('function moveWorkNavToBottom()', js)
@@ -190,3 +190,14 @@ new_test = '''        self.assertIn('function moveWorkNavToBottom()', js)
         self.assertIn('orderTabs.insertBefore(delivered,pending)', js)'''
 test = replace_once(test, old_test, new_test, "update mobile standard owner test")
 test_path.write_text(test, encoding="utf-8")
+
+interaction_path = ROOT / "tests" / "test_mobile_interaction_owner.py"
+interaction = interaction_path.read_text(encoding="utf-8")
+old_interaction = '''    def test_customer_search_calls_original_picker_owner(self):
+        self.assertIn('data-order-customer-for="mobileUserSendOrder"', JS)
+        self.assertIn('(source||fallback)?.click()', JS)'''
+new_interaction = '''    def test_customer_search_calls_original_picker_owner(self):
+        self.assertIn('window.GETLINK_ORDER_UI?.openCustomerPicker', JS)
+        self.assertNotIn('(source||fallback)?.click()', JS)'''
+interaction = replace_once(interaction, old_interaction, new_interaction, "update customer picker owner test")
+interaction_path.write_text(interaction, encoding="utf-8")

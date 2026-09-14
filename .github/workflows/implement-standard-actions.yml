@@ -55,6 +55,20 @@ jobs:
       - name: Apply standard actions
         run: python tools/implement_standard_actions.py
 
+      - name: Preserve quick receipt compatibility
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-desktop-debts.js')
+          s=p.read_text(encoding='utf-8')
+          anchor='\n\n  async function payment(form)'
+          if anchor not in s:
+              raise SystemExit('quick-payment compatibility anchor missing')
+          adapter='\n  async function quickPayment(form){return quickEntry(form,"payment")}\n\n  async function payment(form)'
+          p.write_text(s.replace(anchor,adapter,1),encoding='utf-8')
+          PY
+
       - name: Verify focused contracts
         shell: bash
         run: |

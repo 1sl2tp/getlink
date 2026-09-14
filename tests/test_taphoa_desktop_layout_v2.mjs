@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import assert from "node:assert/strict";
 
-// Locks the desktop layout decisions that were visually audited at 1000/1280/1440 widths.
+// Locks the desktop layout decisions audited at 1000/1280/1440 widths, including narrow-pane forms.
 const read=name=>fs.readFileSync(new URL(`../${name}`,import.meta.url),"utf8");
 const block=(text,start,end)=>{
   const a=text.indexOf(start);

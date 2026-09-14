@@ -1,0 +1,42 @@
+name: Apply mobile canonical order owner
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - fix/mobile-orders-source-detail-owner
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mobile-orders-source-detail-owner
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r scraper/requirements.txt
+      - run: python tools/apply_mobile_canonical_order_owner.py
+      - run: python tools/stamp_static_build.py
+      - run: python -m unittest tests.test_mobile_orders_canonical_source_detail -v
+      - run: python -m unittest tests.test_mobile_order_detail_source_owner -v
+      - run: python -m unittest tests.test_mobile_order_row_detail_and_sources -v
+      - run: python -m unittest discover -s tests -v
+      - run: node --check taphoa-workspace-feedback.js
+      - run: node --check order-management.js
+      - run: node tests/test_taphoa_desktop_hot_paths.mjs
+      - run: node tests/test_taphoa_desktop_layout_v2.mjs
+      - run: python tools/stamp_static_build.py --check
+      - name: Commit canonical mobile order owner repair
+        run: |
+          rm -f tools/apply_mobile_canonical_order_owner.py .github/workflows/apply-mobile-canonical-order-owner.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "fix: restore mobile order source and view detail"
+          git push origin HEAD:fix/mobile-orders-source-detail-owner

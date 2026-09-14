@@ -15,6 +15,7 @@ const orders=read("taphoa-desktop-orders.js");
 const debts=read("taphoa-desktop-debts.js");
 const data=read("taphoa-desktop-data.js");
 const workspace=read("taphoa-desktop-workspace.js");
+const styles=read("taphoa-desktop-workspace.css");
 const config=read("config.js");
 
 const salesResults=block(sales,"function renderMasterResults", "function renderMaster()");
@@ -32,6 +33,9 @@ const price=block(sales,"function price(row)", "function qc(row)");
 assert.ok(price.includes("row?.price_vnd"),"manual quick-add result must show its returned price immediately");
 const editUpdate=block(sales,"async function updateEditing", "function editOrder");
 assert.ok(editUpdate.includes('TaphoaDesktopWorkspace?.view==="sales"'),"edit completion must not repaint Sales after switching back to Orders");
+const salesRail=block(sales,"function renderCategories()", "function rowMarkup");
+assert.ok(salesRail.includes("<strong>Nguồn hàng</strong>"),"Sales left rail must be named Nguồn hàng, not Danh mục");
+assert.ok(!salesRail.includes("<strong>Danh mục</strong>"),"Sales source rail must not present itself as a category list");
 
 const ensureIndex=block(data,"function ensureProductIndex", "function allProducts");
 assert.ok(ensureIndex.includes("currentLibraryRows"),"product index must notice when the app library cache arrives or changes");
@@ -76,6 +80,10 @@ assert.ok(orders.includes("async function shareSourceReport"),"source report mus
 const share=block(orders,"async function shareSourceReport", "async function batchCurrentOrders");
 assert.ok(share.includes("navigator.share"),"source report should use native share when available");
 assert.ok(share.includes("navigator.clipboard.writeText"),"source report should fall back to clipboard copy");
+for(const selector of [".taphoa-source-report-bar",".taphoa-source-report-actions",".taphoa-source-detail-row",".taphoa-source-combined-row"]){
+  assert.ok(styles.includes(selector),`missing desktop source-report style ${selector}`);
+}
+assert.ok(styles.includes("grid-template-columns:32px minmax(0,1fr) 64px 86px"),"source detail rows must keep quantity and money columns aligned");
 
 assert.ok(debts.includes('data-td-debt-order="'),"order-linked debt transactions must expose an order drill-down control");
 assert.ok(debts.includes("async function loadLinkedOrder"),"debt workspace must fetch a linked order on demand");

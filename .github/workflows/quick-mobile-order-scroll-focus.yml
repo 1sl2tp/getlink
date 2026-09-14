@@ -16,98 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: RED contract
-        run: |
-          cat > tests/test_mobile_order_scroll_focus.py <<'PY'
-          from pathlib import Path
-          import unittest
-          ROOT=Path(__file__).resolve().parents[1]
-          JS=ROOT.joinpath('order-management.js').read_text('utf-8')
-          CSS=ROOT.joinpath('taphoa-mobile-standard.css').read_text('utf-8')
-          class MobileOrderScrollFocus(unittest.TestCase):
-              def test_search_control_is_never_detached_during_live_filter(self):
-                  self.assertIn('function ensureOrderReportResultsHost(list)', JS)
-                  self.assertIn('results.innerHTML=sourceSummaryMarkup(visible)', JS)
-                  self.assertNotIn('if(controlsInList)controls.remove();', JS)
-              def test_order_list_is_forced_to_be_the_scroll_owner(self):
-                  self.assertIn('height:0!important;', CSS)
-                  self.assertIn('overflow-y:auto!important;', CSS)
-                  self.assertIn('touch-action:pan-y!important;', CSS)
-              def test_ios_search_input_has_stable_text_focus_contract(self):
-                  self.assertIn('font-size:16px!important;', CSS)
-                  self.assertIn('-webkit-user-select:text!important;', CSS)
-          if __name__=='__main__': unittest.main()
-          PY
-          if python -m unittest tests.test_mobile_order_scroll_focus -v; then
-            echo 'Expected RED but test passed'
-            exit 1
-          else
-            echo 'RED confirmed'
-          fi
-      - name: Patch root causes
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('order-management.js')
-          s=p.read_text('utf-8')
-          old='''    const manager=document.getElementById("orderManager");
-              const controls=manager?.querySelector(".order-report-controls");
-              const controlsInList=controls?.parentElement===list;
-              if(controlsInList)controls.remove();
-              list.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
-              if(controlsInList)list.prepend(controls);
-              else if(!controls)list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
-            }
-'''.replace('              ','    ')
-          new='''    const results=ensureOrderReportResultsHost(list);
-              results.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
-            }
-            function ensureOrderReportResultsHost(list){
-              let controls=list.querySelector(":scope > .order-report-controls");
-              if(!controls){
-                list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
-                controls=list.querySelector(":scope > .order-report-controls");
-              }
-              let results=list.querySelector(":scope > .order-report-results");
-              if(!results){
-                results=document.createElement("div");
-                results.className="order-report-results";
-                controls?.insertAdjacentElement("afterend",results);
-              }
-              return results;
-            }
-'''.replace('              ','    ')
-          if old not in s:
-              raise SystemExit('renderOrders anchor not found')
-          p.write_text(s.replace(old,new,1),'utf-8')
-
-          c=Path('taphoa-mobile-standard.css')
-          css=c.read_text('utf-8')
-          marker='''  #mobileUserWork[data-taphoa-view="orders"] .order-manager-list,
-            #mobileUserWork[data-taphoa-view="debts"] .order-manager-list{
-              flex:1 1 auto!important;
-              min-height:0!important;
-              overflow-y:auto!important;'''.replace('            ','  ')
-          repl='''  #mobileUserWork[data-taphoa-view="orders"] .order-manager-list,
-            #mobileUserWork[data-taphoa-view="debts"] .order-manager-list{
-              flex:1 1 0!important;
-              height:0!important;
-              min-height:0!important;
-              overflow-y:auto!important;'''.replace('            ','  ')
-          if marker not in css:
-              raise SystemExit('scroll owner anchor not found')
-          css=css.replace(marker,repl,1)
-          input_marker='''  #mobileUserWork .order-report-search input,
-            #mobileUserWork .mobile-standard-debt-search input{
-              touch-action:manipulation!important;'''.replace('            ','  ')
-          input_repl='''  #mobileUserWork .order-report-search input,
-            #mobileUserWork .mobile-standard-debt-search input{
-              font-size:16px!important;
-              touch-action:manipulation!important;'''.replace('            ','  ')
-          if input_marker not in css:
-              raise SystemExit('input focus anchor not found')
-          c.write_text(css.replace(input_marker,input_repl,1),'utf-8')
-          PY
+      - name: Red then patch
+        run: python tools/hotfix_mobile_order_scroll_focus.py
       - name: Verify hotfix
         run: |
           python tools/stamp_static_build.py
@@ -123,7 +33,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/quick-mobile-order-scroll-focus.yml
+          git rm -f .github/workflows/quick-mobile-order-scroll-focus.yml tools/hotfix_mobile_order_scroll_focus.py
           git add order-management.js taphoa-mobile-standard.css tests/test_mobile_order_scroll_focus.py index.html version.json
           git commit -m 'fix: keep mobile order search focused and list scrollable'
           git push origin HEAD:main

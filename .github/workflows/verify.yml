@@ -52,7 +52,7 @@ jobs:
         run: |
           grep -q 'supabase.co/functions/v1/getlink-api' config.js
           ! grep -q 'workers.dev' config.js
-          test -f supabase/functions/v1/getlink-api/index.ts || test -f supabase/functions/getlink-api/index.ts
+          test -f supabase/functions/getlink-api/index.ts
           test -f supabase/functions/getlink-orders/index.ts
           test -f supabase/functions/getlink-product-add/index.ts
           test -f supabase/functions/getlink-order-customer/index.ts

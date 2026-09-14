@@ -5,16 +5,17 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TaphoaDesktopWorkspaceContract(unittest.TestCase):
-    def test_shell_has_three_permanent_slots_and_bottom_nav(self):
+    def test_shell_has_three_permanent_slots_and_top_nav(self):
         js = (ROOT / "taphoa-desktop-workspace.js").read_text("utf-8")
         for token in [
             "taphoaDesktopWorkspace",
             "taphoaLeftRail",
             "taphoaMasterList",
             "taphoaDetailPane",
-            "taphoaBottomNav",
+            "taphoaTopNav",
         ]:
             self.assertIn(token, js)
+        self.assertNotIn("taphoaBottomNav", js)
 
     def test_shell_does_not_use_mutation_observer_or_cross_column_reparenting(self):
         js = (ROOT / "taphoa-desktop-workspace.js").read_text("utf-8")

@@ -36,6 +36,7 @@ jobs:
       - run: node --check taphoa-workspace-feedback.js
       - run: node --check relay/src/index.js
       - run: node tests/test_taphoa_desktop_hot_paths.mjs
+      - run: node tests/test_taphoa_desktop_layout_v2.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x

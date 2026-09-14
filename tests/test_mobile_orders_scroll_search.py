@@ -13,7 +13,7 @@ class MobileOrdersScrollSearch(unittest.TestCase):
         self.assertIn('-webkit-overflow-scrolling:touch', CSS)
 
     def test_order_search_does_not_replace_input_while_typing(self):
-        self.assertIn('function applyOrderReportSearch()', JS)
+        self.assertIn('function applyOrderReportSearch(input)', JS)
         self.assertIn('renderOrderResultContent()', JS)
         self.assertNotIn('setOrderReportFilter({search:String(event.target.value||"")});sourceDrillSource="";renderOrders();', JS)
 

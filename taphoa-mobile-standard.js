@@ -124,7 +124,7 @@
     const host=root();
     const nav=host?.querySelector(".taphoa-work-nav.mobile");
     if(!host||!nav)return false;
-    if(nav.parentElement!==host||nav!==host.lastElementChild)host.appendChild(nav);
+    nav.classList.add("mobile-standard-nav-bottom");
     return true;
   }
 
@@ -290,7 +290,9 @@
       const name=String(action.dataset.mobileStandardAction||"");
       if(name==="customer-search"){
         event.preventDefault();
-        document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]")?.click();
+        const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"][data-order-customer-select]')||document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');
+        const fallback=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
+        (source||fallback)?.click();
         queueAfterAsyncOwner();
         return;
       }

@@ -210,3 +210,19 @@
     touch-action:manipulation;
   }
 }
+
+
+/* Mobile interaction owner: preserve original nav DOM and only place it visually at the bottom. */
+@media(max-width:639px){
+  #mobileUserWork>.taphoa-work-nav.mobile,
+  #mobileUserWork .taphoa-work-nav.mobile.mobile-standard-nav-bottom{
+    order:99!important;
+    flex:0 0 auto!important;
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+  #mobileUserWork .taphoa-work-nav.mobile button{
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+}

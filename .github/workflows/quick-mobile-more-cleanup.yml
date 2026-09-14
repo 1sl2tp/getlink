@@ -1,0 +1,47 @@
+name: Quick mobile more cleanup
+on:
+  push:
+    branches: [fix/mobile-canonical-owner-audit]
+permissions:
+  contents: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/mobile-canonical-owner-audit
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Hide legacy sales controls in More
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-mobile-standard.css')
+          s=p.read_text('utf-8')
+          marker='/* CANONICAL_MORE_VISIBILITY_20260914 */'
+          if marker not in s:
+              s += '''\n\n/* CANONICAL_MORE_VISIBILITY_20260914 */\n@media(max-width:639px){\n  #mobileUserWork[data-taphoa-view="more"] .mobile-user-toolbar,\n  #mobileUserWork[data-taphoa-view="more"] #mobileUserResults,\n  #mobileUserWork[data-taphoa-view="more"] #mobileUserEmpty,\n  #mobileUserWork[data-taphoa-view="more"] #mobileStandardCustomer,\n  #mobileUserWork[data-taphoa-view="more"] #mobileStandardCartBar,\n  #mobileUserWork[data-taphoa-view="more"] .mobile-user-order-bar{display:none!important}\n}\n'''
+          p.write_text(s,'utf-8')
+          PY
+      - name: Stamp and verify focused mobile contracts
+        run: |
+          python tools/stamp_static_build.py
+          python -m unittest tests.test_mobile_canonical_owner_audit -v
+          python -m unittest tests.test_mobile_standard_document_layout -v
+          python -m unittest tests.test_mobile_interaction_owner -v
+          python -m unittest tests.test_mobile_iframe_touch_scroll -v
+          python -m unittest tests.test_mobile_iframe_tap_fallback -v
+          node --check taphoa-mobile-standard.js
+          node --check order-management.js
+          python tools/stamp_static_build.py --check
+      - name: Commit cleanup
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add taphoa-mobile-standard.css index.html version.json
+          git rm -f .github/workflows/quick-mobile-more-cleanup.yml
+          git commit -m 'fix: isolate mobile more workspace'
+          git push origin HEAD:fix/mobile-canonical-owner-audit

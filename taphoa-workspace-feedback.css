@@ -330,6 +330,9 @@
 }
 .order-lifecycle-list[data-taphoa-v2-source="1"]{display:none!important}
 
+/* Keep the stable search/results DOM wrapper layout-transparent so the order workspace remains the sized flex child. */
+.order-report-results{display:contents}
+
 .order-workspace-v2{
   flex:1 1 auto;
   min-width:0;

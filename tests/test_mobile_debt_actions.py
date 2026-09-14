@@ -17,11 +17,16 @@ class MobileDebtActionsTests(unittest.TestCase):
         self.assertIn("payment.disabled=!positive", MOBILE_JS)
         self.assertIn("legacy?.remove()", MOBILE_JS)
 
-    def test_mobile_debt_actions_use_thousand_unit_and_existing_sales_api(self):
+    def test_mobile_debt_actions_use_thousand_unit_and_sales_api(self):
         self.assertIn("function parseCompactVnd", MOBILE_JS)
         self.assertIn("*1000", MOBILE_JS)
         self.assertIn('action==="debt"?"adjustments":"payments"', MOBILE_JS)
-        self.assertIn("TaphoaDesktopData.orderRequest", MOBILE_JS)
+        self.assertIn('const DEBT_AUTH_KEY="getlink:chat-order-auth";', MOBILE_JS)
+        self.assertIn('const DEBT_ORDER_API=', MOBILE_JS)
+        self.assertIn('headers.set("apikey",DEBT_API_KEY)', MOBILE_JS)
+        self.assertIn('headers.set("authorization","Bearer "+auth.accessToken)', MOBILE_JS)
+        self.assertIn('await debtRequest("/debts/"', MOBILE_JS)
+        self.assertNotIn("TaphoaDesktopData.orderRequest", MOBILE_JS)
 
 
 if __name__ == "__main__":

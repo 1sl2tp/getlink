@@ -666,3 +666,15 @@
   .order-invoice-actions{min-height:50px;padding:7px 9px}
   .order-invoice-actions button{flex:1;min-width:0;padding:0 7px}
 }
+
+@media(max-width:639px){
+  /* MOBILE_CANONICAL_ORDER_OWNER_20260914 */
+  #mobileUserWork[data-taphoa-view="orders"] .order-source-summary{
+    display:block!important;
+    flex:0 0 auto!important;
+    min-height:max-content;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-source-detail{
+    flex:0 0 auto!important;
+  }
+}

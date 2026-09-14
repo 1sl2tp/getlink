@@ -29,10 +29,10 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
         css = MOBILE_CSS_PATH.read_text(encoding="utf-8")
         for token in [
-            'id="mobileStandardCustomer"',
+            'const CUSTOMER_ID="mobileStandardCustomer"',
             'data-order-customer-select',
-            'id="mobileStandardCartBar"',
-            'id="mobileStandardCartSheet"',
+            'const CART_BAR_ID="mobileStandardCartBar"',
+            'const CART_SHEET_ID="mobileStandardCartSheet"',
             'data-mobile-standard-action="cart"',
             'data-mobile-standard-action="place"',
             'data-mobile-standard-action="sell"',
@@ -67,7 +67,7 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
 
     def test_debt_has_mobile_search_and_keeps_history_detail_owner(self):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
-        self.assertIn('id="mobileStandardDebtSearch"', js)
+        self.assertIn('const DEBT_SEARCH_ID="mobileStandardDebtSearch"', js)
         self.assertIn('function syncDebtSearch()', js)
         self.assertIn('.debt-customer-card', js)
         self.assertIn('data-debt-order-id', js)

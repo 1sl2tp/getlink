@@ -916,7 +916,6 @@
   }
   async function loadDebtDetail(customerId){
     const data=await orderFetch("/debts/"+encodeURIComponent(customerId),{method:"GET"});
-    debtCustomerId=String(data?.customer?.id||customerId||"");
     debtDetail=data;
     return data;
   }
@@ -954,7 +953,9 @@
     </form>`;
   }
   async function openDebtLinkedOrder(id){
+    const requestedDebtCustomerId=String(debtCustomerId||"");
     const data=await orderFetch("/orders/"+encodeURIComponent(id),{method:"GET"});
+    if(activeView!=="debts"||String(debtCustomerId||"")!==requestedDebtCustomerId)return;
     debtLinkedOrder=data?.order||null;
     if(debtLinkedOrder)orders=[debtLinkedOrder,...orders.filter(row=>String(row.id)!==String(debtLinkedOrder.id))];
     renderDebtLinkedOrder();
@@ -1270,12 +1271,14 @@
     const amountVnd=parseCompactVnd(form.elements.amountVnd?.value);
     const note=String(form.elements.note?.value||"").trim();
     if(!Number.isFinite(amountVnd)||amountVnd<=0){alert("Nhập số tiền khách trả.");return;}
+    const requestedDebtCustomerId=String(debtCustomerId||"");
     busy=true;
     try{
       await orderFetch("/debts/"+encodeURIComponent(customerId)+"/payments",{
         method:"POST",body:JSON.stringify({amountVnd:Math.round(amountVnd),note})
       });
       await loadDebtDetail(customerId);
+      if(activeView!=="debts"||String(debtCustomerId||"")!==requestedDebtCustomerId)return;
       renderDebtDetail();
     }catch(error){
       if(!handleAuthError(error))alert(String(error?.message||error));

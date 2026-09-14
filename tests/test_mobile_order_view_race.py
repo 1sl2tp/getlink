@@ -20,6 +20,28 @@ class MobileOrderViewRace(unittest.TestCase):
         self.assertIn('async function refreshDebts(refreshSeq=managerRefreshSeq,requestedView="debts")', ORDER)
         self.assertIn('if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;', ORDER)
 
+    def test_debt_loader_does_not_reclaim_navigation_owner(self):
+        start = ORDER.index('async function loadDebtDetail(customerId)')
+        end = ORDER.index('\n  }', start) + 4
+        block = ORDER[start:end]
+        self.assertNotIn('debtCustomerId=', block)
+
+    def test_payment_completion_cannot_render_debt_inside_orders(self):
+        start = ORDER.index('async function submitPayment(form)')
+        end = ORDER.index('\n  }', start) + 4
+        block = ORDER[start:end]
+        self.assertIn('const requestedDebtCustomerId=String(debtCustomerId||"");', block)
+        self.assertIn('if(activeView!=="debts"||String(debtCustomerId||"")!==requestedDebtCustomerId)return;', block)
+        self.assertLess(block.index('if(activeView!=="debts"'), block.index('renderDebtDetail();'))
+
+    def test_linked_order_completion_cannot_render_after_leaving_debt(self):
+        start = ORDER.index('async function openDebtLinkedOrder(id)')
+        end = ORDER.index('\n  }', start) + 4
+        block = ORDER[start:end]
+        self.assertIn('const requestedDebtCustomerId=String(debtCustomerId||"");', block)
+        self.assertIn('if(activeView!=="debts"||String(debtCustomerId||"")!==requestedDebtCustomerId)return;', block)
+        self.assertLess(block.index('if(activeView!=="debts"'), block.index('renderDebtLinkedOrder();'))
+
 
 if __name__ == "__main__":
     unittest.main()

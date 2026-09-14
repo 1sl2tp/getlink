@@ -10,10 +10,20 @@
   let mounted=false;
   let cartOpen=false;
   let syncQueued=false;
+  let activeDebtCustomerId="";
+  let debtActionBusy=false;
 
   function root(){return document.getElementById(ROOT_ID)}
   function isMobile(){return window.matchMedia(MOBILE_QUERY).matches}
   function clean(value){return String(value??"").replace(/\s+/g," ").trim()}
+  function parseCompactVnd(value){
+    const text=String(value??"").trim().replace(/\s+/g,"").replace(",",".");
+    if(!/^\d+(?:\.\d)?$/.test(text))return null;
+    const compact=Number(text);
+    if(!Number.isFinite(compact)||compact<=0)return null;
+    return Math.round(compact*2)/2*1000;
+  }
+  function isAdmin(){return String(window.TaphoaDesktopData?.readAuth?.()?.account?.role||"")==="admin"}
   function normalized(value){
     return clean(value).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").replace(/Đ/g,"D").toLowerCase();
   }
@@ -237,6 +247,90 @@
     });
   }
 
+  function syncDebtActions(){
+    const host=root(),manager=document.getElementById("orderManager");
+    if(!host||!manager)return;
+    const inDebt=String(host.dataset.taphoaView||"")==="debts";
+    const head=manager.querySelector(".debt-detail-head");
+    if(!isMobile()||!inDebt||!isAdmin()||!head){
+      manager.querySelector("[data-mobile-standard-debt-entry]")?.remove();
+      return;
+    }
+
+    const legacy=manager.querySelector(".debt-payment-form[data-debt-payment-form]");
+    const legacyCustomerId=clean(legacy?.dataset.customerId||"");
+    if(legacyCustomerId)activeDebtCustomerId=legacyCustomerId;
+    legacy?.remove();
+    if(!activeDebtCustomerId)return;
+
+    const balanceText=clean(head.querySelector("b")?.textContent||"");
+    const negative=/^[−-]/.test(balanceText);
+    const zero=!balanceText||/^[-−]?0(?:[.,]0)?$/.test(balanceText);
+    const positive=!negative&&!zero;
+    let form=manager.querySelector("[data-mobile-standard-debt-entry]");
+    if(!form){
+      head.insertAdjacentHTML("afterend",'<form class="debt-payment-form mobile-standard-debt-entry" data-mobile-standard-debt-entry data-customer-id="'+escAttr(activeDebtCustomerId)+'">'+
+        '<input name="amountVnd" inputmode="decimal" autocomplete="off" placeholder="Số tiền (nghìn)" aria-label="Số tiền, đơn vị nghìn">'+
+        '<input name="note" autocomplete="off" maxlength="160" placeholder="Ghi chú (không bắt buộc)" aria-label="Ghi chú">'+
+        '<div style="grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:7px">'+
+          '<button type="submit" data-mobile-debt-action="payment">Thu tiền</button>'+
+          '<button type="submit" data-mobile-debt-action="debt" style="border-color:#e5c6b8;background:#fff8f4;color:#8b4a2d">Ghi nợ</button>'+
+        '</div>'+
+        '<small data-mobile-debt-status style="grid-column:1/-1;color:#697482;font-size:11px"></small>'+
+      '</form>');
+      form=manager.querySelector("[data-mobile-standard-debt-entry]");
+    }
+    if(!form)return;
+    form.dataset.customerId=activeDebtCustomerId;
+    const payment=form.querySelector('[data-mobile-debt-action="payment"]');
+    const debt=form.querySelector('[data-mobile-debt-action="debt"]');
+    const status=form.querySelector("[data-mobile-debt-status]");
+    if(payment){
+      payment.disabled=!positive||debtActionBusy;
+      payment.style.opacity=payment.disabled?".45":"1";
+      payment.style.cursor=payment.disabled?"not-allowed":"pointer";
+    }
+    if(debt)debt.disabled=debtActionBusy;
+    form.querySelectorAll("input").forEach(input=>input.disabled=debtActionBusy);
+    if(status&&!debtActionBusy){
+      const absolute=balanceText.replace(/^[−-]/,"");
+      status.textContent=negative?"Khách đang dư "+absolute:positive?"Khách còn nợ "+balanceText:"Khách không còn nợ";
+    }
+  }
+
+  async function submitDebtEntry(form,action){
+    if(debtActionBusy||!isAdmin())return;
+    const customerId=clean(form?.dataset.customerId||activeDebtCustomerId);
+    const amountVnd=parseCompactVnd(form?.elements?.amountVnd?.value);
+    const status=form?.querySelector("[data-mobile-debt-status]");
+    if(!customerId){if(status)status.textContent="Chưa chọn khách hàng.";return;}
+    if(!Number.isFinite(amountVnd)||amountVnd<=0){if(status)status.textContent="Nhập số tiền (nghìn).";return;}
+    const debt=action==="debt";
+    const endpoint=action==="debt"?"adjustments":"payments";
+    debtActionBusy=true;
+    form.querySelectorAll("input,button").forEach(element=>element.disabled=true);
+    if(status)status.textContent=debt?"Đang ghi nợ...":"Đang thu tiền...";
+    let failed="";
+    try{
+      await window.TaphoaDesktopData.orderRequest("/debts/"+encodeURIComponent(customerId)+"/"+endpoint,{
+        method:"POST",
+        body:JSON.stringify({amountVnd:Math.round(amountVnd),note:clean(form.elements.note?.value||"")})
+      });
+    }catch(error){
+      failed=String(error?.message||error||"Không thực hiện được.");
+    }
+    debtActionBusy=false;
+    if(failed){
+      syncDebtActions();
+      const current=document.querySelector("[data-mobile-standard-debt-entry] [data-mobile-debt-status]");
+      if(current)current.textContent=failed;
+      return;
+    }
+    const active=document.querySelector('.taphoa-work-nav.mobile [data-taphoa-work-view="debts"]');
+    active?.click();
+    queueAfterAsyncOwner();
+  }
+
   function syncView(){
     const host=root();if(!host)return;
     const view=String(host.dataset.taphoaView||"sales");
@@ -245,7 +339,7 @@
     if(standardCustomer)standardCustomer.hidden=!isMobile()||view!=="sales";
     if(cartBar)cartBar.hidden=!isMobile()||view!=="sales";
     if(view!=="sales"&&cartOpen)closeCart();
-    moveWorkNavToBottom();configureOrderTabs();syncDebtSearch();
+    moveWorkNavToBottom();configureOrderTabs();syncDebtSearch();syncDebtActions();
   }
 
   function syncAll(){
@@ -262,6 +356,12 @@
   }
 
   document.addEventListener("click",event=>{
+    const debtCustomer=event.target.closest?.("[data-debt-customer-id]");
+    if(debtCustomer)activeDebtCustomerId=clean(debtCustomer.dataset.debtCustomerId||"");
+    if(event.target.closest?.("#debtBackButton"))activeDebtCustomerId="";
+    const workView=event.target.closest?.("[data-taphoa-work-view]");
+    if(workView&&String(workView.dataset.taphoaWorkView||"")!=="debts")activeDebtCustomerId="";
+
     const action=event.target.closest?.("[data-mobile-standard-action]");
     if(action){
       const name=String(action.dataset.mobileStandardAction||"");
@@ -272,6 +372,15 @@
       if(name==="clear"){event.preventDefault();triggerClear();queueAfterAsyncOwner();return;}
     }
     if(event.target.closest?.("[data-work-qty],[data-taphoa-work-view],[data-order-status],[data-debt-customer-id],[data-debt-order-back],[data-debt-order-id],[data-order-customer-select]"))queueAfterAsyncOwner();
+  });
+
+  document.addEventListener("submit",event=>{
+    const form=event.target.closest?.("[data-mobile-standard-debt-entry]");
+    if(!form)return;
+    event.preventDefault();
+    const action=String(event.submitter?.dataset.mobileDebtAction||"");
+    if(action!=="payment"&&action!=="debt")return;
+    void submitDebtEntry(form,action);
   });
 
   document.addEventListener("input",event=>{

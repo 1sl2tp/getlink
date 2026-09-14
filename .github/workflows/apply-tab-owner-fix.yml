@@ -1,0 +1,46 @@
+name: Apply tab owner fix
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - fix/tab-owner-order-debt-cleanup
+    paths:
+      - ".github/workflows/apply-tab-owner-fix.yml"
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/tab-owner-order-debt-cleanup
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Patch shared list ownership
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path=Path('order-management.js')
+          text=path.read_text('utf-8')
+          anchor='  function renderOrders(){\n    renderTabs();'
+          helper='''  function claimOrderListOwner(list){\n    for(const child of [...list.children]){\n      if(child.matches?.(".order-report-controls,.order-report-results"))continue;\n      child.remove();\n    }\n  }\n  function renderOrders(){\n    renderTabs();'''
+          if anchor not in text:
+              raise SystemExit('renderOrders anchor missing')
+          text=text.replace(anchor,helper,1)
+          target='''    if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn trong phạm vi này.";}\n    if(!list)return;\n    const cards=visible.map(order=>{'''
+          replacement='''    if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn trong phạm vi này.";}\n    if(!list)return;\n    claimOrderListOwner(list);\n    const cards=visible.map(order=>{'''
+          if target not in text:
+              raise SystemExit('renderOrders list anchor missing')
+          text=text.replace(target,replacement,1)
+          path.write_text(text,'utf-8')
+          PY
+          python tools/stamp_static_build.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add order-management.js index.html version.json
+          git commit -m "fix: isolate Orders list from debt content"
+          git push origin HEAD:fix/tab-owner-order-debt-cleanup

@@ -58,10 +58,8 @@
 
   function customerMarkup(){
     return '<section id="'+CUSTOMER_ID+'" class="mobile-standard-customer" aria-label="Khách hàng">'+
-      '<button type="button" class="mobile-standard-customer-button" data-order-customer-select aria-label="Chọn khách hàng">'+
-        '<span class="mobile-standard-customer-copy"><small>Khách hàng</small><strong data-mobile-standard-customer-label>Chọn khách</strong></span>'+
-        '<span class="mobile-standard-customer-arrow" aria-hidden="true">›</span>'+
-      '</button>'+
+      '<button type="button" class="mobile-standard-customer-search" data-mobile-standard-action="customer-search">Tìm khách: tên / SĐT / mã</button>'+
+      '<button type="button" class="mobile-standard-customer-selected" data-order-customer-select aria-label="Khách đã chọn">Chọn khách</button>'+
     '</section>';
   }
 
@@ -139,16 +137,36 @@
     }
   }
 
+  function moveOrderReportControls(){
+    const host=root();
+    const tabs=document.getElementById("orderManagerTabs");
+    const list=document.getElementById("orderManagerList");
+    const all=[...document.querySelectorAll("#orderManager .order-report-controls")];
+    if(!tabs||!tabs.parentElement)return false;
+    if(!isMobile()||host?.dataset.taphoaView!=="orders"){
+      all.forEach(controls=>{if(controls.parentElement!==list)controls.remove();});
+      return false;
+    }
+    if(!all.length)return false;
+    const controls=all[all.length-1];
+    all.slice(0,-1).forEach(node=>node.remove());
+    if(controls.parentElement!==tabs.parentElement||controls.nextElementSibling!==tabs){
+      tabs.parentElement.insertBefore(controls,tabs);
+    }
+    return true;
+  }
+
   function syncCustomer(){
     const standard=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
+    const search=document.querySelector("#"+CUSTOMER_ID+" [data-mobile-standard-action=\"customer-search\"]");
     if(!standard)return;
     const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');
-    const label=standard.querySelector("[data-mobile-standard-customer-label]");
     if(source){
       standard.hidden=source.hidden;
-      if(label)label.textContent=clean(source.textContent).replace(/^Khách\s*·\s*/i,"")||"Chọn khách";
+      standard.textContent=clean(source.textContent).replace(/^Khách\s*·\s*/i,"")||"Chọn khách";
       standard.title=source.title||"Chọn khách hàng";
-    }else if(label&&!clean(label.textContent))label.textContent="Chọn khách";
+    }else if(!clean(standard.textContent))standard.textContent="Chọn khách";
+    if(search)search.hidden=standard.hidden;
   }
 
   function syncCartBar(){
@@ -250,7 +268,7 @@
     if(standardCustomer)standardCustomer.hidden=!isMobile()||view!=="sales";
     if(cartBar)cartBar.hidden=!isMobile()||view!=="sales";
     if(view!=="sales"&&cartOpen)closeCart();
-    moveWorkNavToBottom();configureOrderTabs();syncDebtSearch();
+    moveWorkNavToBottom();configureOrderTabs();moveOrderReportControls();syncDebtSearch();
   }
 
   function syncAll(){
@@ -270,6 +288,12 @@
     const action=event.target.closest?.("[data-mobile-standard-action]");
     if(action){
       const name=String(action.dataset.mobileStandardAction||"");
+      if(name==="customer-search"){
+        event.preventDefault();
+        document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]")?.click();
+        queueAfterAsyncOwner();
+        return;
+      }
       if(name==="cart"){event.preventDefault();openCart();return;}
       if(name==="close"){event.preventDefault();closeCart();return;}
       if(name==="place"){event.preventDefault();if(triggerPlace())closeCart();queueAfterAsyncOwner();return;}
@@ -282,6 +306,10 @@
   document.addEventListener("input",event=>{
     if(event.target?.closest?.("#"+DEBT_SEARCH_ID)){syncDebtSearch();return;}
     if(event.target?.id==="mobileUserSearch")queueSync();
+  });
+
+  document.addEventListener("change",event=>{
+    if(event.target?.closest?.(".order-report-controls"))queueAfterAsyncOwner();
   });
 
   document.addEventListener("getlink-access-change",()=>queueAfterAsyncOwner());

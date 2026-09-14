@@ -25,13 +25,11 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         self.assertNotIn('MutationObserver', js)
         self.assertNotIn('setInterval(', js)
 
-    def test_sales_is_customer_search_products_cart_then_place_sell(self):
+    def test_sales_is_customer_then_product_search_then_cart_actions(self):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
         css = MOBILE_CSS_PATH.read_text(encoding="utf-8")
         for token in [
             'const CUSTOMER_ID="mobileStandardCustomer"',
-            'Tìm khách: tên / SĐT / mã',
-            'data-mobile-standard-action="customer-search"',
             'data-order-customer-select',
             'const CART_BAR_ID="mobileStandardCartBar"',
             'const CART_SHEET_ID="mobileStandardCartSheet"',
@@ -40,6 +38,8 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
             'data-mobile-standard-action="sell"',
         ]:
             self.assertIn(token, js)
+        self.assertNotIn('Tìm khách: tên / SĐT / mã', js)
+        self.assertNotIn('data-mobile-standard-action="customer-search"', js)
         self.assertIn('#mobileUserWork[data-taphoa-view="sales"] .mobile-user-order-bar', css)
         self.assertRegex(css, r'mobile-user-order-bar[^}]*display\s*:\s*none')
         self.assertIn('.mobile-user-mine-card .mobile-user-product-image', css)
@@ -47,7 +47,7 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         self.assertIn('.mobile-user-mine-card:not(.is-selected) .mobile-user-qty [data-work-qty="-1"]', css)
         self.assertIn('.mobile-user-mine-card:not(.is-selected) .mobile-user-qty > b', css)
 
-    def test_cart_sheet_reuses_existing_quantity_and_order_actions(self):
+    def test_cart_sheet_reuses_existing_quantity_and_only_bottom_bar_places_sells(self):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
         self.assertIn('window.userWorkSelectedItems', js)
         self.assertIn('data-work-qty="-1"', js)
@@ -56,6 +56,10 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         self.assertIn('[data-order-cart-for="mobileUserSendOrder"] [data-order-cart-action="quick"]', js)
         self.assertIn('[data-order-cart-for="mobileUserSendOrder"] [data-order-cart-action="clear"]', js)
         self.assertIn('[data-order-cart-for="mobileUserSendOrder"] [data-order-cart-action="update"]', js)
+        sheet=re.search(r'function cartSheetMarkup\(\)\{(.+?)\n  \}',js,re.S)
+        self.assertIsNotNone(sheet)
+        self.assertNotIn('data-mobile-standard-action="place"',sheet.group(1))
+        self.assertNotIn('data-mobile-standard-action="sell"',sheet.group(1))
 
     def test_mobile_work_nav_is_bottom_owned_and_orders_prioritize_delivered_pending(self):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")

@@ -1,12 +1,13 @@
-name: Apply mobile order row/source owner fix
+name: Apply mobile order row source owner fix
 permissions:
   contents: write
 on:
   push:
-    branches: [fix/mobile-order-row-source-owner]
+    branches:
+      - fix/mobile-order-row-source-owner
 jobs:
   patch:
-    if: github.actor != 'github-actions[bot]'
+    if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,102 +15,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Patch mobile order owner
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p=Path('taphoa-workspace-feedback.js')
-          s=p.read_text('utf-8')
-
-          old='  let customerReassignBusy=false;\n'
-          new='  let customerReassignBusy=false;\n  let mobileOrderTap=null;\n'
-          if old not in s:
-              raise SystemExit('state marker not found')
-          s=s.replace(old,new,1)
-
-          old='''    const scroll=workspace.querySelector(".order-index-scroll");
-    const sourceSummary=list.querySelector(":scope > .order-source-summary");
-    const sourceDrill=list.querySelector(":scope > .order-source-detail");
-    if(scroll&&(sourceSummary||sourceDrill)){
-      const report=document.createElement("details");
-      report.className="order-source-report";
-      report.innerHTML='<summary>Theo nguồn</summary><div class="order-source-report-body"></div>';
-      const body=report.querySelector(".order-source-report-body");
-      if(sourceSummary)body?.appendChild(sourceSummary);
-      if(sourceDrill)body?.appendChild(sourceDrill);
-      scroll.insertBefore(report,scroll.firstChild);
-    }
-'''
-          new='''    const scroll=workspace.querySelector(".order-index-scroll");
-    const resultsOwner=source.closest(".order-report-results")||list;
-    const sourceSummary=resultsOwner.querySelector(":scope > .order-source-summary");
-    const sourceDrill=resultsOwner.querySelector(":scope > .order-source-detail");
-    if(scroll&&(sourceSummary||sourceDrill)){
-      const report=document.createElement("details");
-      report.className="order-source-report";
-      report.open=!window.matchMedia("(min-width:1000px)").matches;
-      report.innerHTML='<summary>Theo nguồn</summary><div class="order-source-report-body"></div>';
-      const body=report.querySelector(".order-source-report-body");
-      if(sourceSummary)body?.appendChild(sourceSummary);
-      if(sourceDrill)body?.appendChild(sourceDrill);
-      scroll.insertBefore(report,scroll.firstChild);
-    }
-'''
-          if old not in s:
-              raise SystemExit('source owner block not found')
-          s=s.replace(old,new,1)
-
-          old='''  document.addEventListener("click",event=>{
-    const listItem=event.target?.closest?.("[data-order-list-item]");
-    if(listItem){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      orderWorkspaceSelectedId=String(listItem.dataset.orderId||"");
-      renderOrderWorkspaceSelection();
-      return;
-    }
-'''
-          new='''  function selectOrderWorkspaceItem(listItem){
-    if(!listItem)return false;
-    const id=String(listItem.dataset.orderId||"");
-    if(!id)return false;
-    orderWorkspaceSelectedId=id;
-    renderOrderWorkspaceSelection();
-    return true;
-  }
-  function beginMobileOrderTap(event){
-    if(!window.matchMedia("(max-width:999px)").matches)return;
-    if(event.pointerType&&event.pointerType!=="touch"&&event.pointerType!=="pen")return;
-    const target=event.target?.closest?.("[data-order-list-item]");
-    if(!target)return;
-    mobileOrderTap={pointerId:event.pointerId,target,x:event.clientX,y:event.clientY,at:performance.now()};
-  }
-  function finishMobileOrderTap(event){
-    const tap=mobileOrderTap;
-    mobileOrderTap=null;
-    if(!tap||tap.pointerId!==event.pointerId||!tap.target.isConnected)return;
-    if(Math.hypot(event.clientX-tap.x,event.clientY-tap.y)>10||performance.now()-tap.at>800)return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    selectOrderWorkspaceItem(tap.target);
-  }
-  document.addEventListener("pointerdown",beginMobileOrderTap,true);
-  document.addEventListener("pointerup",finishMobileOrderTap,true);
-  document.addEventListener("pointercancel",()=>{mobileOrderTap=null;},true);
-
-  document.addEventListener("click",event=>{
-    const listItem=event.target?.closest?.("[data-order-list-item]");
-    if(listItem){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      selectOrderWorkspaceItem(listItem);
-      return;
-    }
-'''
-          if old not in s:
-              raise SystemExit('order click block not found')
-          s=s.replace(old,new,1)
-          p.write_text(s,'utf-8')
-          PY
+        run: python tools/apply_mobile_order_owner_fix.py
       - name: Stamp and verify focused regressions
         run: |
           python tools/stamp_static_build.py
@@ -123,7 +29,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -f .github/workflows/apply-mobile-order-row-source-owner.yml
+          git rm -f .github/workflows/apply-mobile-order-row-source-owner.yml tools/apply_mobile_order_owner_fix.py
           git add taphoa-workspace-feedback.js tests/test_mobile_order_detail_source_owner.py index.html version.json
           git commit -m 'fix: make mobile order owner direct and complete'
           git push origin HEAD:fix/mobile-order-row-source-owner

@@ -339,3 +339,14 @@
 @media(max-width:360px){
   .mobile-standard-cart-bar:not([hidden]){grid-template-columns:minmax(0,1.35fr) minmax(62px,.7fr) minmax(62px,.75fr)!important}
 }
+
+
+/* CANONICAL_MORE_VISIBILITY_20260914 */
+@media(max-width:639px){
+  #mobileUserWork[data-taphoa-view="more"] .mobile-user-toolbar,
+  #mobileUserWork[data-taphoa-view="more"] #mobileUserResults,
+  #mobileUserWork[data-taphoa-view="more"] #mobileUserEmpty,
+  #mobileUserWork[data-taphoa-view="more"] #mobileStandardCustomer,
+  #mobileUserWork[data-taphoa-view="more"] #mobileStandardCartBar,
+  #mobileUserWork[data-taphoa-view="more"] .mobile-user-order-bar{display:none!important}
+}

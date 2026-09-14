@@ -11,7 +11,8 @@ class MobileOrderRowDetailAndSources(unittest.TestCase):
         self.assertIn('const orderCard=target.closest?.(".order-card[data-order-id]")', ORDER)
         self.assertIn('expandedOrderId=String(orderCard.dataset.orderId||"")', ORDER)
         self.assertIn('renderOrders();return;', ORDER)
-        self.assertIn('#mobileUserWork .order-card[data-order-id]', MOBILE)
+        self.assertNotIn('IFRAME_TAP_SELECTOR', MOBILE)
+        self.assertNotIn('tap.target.click()', MOBILE)
 
     def test_source_summary_seeds_all_supplier_sources(self):
         self.assertIn('function supplierSourceCatalog()', ORDER)

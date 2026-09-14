@@ -58,17 +58,15 @@
 
   function customerMarkup(){
     return '<section id="'+CUSTOMER_ID+'" class="mobile-standard-customer" aria-label="Khách hàng">'+
-      '<button type="button" class="mobile-standard-customer-search" data-mobile-standard-action="customer-search">Tìm khách: tên / SĐT / mã</button>'+
-      '<button type="button" class="mobile-standard-customer-selected" data-order-customer-select aria-label="Khách đã chọn">Chọn khách</button>'+
+      '<button type="button" class="mobile-standard-customer-selected" data-order-customer-select aria-label="Chọn hoặc đổi khách hàng">Chọn khách</button>'+
     '</section>';
   }
 
   function cartBarMarkup(){
     return '<section id="'+CART_BAR_ID+'" class="mobile-standard-cart-bar" aria-label="Giỏ hàng và thao tác bán">'+
       '<button type="button" class="mobile-standard-cart-open" data-mobile-standard-action="cart">'+
-        '<span>Giỏ <b data-mobile-standard-cart-qty>0</b></span><small data-mobile-standard-cart-money>0</small>'+
+        '<span>Giỏ <b data-mobile-standard-cart-lines>0</b></span><small><b data-mobile-standard-cart-qty>0</b> SP · <b data-mobile-standard-cart-money>0</b></small>'+
       '</button>'+
-      '<div class="mobile-standard-cart-total" aria-label="Tổng số lượng"><small>SL</small><strong data-mobile-standard-total-qty>0</strong></div>'+
       '<button type="button" class="mobile-standard-place" data-mobile-standard-action="place">Đặt</button>'+
       '<button type="button" class="mobile-standard-sell" data-mobile-standard-action="sell">Bán</button>'+
     '</section>';
@@ -83,9 +81,8 @@
         '<div class="mobile-standard-cart-lines" data-mobile-standard-cart-lines></div>'+
         '<div class="mobile-standard-cart-grand"><span><small data-mobile-standard-sheet-qty>0 sản phẩm</small><strong>Tổng tiền</strong></span><b data-mobile-standard-sheet-money>0</b></div>'+
         '<footer class="mobile-standard-cart-actions">'+
-          '<button type="button" data-mobile-standard-action="clear">Xóa</button>'+
-          '<button type="button" data-mobile-standard-action="place">Đặt</button>'+
-          '<button type="button" class="primary" data-mobile-standard-action="sell">Bán</button>'+
+          '<button type="button" data-mobile-standard-action="clear">Xóa giỏ</button>'+
+          '<button type="button" class="primary" data-mobile-standard-action="close">Đóng</button>'+
         '</footer>'+
       '</section>'+
     '</section>';
@@ -158,7 +155,6 @@
 
   function syncCustomer(){
     const standard=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
-    const search=document.querySelector("#"+CUSTOMER_ID+" [data-mobile-standard-action=\"customer-search\"]");
     if(!standard)return;
     const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');
     if(source){
@@ -166,18 +162,17 @@
       standard.textContent=clean(source.textContent).replace(/^Khách\s*·\s*/i,"")||"Chọn khách";
       standard.title=source.title||"Chọn khách hàng";
     }else if(!clean(standard.textContent))standard.textContent="Chọn khách";
-    if(search)search.hidden=standard.hidden;
   }
 
   function syncCartBar(){
     const bar=document.getElementById(CART_BAR_ID);
     if(!bar)return;
     const items=selectedItems(),sum=totals(items);
+    const lines=bar.querySelector("[data-mobile-standard-cart-lines]");
     const qty=bar.querySelector("[data-mobile-standard-cart-qty]");
-    const totalQty=bar.querySelector("[data-mobile-standard-total-qty]");
     const amount=bar.querySelector("[data-mobile-standard-cart-money]");
+    if(lines)lines.textContent=String(sum.lines);
     if(qty)qty.textContent=String(sum.qty);
-    if(totalQty)totalQty.textContent=String(sum.qty);
     if(amount)amount.textContent=money(sum.money);
     bar.classList.toggle("has-items",sum.qty>0);
 
@@ -284,51 +279,10 @@
     queueSync();queueSync(80);queueSync(320);queueSync(1000);
   }
 
-  const IFRAME_TAP_SELECTOR="#mobileUserWork button,#mobileUserWork [role=\"button\"],#mobileUserWork .order-card[data-order-id],#mobileStandardCartSheet button,#orderCustomerPicker button";
-  let iframePointerTap=null;
-  let iframeSyntheticGuard=null;
-  function iframeTapFallbackEnabled(){return isMobile()&&window.parent!==window}
-  document.addEventListener("pointerdown",event=>{
-    if(!iframeTapFallbackEnabled()||(event.pointerType!=="touch"&&event.pointerType!=="pen"))return;
-    const target=event.target.closest?.(IFRAME_TAP_SELECTOR);
-    if(!target||target.disabled)return;
-    iframePointerTap={pointerId:event.pointerId,target,x:event.clientX,y:event.clientY,at:Date.now()};
-  },true);
-  document.addEventListener("pointerup",event=>{
-    const tap=iframePointerTap;
-    iframePointerTap=null;
-    if(!tap||tap.pointerId!==event.pointerId||!tap.target.isConnected)return;
-    const moved=Math.hypot(event.clientX-tap.x,event.clientY-tap.y);
-    if(moved>10||Date.now()-tap.at>800)return;
-    event.preventDefault();
-    event.stopPropagation();
-    iframeSyntheticGuard={target:tap.target,until:performance.now()+700};
-    tap.target.click();
-  },true);
-  document.addEventListener("pointercancel",()=>{iframePointerTap=null;},true);
-  document.addEventListener("click",event=>{
-    const guard=iframeSyntheticGuard;
-    if(!guard||performance.now()>guard.until){iframeSyntheticGuard=null;return;}
-    const target=event.target.closest?.(IFRAME_TAP_SELECTOR);
-    if(event.isTrusted&&target===guard.target){
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      iframeSyntheticGuard=null;
-    }
-  },true);
-
   document.addEventListener("click",event=>{
     const action=event.target.closest?.("[data-mobile-standard-action]");
     if(action){
       const name=String(action.dataset.mobileStandardAction||"");
-      if(name==="customer-search"){
-        event.preventDefault();
-        const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"][data-order-customer-select]')||document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');
-        const fallback=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
-        (source||fallback)?.click();
-        queueAfterAsyncOwner();
-        return;
-      }
       if(name==="cart"){event.preventDefault();openCart();return;}
       if(name==="close"){event.preventDefault();closeCart();return;}
       if(name==="place"){event.preventDefault();if(triggerPlace())closeCart();queueAfterAsyncOwner();return;}

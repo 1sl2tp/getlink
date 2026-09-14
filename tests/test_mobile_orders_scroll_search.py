@@ -12,10 +12,13 @@ class MobileOrdersScrollSearch(unittest.TestCase):
         self.assertIn('overflow-y:auto!important', CSS)
         self.assertIn('-webkit-overflow-scrolling:touch', CSS)
 
-    def test_order_search_does_not_replace_input_while_typing(self):
+    def test_order_search_keeps_the_same_input_node_while_typing(self):
         self.assertIn('function applyOrderReportSearch(input)', JS)
-        self.assertIn('renderOrderResultContent()', JS)
+        self.assertIn('const controlsInList=controls?.parentElement===list', JS)
+        self.assertIn('if(controlsInList)controls.remove()', JS)
+        self.assertIn('if(controlsInList)list.prepend(controls)', JS)
         self.assertNotIn('setOrderReportFilter({search:String(event.target.value||"")});sourceDrillSource="";renderOrders();', JS)
+        self.assertNotIn('const input=document.querySelector("[data-order-report-search]");input?.focus()', JS)
 
 
 if __name__ == "__main__":

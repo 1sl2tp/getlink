@@ -30,6 +30,8 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         css = MOBILE_CSS_PATH.read_text(encoding="utf-8")
         for token in [
             'const CUSTOMER_ID="mobileStandardCustomer"',
+            'Tìm khách: tên / SĐT / mã',
+            'data-mobile-standard-action="customer-search"',
             'data-order-customer-select',
             'const CART_BAR_ID="mobileStandardCartBar"',
             'const CART_SHEET_ID="mobileStandardCartSheet"',
@@ -59,6 +61,8 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
         css = MOBILE_CSS_PATH.read_text(encoding="utf-8")
         self.assertIn('function moveWorkNavToBottom()', js)
+        self.assertIn('function moveOrderReportControls()', js)
+        self.assertIn('tabs.parentElement.insertBefore(controls,tabs)', js)
         self.assertIn('orderTabs.insertBefore(delivered,pending)', js)
         self.assertIn('.taphoa-work-nav.mobile', css)
         self.assertRegex(css, r'taphoa-work-nav\.mobile[^}]*bottom\s*:\s*0')

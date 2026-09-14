@@ -51,7 +51,16 @@ assert.ok(!select.includes("scrollTop"),"order selection must preserve list scro
 const orderRows=block(orders,"function renderOrderRows", "function renderOrderList");
 assert.ok(orderRows.includes(".taphoa-order-list"),"order filtering must target list body");
 assert.ok(!orderRows.includes("slots.master.innerHTML"),"order search/filter must preserve toolbar input");
-assert.ok(orders.includes('state.query=String(e.target.value||"");state.source="";state.selectedId="";renderSourceRail();renderOrderRows()'),"order search must stay local");
+const orderInput=block(orders,'slots.master.addEventListener("input"','slots.master.addEventListener("change"');
+assert.ok(orderInput.includes('e.target.id!=="taphoaOrderSearch"'),"order input handler must be scoped to the search field");
+assert.ok(orderInput.includes('state.query=String(e.target.value||"")'),"order search must update only local query state");
+assert.ok(orderInput.includes('state.source=""'),"order search must clear source drill-down scope");
+assert.ok(orderInput.includes('state.sourceMode="orders"'),"order search must return source report to order mode");
+assert.ok(orderInput.includes('state.selectedId=""'),"order search must clear stale selection");
+assert.ok(orderInput.includes("renderSourceRail()")&&orderInput.includes("renderOrderRows()"),"order search must repaint only local source/list owners");
+assert.ok(!orderInput.includes("refresh()"),"order search must not refetch orders");
+assert.ok(!orderInput.includes("renderOrderList()"),"order search must not rebuild the toolbar shell");
+assert.ok(!orderInput.includes("orderRequest("),"order search must not call the backend");
 
 assert.ok(orders.includes('data-td-order-batch="pending"'),"pending tab must expose its Xóa tất cả action");
 assert.ok(orders.includes('data-td-order-batch="delivered"'),"delivered tab must expose its scoped return-all action");

@@ -9,14 +9,17 @@ CSS = ROOT.joinpath("taphoa-mobile-standard.css").read_text("utf-8")
 class MobileOrdersScrollSearch(unittest.TestCase):
     def test_orders_list_owns_vertical_scroll_on_mobile(self):
         self.assertIn('#mobileUserWork[data-taphoa-view="orders"] .order-manager-list', CSS)
+        self.assertIn('flex:1 1 0!important', CSS)
+        self.assertIn('height:0!important', CSS)
         self.assertIn('overflow-y:auto!important', CSS)
         self.assertIn('-webkit-overflow-scrolling:touch', CSS)
 
     def test_order_search_keeps_the_same_input_node_while_typing(self):
         self.assertIn('function applyOrderReportSearch(input)', JS)
-        self.assertIn('const controlsInList=controls?.parentElement===list', JS)
-        self.assertIn('if(controlsInList)controls.remove()', JS)
-        self.assertIn('if(controlsInList)list.prepend(controls)', JS)
+        self.assertIn('function ensureOrderReportResultsHost(list)', JS)
+        self.assertIn('results.innerHTML=sourceSummaryMarkup(visible)', JS)
+        self.assertNotIn('if(controlsInList)controls.remove()', JS)
+        self.assertNotIn('if(controlsInList)list.prepend(controls)', JS)
         self.assertNotIn('setOrderReportFilter({search:String(event.target.value||"")});sourceDrillSource="";renderOrders();', JS)
         self.assertNotIn('const input=document.querySelector("[data-order-report-search]");input?.focus()', JS)
 

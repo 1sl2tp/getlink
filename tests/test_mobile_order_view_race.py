@@ -9,11 +9,10 @@ class MobileOrderViewRace(unittest.TestCase):
     def test_manager_refresh_uses_generation_guard(self):
         self.assertIn("let managerRefreshSeq=0;", ORDER)
         self.assertIn("const refreshSeq=++managerRefreshSeq;", ORDER)
-        self.assertIn("if(refreshSeq!==managerRefreshSeq)return;", ORDER)
-
-    def test_debt_and_order_render_are_guarded_by_requested_view(self):
         self.assertIn('const requestedView=activeView;', ORDER)
         self.assertIn('if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;', ORDER)
+
+    def test_debt_and_order_render_are_guarded_by_requested_view(self):
         self.assertIn('if(requestedView==="debts")await refreshDebts(refreshSeq,requestedView);', ORDER)
         self.assertIn('else {await loadOrders();if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;renderOrders();}', ORDER)
 

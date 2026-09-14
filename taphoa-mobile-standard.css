@@ -350,3 +350,24 @@
   #mobileUserWork[data-taphoa-view="more"] #mobileStandardCartBar,
   #mobileUserWork[data-taphoa-view="more"] .mobile-user-order-bar{display:none!important}
 }
+
+
+/* FINAL_MOBILE_ORDER_FILTER_OWNER_20260914 */
+@media(max-width:639px){
+  .order-manager-filters{display:none!important}
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-filters{
+    display:block!important;
+    flex:0 0 auto!important;
+    min-height:0!important;
+    background:#fff!important;
+    border-bottom:1px solid #e7eaed!important;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-filters .order-report-controls{
+    margin:0!important;
+    border-bottom:0!important;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-list{
+    overflow-y:auto!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+}

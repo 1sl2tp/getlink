@@ -818,7 +818,8 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);setMainStatus("Đã sao chép "+title+".");return;}
     setMainStatus("Thiết bị không hỗ trợ chia sẻ hoặc sao chép.");
   }
-  function renderOrderResultContent(){
+  function renderOrders(){
+    renderTabs();
     const visible=sortOrdersNewestFirst(filterOrdersForReport(orders)),statusCount=orders.filter(order=>order.status===activeStatus).length;
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
@@ -840,25 +841,18 @@
         ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
-    const controls=list.querySelector(".order-report-controls");
-    if(controls)controls.remove();
-    list.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
-    if(controls)list.prepend(controls);
-  }
-  function renderOrders(){
-    renderTabs();
     const manager=document.getElementById("orderManager");
     const controls=manager?.querySelector(".order-report-controls");
-    renderOrderResultContent();
-    if(!controls){
-      const list=document.getElementById("orderManagerList");
-      list?.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
-    }
+    const controlsInList=controls?.parentElement===list;
+    if(controlsInList)controls.remove();
+    list.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
+    if(controlsInList)list.prepend(controls);
+    else if(!controls)list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
   }
   function applyOrderReportSearch(input){
     setOrderReportFilter({search:String(input?.value||"")});
     sourceDrillSource="";
-    renderOrderResultContent();
+    renderOrders();
   }
 
   async function loadDebtSummaries(){

@@ -7,6 +7,7 @@ MOBILE_JS = (ROOT / "taphoa-mobile-standard.js").read_text(encoding="utf-8")
 MOBILE_CSS = (ROOT / "taphoa-mobile-standard.css").read_text(encoding="utf-8")
 
 
+# Canonical mobile contract: one owner for filters, picker actions, and scroll regions.
 class MobileStandardOwnerAuditTest(unittest.TestCase):
     def test_order_filters_have_one_canonical_host_before_status_tabs(self):
         self.assertIn('id="orderManagerFilters"', ORDER_JS)

@@ -235,7 +235,7 @@
   .taphoa-order-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
   .taphoa-order-tabs button{height:32px;border:1px solid #dce3df;border-radius:6px;background:#fff;font:inherit;font-size:12px;font-weight:700;cursor:pointer}
   .taphoa-order-tabs button.active{background:#eaf5ee;border-color:#cbe2d3;color:#176b3b}
-  .taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 132px;gap:6px}
+  .taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:6px}
   .taphoa-order-custom-range{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding-top:1px}
   .taphoa-order-custom-range[hidden]{display:none!important}
   .taphoa-order-custom-range label{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px}

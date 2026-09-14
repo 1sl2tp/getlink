@@ -167,6 +167,12 @@
   .taphoa-sales-copy{min-width:0;display:grid;gap:3px}
   .taphoa-sales-copy strong{font-size:13px;line-height:1.28;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
   .taphoa-sales-copy small{font-size:11px;color:#7d8781;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-sales-name-edit{width:100%;min-width:0;height:28px;border:0;border-bottom:1px solid #b9d2c2;background:transparent;padding:0;font:inherit;font-size:13px;font-weight:700;color:#17211c;outline:none}
+  .taphoa-sales-name-edit:focus{border-bottom-color:#4f9468}
+  .taphoa-sales-price-edit{min-width:0;display:flex;align-items:center;justify-content:flex-end;gap:3px;padding:7px 8px}
+  .taphoa-sales-price-edit input{width:58px;min-width:0;height:30px;border:1px solid #cfdad4;border-radius:6px;background:#fff;padding:0 5px;text-align:right;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;outline:none}
+  .taphoa-sales-price-edit input[aria-invalid="true"]{border-color:#c85b55;background:#fff7f6}
+  .taphoa-sales-price-edit small{font-size:9.5px;color:#7c8780}
   .taphoa-sales-price{text-align:right;font-size:13px;font-variant-numeric:tabular-nums;white-space:nowrap}
   .taphoa-sales-qty{display:grid;grid-template-columns:30px 40px 30px;align-items:center;justify-content:center;padding-inline:2px!important}
   .taphoa-sales-qty button{height:31px;border:1px solid #d9e1dd;background:#fff;font-size:16px;cursor:pointer}
@@ -342,11 +348,12 @@
   .taphoa-debt-overview-card.credit small{color:#3c7955}
   .taphoa-debt-overview-card strong{font-size:15px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
   .taphoa-debt-overview-card span{font-size:10px;color:#718078;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .taphoa-debt-quick-payment{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
-  .taphoa-debt-quick-payment>strong,.taphoa-debt-quick-payment>select{grid-column:1/-1}
+  .taphoa-debt-quick-payment{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .taphoa-debt-quick-payment>strong,.taphoa-debt-quick-payment>select,.taphoa-debt-quick-payment>input{grid-column:1/-1}
   .taphoa-debt-quick-payment>strong{font-size:11px}
   .taphoa-debt-quick-payment select,.taphoa-debt-quick-payment input,.taphoa-debt-quick-payment button{min-width:0;height:34px;border:1px solid #ccd9d2;border-radius:6px;background:#fff;padding:0 7px;font:inherit;font-size:11px}
-  .taphoa-debt-quick-payment button{min-width:54px;background:#397b43;color:#fff;border-color:#397b43;font-weight:800;cursor:pointer}
+  .taphoa-debt-quick-payment button{min-width:0;background:#397b43;color:#fff;border-color:#397b43;font-weight:800;cursor:pointer}
+  .taphoa-debt-quick-payment button.debt{background:#b44d3d;border-color:#b44d3d}
   .taphoa-debt-quick-payment button:disabled{opacity:.45;cursor:default}
   .taphoa-debt-quick-status{min-height:14px;font-size:10px;color:#66746d}
 }

@@ -31,9 +31,9 @@
 - Consumes: existing `index.html`, `app.js`, `order-management.js`.
 - Produces: a static contract that rejects mid-screen Bán/Đơn/Công nợ navigation, permanent four-action sale bars, image-heavy Tạp hóa rows, and any MutationObserver-based mobile owner.
 
-- [ ] **Step 1: Write the failing test** that requires the new mobile JS/CSS bootstrap, customer-first row, cart sheet, bottom work nav, compact Tạp hóa rows, order delivered/pending priority, debt search surface, and explicit absence of `MutationObserver` in the new owner.
-- [ ] **Step 2: Run the focused test** and verify RED because the new assets do not exist on baseline.
-- [ ] **Step 3: Add the focused test to `Verify GETLINK`** after the current layout tests.
+- [x] **Step 1: Write the failing test** that requires the new mobile JS/CSS bootstrap, customer-first row, cart sheet, bottom work nav, compact Tạp hóa rows, order delivered/pending priority, debt search surface, and explicit absence of `MutationObserver` in the new owner.
+- [x] **Step 2: Run the focused test** and verify RED before bootstrap/build ownership was added (Verify GETLINK #2034 failed at the focused mobile contract as expected).
+- [x] **Step 3: Add the focused test to `Verify GETLINK`** after the current layout tests.
 
 ### Task 2: Build the mobile-only presentation owner
 
@@ -45,11 +45,11 @@
 - Consumes: `window.userWorkSelectedItems()`, `data-work-qty`, `data-order-customer-select`, `#mobileUserSendOrder`, `[data-order-cart-action="quick"]`, `[data-order-cart-action="clear"]`, `[data-order-cart-action="update"]`, `.taphoa-work-nav.mobile`, `#orderManager`.
 - Produces: `#mobileStandardCustomer`, `#mobileStandardCartBar`, `#mobileStandardCartSheet`, `#mobileStandardDebtSearch` and document-level event sync without a DOM observer.
 
-- [ ] **Step 1: Mount once** after existing runtime owners, creating a customer-first row and moving the existing mobile Tạp hóa nav to the end of the mobile workspace.
-- [ ] **Step 2: Build the cart bar** as `Giỏ | tổng | Đặt | Bán`; route Đặt to the existing send action and Bán to existing quick sale. During order editing, route the primary action to existing update instead of creating a duplicate order.
-- [ ] **Step 3: Build the cart sheet** from `window.userWorkSelectedItems()` with name, unit price, `− SL +`, line total, total quantity, total money and `Xóa | Đặt | Bán`; quantity buttons retain existing `data-work-qty` contract.
-- [ ] **Step 4: Add debt search** that filters the already-rendered debt customer list locally and is shown only on the debt customer-summary screen.
-- [ ] **Step 5: Sync only from explicit events** (`click`, `input`, `getlink-access-change`, resize, visibility/load). No MutationObserver, no polling loop.
+- [x] **Step 1: Mount once** after existing runtime owners, creating a customer-first row and moving the existing mobile Tạp hóa nav to the end of the mobile workspace.
+- [x] **Step 2: Build the cart bar** as `Giỏ | tổng | Đặt | Bán`; route Đặt to the existing send action and Bán to existing quick sale. During order editing, route the primary action to existing update instead of creating a duplicate order.
+- [x] **Step 3: Build the cart sheet** from `window.userWorkSelectedItems()` with name, unit price, `− SL +`, line total, total quantity, total money and `Xóa | Đặt | Bán`; quantity buttons retain existing `data-work-qty` contract.
+- [x] **Step 4: Add debt search** that filters the already-rendered debt customer list locally and is shown only on the debt customer-summary screen.
+- [x] **Step 5: Sync only from explicit events** (`click`, `input`, `getlink-access-change`, resize, visibility/load). No MutationObserver, no polling loop.
 
 ### Task 3: Lock mobile geometry to the document
 
@@ -60,11 +60,11 @@
 - Consumes: existing mobile catalog/order/debt markup.
 - Produces: one-column Tạp hóa mobile geometry and bottom action/navigation ownership.
 
-- [ ] **Step 1: Make Tạp hóa rows compact**: hide the product image only for own-store rows, show name/QC + selling price + quantity, and when quantity is zero show only `+`; selected rows show `− SL +`.
-- [ ] **Step 2: Remove the legacy permanent sale footer from view** and make the new document cart bar the only mobile sale footer.
-- [ ] **Step 3: Place Bán/Đơn/Công nợ at the bottom** of the Tạp hóa mobile workspace, not between filters and product rows.
-- [ ] **Step 4: Make Orders document-like**: search/time first, show `Đã giao` then `Đơn tạm`, de-emphasize/hide `Đã hoàn` on mobile, and keep each list row compact with customer/order/date/amount.
-- [ ] **Step 5: Make Debts document-like**: search + compact summary/customer list first; opening a customer shows timeline/history and linked order detail; payment form remains contextual.
+- [x] **Step 1: Make Tạp hóa rows compact**: hide the product image only for own-store rows, show name/QC + selling price + quantity, and when quantity is zero show only `+`; selected rows show `− SL +`.
+- [x] **Step 2: Remove the legacy permanent sale footer from view** and make the new document cart bar the only mobile sale footer.
+- [x] **Step 3: Place Bán/Đơn/Công nợ at the bottom** of the Tạp hóa mobile workspace, not between filters and product rows.
+- [x] **Step 4: Make Orders document-like**: search/time first, show `Đã giao` then `Đơn tạm`, de-emphasize/hide `Đã hoàn` on mobile, and keep each list row compact with customer/order/date/amount.
+- [x] **Step 5: Make Debts document-like**: search + compact summary/customer list first; opening a customer shows timeline/history and linked order detail; payment form remains contextual.
 
 ### Task 4: Bootstrap and static build ownership
 
@@ -77,9 +77,9 @@
 - Consumes: new mobile JS/CSS.
 - Produces: cache-busted production bootstrap with mobile assets included in static build hashing.
 
-- [ ] **Step 1: Load the new CSS and JS after `order-management`** so existing data/action owners initialize first.
-- [ ] **Step 2: Add both assets to `ASSETS` and version metadata.**
-- [ ] **Step 3: Stamp the build** and verify `python tools/stamp_static_build.py --check` passes.
+- [x] **Step 1: Load the new CSS and JS after `order-management`** so existing data/action owners initialize first.
+- [x] **Step 2: Add both assets to `ASSETS` and version metadata.**
+- [x] **Step 3: Stamp the build** and verify `python tools/stamp_static_build.py --check` passes. Build: `7162b5ccdf527efaf1140b8d4cf0790fd47931f6aa42f78cbf13f11e93a8c4f0`.
 
 ### Task 5: Regression and integration gate
 
@@ -90,7 +90,7 @@
 - Consumes: final branch tree.
 - Produces: mergeable PR only after exact-head verification.
 
-- [ ] **Step 1: Run focused mobile contract test.**
+- [x] **Step 1: Run focused mobile contract test.** Focused contract + existing mobile V46 contract + JS syntax were green in the one-time patch gate.
 - [ ] **Step 2: Run existing mobile contracts, order/debt contracts, JS syntax checks, and static build check.**
 - [ ] **Step 3: Run the repository Verify GETLINK workflow on the exact final head.**
 - [ ] **Step 4: Review the PR diff for desktop/backend scope leakage.**

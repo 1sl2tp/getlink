@@ -12,6 +12,9 @@ on:
     paths:
       - "config.js"
       - "supabase/functions/getlink-api/**"
+      - "supabase/functions/getlink-orders/**"
+      - "supabase/functions/getlink-product-add/**"
+      - "supabase/functions/getlink-order-customer/**"
       - "supabase/migrations/**"
       - ".github/workflows/smoke-supabase.yml"
   workflow_dispatch:
@@ -53,6 +56,33 @@ jobs:
           test "$CODE" = "401"
           test "$(jq -r '.error' /tmp/source-manager.json)" = "admin_locked"
 
+      - name: Probe sales Edge Functions
+        shell: bash
+        run: |
+          set -euo pipefail
+          API="$(sed -n 's/^window.GETLINK_API_BASE="\([^"]*\)";/\1/p' config.js)"
+          test -n "$API"
+          FUNCTIONS="${API%/getlink-api}"
+
+          probe_edge() {
+            local SLUG="$1"
+            local HEADERS="/tmp/${SLUG}-headers.txt"
+            CODE="$(curl --silent --show-error --output /dev/null --dump-header "$HEADERS" --write-out '%{http_code}' \
+              -H 'origin: https://get.taphoa.xyz' \
+              -H 'access-control-request-method: GET' \
+              -X OPTIONS "$FUNCTIONS/$SLUG")"
+            if [ "$CODE" != "204" ]; then
+              echo "$SLUG OPTIONS HTTP $CODE"
+              cat "$HEADERS"
+              exit 1
+            fi
+            test "$CODE" = "204"
+            grep -qi '^access-control-allow-origin: https://get.taphoa.xyz' "$HEADERS"
+          }
+
+          probe_edge "getlink-orders"
+          probe_edge "getlink-product-add"
+          probe_edge "getlink-order-customer"
 
       - name: Reject customer GETLINK without admin session
         shell: bash

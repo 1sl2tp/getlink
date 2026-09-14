@@ -11,7 +11,7 @@ const ORDER_STATUSES=["pending","delivered","returned"] as const;
 
 type OrderStatus=typeof ORDER_STATUSES[number];
 type Identity={kind:"customer"|"admin";id:string;name:string;username:string;role:"user"|"admin"};
-type CreateInput={url:string;qty:number;bargainPriceVnd:number;lineNote:string};
+type CreateInput={url:string;qty:number;bargainPriceVnd:number;lineNote:string;nameOverride:string;sellingPriceVnd:number|null};
 type ChatCustomer={id:string;name:string;username:string;avatarPath:string};
 
 function clean(value:unknown){return String(value??"").replace(/\s+/g," ").trim()}
@@ -203,7 +203,7 @@ async function listOrders(actor:Identity){
   ));
 }
 
-async function resolveCreateItems(raw:unknown){
+async function resolveCreateItems(raw:unknown,actor:Identity){
   if(!Array.isArray(raw)||raw.length===0)throw fail("Đơn phải có ít nhất một sản phẩm");
   if(raw.length>100)throw fail("Đơn có quá nhiều sản phẩm");
   const requested:CreateInput[]=[];
@@ -214,11 +214,19 @@ async function resolveCreateItems(raw:unknown){
     const bargainRaw=Number(entry?.bargainPriceVnd||0);
     const bargainPriceVnd=Number.isFinite(bargainRaw)?Math.max(0,Math.min(100000,Math.round(bargainRaw))):0;
     const lineNote=clean(entry?.lineNote);
+    const nameOverride=clean(entry?.nameOverride);
+    const hasSellingOverride=Object.prototype.hasOwnProperty.call(entry||{},"sellingPriceVnd")&&entry?.sellingPriceVnd!==null&&entry?.sellingPriceVnd!=="";
+    const sellingRaw=hasSellingOverride?Number(entry?.sellingPriceVnd):null;
+    const sellingPriceVnd=hasSellingOverride&&Number.isFinite(sellingRaw)?Math.round(Number(sellingRaw)):null;
     const key=url.toLowerCase();
     if(!url||!Number.isInteger(qty)||qty<=0||qty>999)throw fail("Sản phẩm hoặc số lượng không hợp lệ");
     if(lineNote.length>160)throw fail("Ghi chú sản phẩm tối đa 160 ký tự");
+    if(nameOverride.length>120)throw fail("Tên sản phẩm tối đa 120 ký tự");
+    if(hasSellingOverride&&(sellingPriceVnd===null||sellingPriceVnd<0||sellingPriceVnd>1000000))throw fail("Giá bán phải từ 0 đến 1.000.000");
+    if((nameOverride||hasSellingOverride)&&actor.kind!=="admin")throw fail("Chỉ Admin được sửa tên hoặc giá bán của dòng đơn",403);
     if(seen.has(key))throw fail("Sản phẩm bị trùng trong đơn");
-    seen.add(key);requested.push({url,qty,bargainPriceVnd,lineNote:clean(entry?.lineNote)});
+    seen.add(key);
+    requested.push({url,qty,bargainPriceVnd,lineNote:clean(entry?.lineNote),nameOverride,sellingPriceVnd});
   }
   const urls=requested.map(x=>x.url);
   const {data,error}=await db.from("getlink_supplier_products")
@@ -236,10 +244,10 @@ async function resolveCreateItems(raw:unknown){
     if(clean(row.stock_status)==="out_of_stock")throw fail("Có sản phẩm đang hết hàng");
     return {
       productCode:clean(row.product_code),
-      productName:clean(row.product_name),
+      productName:request.nameOverride||clean(row.product_name),
       productUrl:clean(row.canonical_url),
       quantity:request.qty,
-      unitPriceVnd:price,
+      unitPriceVnd:request.sellingPriceVnd===null?price:request.sellingPriceVnd,
       bargainPriceVnd:request.bargainPriceVnd,
       lineNote:request.lineNote,
       unitCostVnd:Number.isFinite(cost)?cost:0,
@@ -272,7 +280,7 @@ async function createOrder(body:any,actor:Identity,quick=false){
     ?await selectedCustomer(actor.id)
     :await selectedCustomer(clean(body?.customerId));
   if(actor.kind==="admin"&&!clean(body?.customerId))throw fail("Chưa chọn khách hàng");
-  const items=await resolveCreateItems(body?.items);
+  const items=await resolveCreateItems(body?.items,actor);
   const id=crypto.randomUUID();
   const submittedAt=new Date().toISOString();
   const rpcArgs={
@@ -296,7 +304,7 @@ async function createOrder(body:any,actor:Identity,quick=false){
 }
 
 async function updatePendingOrder(id:string,body:any,actor:Identity){
-  const items=await resolveCreateItems(body?.items);
+  const items=await resolveCreateItems(body?.items,actor);
   const {error}=await db.rpc("getlink_sales_update_pending_order",{
     p_id:id,p_actor_id:actor.id,p_items:items
   });
@@ -306,7 +314,7 @@ async function updatePendingOrder(id:string,body:any,actor:Identity){
 
 async function updateDeliveredOrder(id:string,body:any,actor:Identity){
   if(actor.kind!=="admin")throw fail("forbidden",403);
-  const items=await resolveCreateItems(body?.items);
+  const items=await resolveCreateItems(body?.items,actor);
   const {error}=await db.rpc("getlink_sales_update_delivered_order",{
     p_id:id,p_actor_id:actor.id,p_items:items
   });
@@ -429,6 +437,20 @@ async function recordPayment(req:Request,actor:Identity,customerId:string){
   return {id:String(data||""),customerId:customer.id,amountVnd};
 }
 
+async function recordDebtAdjustment(req:Request,actor:Identity,customerId:string){
+  if(actor.kind!=="admin")throw fail("forbidden",403);
+  const customer=await selectedCustomer(customerId);
+  const body=await req.json().catch(()=>({}));
+  const amountVnd=Math.round(Number(body?.amountVnd||0));
+  if(!Number.isFinite(amountVnd)||amountVnd<=0)throw fail("Số tiền ghi nợ không hợp lệ");
+  const note=clean(body?.note);
+  const {data,error}=await db.rpc("getlink_sales_record_debt_adjustment",{
+    p_customer_id:customer.id,p_amount_vnd:amountVnd,p_actor_id:actor.id,p_note:note
+  });
+  if(error)throw error;
+  return {id:String(data||""),customerId:customer.id,amountVnd};
+}
+
 Deno.serve(async(req:Request)=>{
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers:cors(req)});
   if(!publicKeyAuthorized(req))return json(req,{error:"unauthorized"},401);
@@ -471,6 +493,12 @@ Deno.serve(async(req:Request)=>{
       if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
       const payment=await recordPayment(req,actor,decodeURIComponent(paymentMatch[1]));
       return json(req,{ok:true,payment},201);
+    }
+    const adjustmentMatch=path.match(/^\/debts\/([^/]+)\/adjustments$/);
+    if(req.method==="POST"&&adjustmentMatch){
+      if(actor.kind!=="admin")return json(req,{error:"forbidden"},403);
+      const adjustment=await recordDebtAdjustment(req,actor,decodeURIComponent(adjustmentMatch[1]));
+      return json(req,{ok:true,adjustment},201);
     }
 
     const match=path.match(/^\/orders\/([^/]+)\/(deliver|return)$/);

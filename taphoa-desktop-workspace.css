@@ -70,12 +70,6 @@
   #taphoaMasterList{grid-column:2;border-right:1px solid #e4e9e6;background:#fff}
   #taphoaDetailPane{grid-column:3;background:#fff}
 
-  #taphoaDesktopWorkspace[data-view="orders"]{
-    grid-template-columns:minmax(430px,.82fr) minmax(560px,1.18fr);
-  }
-  #taphoaDesktopWorkspace[data-view="orders"] #taphoaLeftRail{display:none}
-  #taphoaDesktopWorkspace[data-view="orders"] #taphoaMasterList{grid-column:1}
-  #taphoaDesktopWorkspace[data-view="orders"] #taphoaDetailPane{grid-column:2;border-left:0}
 
   .taphoa-column-head,
   .taphoa-master-head,
@@ -332,4 +326,30 @@
   .taphoa-sales-thumb{width:34px;height:34px;flex-basis:34px}
   .taphoa-order-filter-row{grid-template-columns:minmax(0,1fr) 96px 116px}
   .taphoa-invoice-head,.taphoa-invoice-line{grid-template-columns:34px minmax(0,1fr) 112px 82px}
+}
+
+@media (min-width:1000px){
+  #taphoaDesktopWorkspace[data-view="debts"]{grid-template-columns:minmax(260px,300px) minmax(340px,.9fr) minmax(360px,1fr)}
+  .taphoa-sales-customer-rail{padding:10px;border-bottom:1px solid #dfe6e2;background:#eef4f8}
+  .taphoa-sales-customer-rail .taphoa-customer-static,.taphoa-sales-customer-rail .taphoa-customer-select{display:grid;gap:5px}
+  .taphoa-sales-customer-rail .taphoa-customer-static small,.taphoa-sales-customer-rail .taphoa-customer-select small{font-size:11px;color:#64736b;font-weight:700}
+  .taphoa-sales-customer-rail .taphoa-customer-static strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-sales-customer-rail .taphoa-customer-select select{width:100%;height:36px;border:1px solid #cfdad4;border-radius:7px;background:#fff;padding:0 8px;font:inherit;font-size:12px}
+  .taphoa-debt-overview{padding:9px;border-bottom:1px solid #d6e0e8;background:linear-gradient(150deg,#eef4ff,#eef8f4);display:grid;gap:8px}
+  .taphoa-debt-overview-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .taphoa-debt-overview-card{min-width:0;padding:8px;border:1px solid rgba(70,101,148,.16);border-radius:8px;background:rgba(255,255,255,.74);display:grid;gap:2px}
+  .taphoa-debt-overview-card small{font-size:9.5px;font-weight:800;color:#7d6730}
+  .taphoa-debt-overview-card.credit small{color:#3c7955}
+  .taphoa-debt-overview-card strong{font-size:15px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
+  .taphoa-debt-overview-card span{font-size:10px;color:#718078;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .taphoa-debt-quick-payment{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}
+  .taphoa-debt-quick-payment>strong,.taphoa-debt-quick-payment>select{grid-column:1/-1}
+  .taphoa-debt-quick-payment>strong{font-size:11px}
+  .taphoa-debt-quick-payment select,.taphoa-debt-quick-payment input,.taphoa-debt-quick-payment button{min-width:0;height:34px;border:1px solid #ccd9d2;border-radius:6px;background:#fff;padding:0 7px;font:inherit;font-size:11px}
+  .taphoa-debt-quick-payment button{min-width:54px;background:#397b43;color:#fff;border-color:#397b43;font-weight:800;cursor:pointer}
+  .taphoa-debt-quick-payment button:disabled{opacity:.45;cursor:default}
+  .taphoa-debt-quick-status{min-height:14px;font-size:10px;color:#66746d}
+}
+@media (min-width:1000px) and (max-width:1180px){
+  #taphoaDesktopWorkspace[data-view="debts"]{grid-template-columns:minmax(230px,250px) minmax(300px,.9fr) minmax(330px,1fr)}
 }

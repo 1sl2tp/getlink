@@ -105,7 +105,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/implement-standard-actions.yml tools/implement_standard_actions.py
+          git rm .github/workflows/implement-standard-actions.yml
+          git rm -f tools/implement_standard_actions.py
           git add taphoa-desktop-sales.js taphoa-desktop-debts.js taphoa-desktop-workspace.css supabase/functions/getlink-orders/index.ts supabase/migrations/20260914050000_getlink_manual_debt_adjustment.sql tests/test_taphoa_standard_actions.py index.html version.json
           git commit -m "feat: complete standard sales and debt actions"
           git push origin HEAD:feature/taphoa-standard-actions

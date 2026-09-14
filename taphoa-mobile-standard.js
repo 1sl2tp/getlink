@@ -284,6 +284,39 @@
     queueSync();queueSync(80);queueSync(320);queueSync(1000);
   }
 
+  const IFRAME_TAP_SELECTOR="#mobileUserWork button,#mobileUserWork [role=\"button\"],#mobileStandardCartSheet button,#orderCustomerPicker button";
+  let iframePointerTap=null;
+  let iframeSyntheticGuard=null;
+  function iframeTapFallbackEnabled(){return isMobile()&&window.parent!==window}
+  document.addEventListener("pointerdown",event=>{
+    if(!iframeTapFallbackEnabled()||(event.pointerType!=="touch"&&event.pointerType!=="pen"))return;
+    const target=event.target.closest?.(IFRAME_TAP_SELECTOR);
+    if(!target||target.disabled)return;
+    iframePointerTap={pointerId:event.pointerId,target,x:event.clientX,y:event.clientY,at:Date.now()};
+  },true);
+  document.addEventListener("pointerup",event=>{
+    const tap=iframePointerTap;
+    iframePointerTap=null;
+    if(!tap||tap.pointerId!==event.pointerId||!tap.target.isConnected)return;
+    const moved=Math.hypot(event.clientX-tap.x,event.clientY-tap.y);
+    if(moved>10||Date.now()-tap.at>800)return;
+    event.preventDefault();
+    event.stopPropagation();
+    iframeSyntheticGuard={target:tap.target,until:performance.now()+700};
+    tap.target.click();
+  },true);
+  document.addEventListener("pointercancel",()=>{iframePointerTap=null;},true);
+  document.addEventListener("click",event=>{
+    const guard=iframeSyntheticGuard;
+    if(!guard||performance.now()>guard.until){iframeSyntheticGuard=null;return;}
+    const target=event.target.closest?.(IFRAME_TAP_SELECTOR);
+    if(event.isTrusted&&target===guard.target){
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      iframeSyntheticGuard=null;
+    }
+  },true);
+
   document.addEventListener("click",event=>{
     const action=event.target.closest?.("[data-mobile-standard-action]");
     if(action){

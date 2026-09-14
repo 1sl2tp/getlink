@@ -34,7 +34,8 @@ assert.ok(styles.includes('#taphoaDesktopWorkspace[data-view="orders"] #taphoaLe
 assert.ok(orders.includes("taphoa-order-customer-inline"),"customer reassignment belongs beside the customer name, not in a duplicated strip");
 const orderDetail=block(orders,"function renderOrderDetail(id)","function selectOrder");
 assert.ok(!orderDetail.includes('class="taphoa-detail-customer"'),"order detail must not duplicate customer identity in a second strip");
-assert.ok(!orderDetail.includes('<footer class="taphoa-order-detail-footer"><div><small>'+"'"),"order footer must not repeat the same grand total already shown in the header");
+assert.ok(orderDetail.includes('class="taphoa-order-detail-footer"'),"order detail keeps a compact footer for line and quantity counts");
+assert.ok(!orderDetail.includes("Tổng cộng"),"order footer must not repeat the same grand total already shown in the header");
 
 assert.ok(debts.includes("function visibleDebtCustomers"),"debt customer rail needs a dedicated visibility rule");
 const payment=block(debts,"function paymentMarkup()", "function renderLinkedOrder");

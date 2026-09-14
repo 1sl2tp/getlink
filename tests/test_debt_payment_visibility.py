@@ -2,23 +2,26 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-ORDER_JS = (ROOT / "order-management.js").read_text("utf-8")
-ORDER_CSS = (ROOT / "order-management.css").read_text("utf-8")
+MOBILE_JS = (ROOT / "taphoa-mobile-standard.js").read_text("utf-8")
 
 
 class DebtPaymentVisibility(unittest.TestCase):
-    def test_mobile_admin_always_sees_payment_control(self):
-        self.assertIn('const canCollect=Number(debtDetail?.balanceVnd||0)>0;', ORDER_JS)
-        self.assertNotIn('Number(debtDetail?.balanceVnd||0)<=0)return "";', ORDER_JS)
-        self.assertIn('data-debt-payment-disabled', ORDER_JS)
-        self.assertIn('>Thu tiền</button>', ORDER_JS)
+    def test_mobile_admin_uses_shared_sales_access_context(self):
+        self.assertIn("window.GETLINK_ACCESS_CONTEXT?.snapshot?.()?.state", MOBILE_JS)
+        self.assertNotIn("window.TaphoaDesktopData?.readAuth", MOBILE_JS)
 
-    def test_non_positive_balance_is_visible_but_locked(self):
-        self.assertIn('Khách đang dư', ORDER_JS)
-        self.assertIn('Không còn nợ để thu', ORDER_JS)
-        self.assertIn('if(!canCollect)return;', ORDER_JS)
-        self.assertIn('.debt-payment-form[data-debt-payment-disabled="true"]', ORDER_CSS)
-        self.assertIn('.debt-payment-state', ORDER_CSS)
+    def test_mobile_debt_actions_do_not_depend_on_desktop_data_module(self):
+        self.assertIn('const DEBT_AUTH_KEY="getlink:chat-order-auth";', MOBILE_JS)
+        self.assertIn('const DEBT_ORDER_API=', MOBILE_JS)
+        self.assertIn("async function debtRequest(", MOBILE_JS)
+        self.assertIn('await debtRequest("/debts/"', MOBILE_JS)
+        self.assertNotIn("window.TaphoaDesktopData.orderRequest", MOBILE_JS)
+
+    def test_payment_control_stays_visible_and_locks_when_no_debt(self):
+        self.assertIn('data-mobile-debt-action="payment">Thu tiền</button>', MOBILE_JS)
+        self.assertIn("payment.disabled=!positive||debtActionBusy", MOBILE_JS)
+        self.assertIn('negative?"Khách đang dư "+absolute', MOBILE_JS)
+        self.assertIn(':"Khách không còn nợ"', MOBILE_JS)
 
 
 if __name__ == "__main__":

@@ -20,16 +20,96 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Finish source report presentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          sales = Path('taphoa-desktop-sales.js')
+          text = sales.read_text('utf-8')
+          old = '<strong>Danh mục</strong>'
+          new = '<strong>Nguồn hàng</strong>'
+          if old in text:
+              text = text.replace(old, new, 1)
+              sales.write_text(text, 'utf-8')
+          elif new not in text:
+              raise SystemExit('Sales rail label anchor changed')
+
+          css = Path('taphoa-desktop-workspace.css')
+          styles = css.read_text('utf-8')
+          marker = '/* TAPHOA_DESKTOP_SOURCE_REPORT_20260914 */'
+          if marker not in styles:
+              styles += r'''
+
+          /* TAPHOA_DESKTOP_SOURCE_REPORT_20260914 */
+          @media (min-width:1000px){
+            .taphoa-source-report-slot:empty{display:none}
+            .taphoa-source-report-bar{
+              min-width:0;
+              display:grid;
+              grid-template-columns:minmax(0,1fr) auto;
+              align-items:center;
+              gap:8px;
+              padding:7px 0 1px;
+              border-top:1px solid #edf0ee;
+            }
+            .taphoa-source-report-copy{min-width:0;display:grid;gap:2px}
+            .taphoa-source-report-copy strong{font-size:10.5px;color:#26332c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .taphoa-source-report-copy small{font-size:9px;color:#77827b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .taphoa-source-report-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:wrap}
+            .taphoa-source-report-actions button{
+              min-height:26px;
+              padding:0 7px;
+              border:1px solid #d8e1dc;
+              border-radius:6px;
+              background:#fff;
+              color:#506058;
+              font:inherit;
+              font-size:9.5px;
+              font-weight:700;
+              cursor:pointer;
+              white-space:nowrap;
+            }
+            .taphoa-source-report-actions button:hover{background:#f6faf7}
+            .taphoa-source-report-actions button.active{background:#eaf5ee;border-color:#cbe2d3;color:#176b3b}
+            .taphoa-source-detail-row,.taphoa-source-combined-row{
+              width:100%;
+              min-width:0;
+              min-height:44px;
+              padding:6px 10px;
+              border:0;
+              border-bottom:1px solid #edf0ee;
+              background:#fff;
+              color:inherit;
+              align-items:center;
+              gap:8px;
+              text-align:left;
+              font:inherit;
+            }
+            .taphoa-source-detail-row{display:grid;grid-template-columns:32px minmax(0,1fr) 64px 86px;cursor:pointer}
+            .taphoa-source-combined-row{display:grid;grid-template-columns:32px minmax(0,1fr) 64px 86px minmax(0,76px)}
+            .taphoa-source-detail-row:hover{background:#fafcfb}
+            .taphoa-source-detail-row>small,.taphoa-source-combined-row>small{font-size:9px;color:#7a867f}
+            .taphoa-source-detail-row>span:nth-child(2),.taphoa-source-combined-row>span:nth-child(2){min-width:0;display:grid;gap:2px}
+            .taphoa-source-detail-row strong,.taphoa-source-combined-row strong{font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .taphoa-source-detail-row em,.taphoa-source-combined-row em{font-size:9px;color:#7a867f;font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+            .taphoa-source-detail-row>b,.taphoa-source-combined-row>b{text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums}
+            .taphoa-source-detail-row>span:nth-child(4),.taphoa-source-combined-row>span:nth-child(4),.taphoa-source-profit{text-align:right;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+            .taphoa-source-profit{color:#27734a;font-weight:700}
+          }
+          '''
+              css.write_text(styles, 'utf-8')
+          PY
       - name: Stamp build
         run: python tools/stamp_static_build.py
-      - name: Commit stamp when changed
+      - name: Commit changes when needed
         run: |
-          if git diff --quiet -- index.html version.json; then
-            echo 'Build stamp already current.'
+          if git diff --quiet -- taphoa-desktop-sales.js taphoa-desktop-workspace.css index.html version.json; then
+            echo 'Desktop source report and build stamp already current.'
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add index.html version.json
-          git commit -m 'build: stamp Tạp hóa desktop branch'
+          git add taphoa-desktop-sales.js taphoa-desktop-workspace.css index.html version.json
+          git commit -m 'fix: finish desktop source report presentation'
           git push origin HEAD:feature/taphoa-desktop-three-column-rebuild

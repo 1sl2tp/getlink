@@ -1,0 +1,179 @@
+/* Mobile-only presentation owner based on the 5-page standard document. */
+.mobile-standard-customer,
+.mobile-standard-cart-bar,
+.mobile-standard-cart-sheet,
+.mobile-standard-debt-search{display:none}
+
+@media(max-width:639px){
+  #mobileUserWork{
+    --mobile-standard-line:#dfe4e8;
+    --mobile-standard-muted:#747d89;
+    --mobile-standard-text:#20262e;
+    --mobile-standard-green:#267246;
+    --mobile-standard-soft:#f5faf7;
+    position:relative;
+    padding-bottom:0;
+  }
+
+  /* Document order: customer -> product search/categories -> rows -> cart/actions -> menu. */
+  .mobile-standard-customer:not([hidden]){
+    display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;
+    padding:8px 8px 0;background:#fff;
+  }
+  .mobile-standard-customer button{
+    min-height:46px;padding:0 11px;border:1px solid var(--mobile-standard-line);border-radius:8px;background:#fff;color:var(--mobile-standard-text)
+  }
+  .mobile-standard-customer-search{min-width:0;text-align:left;font-size:13px;font-weight:500;color:var(--mobile-standard-muted)!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mobile-standard-customer-selected{max-width:132px;font-size:12px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  #mobileUserWork[data-taphoa-view="sales"] .mobile-user-toolbar{padding-top:7px}
+  #mobileUserWork[data-taphoa-view="sales"] .mobile-user-order-bar{display:none!important}
+
+  /* Own-store sale list: no image tile; name + sell price + quantity only. */
+  #mobileUserWork[data-taphoa-view="sales"] .mobile-user-results{
+    display:grid;grid-template-columns:1fr;gap:6px;padding:7px 8px 9px
+  }
+  .mobile-user-mine-card{
+    grid-column:1/-1!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:8px!important;min-height:58px!important;padding:7px 8px!important;
+    border-radius:8px!important;box-shadow:none!important
+  }
+  .mobile-user-mine-card .mobile-user-product-image{display:none!important}
+  .mobile-user-mine-card .mobile-user-product-copy{min-width:0;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:9px;align-items:center}
+  .mobile-user-mine-card .mobile-user-product-name{grid-column:1/2;font-size:14px!important;line-height:1.25!important;font-weight:700!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-user-mine-card .mobile-user-product-qc{grid-column:1/2;font-size:10px!important;line-height:1.2!important;color:var(--mobile-standard-muted)!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mobile-user-mine-card .mobile-user-product-bottom,
+  .mobile-user-mine-card .mobile-user-own-price{grid-column:2/3;grid-row:1/3;align-self:center;margin:0!important;text-align:right}
+  .mobile-user-mine-card .mobile-user-product-price,
+  .mobile-user-mine-card .mobile-user-own-price>b{font-size:14px!important;line-height:1!important;color:#20262e!important;font-weight:750!important;white-space:nowrap}
+  .mobile-user-mine-card .mobile-user-own-price small{display:none!important}
+  .mobile-user-mine-card .mobile-user-qty{
+    width:auto!important;min-width:42px;height:38px!important;
+    grid-template-columns:38px auto 38px!important;border:1px solid #d9dfe5!important;border-radius:8px!important;overflow:hidden;background:#fff
+  }
+  .mobile-user-mine-card .mobile-user-qty button{width:38px!important;height:38px!important;min-height:38px!important;border-radius:0!important}
+  .mobile-user-mine-card .mobile-user-qty>b{min-width:27px;text-align:center;font-size:13px}
+  .mobile-user-mine-card:not(.is-selected) .mobile-user-qty [data-work-qty="-1"]{display:none!important}
+  .mobile-user-mine-card:not(.is-selected) .mobile-user-qty > b{display:none!important}
+  .mobile-user-mine-card:not(.is-selected) .mobile-user-qty{grid-template-columns:38px!important;min-width:38px!important;border-color:#cfd6dc!important}
+  .mobile-user-mine-card:not(.is-selected) .mobile-user-qty [data-work-qty="1"]{font-size:21px;font-weight:500;color:#334155;background:#fff}
+
+  /* Cart/action line from the reference: Giỏ | total | Đặt | Bán. */
+  .mobile-standard-cart-bar:not([hidden]){
+    display:grid;grid-template-columns:minmax(0,1.45fr) 42px minmax(64px,.72fr) minmax(64px,.78fr);
+    gap:5px;align-items:stretch;padding:7px 8px;background:#fff;border-top:1px solid var(--mobile-standard-line)
+  }
+  .mobile-standard-cart-bar button,
+  .mobile-standard-cart-total{min-height:46px;border:1px solid #d4dbe1;border-radius:8px;background:#fff;color:#28323e}
+  .mobile-standard-cart-bar button{font-weight:700}
+  .mobile-standard-cart-open{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px;text-align:left}
+  .mobile-standard-cart-open span{white-space:nowrap}.mobile-standard-cart-open small{font-size:12px;color:#596574;font-variant-numeric:tabular-nums}
+  .mobile-standard-cart-total{display:grid;place-items:center;align-content:center;gap:1px}
+  .mobile-standard-cart-total small{font-size:9px;color:#7d8793}.mobile-standard-cart-total strong{font-size:13px}
+  .mobile-standard-place{background:#fbfcfd!important}
+  .mobile-standard-sell{border-color:#8fbaa1!important;background:#f1f8f3!important;color:#1f673b!important}
+  .mobile-standard-cart-bar button:disabled{opacity:.45}
+
+  /* Move the existing Bán/Đơn/Công nợ owner to the bottom of the mobile Tạp hóa workspace. */
+  .taphoa-work-nav.mobile{
+    position:sticky!important;top:auto!important;bottom:0!important;z-index:18!important;
+    display:flex;min-height:48px!important;margin:0!important;padding:0!important;gap:0!important;
+    border-top:1px solid #dfe4e8;background:#fff
+  }
+  .taphoa-work-nav.mobile[hidden]{display:none!important}
+  .taphoa-work-nav.mobile button{
+    flex:1;min-width:0!important;height:48px!important;min-height:48px!important;padding:0 4px!important;
+    border:0!important;border-radius:0!important;border-right:1px solid #edf0f2!important;background:#fff!important;
+    color:#525d6b!important;font-size:12px!important;font-weight:650!important
+  }
+  .taphoa-work-nav.mobile button:last-child{border-right:0!important}
+  .taphoa-work-nav.mobile button.active{color:#1f673b!important;background:#f7faf8!important;text-decoration:underline;text-underline-offset:4px}
+
+  /* Orders / Debts own the content region; product-only controls stay out of the way. */
+  #mobileUserWork[data-taphoa-view="orders"] .mobile-user-toolbar,
+  #mobileUserWork[data-taphoa-view="debts"] .mobile-user-toolbar,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileUserResults,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileUserResults,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileUserEmpty,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileUserEmpty,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileStandardCustomer,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileStandardCustomer,
+  #mobileUserWork[data-taphoa-view="orders"] #mobileStandardCartBar,
+  #mobileUserWork[data-taphoa-view="debts"] #mobileStandardCartBar{display:none!important}
+
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager{background:#fff!important}
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-panel,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-panel{
+    height:auto!important;min-height:0!important;border-radius:0!important;box-shadow:none!important;overflow:visible!important
+  }
+  .order-manager-head{min-height:46px!important;padding:7px 9px!important}
+  .order-manager-head h2{font-size:16px!important}
+  .order-manager-head small{font-size:10px!important}
+
+  /* Reference prioritizes Đã giao and Đơn tạm; returned orders remain available on wider/desktop views. */
+  .order-manager-tabs{grid-template-columns:repeat(2,minmax(0,1fr))!important;padding:7px 8px!important;gap:6px!important}
+  .order-manager-tabs [data-order-status="returned"]{display:none!important}
+  .order-manager-tabs button{height:40px!important;min-height:40px!important;font-size:12px!important;border-radius:7px!important}
+  .order-report-controls{padding:7px 8px!important;gap:6px!important;border-bottom:1px solid #e7eaed!important;background:#fff!important}
+  .order-report-search input{min-height:40px!important;font-size:13px!important}
+  .order-report-time{min-height:40px!important}
+  .order-manager-tools{min-height:34px!important;padding:5px 8px!important}
+  .order-manager-list{padding:6px 8px 10px!important;gap:5px!important;background:#fff!important}
+  .order-index-card,
+  .order-card{border-radius:7px!important;box-shadow:none!important}
+  .order-index-card{min-height:58px!important;padding:7px 8px!important}
+  .order-index-primary strong,.order-card-head strong{font-size:13px!important}
+  .order-index-primary b,.order-card-head>b{font-size:13px!important}
+  .order-index-meta,.order-index-count,.order-card-head small{font-size:10px!important}
+
+  /* Debt standard: search + summary/customer list, then timeline/order detail after selection. */
+  .mobile-standard-debt-search:not([hidden]){
+    display:grid;grid-template-columns:minmax(0,1fr) 42px;gap:6px;padding:7px 8px;border-bottom:1px solid #e6e9ed;background:#fff
+  }
+  .mobile-standard-debt-search label{min-width:0}
+  .mobile-standard-debt-search input{width:100%;height:40px;padding:0 11px;border:1px solid #d7dde3;border-radius:7px;background:#fff;font-size:13px;outline:0}
+  .mobile-standard-debt-search button{height:40px;border:1px solid #d7dde3;border-radius:7px;background:#fff;font-size:18px;color:#4b5867}
+  .debt-customer-card{min-height:54px!important;padding:7px 9px!important;border-radius:7px!important}
+  .debt-customer-card strong{font-size:13px!important}.debt-customer-card small{margin-top:2px!important;font-size:10px!important}
+  .debt-customer-card>b{font-size:13px!important}
+  .debt-detail-head{min-height:56px!important;padding:8px 10px!important;border-radius:7px!important}
+  .debt-payment-form{border-radius:7px!important;padding:7px!important;gap:5px!important}
+  .debt-timeline{gap:5px!important}.debt-txn{border-radius:7px!important}
+
+  /* Three actions: the primary action is intentionally wider. */
+  .mobile-standard-cart-sheet:not([hidden]){display:block;position:fixed;inset:0;z-index:1200}
+  .mobile-standard-cart-backdrop{position:absolute;inset:0;border:0;background:rgba(17,24,39,.28)}
+  .mobile-standard-cart-card{
+    position:absolute;left:0;right:0;bottom:0;max-height:min(78dvh,680px);display:flex;flex-direction:column;
+    border-radius:16px 16px 0 0;background:#fff;box-shadow:0 -14px 40px rgba(0,0,0,.16);overflow:hidden
+  }
+  .mobile-standard-cart-head{min-height:52px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e5e8eb}
+  .mobile-standard-cart-head strong{display:block;font-size:16px}.mobile-standard-cart-head small{display:block;margin-top:2px;color:#747e8a;font-size:10px}
+  .mobile-standard-cart-head>button{width:38px;height:38px;border:0;background:transparent;font-size:26px;color:#596574}
+  .mobile-standard-cart-columns,.mobile-standard-cart-line{display:grid;grid-template-columns:minmax(0,1fr) 70px 94px 78px;gap:5px;align-items:center}
+  .mobile-standard-cart-columns{padding:6px 9px;border-bottom:1px solid #eef0f2;color:#7b8490;font-size:9px;font-weight:700;text-transform:uppercase}
+  .mobile-standard-cart-lines{min-height:0;overflow:auto;padding:0 9px}
+  .mobile-standard-cart-line{min-height:54px;border-bottom:1px solid #eef0f2;font-size:11px}
+  .mobile-standard-cart-product{min-width:0;display:flex;gap:4px;align-items:flex-start}.mobile-standard-cart-product small{color:#8a929c}.mobile-standard-cart-product strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .mobile-standard-cart-price,.mobile-standard-cart-line-total{text-align:right;font-size:11px;font-variant-numeric:tabular-nums}
+  .mobile-standard-cart-qty{height:34px;display:grid;grid-template-columns:30px 1fr 30px;border:1px solid #d8dee4;border-radius:7px;overflow:hidden}
+  .mobile-standard-cart-qty button{border:0;background:#f9fafb;font-size:17px}.mobile-standard-cart-qty>b{display:grid;place-items:center;font-size:11px}
+  .mobile-standard-cart-empty{padding:28px 10px;text-align:center;color:#7b8591}
+  .mobile-standard-cart-grand{padding:9px 12px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid #e5e8eb;background:#fafbfc}
+  .mobile-standard-cart-grand span{display:grid}.mobile-standard-cart-grand small{color:#77818e;font-size:10px}.mobile-standard-cart-grand strong{font-size:12px}.mobile-standard-cart-grand>b{font-size:16px}
+  .mobile-standard-cart-actions{display:grid;grid-template-columns:.85fr 1fr 1.35fr;gap:6px;padding:8px 9px calc(8px + env(safe-area-inset-bottom));border-top:1px solid #e5e8eb;background:#fff}
+  .mobile-standard-cart-actions button{min-height:44px;border:1px solid #d5dbe1;border-radius:8px;background:#fff;color:#34404d;font-weight:700}
+  .mobile-standard-cart-actions button.primary{border-color:#8eb99f;background:#eef7f1;color:#1f673b}
+  .mobile-standard-cart-actions button:disabled{opacity:.45}
+  html.mobile-standard-cart-open,html.mobile-standard-cart-open body{overflow:hidden}
+
+  .sr-only{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
+}
+
+@media(max-width:360px){
+  .mobile-standard-cart-bar:not([hidden]){grid-template-columns:minmax(0,1.3fr) 36px minmax(58px,.7fr) minmax(58px,.75fr);gap:4px;padding-left:6px;padding-right:6px}
+  .mobile-standard-cart-columns,.mobile-standard-cart-line{grid-template-columns:minmax(0,1fr) 58px 86px 66px;gap:4px}
+  .mobile-user-mine-card{grid-template-columns:minmax(0,1fr) auto!important}
+}

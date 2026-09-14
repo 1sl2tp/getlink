@@ -4,8 +4,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>GETLINK</title>
-  <meta name="app-build-id" content="5e22675864195e6c638b43070e437a6b5a27dbf84c7adc4f79cfc88b5e1eaa75">
-  <link rel="stylesheet" href="./style.css?v=5e22675864195e6c638b43070e437a6b5a27dbf84c7adc4f79cfc88b5e1eaa75">
+  <meta name="app-build-id" content="716e8550ffabcccd731c391a0d6e9b2b2c9fca8cce2f8441e91e00bcf142ca96">
+  <link rel="stylesheet" href="./style.css?v=716e8550ffabcccd731c391a0d6e9b2b2c9fca8cce2f8441e91e00bcf142ca96">
   <script>
     (()=>{try{
       const p=new URL(location.href).searchParams;
@@ -809,13 +809,17 @@ window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab
     const orderCssUrl=runtime.assetUrl("order-management.css",build);
     const orderCustomerCssUrl=runtime.assetUrl("order-customer-picker.css",build);
     const orderManagementUrl=runtime.assetUrl("order-management.js",build);
+    const mobileStandardCssUrl=runtime.assetUrl("taphoa-mobile-standard.css",build);
+    const mobileStandardJsUrl=runtime.assetUrl("taphoa-mobile-standard.js",build);
     await loadScript(configUrl,build);
     await loadScript(appUrl,build);
     await Promise.all([
       loadStyle("getlinkOrderCss",orderCssUrl),
-      loadStyle("getlinkOrderCustomerCss",orderCustomerCssUrl)
+      loadStyle("getlinkOrderCustomerCss",orderCustomerCssUrl),
+      loadStyle("getlinkMobileStandardCss",mobileStandardCssUrl)
     ]);
     await loadScript(orderManagementUrl,build);
+    await loadScript(mobileStandardJsUrl,build);
   }catch(error){
     console.error("GETLINK bootstrap failed",error);
   }

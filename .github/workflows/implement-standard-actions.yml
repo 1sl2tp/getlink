@@ -38,6 +38,20 @@ jobs:
           test "$status" -ne 0
           grep -q "FAIL" /tmp/red.log
 
+      - name: Preserve JavaScript regex literals in patch helper
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('tools/implement_standard_actions.py')
+          s=p.read_text(encoding='utf-8')
+          old="s, count = re.subn(r'function hydrate\\(\\)\\{.*?\\}\\n  function persist', hydrate + '\\n  function persist', s, count=1, flags=re.S)"
+          new="s, count = re.subn(r'function hydrate\\(\\)\\{.*?\\}\\n  function persist', lambda _m: hydrate + '\\n  function persist', s, count=1, flags=re.S)"
+          if old not in s:
+              raise SystemExit('hydrate subn anchor missing')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          PY
+
       - name: Apply standard actions
         run: python tools/implement_standard_actions.py
 

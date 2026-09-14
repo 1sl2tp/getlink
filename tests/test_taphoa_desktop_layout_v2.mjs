@@ -44,7 +44,7 @@ assert.ok(payment.includes("balanceVnd")&&payment.includes(">0"),"payment form m
 assert.ok(debts.includes("Không có công nợ"),"zero-debt empty state must be explicit instead of duplicating three empty columns");
 
 assert.ok(styles.includes('.taphoa-manual-add input[name="name"]{grid-column:1/-1}'),"manual product add must give the product name a full row on narrow desktop");
-assert.ok(styles.includes('grid-template-columns:minmax(0,1fr) auto'),"debt payment form must keep the primary action visible in a narrow detail pane");
+assert.ok(styles.includes('.taphoa-debt-payment{margin:12px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px}'),"debt payment form must keep the primary action visible in a narrow detail pane");
 assert.ok(styles.includes('.taphoa-debt-payment input[name="note"]{grid-column:1/-1;grid-row:2}'),"debt payment note must move to its own row instead of squeezing the action off-screen");
 
 assert.ok(styles.includes("font-size:12px"),"desktop supporting text must not default to 9px-era sizing");

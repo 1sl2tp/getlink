@@ -173,12 +173,13 @@
     document.querySelectorAll('#mobileUserResults .mobile-user-mine-card[data-url]').forEach(card=>{
       const copy=card.querySelector(".mobile-user-product-copy");
       if(!copy||copy.querySelector(".mobile-standard-price-line"))return;
+      const visiblePrice=String(card.querySelector(".mobile-user-product-price,.mobile-user-own-price>b")?.textContent||"").trim();
       const row=rowFor(card.dataset.url);
-      if(!row)return;
-      const cost=costPrice(row),sale=salePrice(row);
+      const cost=row?costPrice(row):0;
+      const sale=row?salePrice(row):0;
       const line=document.createElement("div");
       line.className="mobile-standard-price-line";
-      line.innerHTML=(cost?'<span class="base">'+compactMoney(cost)+'</span><span class="arrow">→</span>':'')+'<b>'+compactMoney(sale)+'</b>';
+      line.innerHTML=(cost?'<span class="base">'+compactMoney(cost)+'</span><span class="arrow">→</span>':'')+'<b>'+(sale?compactMoney(sale):esc(visiblePrice||"—"))+'</b>';
       copy.appendChild(line);
     });
   }

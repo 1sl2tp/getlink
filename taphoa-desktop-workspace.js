@@ -39,17 +39,17 @@
     root.dataset.view=currentView;
     root.hidden=true;
     root.innerHTML=`
-      <aside id="taphoaLeftRail" class="taphoa-desktop-column taphoa-left-rail" aria-label="Điều hướng Tạp hóa"></aside>
-      <main id="taphoaMasterList" class="taphoa-desktop-column taphoa-master-list"></main>
-      <aside id="taphoaDetailPane" class="taphoa-desktop-column taphoa-detail-pane" aria-label="Chi tiết Tạp hóa"></aside>
-      <nav id="taphoaBottomNav" class="taphoa-desktop-bottom-nav" aria-label="Tạp hóa">
+      <nav id="taphoaTopNav" class="taphoa-desktop-top-nav" aria-label="Tạp hóa">
         <button type="button" data-taphoa-view="sales" aria-pressed="true">Bán</button>
         <button type="button" data-taphoa-view="orders" aria-pressed="false">Đơn</button>
         <button type="button" data-taphoa-view="debts" aria-pressed="false">Công nợ</button>
-      </nav>`;
+      </nav>
+      <aside id="taphoaLeftRail" class="taphoa-desktop-column taphoa-left-rail" aria-label="Điều hướng Tạp hóa"></aside>
+      <main id="taphoaMasterList" class="taphoa-desktop-column taphoa-master-list"></main>
+      <aside id="taphoaDetailPane" class="taphoa-desktop-column taphoa-detail-pane" aria-label="Chi tiết Tạp hóa"></aside>`;
     host.appendChild(root);
 
-    root.querySelector("#taphoaBottomNav")?.addEventListener("click",event=>{
+    root.querySelector("#taphoaTopNav")?.addEventListener("click",event=>{
       const button=event.target.closest?.("[data-taphoa-view]");
       if(!button)return;
       void activateView(String(button.dataset.taphoaView||""));

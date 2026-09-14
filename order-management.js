@@ -33,6 +33,7 @@
   let ordersVersion="";
   let debtVersion="";
   let syncBusy=false;
+  let managerRefreshSeq=0;
   let orders=[];
   let customers=[];
   let debtSummaries=[];
@@ -992,21 +993,25 @@
           <div class="debt-balance-after">Dư nợ sau giao dịch <strong>${escapeHtml(compactMoney(row.balanceAfterVnd))}</strong></div>
         </button>`).join(""):'<div class="order-manager-message">Chưa có giao dịch công nợ.</div>'}</div>`;
   }
-  async function refreshDebts(){
+  async function refreshDebts(refreshSeq=managerRefreshSeq,requestedView="debts"){
+    if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
     const list=document.getElementById("orderManagerList");
     if(list)list.innerHTML='<div class="order-manager-message">Đang tải công nợ...</div>';
     if(currentRole()==="user"){
       const id=String(currentAccount()?.id||"");
       await loadDebtDetail(id);
+      if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
       renderDebtDetail();
       return;
     }
     if(debtCustomerId){
       await loadDebtDetail(debtCustomerId);
+      if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
       renderDebtDetail();
       return;
     }
     await loadDebtSummaries();
+    if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
     renderDebtSummaries();
   }
 
@@ -1017,22 +1022,30 @@
     return true;
   }
   async function refreshManager(){
+    const refreshSeq=++managerRefreshSeq;
+    const requestedView=activeView;
     injectUi();
     updateIdentity();
     if(!readAuth()){
       if(!isEmbeddedInChat()){goToChat();return;}
       setManagerGate("Đang xác thực qua Chat...");
-      if(!(await waitForChatAuth())){setManagerGate("Cần đăng nhập Chat để tiếp tục.");return;}
+      if(!(await waitForChatAuth())){
+        if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
+        setManagerGate("Cần đăng nhập Chat để tiếp tục.");return;
+      }
     }
+    if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
     clearManagerGate();
     updateIdentity();
     if(currentRole()==="admin")void loadCustomers().catch(()=>{});
     syncManagerView();
     try{
-      if(activeView==="debts")await refreshDebts();
-      else {await loadOrders();renderOrders();}
+      if(requestedView==="debts")await refreshDebts(refreshSeq,requestedView);
+      else {await loadOrders();if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;renderOrders();}
+      if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
       if(!syncBusy)await checkRemoteRevision(true);
     }catch(error){
+      if(refreshSeq!==managerRefreshSeq||activeView!==requestedView)return;
       if(!handleAuthError(error)){
         const list=document.getElementById("orderManagerList");
         if(list)list.innerHTML='<div class="order-manager-message">'+escapeHtml(error?.message||error)+'</div>';

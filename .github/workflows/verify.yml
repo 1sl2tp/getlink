@@ -24,10 +24,12 @@ jobs:
       - run: pip install -r scraper/requirements.txt
       - run: python tools/stamp_static_build.py --check
       - run: python -m unittest tests.test_chat_order_source_handoff -v
+      - run: python -m unittest tests.test_mobile_standard_document_layout -v
       - run: python -m unittest discover -s tests -v
       - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py
       - run: node --check app.js
       - run: node --check order-management.js
+      - run: node --check taphoa-mobile-standard.js
       - run: node --check taphoa-desktop-workspace.js
       - run: node --check taphoa-desktop-data.js
       - run: node --check taphoa-desktop-sales.js

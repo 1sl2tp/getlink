@@ -27,6 +27,11 @@ class MobileCanonicalOwnerAudit(unittest.TestCase):
             self.assertIn(f'data-taphoa-work-view="{view}"', text)
             self.assertIn(label, text)
 
+    def test_more_view_hides_sales_legacy_controls(self):
+        self.assertIn('data-taphoa-view="more"', MOBILE_CSS)
+        for token in ['.mobile-user-toolbar','#mobileUserResults','#mobileStandardCustomer','#mobileStandardCartBar']:
+            self.assertIn(token, MOBILE_CSS)
+
     def test_cart_has_only_one_action_set(self):
         bar=re.search(r'function cartBarMarkup\(\)\{(.+?)\n  \}', MOBILE_JS, re.S)
         sheet=re.search(r'function cartSheetMarkup\(\)\{(.+?)\n  \}', MOBILE_JS, re.S)

@@ -1,0 +1,48 @@
+name: Apply debt payment units dedupe fix
+
+on:
+  push:
+    branches:
+      - fix/debt-payment-units-dedupe
+    paths:
+      - .github/workflows/apply-debt-payment-units-dedupe.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/debt-payment-units-dedupe
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: pip install -r scraper/requirements.txt
+      - name: Apply payment unit and dedupe fix
+        run: python tools/apply_debt_payment_units_dedupe.py
+      - name: Verify focused debt contracts
+        run: python -m unittest tests.test_debt_payment_compact_units -v
+      - name: Stamp static build
+        run: python tools/stamp_static_build.py
+      - name: Verify full suite and syntax
+        run: |
+          python tools/stamp_static_build.py --check
+          python -m unittest discover -s tests -v
+          node --check order-management.js
+          node --check taphoa-desktop-debts.js
+          deno check supabase/functions/getlink-orders/index.ts
+      - name: Remove one-time applicator
+        run: |
+          rm .github/workflows/apply-debt-payment-units-dedupe.yml
+          rm tools/apply_debt_payment_units_dedupe.py
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: use thousand-unit debt payments and block duplicate receipts"
+          git push origin HEAD:fix/debt-payment-units-dedupe

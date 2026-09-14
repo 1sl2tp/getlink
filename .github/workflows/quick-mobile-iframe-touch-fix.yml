@@ -1,0 +1,77 @@
+name: Quick mobile iframe touch fix
+permissions:
+  contents: write
+on:
+  push:
+    branches: [main]
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch embedded mobile scroll and input ownership
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-mobile-standard.css')
+          s=p.read_text('utf-8')
+          marker='/* Embedded iOS interaction owner: keep one definite-height scroll region inside the iframe. */'
+          block=r'''
+
+/* Embedded iOS interaction owner: keep one definite-height scroll region inside the iframe. */
+@media(max-width:639px){
+  html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
+    display:flex!important;
+    flex-direction:column!important;
+    height:100dvh!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  html[data-getlink-embed="1"] #mobileUserWork{
+    flex:1 1 0!important;
+    height:100%!important;
+    min-height:0!important;
+    overflow:hidden!important;
+  }
+  html[data-getlink-embed="1"] #mobileUserResults{
+    flex:1 1 0!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+    overscroll-behavior-y:contain;
+  }
+  html[data-getlink-embed="1"] .mobile-user-toolbar,
+  html[data-getlink-embed="1"] .mobile-user-search,
+  html[data-getlink-embed="1"] #mobileUserSearch{
+    position:relative;
+    pointer-events:auto!important;
+    touch-action:manipulation;
+  }
+}
+'''
+          if marker not in s:
+              p.write_text(s+block,'utf-8')
+          t=Path('tests/test_mobile_iframe_touch_scroll.py')
+          t.write_text('''from pathlib import Path\nimport unittest\nCSS=Path(__file__).resolve().parents[1].joinpath("taphoa-mobile-standard.css").read_text("utf-8")\nclass MobileIframeTouchScroll(unittest.TestCase):\n    def test_embed_has_definite_scroll_owner_and_search_is_interactive(self):\n        self.assertIn('html[data-getlink-embed="1"] #mobileUserWork', CSS)\n        self.assertIn('height:100%!important', CSS)\n        self.assertIn('html[data-getlink-embed="1"] #mobileUserResults', CSS)\n        self.assertIn('overflow-y:auto!important', CSS)\n        self.assertIn('-webkit-overflow-scrolling:touch', CSS)\n        self.assertIn('html[data-getlink-embed="1"] #mobileUserSearch', CSS)\n        self.assertIn('pointer-events:auto!important', CSS)\nif __name__=="__main__": unittest.main()\n''','utf-8')
+          PY
+      - name: Stamp and verify focused fix
+        run: |
+          python tools/stamp_static_build.py
+          python tools/stamp_static_build.py --check
+          python -m unittest tests.test_mobile_iframe_touch_scroll -v
+          python -m unittest tests.test_mobile_standard_document_layout -v
+          node --check taphoa-mobile-standard.js
+      - name: Commit and self-remove helper
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/quick-mobile-iframe-touch-fix.yml
+          git add taphoa-mobile-standard.css tests/test_mobile_iframe_touch_scroll.py index.html version.json
+          git commit -m 'fix: restore mobile iframe search and scrolling'
+          git push origin HEAD:main

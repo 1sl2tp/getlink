@@ -1,0 +1,362 @@
+/* TẠP HÓA DESKTOP THREE-COLUMN WORKSPACE */
+#taphoaDesktopWorkspace[hidden]{display:none!important}
+
+@media (min-width:1000px){
+  .user-work-desktop.taphoa-new-desktop-active{
+    display:block!important;
+    height:100%!important;
+    min-height:0!important;
+    min-width:0!important;
+    overflow:hidden!important;
+    padding:0!important;
+  }
+  .user-work-desktop.taphoa-new-desktop-active>:not(#taphoaDesktopWorkspace){display:none!important}
+
+  #taphoaDesktopWorkspace{
+    width:100%;
+    height:100%;
+    min-height:0;
+    min-width:0;
+    display:grid;
+    grid-template-columns:minmax(180px,220px) minmax(390px,1fr) minmax(420px,1.12fr);
+    grid-template-rows:minmax(0,1fr) 48px;
+    overflow:hidden;
+    background:#fff;
+    color:#17211c;
+  }
+  #taphoaLeftRail,
+  #taphoaMasterList,
+  #taphoaDetailPane{
+    min-width:0;
+    min-height:0;
+    overflow:auto;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-gutter:stable;
+  }
+  #taphoaLeftRail{border-right:1px solid #e4e9e6;background:#f8faf9}
+  #taphoaMasterList{border-right:1px solid #e4e9e6;background:#fff}
+  #taphoaDetailPane{background:#fff}
+
+  #taphoaBottomNav{
+    grid-column:1/-1;
+    min-width:0;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    border-top:1px solid #d9e1dd;
+    background:#fff;
+    position:relative;
+    z-index:5;
+  }
+  #taphoaBottomNav button{
+    min-width:0;
+    border:0;
+    border-right:1px solid #edf0ee;
+    background:transparent;
+    color:#637068;
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  #taphoaBottomNav button:last-child{border-right:0}
+  #taphoaBottomNav button:hover{background:#f6faf7}
+  #taphoaBottomNav button.active,
+  #taphoaBottomNav button[aria-pressed="true"]{background:#eaf5ee;color:#176b3b}
+
+  .taphoa-column-head,
+  .taphoa-master-head,
+  .taphoa-order-toolbar,
+  .taphoa-detail-head{
+    position:sticky;
+    top:0;
+    z-index:3;
+    background:rgba(255,255,255,.97);
+    backdrop-filter:saturate(1.1) blur(5px);
+    border-bottom:1px solid #e6ebe8;
+  }
+  .taphoa-column-head{
+    min-height:48px;
+    padding:8px 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+  }
+  .taphoa-column-head strong{font-size:12px}
+  .taphoa-column-head small{font-size:10px;color:#758078;white-space:nowrap}
+
+  .taphoa-left-list{padding:6px;display:grid;gap:4px}
+  .taphoa-left-item{
+    width:100%;
+    min-width:0;
+    min-height:38px;
+    padding:7px 8px;
+    border:1px solid transparent;
+    border-radius:7px;
+    background:transparent;
+    color:#26332c;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    text-align:left;
+    cursor:pointer;
+    font:inherit;
+  }
+  .taphoa-left-item>span{min-width:0;display:grid;gap:1px}
+  .taphoa-left-item>span>strong,.taphoa-left-item>span>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-left-item small{font-size:10px;color:#7b867f}
+  .taphoa-left-item>b{font-size:11px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .taphoa-left-item:hover{background:#f0f5f2}
+  .taphoa-left-item.active{background:#e9f4ed;border-color:#d2e7da;color:#176b3b}
+
+  .taphoa-master-frame,.taphoa-detail-frame{min-height:100%}
+  .taphoa-master-head{
+    min-height:50px;
+    padding:8px 10px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .taphoa-master-head>div{display:grid;gap:1px;min-width:0}
+  .taphoa-master-head strong{font-size:13px}
+  .taphoa-master-head small{font-size:10px;color:#77827b}
+  .taphoa-master-head>b{font-size:14px;font-variant-numeric:tabular-nums}
+  #taphoaSalesSearch,#taphoaOrderSearch{
+    width:100%;
+    min-width:0;
+    height:34px;
+    padding:0 10px;
+    border:1px solid #d6dfda;
+    border-radius:7px;
+    background:#fff;
+    font:inherit;
+    font-size:12px;
+    outline:none;
+  }
+  #taphoaSalesSearch:focus,#taphoaOrderSearch:focus{border-color:#91bda2;box-shadow:0 0 0 2px rgba(70,139,94,.08)}
+  .taphoa-master-count{white-space:nowrap}
+
+  .taphoa-sales-list{display:grid}
+  .taphoa-sales-row{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 78px 104px minmax(100px,136px);
+    align-items:center;
+    min-height:58px;
+    border-bottom:1px solid #edf0ee;
+    background:#fff;
+  }
+  .taphoa-sales-row:hover{background:#fbfdfc}
+  .taphoa-sales-row.is-selected{background:#f3faf6}
+  .taphoa-sales-row>*{min-width:0;padding:6px 8px}
+  .taphoa-sales-product{display:flex;align-items:center;gap:8px}
+  .taphoa-sales-thumb{width:36px;height:36px;flex:0 0 36px;border:1px solid #edf0ee;border-radius:6px;background:#fff;display:grid;place-items:center;overflow:hidden}
+  .taphoa-sales-thumb img{width:100%;height:100%;object-fit:contain}
+  .taphoa-sales-thumb b{font-size:9px;color:#9aa39e}
+  .taphoa-sales-copy{min-width:0;display:grid;gap:2px}
+  .taphoa-sales-copy strong{font-size:12px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .taphoa-sales-copy small{font-size:9.5px;color:#7d8781;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-sales-price{text-align:right;font-size:12px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .taphoa-sales-qty{display:grid;grid-template-columns:30px 38px 30px;align-items:center;justify-content:center;padding-inline:3px!important}
+  .taphoa-sales-qty button{height:30px;border:1px solid #d9e1dd;background:#fff;font-size:16px;cursor:pointer}
+  .taphoa-sales-qty button:first-child{border-radius:6px 0 0 6px}
+  .taphoa-sales-qty button:last-child{border-radius:0 6px 6px 0}
+  .taphoa-sales-qty b{height:30px;display:grid;place-items:center;border-top:1px solid #d9e1dd;border-bottom:1px solid #d9e1dd;font-size:12px;font-variant-numeric:tabular-nums}
+  .taphoa-sales-note{height:32px;border:1px solid #dfe5e1;border-radius:6px;font:inherit;font-size:11px;padding:0 7px;outline:none}
+  .taphoa-load-more{padding:12px;text-align:center;font-size:10px;color:#818a85}
+
+  .taphoa-manual-add{margin:12px;padding:12px;border:1px dashed #becdc4;border-radius:8px;background:#fafcfa;display:grid;grid-template-columns:minmax(0,1fr) 130px 110px auto;gap:7px;align-items:end}
+  .taphoa-manual-add>div{grid-column:1/-1;display:flex;justify-content:space-between;gap:10px}
+  .taphoa-manual-add small{color:#7a867f}
+  .taphoa-manual-add input,.taphoa-manual-add select,.taphoa-manual-add button{height:34px;border:1px solid #d7dfdb;border-radius:6px;background:#fff;padding:0 8px;font:inherit;font-size:11px}
+  .taphoa-manual-add button{background:#176b3b;color:#fff;border-color:#176b3b;font-weight:700;cursor:pointer}
+
+  .taphoa-detail-frame{display:block}
+  .taphoa-detail-head{
+    min-height:64px;
+    padding:10px 12px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:14px;
+  }
+  .taphoa-detail-head>div{min-width:0;display:grid;gap:2px}
+  .taphoa-detail-head strong{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-detail-head small{font-size:10px;color:#78837c}
+  .taphoa-detail-head>b{font-size:16px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .taphoa-detail-kicker{font-size:9px;font-weight:800;letter-spacing:.08em;color:#6c786f}
+  .taphoa-detail-customer{padding:8px 12px;border-bottom:1px solid #edf0ee;background:#fafcfa}
+  .taphoa-customer-static,.taphoa-customer-select,.taphoa-order-customer-change{display:grid;gap:3px}
+  .taphoa-customer-static small,.taphoa-customer-select small,.taphoa-order-customer-change small{font-size:9.5px;color:#78837c}
+  .taphoa-customer-select select,.taphoa-order-customer-change select{height:32px;border:1px solid #d6dfda;border-radius:6px;background:#fff;padding:0 7px;font:inherit;font-size:11px}
+  .taphoa-detail-scroll{padding:0 12px 10px}
+  .taphoa-cart-lines{display:grid}
+  .taphoa-cart-line{display:grid;grid-template-columns:minmax(0,1fr) 104px 78px;gap:8px;align-items:center;min-height:42px;border-bottom:1px solid #edf0ee;font-size:11px}
+  .taphoa-cart-line>span:first-child{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:center}
+  .taphoa-cart-line>span:first-child em{grid-column:2;font-size:9px;color:#7a857f;font-style:normal}
+  .taphoa-cart-line>span:nth-child(2),.taphoa-cart-line>b{text-align:right;font-variant-numeric:tabular-nums}
+  .taphoa-detail-actions{
+    position:sticky;
+    bottom:0;
+    z-index:4;
+    min-height:50px;
+    padding:8px 12px;
+    border-top:1px solid #dfe5e1;
+    background:rgba(255,255,255,.98);
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    gap:7px;
+  }
+  .taphoa-detail-actions button{min-height:32px;padding:0 11px;border:1px solid #cfd9d3;border-radius:6px;background:#fff;font:inherit;font-size:11px;font-weight:700;cursor:pointer}
+  .taphoa-detail-actions button.primary,.taphoa-detail-actions button[data-sales-submit],.taphoa-detail-actions button[data-sales-update]{background:#176b3b;border-color:#176b3b;color:#fff}
+  .taphoa-detail-actions button.danger{color:#a43838;border-color:#eccaca}
+  .taphoa-detail-actions button:disabled{opacity:.45;cursor:default}
+  .taphoa-action-status{min-height:24px;padding:3px 12px 8px;font-size:10px;color:#67736c;background:#fff}
+  .taphoa-empty{padding:24px 12px;text-align:center;color:#7d8781;font-size:11px}
+  .taphoa-detail-empty{min-height:180px;display:grid;place-items:center}
+
+  .taphoa-order-toolbar{padding:8px 10px;display:grid;gap:7px}
+  .taphoa-order-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:5px}
+  .taphoa-order-tabs button{height:30px;border:1px solid #dce3df;border-radius:6px;background:#fff;font:inherit;font-size:10.5px;font-weight:700;cursor:pointer}
+  .taphoa-order-tabs button.active{background:#eaf5ee;border-color:#cbe2d3;color:#176b3b}
+  .taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:6px}
+  #taphoaOrderTime{height:34px;border:1px solid #d6dfda;border-radius:7px;background:#fff;padding:0 6px;font:inherit;font-size:11px}
+  .taphoa-order-list-summary{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#78837c}
+  .taphoa-order-list{display:grid}
+  .taphoa-order-row{width:100%;min-width:0;min-height:58px;padding:7px 10px;border:0;border-bottom:1px solid #edf0ee;background:#fff;color:inherit;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;font:inherit;cursor:pointer}
+  .taphoa-order-row:hover{background:#fafcfb}
+  .taphoa-order-row.selected{background:#eaf5ee;box-shadow:inset 3px 0 #2a7b4c}
+  .taphoa-order-row-main,.taphoa-order-row-meta{min-width:0;display:grid;gap:2px}
+  .taphoa-order-row-main strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-order-row-main small,.taphoa-order-row-meta small{font-size:9.5px;color:#77827b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-order-row-meta{text-align:right;max-width:190px}
+  .taphoa-order-row-meta b{font-size:11px;font-variant-numeric:tabular-nums}
+  .taphoa-invoice-head,.taphoa-invoice-line{display:grid;grid-template-columns:34px minmax(0,1fr) 116px 88px;gap:8px;align-items:center}
+  .taphoa-invoice-head{position:sticky;top:64px;z-index:2;padding:7px 0;background:#fafcfa;border-bottom:1px solid #e7ece9;font-size:9px;font-weight:700;color:#737f77;text-transform:uppercase}
+  .taphoa-invoice-line{min-height:42px;border-bottom:1px solid #edf0ee;font-size:10.5px}
+  .taphoa-invoice-line>span:nth-child(2){display:grid;gap:2px}
+  .taphoa-invoice-line em{font-size:9px;color:#79847e;font-style:normal}
+  .taphoa-invoice-line>span:nth-child(3),.taphoa-invoice-line>b{text-align:right;font-variant-numeric:tabular-nums}
+  .taphoa-order-detail-footer{padding:10px 12px;border-top:1px solid #dfe5e1;display:flex;justify-content:space-between;align-items:end;gap:12px}
+  .taphoa-order-detail-footer>div{display:grid;gap:2px}
+  .taphoa-order-detail-footer small{font-size:9.5px;color:#77827b}
+  .taphoa-order-detail-footer>b{font-size:16px;font-variant-numeric:tabular-nums}
+
+  .taphoa-debt-customer{min-height:48px}
+  .taphoa-debt-timeline{display:grid}
+  .taphoa-debt-txn{width:100%;min-width:0;min-height:68px;padding:8px 10px;border:0;border-bottom:1px solid #edf0ee;background:#fff;color:inherit;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font:inherit;cursor:pointer}
+  .taphoa-debt-txn:hover{background:#fafcfb}
+  .taphoa-debt-txn.selected{background:#f2f8f4;box-shadow:inset 3px 0 #2a7b4c}
+  .taphoa-debt-txn>span:first-child{display:grid;gap:2px}
+  .taphoa-debt-txn strong{font-size:11.5px}
+  .taphoa-debt-txn small{font-size:9.5px;color:#77827b}
+  .taphoa-debt-amount{font-size:11px;font-weight:800;font-variant-numeric:tabular-nums}
+  .taphoa-debt-amount.increase,.taphoa-debt-detail-amount.increase{color:#a13e36}
+  .taphoa-debt-amount.decrease,.taphoa-debt-detail-amount.decrease{color:#27734a}
+  .taphoa-debt-after{grid-column:1/-1;display:flex;justify-content:space-between;border-top:1px dashed #e3e8e5;padding-top:4px}
+  .taphoa-debt-after b{font-size:10px;color:#4e5c54}
+  .taphoa-debt-detail-card{margin:12px 0;padding:14px;border:1px solid #e0e7e3;border-radius:8px;background:#fafcfa;display:grid;gap:8px}
+  .taphoa-debt-detail-card h3{margin:0;font-size:14px}
+  .taphoa-debt-detail-card p{margin:0;font-size:11px;color:#66736b}
+  .taphoa-debt-detail-amount{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  .taphoa-debt-balance-after{display:flex;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #dfe5e1;font-size:11px}
+  .taphoa-debt-payment{margin:12px 0;display:grid;grid-template-columns:1fr 1fr auto;gap:7px}
+  .taphoa-debt-payment input,.taphoa-debt-payment button{height:34px;border:1px solid #d6dfda;border-radius:6px;padding:0 8px;font:inherit;font-size:11px}
+  .taphoa-debt-payment button{background:#176b3b;color:#fff;border-color:#176b3b;font-weight:700;cursor:pointer}
+}
+
+@media (min-width:1000px) and (max-width:1180px){
+  #taphoaDesktopWorkspace{grid-template-columns:180px minmax(350px,1fr) minmax(390px,1fr)}
+  .taphoa-sales-row{grid-template-columns:minmax(0,1fr) 68px 98px 104px}
+}
+
+
+/* TAPHOA_DESKTOP_PARITY_CONTROLS_20260914 */
+@media (min-width:1000px){
+  .taphoa-order-custom-range{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+    padding-top:1px;
+  }
+  .taphoa-order-custom-range[hidden]{display:none!important}
+  .taphoa-order-custom-range label{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px}
+  .taphoa-order-custom-range small{font-size:9px;color:#77827b;white-space:nowrap}
+  .taphoa-order-custom-range input{min-width:0;height:30px;border:1px solid #d6dfda;border-radius:6px;background:#fff;padding:0 6px;font:inherit;font-size:10px}
+  .taphoa-order-list-summary-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0}
+  .taphoa-order-batch{height:26px;padding:0 8px;border:1px solid #e5c5c5;border-radius:6px;background:#fff;color:#9b3d3d;font:inherit;font-size:9.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+  .taphoa-order-batch:hover{background:#fff6f6}
+
+  .taphoa-debt-txn{padding:0;cursor:default;overflow:hidden}
+  .taphoa-debt-txn-select{width:100%;min-width:0;padding:8px 10px 4px;border:0;background:transparent;color:inherit;text-align:left;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:start;font:inherit;cursor:pointer}
+  .taphoa-debt-txn-select>span:first-child{min-width:0;display:grid;gap:2px}
+  .taphoa-debt-txn-select strong{font-size:11.5px}
+  .taphoa-debt-txn-select small{font-size:9.5px;color:#77827b}
+  .taphoa-debt-txn-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 10px 7px}
+  .taphoa-debt-txn-foot .taphoa-debt-after{min-width:0;flex:1;grid-column:auto;margin:0}
+  .taphoa-debt-order-link{flex:0 0 auto;min-height:26px;padding:0 7px;border:1px solid #d5e3da;border-radius:6px;background:#fff;color:#176b3b;font:inherit;font-size:9.5px;font-weight:700;cursor:pointer}
+  .taphoa-debt-order-link:hover{background:#f0f7f3}
+  .taphoa-linked-order-back{padding:7px 12px;border-bottom:1px solid #edf0ee;background:#fafcfa}
+  .taphoa-linked-order-back button{min-height:30px;padding:0 9px;border:1px solid #d6dfda;border-radius:6px;background:#fff;color:#405047;font:inherit;font-size:10px;font-weight:700;cursor:pointer}
+}
+
+
+/* TAPHOA_DESKTOP_SOURCE_REPORT_20260914 */
+@media (min-width:1000px){
+  .taphoa-source-report-slot:empty{display:none}
+  .taphoa-source-report-bar{
+    min-width:0;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:8px;
+    padding:7px 0 1px;
+    border-top:1px solid #edf0ee;
+  }
+  .taphoa-source-report-copy{min-width:0;display:grid;gap:2px}
+  .taphoa-source-report-copy strong{font-size:10.5px;color:#26332c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-source-report-copy small{font-size:9px;color:#77827b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-source-report-actions{display:flex;align-items:center;justify-content:flex-end;gap:4px;flex-wrap:wrap}
+  .taphoa-source-report-actions button{
+    min-height:26px;
+    padding:0 7px;
+    border:1px solid #d8e1dc;
+    border-radius:6px;
+    background:#fff;
+    color:#506058;
+    font:inherit;
+    font-size:9.5px;
+    font-weight:700;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .taphoa-source-report-actions button:hover{background:#f6faf7}
+  .taphoa-source-report-actions button.active{background:#eaf5ee;border-color:#cbe2d3;color:#176b3b}
+  .taphoa-source-detail-row,.taphoa-source-combined-row{
+    width:100%;
+    min-width:0;
+    min-height:44px;
+    padding:6px 10px;
+    border:0;
+    border-bottom:1px solid #edf0ee;
+    background:#fff;
+    color:inherit;
+    align-items:center;
+    gap:8px;
+    text-align:left;
+    font:inherit;
+  }
+  .taphoa-source-detail-row{display:grid;grid-template-columns:32px minmax(0,1fr) 64px 86px;cursor:pointer}
+  .taphoa-source-combined-row{display:grid;grid-template-columns:32px minmax(0,1fr) 64px 86px minmax(0,76px)}
+  .taphoa-source-detail-row:hover{background:#fafcfb}
+  .taphoa-source-detail-row>small,.taphoa-source-combined-row>small{font-size:9px;color:#7a867f}
+  .taphoa-source-detail-row>span:nth-child(2),.taphoa-source-combined-row>span:nth-child(2){min-width:0;display:grid;gap:2px}
+  .taphoa-source-detail-row strong,.taphoa-source-combined-row strong{font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-source-detail-row em,.taphoa-source-combined-row em{font-size:9px;color:#7a867f;font-style:normal;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taphoa-source-detail-row>b,.taphoa-source-combined-row>b{text-align:right;font-size:10.5px;font-variant-numeric:tabular-nums}
+  .taphoa-source-detail-row>span:nth-child(4),.taphoa-source-combined-row>span:nth-child(4),.taphoa-source-profit{text-align:right;font-size:10px;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .taphoa-source-profit{color:#27734a;font-weight:700}
+}

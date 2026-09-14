@@ -818,8 +818,7 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);setMainStatus("Đã sao chép "+title+".");return;}
     setMainStatus("Thiết bị không hỗ trợ chia sẻ hoặc sao chép.");
   }
-  function renderOrders(){
-    renderTabs();
+  function renderOrderResultContent(){
     const visible=sortOrdersNewestFirst(filterOrdersForReport(orders)),statusCount=orders.filter(order=>order.status===activeStatus).length;
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
@@ -841,7 +840,25 @@
         ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
-    list.innerHTML=orderReportControlsMarkup()+sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
+    const controls=list.querySelector(".order-report-controls");
+    if(controls)controls.remove();
+    list.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
+    if(controls)list.prepend(controls);
+  }
+  function renderOrders(){
+    renderTabs();
+    const manager=document.getElementById("orderManager");
+    const controls=manager?.querySelector(".order-report-controls");
+    renderOrderResultContent();
+    if(!controls){
+      const list=document.getElementById("orderManagerList");
+      list?.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
+    }
+  }
+  function applyOrderReportSearch(input){
+    setOrderReportFilter({search:String(input?.value||"")});
+    sourceDrillSource="";
+    renderOrderResultContent();
   }
 
   async function loadDebtSummaries(){
@@ -1249,8 +1266,7 @@
   document.addEventListener("input",event=>{
     if(event.target?.id==="orderCustomerSearch"&&!pickerBusy){renderCustomerList();return;}
     if(event.target?.matches?.("[data-order-report-search]")){
-      setOrderReportFilter({search:String(event.target.value||"")});sourceDrillSource="";renderOrders();
-      const input=document.querySelector("[data-order-report-search]");input?.focus();input?.setSelectionRange(orderReportFilter.search.length,orderReportFilter.search.length);return;
+      applyOrderReportSearch(event.target);return;
     }
     const range=event.target?.closest?.("[data-order-report-range]");
     if(range){const side=String(range.dataset.orderReportRange||"from"),value=String(range.value||"");let next={...orderReportFilter,mode:"custom",[side]:value};if(next.from&&next.to&&next.from>next.to){if(side==="from")next.to=next.from;else next.from=next.to;}setOrderReportFilter(next);sourceDrillSource="";renderOrders();}

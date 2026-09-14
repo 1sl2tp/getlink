@@ -42,6 +42,7 @@ assert.ok(orderSource.includes("Theo nguồn")&&orderSource.includes("data-td-or
 assert.ok(!styles.includes('#taphoaDesktopWorkspace[data-view="orders"] #taphoaLeftRail{display:none'),"Orders must not hide its source column on desktop");
 const orderList=block(orders,"function renderOrderList()","function actionMarkup");
 assert.ok(!orderList.includes('id="taphoaOrderSource"'),"source selection must not be duplicated as a dropdown when the PC source column is visible");
+assert.ok(styles.includes('.taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:6px}'),"Orders filter geometry must match its two visible controls after source moves back to the rail");
 assert.ok(orders.includes("taphoa-order-customer-inline"),"customer reassignment belongs beside the customer name");
 const orderDetail=block(orders,"function renderOrderDetail(id)","function selectOrder");
 assert.ok(!orderDetail.includes('class="taphoa-detail-customer"'),"order detail must not duplicate customer identity in a second strip");

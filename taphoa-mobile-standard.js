@@ -137,24 +137,6 @@
     }
   }
 
-  function moveOrderReportControls(){
-    const host=root();
-    const tabs=document.getElementById("orderManagerTabs");
-    const list=document.getElementById("orderManagerList");
-    const all=[...document.querySelectorAll("#orderManager .order-report-controls")];
-    if(!tabs||!tabs.parentElement)return false;
-    if(!isMobile()||host?.dataset.taphoaView!=="orders"){
-      all.forEach(controls=>{if(controls.parentElement!==list)controls.remove();});
-      return false;
-    }
-    if(!all.length)return false;
-    const controls=all[all.length-1];
-    all.slice(0,-1).forEach(node=>node.remove());
-    if(controls.parentElement!==tabs.parentElement||controls.nextElementSibling!==tabs){
-      tabs.parentElement.insertBefore(controls,tabs);
-    }
-    return true;
-  }
 
   function syncCustomer(){
     const standard=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
@@ -268,7 +250,7 @@
     if(standardCustomer)standardCustomer.hidden=!isMobile()||view!=="sales";
     if(cartBar)cartBar.hidden=!isMobile()||view!=="sales";
     if(view!=="sales"&&cartOpen)closeCart();
-    moveWorkNavToBottom();configureOrderTabs();moveOrderReportControls();syncDebtSearch();
+    moveWorkNavToBottom();configureOrderTabs();syncDebtSearch();
   }
 
   function syncAll(){
@@ -323,9 +305,8 @@
       const name=String(action.dataset.mobileStandardAction||"");
       if(name==="customer-search"){
         event.preventDefault();
-        const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"][data-order-customer-select]')||document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');
-        const fallback=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");
-        (source||fallback)?.click();
+        const picker=window.GETLINK_ORDER_UI?.openCustomerPicker;
+        if(typeof picker==="function")void picker();
         queueAfterAsyncOwner();
         return;
       }

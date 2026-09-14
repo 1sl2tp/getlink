@@ -10,6 +10,6 @@ class MobileInteractionOwner(unittest.TestCase):
         self.assertIn("order:99!important", CSS)
         self.assertIn("pointer-events:auto!important", CSS)
     def test_customer_search_calls_original_picker_owner(self):
-        self.assertIn('data-order-customer-for="mobileUserSendOrder"', JS)
-        self.assertIn('(source||fallback)?.click()', JS)
+        self.assertIn('window.GETLINK_ORDER_UI?.openCustomerPicker', JS)
+        self.assertNotIn('(source||fallback)?.click()', JS)
 if __name__=="__main__": unittest.main()

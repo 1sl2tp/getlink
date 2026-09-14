@@ -269,3 +269,39 @@
     pointer-events:auto!important;
   }
 }
+
+
+/* MOBILE_OWNER_AUDIT_20260914 */
+@media(max-width:639px){
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-filters{
+    display:block!important;
+    flex:0 0 auto!important;
+    min-height:0!important;
+    background:#fff!important;
+    border-bottom:1px solid #e7eaed!important;
+  }
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-filters{display:none!important}
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-filters .order-report-controls{
+    margin:0!important;
+    border-bottom:0!important;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-list,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-list{
+    overflow-y:auto!important;
+  }
+  #mobileUserWork[data-taphoa-view="debts"] .debt-customer-card{
+    display:grid!important;
+    grid-template-columns:24px minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    column-gap:7px!important;
+    align-items:center!important;
+  }
+  .debt-customer-index{
+    grid-column:1;grid-row:1/3;align-self:center;text-align:center;
+    font-size:10px;font-weight:700;color:#87919d;
+  }
+  .debt-customer-copy{grid-column:2;grid-row:1/3;min-width:0}
+  .debt-customer-copy strong,.debt-customer-copy small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .debt-customer-age{display:none}
+  #mobileUserWork[data-taphoa-view="debts"] .debt-customer-card>b{grid-column:3;grid-row:1/3}
+}

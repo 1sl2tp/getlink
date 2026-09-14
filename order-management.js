@@ -409,6 +409,7 @@
           </header>
           <div id="orderManagerGate" class="order-manager-message" hidden></div>
           <div id="orderManagerBody" class="order-manager-body">
+            <div id="orderManagerFilters" class="order-manager-filters"></div>
             <nav id="orderManagerTabs" class="order-manager-tabs" aria-label="Trạng thái đơn">
               <button type="button" data-order-status="pending" class="active">Đơn tạm <small>0</small></button>
               <button type="button" data-order-status="delivered">Đã giao <small>0</small></button>
@@ -859,17 +860,29 @@
     const results=ensureOrderReportResultsHost(list);
     results.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
   }
-  function ensureOrderReportResultsHost(list){
-    let controls=list.querySelector(":scope > .order-report-controls");
-    if(!controls){
-      list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
-      controls=list.querySelector(":scope > .order-report-controls");
+  function orderReportControlsHost(){
+    const list=document.getElementById("orderManagerList");
+    if(!list)return null;
+    if(window.matchMedia("(max-width:639px)").matches){
+      return document.getElementById("orderManagerFilters")||list;
     }
+    return list;
+  }
+  function ensureOrderReportResultsHost(list){
+    const controlsHost=orderReportControlsHost()||list;
+    let controls=document.querySelector("#orderManager .order-report-controls");
+    if(!controls){
+      controlsHost.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
+      controls=controlsHost.querySelector(":scope > .order-report-controls");
+    }else if(controls.parentElement!==controlsHost){
+      controlsHost.insertAdjacentElement("afterbegin",controls);
+    }
+    document.querySelectorAll("#orderManager .order-report-controls").forEach(node=>{if(node!==controls)node.remove();});
     let results=list.querySelector(":scope > .order-report-results");
     if(!results){
       results=document.createElement("div");
       results.className="order-report-results";
-      controls?.insertAdjacentElement("afterend",results);
+      list.appendChild(results);
     }
     return results;
   }
@@ -891,6 +904,11 @@
     return data;
   }
   function debtEventSign(row){return row.direction==="decrease"?"−":"+"}
+  function debtAgeDays(value){
+    const at=new Date(value||0);
+    if(!Number.isFinite(at.getTime()))return null;
+    return Math.max(0,Math.floor((Date.now()-at.getTime())/86400000));
+  }
   function renderDebtSummaries(){
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
@@ -900,11 +918,16 @@
     if(empty){empty.hidden=debtSummaries.length!==0;empty.textContent="Chưa có khách hàng hoặc công nợ.";}
     if(!list)return;
     const recent=sortDebtCustomersNewestFirst(debtSummaries);
-    list.innerHTML=recent.map(row=>`
+    list.innerHTML=recent.map((row,index)=>{
+      const age=debtAgeDays(row.lastOccurredAt);
+      return `
       <button type="button" class="debt-customer-card" data-debt-customer-id="${escapeHtml(row.customerId)}">
-        <span><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.username?"@"+escapeHtml(row.username):""}${row.lastOccurredAt?" · "+escapeHtml(dateTime(row.lastOccurredAt)):""}</small></span>
+        <span class="debt-customer-index">${index+1}</span>
+        <span class="debt-customer-copy"><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.username?"@"+escapeHtml(row.username):""}${row.lastOccurredAt?" · "+escapeHtml(dateTime(row.lastOccurredAt)):""}${age===null?"":" · "+age+" ngày"}</small></span>
+        <span class="debt-customer-age">${age===null?"":age+" ngày"}</span>
         <b>${escapeHtml(compactMoney(row.balanceVnd))}</b>
-      </button>`).join("");
+      </button>`;
+    }).join("");
   }
   function paymentForm(customerId){
     if(currentRole()!=="admin")return "";
@@ -1306,6 +1329,7 @@
   });
 
   // TAPHOA_FULL_ORDER_DEBT_PARITY_20260911
+  window.GETLINK_ORDER_UI=Object.freeze({openCustomerPicker,closeCustomerPicker});
   window.GETLINK_ACCESS_CONTEXT={states:ACCESS_STATES,snapshot:accessSnapshot};
   injectUi();
   emitAccessChange();

@@ -56,6 +56,7 @@
     const compact=Math.round(n/500)*.5;
     return new Intl.NumberFormat("vi-VN",{minimumFractionDigits:0,maximumFractionDigits:1}).format(compact);
   }
+  function parseCompactVnd(value){const text=String(value??"").trim().replace(/\s+/g,"").replace(",",".");if(!/^\d+(?:\.\d)?$/.test(text))return null;const compact=Number(text);if(!Number.isFinite(compact)||compact<=0)return null;return Math.round(compact*2)/2*1000;}
   function dateTime(value){
     const d=new Date(value||0);
     if(!Number.isFinite(d.getTime()))return "";
@@ -945,9 +946,9 @@
     }).join("");
   }
   function paymentForm(customerId){
-    if(currentRole()!=="admin")return "";
+    if(currentRole()!=="admin"||Number(debtDetail?.balanceVnd||0)<=0)return "";
     return `<form class="debt-payment-form" data-debt-payment-form data-customer-id="${escapeHtml(customerId)}">
-      <input name="amountVnd" inputmode="numeric" autocomplete="off" placeholder="Số tiền khách trả" aria-label="Số tiền khách trả">
+      <input name="amountVnd" inputmode="decimal" autocomplete="off" placeholder="Số tiền khách trả (nghìn)" aria-label="Số tiền khách trả, đơn vị nghìn">
       <input name="note" autocomplete="off" placeholder="Ghi chú (không bắt buộc)" aria-label="Ghi chú">
       <button type="submit">Ghi nhận thanh toán</button>
     </form>`;
@@ -1266,8 +1267,7 @@
   async function submitPayment(form){
     if(busy||currentRole()!=="admin")return;
     const customerId=String(form.dataset.customerId||"");
-    const amountText=String(form.elements.amountVnd?.value||"").replace(/[^0-9]/g,"");
-    const amountVnd=Number(amountText||0);
+    const amountVnd=parseCompactVnd(form.elements.amountVnd?.value);
     const note=String(form.elements.note?.value||"").trim();
     if(!Number.isFinite(amountVnd)||amountVnd<=0){alert("Nhập số tiền khách trả.");return;}
     busy=true;

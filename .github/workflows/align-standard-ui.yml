@@ -1,0 +1,113 @@
+name: Align desktop standard UI
+
+on:
+  push:
+    branches: [feature/taphoa-desktop-layout-v2]
+    paths:
+      - .github/workflows/align-standard-ui.yml
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-desktop-layout-v2
+          fetch-depth: 0
+
+      - name: Align desktop regions to standard flow
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text()
+
+          def write(path, text):
+              Path(path).write_text(text)
+
+          def replace_between(text, start, end, replacement, label):
+              a=text.find(start)
+              if a<0:
+                  raise SystemExit(f"missing start for {label}: {start}")
+              b=text.find(end,a+len(start))
+              if b<0:
+                  raise SystemExit(f"missing end for {label}: {end}")
+              return text[:a]+replacement+text[b:]
+
+          # BÁN: customer is the first workflow region; cart stays permanently visible on PC.
+          path="taphoa-desktop-sales.js"
+          s=read(path)
+          sales_categories='''function renderCategories(){if(!slots?.left)return;const sources=window.TaphoaDesktopData?.supplierSources?.()||[],total=window.TaphoaDesktopData?.productCount||0,a=window.TaphoaDesktopData?.readAuth?.();slots.left.innerHTML='<div class="taphoa-sales-customer-rail">'+customerControl(a)+'</div><div class="taphoa-column-head"><strong>Nguồn hàng</strong><small>'+total+' sản phẩm</small></div><div class="taphoa-left-list"><button type="button" class="taphoa-left-item '+(!state.sourceKey?'active':'')+'" data-sales-source=""><span>Tất cả</span><small>'+total+'</small></button>'+sources.map(s=>'<button type="button" class="taphoa-left-item '+(state.sourceKey===s.key?'active':'')+'" data-sales-source="'+attr(s.key)+'"><span>'+esc(s.name)+'</span><small>'+s.count+'</small></button>').join('')+'</div>'}\n  '''
+          s=replace_between(s,"function renderCategories()","function rowMarkup(row)",sales_categories,"sales categories")
+          sales_detail='''function renderDetail(){if(!slots?.detail)return;const a=window.TaphoaDesktopData?.readAuth?.(),items=selectedItems(),products=items.reduce((s,i)=>s+i.qty,0),total=items.reduce((s,i)=>s+i.qty*i.price,0),editing=Boolean(state.editingOrder);slots.detail.innerHTML='<section class="taphoa-detail-frame taphoa-sales-detail"><header class="taphoa-detail-head"><div><strong>'+(editing?'Sửa đơn':'Đơn đang lên')+'</strong><small>'+items.length+' dòng · '+products+' sản phẩm</small></div><b>'+esc(money(total))+'</b></header><div class="taphoa-detail-scroll"><div class="taphoa-cart-lines">'+(items.length?items.map((i,x)=>'<div class="taphoa-cart-line"><span><small>'+(x+1)+'.</small><strong>'+esc(name(i.row))+'</strong><input class="taphoa-cart-note" data-sales-cart-note="'+attr(i.key)+'" maxlength="160" autocomplete="off" placeholder="Ghi chú cho dòng hàng" value="'+attr(i.note)+'"></span><span>'+i.qty+' × '+esc(money(i.price))+'</span><b>'+esc(money(i.qty*i.price))+'</b></div>').join(''):'<div class="taphoa-empty">Chưa chọn sản phẩm.</div>')+'</div></div><footer class="taphoa-detail-actions">'+(editing?'<button type="button" data-sales-cancel-edit>Hủy</button><button type="button" data-sales-update '+(!items.length||state.busy?'disabled':'')+'>Cập nhật</button>':'<button type="button" data-sales-clear '+(!items.length?'disabled':'')+'>Xóa hàng</button>'+(a?.account?.role==='admin'?'<button type="button" data-sales-quick '+(!items.length||!state.selectedCustomerId||state.busy?'disabled':'')+'>Bán nhanh</button>':'')+'<button type="button" data-sales-submit '+(!items.length||(a?.account?.role==='admin'&&!state.selectedCustomerId)||state.busy?'disabled':'')+'>Gửi đơn</button>')+'</footer><div class="taphoa-action-status" aria-live="polite">'+esc(state.status)+'</div></section>'}\n  '''
+          s=replace_between(s,"function renderDetail()","function updateQtyRow",sales_detail,"sales detail")
+          sales_bind='''function bind(){if(bound||!slots)return;bound=true;slots.left.addEventListener("click",e=>{const b=e.target.closest?.("[data-sales-source]");if(!b)return;state.sourceKey=String(b.dataset.salesSource||"");state.visible=PAGE_SIZE;renderCategories();renderMasterResults()});slots.left.addEventListener("change",e=>{const c=e.target.closest?.("[data-sales-customer]");if(!c)return;state.selectedCustomerId=String(c.value||"");if(state.selectedCustomerId)sessionStorage.setItem(CUSTOMER_KEY,state.selectedCustomerId);else sessionStorage.removeItem(CUSTOMER_KEY);renderDetail()});slots.master.addEventListener("input",e=>{if(e.target.id==="taphoaSalesSearch"){state.query=String(e.target.value||"");state.visible=PAGE_SIZE;renderMasterResults()}});slots.master.addEventListener("click",e=>{const b=e.target.closest?.("[data-sales-qty]");if(!b)return;const row=b.closest("[data-sales-product]");if(row)changeQty(String(row.dataset.salesProduct||""),Number(b.dataset.salesQty)||0)});slots.master.addEventListener("scroll",()=>{if(slots.master.scrollHeight-slots.master.scrollTop-slots.master.clientHeight>260||state.visible>=state.rows.length)return;state.visible=Math.min(state.rows.length,state.visible+PAGE_SIZE);renderMasterResults({append:true})},{passive:true});slots.master.addEventListener("submit",e=>{const f=e.target.closest?.("[data-sales-manual-add]");if(f){e.preventDefault();void addProduct(f)}});slots.detail.addEventListener("input",e=>{const note=e.target.closest?.("[data-sales-cart-note]");if(note)setNote(String(note.dataset.salesCartNote||""),note.value,{render:false})});slots.detail.addEventListener("click",e=>{if(e.target.closest?.("[data-sales-clear]"))clearCart();else if(e.target.closest?.("[data-sales-submit]"))void submit("pending");else if(e.target.closest?.("[data-sales-quick]"))void submit("quick");else if(e.target.closest?.("[data-sales-update]"))void updateEditing();else if(e.target.closest?.("[data-sales-cancel-edit]"))cancelEdit()})}\n  '''
+          s=replace_between(s,"function bind()","function mount(s)",sales_bind,"sales bind")
+          write(path,s)
+
+          # ĐƠN: restore PC supporting source/summary column; do not duplicate source as a dropdown.
+          path="taphoa-desktop-orders.js"
+          s=read(path)
+          order_source='''function renderSourceRail(){if(!slots?.left)return;if(!sourceNames.size)refreshSourceNames();const rows=baseRows();slots.left.innerHTML='<div class="taphoa-column-head"><strong>Theo nguồn</strong><small>'+rows.length+' đơn</small></div><div class="taphoa-left-list"><button type="button" class="taphoa-left-item '+(!state.source?'active':'')+'" data-td-order-source=""><span>Tất cả</span><small>'+rows.length+'</small></button>'+stats().map(x=>'<button type="button" class="taphoa-left-item '+(state.source===x.key?'active':'')+'" data-td-order-source="'+attr(x.key)+'"><span><strong>'+esc(sourceLabel(x.key))+'</strong><small>'+x.orders+' đơn · '+x.products+' SP</small></span><b>'+esc(money(x.revenue))+'</b></button>').join('')+'</div>'}\n  '''
+          s=replace_between(s,"function renderSourceRail()","function sourceReportMarkup()",order_source,"orders source rail")
+          order_rows='''function renderOrderRows(){if(!slots?.master)return;const rows=visibleRows();normalizeSelection(rows);const list=slots.master.querySelector(".taphoa-order-list");if(!list){renderOrderList();return}list.innerHTML=orderBodyMarkup(rows);updateSummary(rows);updateSourceReportSlot();renderOrderDetail(state.selectedId)}\n  '''
+          s=replace_between(s,"function renderOrderRows()","function timeOptions()",order_rows,"orders rows")
+          order_list='''function renderOrderList(){if(!slots?.master)return;const rows=visibleRows();normalizeSelection(rows);slots.master.innerHTML='<section class="taphoa-master-frame taphoa-orders-master"><header class="taphoa-order-toolbar"><nav class="taphoa-order-tabs">'+["pending","delivered","returned"].map(s=>'<button type="button" data-td-order-status="'+s+'" class="'+(state.status===s?'active':'')+'">'+statusLabel(s)+'</button>').join('')+'</nav><div class="taphoa-order-filter-row"><input id="taphoaOrderSearch" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Tìm khách, mã đơn, sản phẩm" value="'+attr(state.query)+'"><select id="taphoaOrderTime">'+timeOptions()+'</select></div><div class="taphoa-order-custom-range" '+(state.timePreset==='custom'?'':'hidden')+'><label><small>Từ ngày</small><input id="taphoaOrderFrom" type="date" value="'+attr(state.from)+'"></label><label><small>Đến ngày</small><input id="taphoaOrderTo" type="date" value="'+attr(state.to)+'"></label></div><div class="taphoa-source-report-slot">'+sourceReportMarkup()+'</div><div class="taphoa-order-list-summary"></div></header><div class="taphoa-order-list">'+orderBodyMarkup(rows)+'</div></section>';updateSummary(rows);renderOrderDetail(state.selectedId)}\n  '''
+          s=replace_between(s,"function renderOrderList()","function actionMarkup",order_list,"orders list")
+          order_bind='''function bind(){\n    if(bound||!slots)return;bound=true;\n    slots.left.addEventListener("click",e=>{const b=e.target.closest?.("[data-td-order-source]");if(!b)return;state.source=String(b.dataset.tdOrderSource||"");state.sourceMode="orders";state.selectedId="";renderSourceRail();renderOrderRows()});\n    slots.master.addEventListener("click",e=>{const mode=e.target.closest?.("[data-td-source-mode]");if(mode){state.sourceMode=String(mode.dataset.tdSourceMode||"orders");renderOrderRows();return}if(e.target.closest?.("[data-td-source-share]")){void shareSourceReport();return}const batch=e.target.closest?.("[data-td-order-batch]");if(batch){void batchCurrentOrders(String(batch.dataset.tdOrderBatch||""));return}const tab=e.target.closest?.("[data-td-order-status]");if(tab){state.status=String(tab.dataset.tdOrderStatus||"pending");state.source="";state.sourceMode="orders";state.selectedId="";slots.master.querySelectorAll("[data-td-order-status]").forEach(b=>b.classList.toggle("active",b===tab));renderSourceRail();renderOrderRows();return}const row=e.target.closest?.("[data-td-order-id]");if(row)selectOrder(String(row.dataset.tdOrderId||""))});\n    slots.master.addEventListener("input",e=>{if(e.target.id!=="taphoaOrderSearch")return;state.query=String(e.target.value||"");state.source="";state.sourceMode="orders";state.selectedId="";renderSourceRail();renderOrderRows()});\n    slots.master.addEventListener("change",e=>{if(e.target.id==="taphoaOrderTime"){state.timePreset=String(e.target.value||"today");state.source="";state.sourceMode="orders";state.selectedId="";const custom=slots.master.querySelector(".taphoa-order-custom-range");if(custom)custom.hidden=state.timePreset!=="custom";renderSourceRail();renderOrderRows();return}if(e.target.id==="taphoaOrderFrom"){state.from=String(e.target.value||"");if(state.from&&state.to&&state.from>state.to){state.to=state.from;const to=slots.master.querySelector("#taphoaOrderTo");if(to)to.value=state.to}state.source="";state.sourceMode="orders";state.selectedId="";renderSourceRail();renderOrderRows();return}if(e.target.id==="taphoaOrderTo"){state.to=String(e.target.value||"");if(state.from&&state.to&&state.from>state.to){state.from=state.to;const from=slots.master.querySelector("#taphoaOrderFrom");if(from)from.value=state.from}state.source="";state.sourceMode="orders";state.selectedId="";renderSourceRail();renderOrderRows()}});\n    slots.detail.addEventListener("click",e=>{const b=e.target.closest?.("[data-td-order-action]");if(!b)return;const o=state.orders.find(x=>String(x.id)===state.selectedId);void mutate(String(b.dataset.tdOrderAction||""),o)});\n    slots.detail.addEventListener("change",e=>{const c=e.target.closest?.("[data-td-order-customer]");if(c)void changeCustomer(String(c.dataset.tdOrderId||""),String(c.value||""))});\n    document.addEventListener("taphoa-desktop-orders-changed",()=>{if(active)void refresh()})\n  }\n  '''
+          s=replace_between(s,"function bind()","function mount(s)",order_bind,"orders bind")
+          write(path,s)
+
+          # CÔNG NỢ: dashboard totals + real quick receipt (existing payments API) before drill-down.
+          path="taphoa-desktop-debts.js"
+          s=read(path)
+          debt_customers='''function debtTotals(){const rows=Array.isArray(state.summaries)?state.summaries:[],debtRows=rows.filter(r=>Number(r?.balanceVnd||0)>0),creditRows=rows.filter(r=>Number(r?.balanceVnd||0)<0);return{debt:debtRows.reduce((sum,r)=>sum+Number(r.balanceVnd||0),0),credit:creditRows.reduce((sum,r)=>sum+Math.abs(Number(r.balanceVnd||0)),0),debtCount:debtRows.length,creditCount:creditRows.length}}\n  function debtOverviewMarkup(){if(!isAdmin())return"";const totals=debtTotals(),owing=visibleDebtCustomers().filter(r=>Number(r?.balanceVnd||0)>0);return '<section class="taphoa-debt-overview"><div class="taphoa-debt-overview-cards"><article class="taphoa-debt-overview-card"><small>TỔNG NỢ</small><strong>'+esc(money(totals.debt))+'</strong><span>'+totals.debtCount+' khách còn nợ</span></article><article class="taphoa-debt-overview-card credit"><small>TỔNG DƯ TIỀN</small><strong>'+esc(money(totals.credit))+'</strong><span>'+totals.creditCount+' khách dư</span></article></div><form class="taphoa-debt-quick-payment" data-td-debt-quick-payment><strong>Lập phiếu nhanh</strong><select name="customerId" required><option value="">Tìm khách hàng...</option>'+owing.map(r=>'<option value="'+attr(r.customerId)+'">'+esc(r.customerName||r.username||"Khách hàng")+' · '+esc(money(r.balanceVnd))+'</option>').join('')+'</select><input name="amountVnd" inputmode="numeric" autocomplete="off" placeholder="Số tiền..." required><button type="submit" '+(!owing.length?'disabled':'')+'>Thu</button></form><small class="taphoa-debt-quick-status">'+esc(state.statusText)+'</small></section>'}\n  function renderCustomers(){if(!slots?.left)return;const rows=visibleDebtCustomers(),total=rows.reduce((s,r)=>s+Number(r?.balanceVnd||0),0);slots.left.innerHTML=debtOverviewMarkup()+'<div class="taphoa-column-head"><strong>Còn nợ / phát sinh</strong><small>'+rows.length+' khách · '+esc(money(total))+'</small></div><div class="taphoa-left-list">'+(rows.length?rows.map(r=>'<button type="button" class="taphoa-left-item taphoa-debt-customer '+(String(r.customerId)===state.customerId?'active':'')+'" data-td-debt-customer="'+attr(r.customerId)+'"><span><strong>'+esc(r.customerName||r.username||"Khách hàng")+'</strong><small>'+(r.lastOccurredAt?esc(dateTime(r.lastOccurredAt)):'Chưa giao dịch')+'</small></span><b>'+esc(money(r.balanceVnd))+'</b></button>').join(''):'<div class="taphoa-empty">Không có khách hàng đang phát sinh công nợ.</div>')+'</div>'}\n\n  '''
+          s=replace_between(s,"function renderCustomers()","function txnMarkup",debt_customers,"debt customers")
+          marker='  async function payment(form)'
+          i=s.find(marker)
+          if i<0:
+              raise SystemExit("missing debt payment marker")
+          quick='''  async function quickPayment(form){if(state.busy||!isAdmin())return;const customerId=String(form.elements.customerId?.value||""),amount=Number(String(form.elements.amountVnd?.value||"").replace(/\\D/g,""));if(!customerId||!amount){state.statusText="Chọn khách và nhập số tiền.";renderCustomers();return}state.busy=true;state.statusText="Đang thu tiền...";renderCustomers();try{await window.TaphoaDesktopData.orderRequest("/debts/"+encodeURIComponent(customerId)+"/payments",{method:"POST",body:JSON.stringify({amountVnd:Math.round(amount),note:"Thu tiền nhanh"})});state.busy=false;state.customerId=customerId;state.statusText="Đã ghi nhận thanh toán.";await refresh();return}catch(e){state.statusText=String(e?.message||e);renderCustomers()}finally{state.busy=false}}\n\n'''
+          s=s[:i]+quick+s[i:]
+          debt_bind='''function bind(){if(bound||!slots)return;bound=true;slots.left.addEventListener("click",e=>{const b=e.target.closest?.("[data-td-debt-customer]");if(b)void loadDetail(String(b.dataset.tdDebtCustomer||""))});slots.left.addEventListener("submit",e=>{const f=e.target.closest?.("[data-td-debt-quick-payment]");if(f){e.preventDefault();void quickPayment(f)}});slots.master.addEventListener("click",e=>{const order=e.target.closest?.("[data-td-debt-order]");if(order){void loadLinkedOrder(String(order.dataset.tdDebtOrder||""));return}const b=e.target.closest?.("[data-td-debt-txn]");if(b)selectTxn(String(b.dataset.tdDebtTxn||""))});slots.detail.addEventListener("click",e=>{if(e.target.closest?.("[data-td-debt-order-back]")){state.linkedOrder=null;state.statusText="";renderDetail(state.selectedTxnId);return}const action=e.target.closest?.("[data-td-order-action]");if(action&&state.linkedOrder){void window.TaphoaDesktopOrders?.performAction?.(String(action.dataset.tdOrderAction||""),state.linkedOrder);return}});slots.detail.addEventListener("submit",e=>{const f=e.target.closest?.("[data-td-debt-payment]");if(f){e.preventDefault();void payment(f)}});document.addEventListener("taphoa-desktop-debts-changed",()=>{if(active)void refresh()});document.addEventListener("taphoa-desktop-orders-changed",()=>{if(active)void refresh()})}\n  '''
+          s=replace_between(s,"function bind()","function mount(s)",debt_bind,"debt bind")
+          write(path,s)
+
+          # Desktop geometry: all three supporting columns remain visible where the container allows.
+          path="taphoa-desktop-workspace.css"
+          s=read(path)
+          s=re.sub(r'''\n  #taphoaDesktopWorkspace\[data-view="orders"\]\{\n    grid-template-columns:[^\n]+;\n  \}\n  #taphoaDesktopWorkspace\[data-view="orders"\] #taphoaLeftRail\{display:none\}\n  #taphoaDesktopWorkspace\[data-view="orders"\] #taphoaMasterList\{grid-column:1\}\n  #taphoaDesktopWorkspace\[data-view="orders"\] #taphoaDetailPane\{grid-column:2;border-left:0\}\n''','\n',s,count=1)
+          s=re.sub(r'''\n    #taphoaDesktopWorkspace\[data-view="orders"\]\{grid-template-columns:[^\n]+\}\n''','\n',s,count=1)
+          extra='''\n@media (min-width:1000px){\n  #taphoaDesktopWorkspace[data-view="debts"]{grid-template-columns:minmax(260px,300px) minmax(340px,.9fr) minmax(360px,1fr)}\n  .taphoa-sales-customer-rail{padding:10px;border-bottom:1px solid #dfe6e2;background:#eef4f8}\n  .taphoa-sales-customer-rail .taphoa-customer-static,.taphoa-sales-customer-rail .taphoa-customer-select{display:grid;gap:5px}\n  .taphoa-sales-customer-rail .taphoa-customer-static small,.taphoa-sales-customer-rail .taphoa-customer-select small{font-size:11px;color:#64736b;font-weight:700}\n  .taphoa-sales-customer-rail .taphoa-customer-static strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n  .taphoa-sales-customer-rail .taphoa-customer-select select{width:100%;height:36px;border:1px solid #cfdad4;border-radius:7px;background:#fff;padding:0 8px;font:inherit;font-size:12px}\n  .taphoa-debt-overview{padding:9px;border-bottom:1px solid #d6e0e8;background:linear-gradient(150deg,#eef4ff,#eef8f4);display:grid;gap:8px}\n  .taphoa-debt-overview-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}\n  .taphoa-debt-overview-card{min-width:0;padding:8px;border:1px solid rgba(70,101,148,.16);border-radius:8px;background:rgba(255,255,255,.74);display:grid;gap:2px}\n  .taphoa-debt-overview-card small{font-size:9.5px;font-weight:800;color:#7d6730}\n  .taphoa-debt-overview-card.credit small{color:#3c7955}\n  .taphoa-debt-overview-card strong{font-size:15px;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}\n  .taphoa-debt-overview-card span{font-size:10px;color:#718078;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n  .taphoa-debt-quick-payment{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px}\n  .taphoa-debt-quick-payment>strong,.taphoa-debt-quick-payment>select{grid-column:1/-1}\n  .taphoa-debt-quick-payment>strong{font-size:11px}\n  .taphoa-debt-quick-payment select,.taphoa-debt-quick-payment input,.taphoa-debt-quick-payment button{min-width:0;height:34px;border:1px solid #ccd9d2;border-radius:6px;background:#fff;padding:0 7px;font:inherit;font-size:11px}\n  .taphoa-debt-quick-payment button{min-width:54px;background:#397b43;color:#fff;border-color:#397b43;font-weight:800;cursor:pointer}\n  .taphoa-debt-quick-payment button:disabled{opacity:.45;cursor:default}\n  .taphoa-debt-quick-status{min-height:14px;font-size:10px;color:#66746d}\n}\n@media (min-width:1000px) and (max-width:1180px){\n  #taphoaDesktopWorkspace[data-view="debts"]{grid-template-columns:minmax(230px,250px) minmax(300px,.9fr) minmax(330px,1fr)}\n}\n'''
+          s=s.rstrip()+"\n"+extra
+          write(path,s)
+          PY
+
+      - name: Verify standard-flow contracts
+        run: |
+          node --check taphoa-desktop-sales.js
+          node --check taphoa-desktop-orders.js
+          node --check taphoa-desktop-debts.js
+          node tests/test_taphoa_desktop_layout_v2.mjs
+          node tests/test_taphoa_desktop_hot_paths.mjs
+
+      - name: Stamp static build
+        run: |
+          python tools/stamp_static_build.py
+          python tools/stamp_static_build.py --check
+
+      - name: Commit aligned desktop flow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/align-standard-ui.yml
+          git add taphoa-desktop-sales.js taphoa-desktop-orders.js taphoa-desktop-debts.js taphoa-desktop-workspace.css tests/test_taphoa_desktop_layout_v2.mjs index.html version.json
+          git commit -m "ui: align desktop workspace with standard flow"
+          git push origin HEAD:feature/taphoa-desktop-layout-v2

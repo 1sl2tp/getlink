@@ -284,7 +284,7 @@
     queueSync();queueSync(80);queueSync(320);queueSync(1000);
   }
 
-  const IFRAME_TAP_SELECTOR="#mobileUserWork button,#mobileUserWork [role=\"button\"],#mobileStandardCartSheet button,#orderCustomerPicker button";
+  const IFRAME_TAP_SELECTOR="#mobileUserWork button,#mobileUserWork [role=\"button\"],#mobileUserWork .order-card[data-order-id],#mobileStandardCartSheet button,#orderCustomerPicker button";
   let iframePointerTap=null;
   let iframeSyntheticGuard=null;
   function iframeTapFallbackEnabled(){return isMobile()&&window.parent!==window}

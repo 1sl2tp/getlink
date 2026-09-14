@@ -1,0 +1,55 @@
+name: Quick mobile interaction owner fix
+permissions:
+  contents: write
+on:
+  push:
+    branches: [main]
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch nav and customer interaction ownership
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-mobile-standard.js')
+          s=p.read_text('utf-8')
+          old='''  function moveWorkNavToBottom(){\n    const host=root();\n    const nav=host?.querySelector(".taphoa-work-nav.mobile");\n    if(!host||!nav)return false;\n    if(nav.parentElement!==host||nav!==host.lastElementChild)host.appendChild(nav);\n    return true;\n  }'''
+          new='''  function moveWorkNavToBottom(){\n    const host=root();\n    const nav=host?.querySelector(".taphoa-work-nav.mobile");\n    if(!host||!nav)return false;\n    nav.classList.add("mobile-standard-nav-bottom");\n    return true;\n  }'''
+          if old not in s: raise SystemExit('nav reparent anchor not found')
+          s=s.replace(old,new,1)
+          old2='''      if(name==="customer-search"){\n        event.preventDefault();\n        document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]")?.click();\n        queueAfterAsyncOwner();\n        return;\n      }'''
+          new2='''      if(name==="customer-search"){\n        event.preventDefault();\n        const source=document.querySelector('[data-order-customer-for="mobileUserSendOrder"][data-order-customer-select]')||document.querySelector('[data-order-customer-for="mobileUserSendOrder"]');\n        const fallback=document.querySelector("#"+CUSTOMER_ID+" [data-order-customer-select]");\n        (source||fallback)?.click();\n        queueAfterAsyncOwner();\n        return;\n      }'''
+          if old2 not in s: raise SystemExit('customer search anchor not found')
+          p.write_text(s.replace(old2,new2,1),'utf-8')
+
+          c=Path('taphoa-mobile-standard.css')
+          css=c.read_text('utf-8')
+          marker='/* Mobile interaction owner: preserve original nav DOM and only place it visually at the bottom. */'
+          block='''\n\n/* Mobile interaction owner: preserve original nav DOM and only place it visually at the bottom. */\n@media(max-width:639px){\n  #mobileUserWork>.taphoa-work-nav.mobile,\n  #mobileUserWork .taphoa-work-nav.mobile.mobile-standard-nav-bottom{\n    order:99!important;\n    flex:0 0 auto!important;\n    pointer-events:auto!important;\n    touch-action:manipulation!important;\n  }\n  #mobileUserWork .taphoa-work-nav.mobile button{\n    pointer-events:auto!important;\n    touch-action:manipulation!important;\n  }\n}\n'''
+          if marker not in css:c.write_text(css+block,'utf-8')
+
+          t=Path('tests/test_mobile_interaction_owner.py')
+          t.write_text('''from pathlib import Path\nimport unittest\nROOT=Path(__file__).resolve().parents[1]\nJS=ROOT.joinpath("taphoa-mobile-standard.js").read_text("utf-8")\nCSS=ROOT.joinpath("taphoa-mobile-standard.css").read_text("utf-8")\nclass MobileInteractionOwner(unittest.TestCase):\n    def test_nav_is_not_reparented(self):\n        self.assertNotIn("host.appendChild(nav)", JS)\n        self.assertIn('nav.classList.add("mobile-standard-nav-bottom")', JS)\n        self.assertIn("order:99!important", CSS)\n        self.assertIn("pointer-events:auto!important", CSS)\n    def test_customer_search_calls_original_picker_owner(self):\n        self.assertIn('data-order-customer-for="mobileUserSendOrder"', JS)\n        self.assertIn('(source||fallback)?.click()', JS)\nif __name__=="__main__": unittest.main()\n''','utf-8')
+          PY
+      - name: Stamp and verify focused fix
+        run: |
+          python tools/stamp_static_build.py
+          python tools/stamp_static_build.py --check
+          python -m unittest tests.test_mobile_interaction_owner -v
+          python -m unittest tests.test_mobile_iframe_touch_scroll -v
+          python -m unittest tests.test_mobile_standard_document_layout -v
+          node --check taphoa-mobile-standard.js
+      - name: Commit and self-remove helper
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm -f .github/workflows/quick-mobile-interaction-owner-fix.yml
+          git add taphoa-mobile-standard.js taphoa-mobile-standard.css tests/test_mobile_interaction_owner.py index.html version.json
+          git commit -m 'fix: restore mobile nav and customer interactions'
+          git push origin HEAD:main

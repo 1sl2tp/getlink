@@ -65,6 +65,7 @@
 - [x] **Step 3: Place Bán/Đơn/Công nợ at the bottom** of the Tạp hóa mobile workspace, not between filters and product rows.
 - [x] **Step 4: Make Orders document-like**: search/time first, show `Đã giao` then `Đơn tạm`, de-emphasize/hide `Đã hoàn` on mobile, and keep each list row compact with customer/order/date/amount.
 - [x] **Step 5: Make Debts document-like**: search + compact summary/customer list first; opening a customer shows timeline/history and linked order detail; payment form remains contextual.
+- [x] **Step 6: Match page-2/page-5 source order exactly**: customer row is `Tìm khách: tên / SĐT / mã | khách đã chọn`; Orders physically place search/time controls before `Đã giao | Đơn tạm`. This refinement was locked RED in Verify GETLINK #2039, then the one-time fidelity patch passed focused contract + syntax + existing mobile V46 checks.
 
 ### Task 4: Bootstrap and static build ownership
 
@@ -79,7 +80,7 @@
 
 - [x] **Step 1: Load the new CSS and JS after `order-management`** so existing data/action owners initialize first.
 - [x] **Step 2: Add both assets to `ASSETS` and version metadata.**
-- [x] **Step 3: Stamp the build** and verify `python tools/stamp_static_build.py --check` passes. Build: `7162b5ccdf527efaf1140b8d4cf0790fd47931f6aa42f78cbf13f11e93a8c4f0`.
+- [x] **Step 3: Stamp the build** and verify `python tools/stamp_static_build.py --check` passes. Final candidate build after page-2/page-5 fidelity refinement: `716e8550ffabcccd731c391a0d6e9b2b2c9fca8cce2f8441e91e00bcf142ca96`.
 
 ### Task 5: Regression and integration gate
 
@@ -91,7 +92,7 @@
 - Produces: mergeable PR only after exact-head verification.
 
 - [x] **Step 1: Run focused mobile contract test.** Focused contract + existing mobile V46 contract + JS syntax were green in the one-time patch gate.
-- [ ] **Step 2: Run existing mobile contracts, order/debt contracts, JS syntax checks, and static build check.**
-- [ ] **Step 3: Run the repository Verify GETLINK workflow on the exact final head.**
-- [ ] **Step 4: Review the PR diff for desktop/backend scope leakage.**
+- [x] **Step 2: Run existing mobile contracts, order/debt contracts, JS syntax checks, and static build check.** Full Verify GETLINK #2038 was green before the final fidelity refinement; the final fidelity patch re-ran focused + V46 + syntax + build stamp successfully.
+- [ ] **Step 3: Run the repository Verify GETLINK workflow on the exact final user-authored head after the fidelity refinement.**
+- [x] **Step 4: Review the PR diff for desktop/backend scope leakage.** Changed runtime scope is mobile presentation/bootstrap/build metadata only; no `supabase/**` or desktop runtime module is modified.
 - [ ] **Step 5: Merge only after the exact-head gate is green; then verify the merge commit and Pages deployment before calling production updated.**

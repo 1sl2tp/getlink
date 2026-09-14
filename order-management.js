@@ -41,6 +41,7 @@
   let selectedCustomerId=String(sessionStorage.getItem(SELECTED_CUSTOMER_KEY)||"");
   let busy=false;
   let pickerBusy=false;
+  let orderSelectMode=false;
   let bridgeSeq=0;
   let chatWorkContext=null;
   let pendingChatWorkContext=null;
@@ -293,6 +294,7 @@
       '<button type="button" data-taphoa-work-view="sales">Bán</button>'+
       '<button type="button" data-taphoa-work-view="orders">Đơn</button>'+
       '<button type="button" data-taphoa-work-view="debts">Công nợ</button>'+
+      (kind==="mobile"?'<button type="button" data-taphoa-work-view="more">Khác</button>':'')+
     '</nav>';
   }
   function isTaphoaWorkspaceActive(){
@@ -363,9 +365,17 @@
     }
     ensureSalesContextPanel();
   }
+
+  function ensureMobileMorePanel(){
+    const host=document.getElementById("mobileUserWork");
+    if(!host||document.getElementById("taphoaMobileMore"))return;
+    host.insertAdjacentHTML("beforeend",'<section id="taphoaMobileMore" class="taphoa-mobile-more" hidden aria-label="Khác"><header><strong>Khác</strong><small>Tiện ích Tạp hóa</small></header><div class="taphoa-mobile-more-grid"><button type="button" data-mobile-more-action="customer">Khách hàng</button><button type="button" data-mobile-more-action="products">Sản phẩm</button><button type="button" data-mobile-more-action="orders">Đơn hàng</button><button type="button" data-mobile-more-action="settings">Cài đặt cập nhật</button></div></section>');
+  }
+
   function syncTaphoaWorkspace(){
     const active=isTaphoaWorkspaceActive();
     const sales=taphoaWorkView==="sales";
+    const more=taphoaWorkView==="more";
     const mobile=window.matchMedia("(max-width:639px)").matches;
     document.querySelectorAll(".taphoa-work-nav").forEach(nav=>{
       nav.hidden=!active;
@@ -385,11 +395,14 @@
       if(mine)mine.hidden=!sales;
       if(categories)categories.hidden=!sales;
     }
+    ensureMobileMorePanel();
+    const morePanel=document.getElementById("taphoaMobileMore");
+    if(morePanel)morePanel.hidden=!(active&&mobile&&more);
     const manager=document.getElementById("orderManager");
     const host=activeTaphoaWorkspaceHost();
     if(manager&&host&&manager.parentElement!==host)host.appendChild(manager);
     if(manager){
-      manager.hidden=!(active&&!sales);
+      manager.hidden=!(active&&!sales&&!more);
       manager.setAttribute("aria-hidden",manager.hidden?"true":"false");
     }
     const title=document.getElementById("orderManagerTitle");
@@ -418,6 +431,7 @@
               <span id="orderManagerSummary"></span>
               <div class="order-manager-tool-actions">
                 <button id="debtBackButton" type="button" hidden>Khách hàng</button>
+                <button id="orderSelectModeButton" type="button" data-order-select-mode hidden>Chọn</button>
                 <button id="orderDeleteAllPendingButton" type="button" data-order-batch="delete-pending" hidden>Xóa tất cả</button>
                 <button id="orderReturnAllDeliveredButton" type="button" data-order-batch="return-delivered" hidden>Xóa tất cả đã giao</button>
               </div>
@@ -497,13 +511,16 @@
     });
   }
   function syncBatchControls(filtered=null){
+    const selectButton=document.getElementById("orderSelectModeButton");
     const pendingButton=document.getElementById("orderDeleteAllPendingButton");
     const deliveredButton=document.getElementById("orderReturnAllDeliveredButton");
     const pendingCount=orders.filter(order=>order.status==="pending").length;
     const filteredRows=Array.isArray(filtered)?filtered:filterOrdersForReport(orders);
     const deliveredCount=filteredRows.filter(order=>order.status==="delivered").length;
-    if(pendingButton)pendingButton.hidden=activeView!=="orders"||activeStatus!=="pending"||pendingCount===0;
-    if(deliveredButton)deliveredButton.hidden=activeView!=="orders"||activeStatus!=="delivered"||currentRole()!=="admin"||deliveredCount===0;
+    const selectable=activeView==="orders"&&((activeStatus==="pending"&&pendingCount>0)||(activeStatus==="delivered"&&currentRole()==="admin"&&deliveredCount>0));
+    if(selectButton){selectButton.hidden=!selectable;selectButton.textContent=orderSelectMode?"Xong":"Chọn";}
+    if(pendingButton)pendingButton.hidden=activeView!=="orders"||activeStatus!=="pending"||pendingCount===0||!orderSelectMode;
+    if(deliveredButton)deliveredButton.hidden=activeView!=="orders"||activeStatus!=="delivered"||currentRole()!=="admin"||deliveredCount===0||!orderSelectMode;
   }
   function syncCustomerControls(){
     ensureInlineCustomerButtons();
@@ -835,11 +852,11 @@
   }
   function renderOrders(){
     renderTabs();
-    const visible=sortOrdersNewestFirst(filterOrdersForReport(orders)),statusCount=orders.filter(order=>order.status===activeStatus).length;
+    const visibleAll=sortOrdersNewestFirst(filterOrdersForReport(orders)),visible=window.matchMedia("(max-width:639px)").matches?visibleAll.slice(0,40):visibleAll,statusCount=orders.filter(order=>order.status===activeStatus).length;
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
     const summary=document.getElementById("orderManagerSummary");
-    if(summary)summary.textContent=(STATUS_LABELS[activeStatus]||activeStatus)+" · "+visible.length+(visible.length!==statusCount?" / "+statusCount:"")+" đơn";
+    if(summary)summary.textContent=(STATUS_LABELS[activeStatus]||activeStatus)+" · "+visibleAll.length+(visibleAll.length!==statusCount?" / "+statusCount:"")+" đơn";
     syncBatchControls(visible);
     if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn trong phạm vi này.";}
     if(!list)return;
@@ -891,6 +908,11 @@
     return data;
   }
   function debtEventSign(row){return row.direction==="decrease"?"−":"+"}
+  function debtAgeDays(value){
+    const at=Date.parse(value||0);
+    if(!at)return "";
+    return Math.max(0,Math.floor((Date.now()-at)/86400000));
+  }
   function renderDebtSummaries(){
     const list=document.getElementById("orderManagerList");
     const empty=document.getElementById("orderManagerEmpty");
@@ -900,11 +922,15 @@
     if(empty){empty.hidden=debtSummaries.length!==0;empty.textContent="Chưa có khách hàng hoặc công nợ.";}
     if(!list)return;
     const recent=sortDebtCustomersNewestFirst(debtSummaries);
-    list.innerHTML=recent.map(row=>`
+    list.innerHTML=recent.map((row,index)=>{
+      const days=debtAgeDays(row.lastOccurredAt);
+      return `
       <button type="button" class="debt-customer-card" data-debt-customer-id="${escapeHtml(row.customerId)}">
-        <span><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.username?"@"+escapeHtml(row.username):""}${row.lastOccurredAt?" · "+escapeHtml(dateTime(row.lastOccurredAt)):""}</small></span>
+        <span class="debt-customer-stt">${index+1}</span>
+        <span class="debt-customer-copy"><strong>${escapeHtml(row.customerName||row.username||"Khách hàng")}</strong><small>${row.lastOccurredAt?"GD "+escapeHtml(dateTime(row.lastOccurredAt)):"Chưa có giao dịch"}${days!==""?" · "+days+" ngày":""}</small></span>
         <b>${escapeHtml(compactMoney(row.balanceVnd))}</b>
-      </button>`).join("");
+      </button>`;
+    }).join("");
   }
   function paymentForm(customerId){
     if(currentRole()!=="admin")return "";
@@ -1244,6 +1270,7 @@
     const target=event.target;
     const cartAction=target.closest?.("[data-order-cart-action]");
     if(cartAction){const action=String(cartAction.dataset.orderCartAction||"");if(action==="clear")clearCurrentCart();else if(action==="quick")await submitQuickSale();else if(action==="cancel-edit")cancelEditOrder();else if(action==="update")await updateEditingOrder();return;}
+    if(target.closest?.("[data-order-select-mode]")){orderSelectMode=!orderSelectMode;syncBatchControls();return;}
     const batch=target.closest?.("[data-order-batch]");
     if(batch?.dataset.orderBatch==="delete-pending"){await deleteAllPendingOrders();return;}
     if(batch?.dataset.orderBatch==="return-delivered"){await returnFilteredDeliveredOrders();return;}
@@ -1261,15 +1288,23 @@
       if(taphoaWorkView==="debts"&&currentRole()==="user")debtCustomerId=String(currentAccount()?.id||"");
       else if(taphoaWorkView!=="debts")debtCustomerId="";
       debtDetail=null;syncTaphoaWorkspace();syncManagerView();
-      if(taphoaWorkView!=="sales"&&await requireChatAuth())await refreshManager();
+      if(taphoaWorkView!=="sales"&&taphoaWorkView!=="more"&&await requireChatAuth())await refreshManager();
       return;
+    }
+    const moreAction=target.closest?.("[data-mobile-more-action]");
+    if(moreAction){
+      const action=String(moreAction.dataset.mobileMoreAction||"");
+      if(action==="customer"){await openCustomerPicker();return;}
+      if(action==="products"){taphoaWorkView="sales";syncTaphoaWorkspace();return;}
+      if(action==="orders"){taphoaWorkView="orders";activeView="orders";syncTaphoaWorkspace();syncManagerView();if(await requireChatAuth())await refreshManager();return;}
+      if(action==="settings"){document.getElementById("openUpdateSettings")?.click();return;}
     }
     if(target.closest?.("#orderCustomerPickerClose")){closeCustomerPicker();return;}
     if(target.closest?.("[data-order-customer-select]")){await openCustomerPicker();return;}
     if(target.closest?.("#debtBackButton")){debtCustomerId="";debtDetail=null;debtLinkedOrder=null;syncManagerView();await refreshDebts();return;}
     const debtCustomer=target.closest?.("[data-debt-customer-id]");if(debtCustomer){debtLinkedOrder=null;await openDebtCustomer(String(debtCustomer.dataset.debtCustomerId||""));return;}
     const customerOption=target.closest?.("[data-order-customer-id]");if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
-    const tab=target.closest?.("[data-order-status]");if(tab){expandedOrderId="";sourceDrillSource="";setActiveOrderStatus(String(tab.dataset.orderStatus||"pending"));renderOrders();return;}
+    const tab=target.closest?.("[data-order-status]");if(tab){orderSelectMode=false;expandedOrderId="";sourceDrillSource="";setActiveOrderStatus(String(tab.dataset.orderStatus||"pending"));renderOrders();return;}
     const orderCard=target.closest?.(".order-card[data-order-id]");
     if(orderCard&&!target.closest?.("button,a,input,select,textarea,label")){expandedOrderId=String(orderCard.dataset.orderId||"");renderOrders();return;}
     const detail=target.closest?.("[data-order-detail]");if(detail){const id=String(detail.dataset.orderId||"");expandedOrderId=expandedOrderId===id?"":id;renderOrders();return;}

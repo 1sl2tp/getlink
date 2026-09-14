@@ -1,0 +1,60 @@
+name: Fix order filter geometry
+
+on:
+  push:
+    branches: [feature/taphoa-desktop-layout-v2]
+    paths:
+      - .github/workflows/fix-order-filter-geometry.yml
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/taphoa-desktop-layout-v2
+          fetch-depth: 0
+
+      - name: Prove new geometry contract is RED
+        shell: bash
+        run: |
+          set +e
+          node tests/test_taphoa_desktop_layout_v2.mjs > /tmp/red.log 2>&1
+          status=$?
+          set -e
+          cat /tmp/red.log
+          test "$status" -ne 0
+          grep -q "Orders filter geometry must match its two visible controls" /tmp/red.log
+
+      - name: Remove stale third filter column
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('taphoa-desktop-workspace.css')
+          s=p.read_text()
+          old='.taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 104px 132px;gap:6px}'
+          new='.taphoa-order-filter-row{display:grid;grid-template-columns:minmax(0,1fr) 104px;gap:6px}'
+          if old not in s:
+              raise SystemExit('stale three-column order filter rule not found')
+          p.write_text(s.replace(old,new,1))
+          PY
+
+      - name: Verify geometry and static build
+        run: |
+          node tests/test_taphoa_desktop_layout_v2.mjs
+          node tests/test_taphoa_desktop_hot_paths.mjs
+          python tools/stamp_static_build.py
+          python tools/stamp_static_build.py --check
+
+      - name: Commit review fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/fix-order-filter-geometry.yml
+          git add taphoa-desktop-workspace.css tests/test_taphoa_desktop_layout_v2.mjs index.html version.json
+          git commit -m "fix: align order filter with restored source rail"
+          git push origin HEAD:feature/taphoa-desktop-layout-v2

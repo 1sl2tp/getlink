@@ -853,6 +853,12 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(text);setMainStatus("Đã sao chép "+title+".");return;}
     setMainStatus("Thiết bị không hỗ trợ chia sẻ hoặc sao chép.");
   }
+  function claimOrderListOwner(list){
+    for(const child of [...list.children]){
+      if(child.matches?.(".order-report-controls,.order-report-results"))continue;
+      child.remove();
+    }
+  }
   function renderOrders(){
     renderTabs();
     const visibleAll=sortOrdersNewestFirst(filterOrdersForReport(orders)),visible=window.matchMedia("(max-width:639px)").matches?visibleAll.slice(0,40):visibleAll,statusCount=orders.filter(order=>order.status===activeStatus).length;
@@ -863,6 +869,7 @@
     syncBatchControls(visible);
     if(empty){empty.hidden=visible.length!==0;empty.textContent="Chưa có đơn trong phạm vi này.";}
     if(!list)return;
+    claimOrderListOwner(list);
     const cards=visible.map(order=>{
       const items=Array.isArray(order.items)?order.items:[];
       const id=String(order.id||"");

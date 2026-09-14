@@ -42,6 +42,21 @@ class MobileOrderViewRace(unittest.TestCase):
         self.assertIn('if(activeView!=="debts"||String(debtCustomerId||"")!==requestedDebtCustomerId)return;', block)
         self.assertLess(block.index('if(activeView!=="debts"'), block.index('renderDebtLinkedOrder();'))
 
+    def test_orders_claim_shared_list_before_rendering_results(self):
+        self.assertIn('function claimOrderListOwner(list)', ORDER)
+        start = ORDER.index('function renderOrders()')
+        end = ORDER.index('\n  }', start) + 4
+        block = ORDER[start:end]
+        self.assertIn('claimOrderListOwner(list);', block)
+        self.assertLess(block.index('claimOrderListOwner(list);'), block.index('ensureOrderReportResultsHost(list)'))
+
+    def test_order_list_owner_removes_debt_nodes_but_keeps_order_hosts(self):
+        start = ORDER.index('function claimOrderListOwner(list)')
+        end = ORDER.index('\n  }', start) + 4
+        block = ORDER[start:end]
+        self.assertIn('.order-report-controls,.order-report-results', block)
+        self.assertIn('child.remove()', block)
+
 
 if __name__ == "__main__":
     unittest.main()

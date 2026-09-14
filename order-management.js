@@ -748,12 +748,27 @@
       return true;
     });
   }
+  function supplierSourceCatalog(){
+    try{
+      if(typeof mobileSupplierSources==="function"){
+        const rows=mobileSupplierSources();
+        return Array.isArray(rows)?rows:[];
+      }
+    }catch{}
+    return [];
+  }
   function summarizeOrdersBySource(rows=[]){
     const map=new Map();const total={qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false};
+    for(const sourceRow of supplierSourceCatalog()){
+      const source=String(sourceRow?.key||"").trim();
+      if(!source)continue;
+      const sourceLabel=String(sourceRow?.label||source).trim()||source;
+      map.set(source,{source,sourceLabel,qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false,orders:new Set()});
+    }
     for(const order of rows){
       for(const item of order.items||[]){
         const source=String(item.sourceId||"Khác").trim()||"Khác",qty=Number(item.qty||0),price=Number(item.price||0),cost=Number(item.cost||0),known=item.cost!==undefined&&item.cost!==null;
-        const row=map.get(source)||{source,qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false,orders:new Set()};
+        const row=map.get(source)||{source,sourceLabel:source,qty:0,expenseVnd:0,revenue:0,profit:0,costKnown:false,orders:new Set()};
         row.qty+=qty;row.revenue+=price*qty;row.expenseVnd+=known?cost*qty:0;row.profit+=known?(price-cost)*qty:0;row.costKnown=row.costKnown||known;row.orders.add(String(order.id));map.set(source,row);
         total.qty+=qty;total.revenue+=price*qty;if(known){total.expenseVnd+=cost*qty;total.profit+=(price-cost)*qty;total.costKnown=true;}
       }
@@ -777,7 +792,7 @@
     const value=(n,known=true)=>known?compactMoney(n):"—";
     return `<section class="order-source-summary">
       <div class="order-source-grid order-source-head"><span>NGUỒN</span><span>SL</span><span>CHI</span><span>THU</span><span>LÃI</span></div>
-      ${summary.rows.map(row=>`<button type="button" class="order-source-grid order-source-row" data-order-source-open="${escapeHtml(row.source)}"><span>${escapeHtml(row.source)}</span><span>${row.qty}</span><span>${escapeHtml(value(row.expenseVnd,admin&&row.costKnown))}</span><span>${escapeHtml(value(row.revenue))}</span><span>${escapeHtml(value(row.profit,admin&&row.costKnown))}</span></button>`).join("")}
+      ${summary.rows.map(row=>`<button type="button" class="order-source-grid order-source-row" data-order-source-open="${escapeHtml(row.source)}"><span>${escapeHtml(row.sourceLabel||row.source)}</span><span>${row.qty}</span><span>${escapeHtml(value(row.expenseVnd,admin&&row.costKnown))}</span><span>${escapeHtml(value(row.revenue))}</span><span>${escapeHtml(value(row.profit,admin&&row.costKnown))}</span></button>`).join("")}
       <div class="order-source-grid order-source-total"><span>TỔNG (${rows.length} đơn)</span><span>${summary.total.qty}</span><span>${escapeHtml(value(summary.total.expenseVnd,admin&&summary.total.costKnown))}</span><span>${escapeHtml(value(summary.total.revenue))}</span><span>${escapeHtml(value(summary.total.profit,admin&&summary.total.costKnown))}</span></div>
     </section>`;
   }
@@ -1255,6 +1270,8 @@
     const debtCustomer=target.closest?.("[data-debt-customer-id]");if(debtCustomer){debtLinkedOrder=null;await openDebtCustomer(String(debtCustomer.dataset.debtCustomerId||""));return;}
     const customerOption=target.closest?.("[data-order-customer-id]");if(customerOption){chooseCustomer(String(customerOption.dataset.orderCustomerId||""));return;}
     const tab=target.closest?.("[data-order-status]");if(tab){expandedOrderId="";sourceDrillSource="";setActiveOrderStatus(String(tab.dataset.orderStatus||"pending"));renderOrders();return;}
+    const orderCard=target.closest?.(".order-card[data-order-id]");
+    if(orderCard&&!target.closest?.("button,a,input,select,textarea,label")){expandedOrderId=String(orderCard.dataset.orderId||"");renderOrders();return;}
     const detail=target.closest?.("[data-order-detail]");if(detail){const id=String(detail.dataset.orderId||"");expandedOrderId=expandedOrderId===id?"":id;renderOrders();return;}
     const action=target.closest?.("[data-order-action]");if(action){await performOrderAction(String(action.dataset.orderAction||""),String(action.dataset.orderId||""));return;}
     if(target.closest?.(".user-work-jump-button,#mobileUserSourceTabs button"))window.setTimeout(()=>{if(!isTaphoaWorkspaceActive())taphoaWorkView="sales";ensureTaphoaWorkspaceNav();syncTaphoaWorkspace();},0);

@@ -841,13 +841,22 @@
         ${expanded?orderActions(order):""}
       </article>`;
     }).join("");
-    const manager=document.getElementById("orderManager");
-    const controls=manager?.querySelector(".order-report-controls");
-    const controlsInList=controls?.parentElement===list;
-    if(controlsInList)controls.remove();
-    list.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
-    if(controlsInList)list.prepend(controls);
-    else if(!controls)list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
+    const results=ensureOrderReportResultsHost(list);
+    results.innerHTML=sourceSummaryMarkup(visible)+sourceDrillMarkup(visible)+`<div class="order-lifecycle-list">${cards}</div>`;
+  }
+  function ensureOrderReportResultsHost(list){
+    let controls=list.querySelector(":scope > .order-report-controls");
+    if(!controls){
+      list.insertAdjacentHTML("afterbegin",orderReportControlsMarkup());
+      controls=list.querySelector(":scope > .order-report-controls");
+    }
+    let results=list.querySelector(":scope > .order-report-results");
+    if(!results){
+      results=document.createElement("div");
+      results.className="order-report-results";
+      controls?.insertAdjacentElement("afterend",results);
+    }
+    return results;
   }
   function applyOrderReportSearch(input){
     setOrderReportFilter({search:String(input?.value||"")});

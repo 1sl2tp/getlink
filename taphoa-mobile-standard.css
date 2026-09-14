@@ -251,7 +251,8 @@
   }
   #mobileUserWork[data-taphoa-view="orders"] .order-manager-list,
   #mobileUserWork[data-taphoa-view="debts"] .order-manager-list{
-    flex:1 1 auto!important;
+    flex:1 1 0!important;
+    height:0!important;
     min-height:0!important;
     overflow-y:auto!important;
     overflow-x:hidden!important;
@@ -261,6 +262,7 @@
   }
   #mobileUserWork .order-report-search input,
   #mobileUserWork .mobile-standard-debt-search input{
+    font-size:16px!important;
     touch-action:manipulation!important;
     -webkit-user-select:text!important;
     user-select:text!important;

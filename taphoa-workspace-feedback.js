@@ -14,7 +14,6 @@
   let orderWorkspaceSelectedId="";
   let customerReassignOrderId="";
   let customerReassignBusy=false;
-  let mobileOrderTap=null;
   // TAPHOA_FAST_SEARCH_20260913
   // TAPHOA_ORDER_WORKSPACE_V2_20260913
 
@@ -329,7 +328,27 @@
     const order=index>=0?orderCache.get(orderWorkspaceSelectedId):null;
     detail.innerHTML=orderInvoiceMarkup(order,index>=0?index:0);
   }
+  function mobileUsesCanonicalOrderOwner(){return window.matchMedia("(max-width:639px)").matches}
+  function restoreCanonicalMobileOrders(){
+    const list=document.getElementById("orderManagerList");
+    if(!list)return;
+    const workspace=list.querySelector(".order-workspace-v2");
+    const source=list.querySelector(".order-lifecycle-list");
+    if(workspace){
+      const report=workspace.querySelector(".order-source-report");
+      const sourceSummary=report?.querySelector(".order-source-summary");
+      const sourceDrill=report?.querySelector(".order-source-detail");
+      if(source){
+        if(sourceSummary)source.insertAdjacentElement("beforebegin",sourceSummary);
+        if(sourceDrill)source.insertAdjacentElement("beforebegin",sourceDrill);
+      }
+      workspace.remove();
+    }
+    if(source){delete source.dataset.taphoaV2Source;source.hidden=false;}
+    orderWorkspaceSelectedId="";
+  }
   function syncOrderWorkspaceV2(){
+    if(mobileUsesCanonicalOrderOwner()){restoreCanonicalMobileOrders();return;}
     const list=document.getElementById("orderManagerList");
     const source=list?.querySelector?.(".order-lifecycle-list");
     if(!list||!source)return;
@@ -648,25 +667,6 @@
     renderOrderWorkspaceSelection();
     return true;
   }
-  function beginMobileOrderTap(event){
-    if(!window.matchMedia("(max-width:999px)").matches)return;
-    if(event.pointerType&&event.pointerType!=="touch"&&event.pointerType!=="pen")return;
-    const target=event.target?.closest?.("[data-order-list-item]");
-    if(!target)return;
-    mobileOrderTap={pointerId:event.pointerId,target,x:event.clientX,y:event.clientY,at:performance.now()};
-  }
-  function finishMobileOrderTap(event){
-    const tap=mobileOrderTap;
-    mobileOrderTap=null;
-    if(!tap||tap.pointerId!==event.pointerId||!tap.target.isConnected)return;
-    if(Math.hypot(event.clientX-tap.x,event.clientY-tap.y)>10||performance.now()-tap.at>800)return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    selectOrderWorkspaceItem(tap.target);
-  }
-  document.addEventListener("pointerdown",beginMobileOrderTap,true);
-  document.addEventListener("pointerup",finishMobileOrderTap,true);
-  document.addEventListener("pointercancel",()=>{mobileOrderTap=null;},true);
 
   document.addEventListener("click",event=>{
     const listItem=event.target?.closest?.("[data-order-list-item]");

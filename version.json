@@ -1,6 +1,6 @@
 {
   "version": "GETLINK",
-  "build_id": "5e22675864195e6c638b43070e437a6b5a27dbf84c7adc4f79cfc88b5e1eaa75",
+  "build_id": "f616fd4915e8114a40a06340ea3d3841eb0fef4cfc245644522962ae1416d51d",
   "update_policy": "auto-when-safe",
   "published_from": "github-main",
   "assets": [
@@ -10,6 +10,8 @@
     "app.js",
     "order-management.js",
     "order-management.css",
+    "taphoa-mobile-standard.js",
+    "taphoa-mobile-standard.css",
     "taphoa-desktop-workspace.js",
     "taphoa-desktop-workspace.css",
     "taphoa-desktop-data.js",

@@ -226,3 +226,44 @@
     touch-action:manipulation!important;
   }
 }
+
+
+/* Mobile orders/debts: list owns the scroll viewport inside the embedded workspace. */
+@media(max-width:639px){
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:hidden!important;
+    display:flex!important;
+    flex-direction:column!important;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-panel,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-panel,
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-body,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-body{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    height:100%!important;
+    display:flex!important;
+    flex-direction:column!important;
+    overflow:hidden!important;
+  }
+  #mobileUserWork[data-taphoa-view="orders"] .order-manager-list,
+  #mobileUserWork[data-taphoa-view="debts"] .order-manager-list{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior-y:contain!important;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y!important;
+  }
+  #mobileUserWork .order-report-search input,
+  #mobileUserWork .mobile-standard-debt-search input{
+    touch-action:manipulation!important;
+    -webkit-user-select:text!important;
+    user-select:text!important;
+    pointer-events:auto!important;
+  }
+}

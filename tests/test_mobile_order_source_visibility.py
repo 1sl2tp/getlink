@@ -7,16 +7,14 @@ CSS = (ROOT / "taphoa-workspace-feedback.css").read_text(encoding="utf-8")
 
 
 class MobileOrderSourceVisibility(unittest.TestCase):
-    def test_mobile_canonical_orders_override_desktop_v2_shell(self):
+    def test_mobile_source_summary_stays_sized_inside_scroll_owner(self):
+        compact = "".join(CSS.split())
+        self.assertIn(".order-report-results{display:contents}", compact)
         pattern = re.compile(
             r"@media\(max-width:639px\)\{\s*"
             r"/\* MOBILE_CANONICAL_ORDER_OWNER_20260914 \*/.*?"
-            r"#mobileUserWork\[data-taphoa-view=\"orders\"\] \.order-manager-list\s*\{"
-            r"[^}]*display:grid!important;[^}]*overflow:visible!important;[^}]*\}.*?"
-            r"#mobileUserWork\[data-taphoa-view=\"orders\"\] \.order-report-results\s*\{"
-            r"[^}]*display:block!important;[^}]*\}.*?"
             r"#mobileUserWork\[data-taphoa-view=\"orders\"\] \.order-source-summary\s*\{"
-            r"[^}]*display:block!important;[^}]*flex:none!important;[^}]*\}",
+            r"[^}]*display:block!important;[^}]*flex:0 0 auto!important;[^}]*\}",
             re.S,
         )
         self.assertRegex(CSS, pattern)

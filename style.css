@@ -15472,3 +15472,64 @@ body.news-quick-open{overflow:hidden!important}
     max-height:19px!important;
   }
 }
+
+
+/* Source selector text-only v1
+   Source filters use readable short names instead of brand artwork. */
+.source-tabs-inline .source-chip-text,
+.quick-source-tabs .source-chip-text,
+.workspace-nav .nav-source-tabs .source-chip-text{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  width:auto!important;
+  min-width:0!important;
+  gap:0!important;
+  padding-left:10px!important;
+  padding-right:10px!important;
+  white-space:nowrap!important;
+}
+.source-tabs-inline .source-chip-text .source-chip-label,
+.quick-source-tabs .source-chip-text .source-chip-label,
+.workspace-nav .nav-source-tabs .source-chip-text .source-chip-label{
+  display:block!important;
+  overflow:visible!important;
+  text-overflow:clip!important;
+  font-size:9.5px!important;
+  font-weight:780!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+.quick-source-tabs{
+  grid-template-columns:repeat(3,minmax(0,1fr))!important;
+}
+.quick-source-tabs .source-chip-text{
+  width:100%!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding-left:5px!important;
+  padding-right:5px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-text{
+  flex:0 0 auto!important;
+  height:34px!important;
+  min-height:34px!important;
+}
+@media(max-width:720px){
+  .purchase-mode-row .source-tabs-inline{
+    display:grid!important;
+    grid-template-columns:repeat(3,minmax(0,1fr))!important;
+    gap:5px!important;
+    overflow:visible!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-text{
+    width:100%!important;
+    min-width:0!important;
+    padding-left:4px!important;
+    padding-right:4px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-chip-text .source-chip-label,
+  .quick-source-tabs .source-chip-text .source-chip-label{
+    font-size:9px!important;
+  }
+}

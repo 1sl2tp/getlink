@@ -68,12 +68,14 @@ function sourceKey(raw: string) {
   if (host === "bachhoaxanh.com") return "bachhoaxanh";
   if (host === "winmart.vn") return "winmart";
   if (host === "sieuthi-go.vn") return "go";
+  if (host === "vinamilk.com.vn") return "vinamilk";
   if (host === "get.taphoa.xyz" && new URL(raw).pathname.startsWith("/nguon-hang/")) return "mine";
   throw new Error("unsupported_source_url");
 }
 function sourceObject(key: string) {
   if (key === "winmart") return { key, name: "WinMart", host: "winmart.vn" };
   if (key === "go") return { key, name: "GO!", host: "sieuthi-go.vn" };
+  if (key === "vinamilk") return { key, name: "Vinamilk", host: "vinamilk.com.vn" };
   if (key === "mine") return { key, name: "Tạp hóa", host: "get.taphoa.xyz" };
   return { key: "bachhoaxanh", name: "Bách Hóa XANH", host: "bachhoaxanh.com" };
 }
@@ -181,6 +183,18 @@ function canonicalGo(raw: string) {
   const path = (u.pathname || "/").replace(/\/+/g, "/").replace(/\/$/, "") || "/";
   return "https://sieuthi-go.vn" + path;
 }
+function canonicalVinamilk(raw:string){
+  const u=new URL(raw);
+  const host=u.hostname.toLowerCase().replace(/^www\./,"");
+  if(host!=="vinamilk.com.vn")throw new Error("invalid_vinamilk_url");
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/$/,"")||"/";
+  const out=new URL("https://www.vinamilk.com.vn"+path);
+  const src=clean(u.searchParams.get("src")||"");
+  const variant=clean(u.searchParams.get("variant")||"");
+  if(src)out.searchParams.set("src",src);
+  if(variant)out.searchParams.set("variant",variant);
+  return out.toString().replace(/\?$/,"");
+}
 function canonicalMine(raw:string){
   const u=new URL(raw);
   return ("https://get.taphoa.xyz"+(u.pathname||"/").replace(/\/+$/,"")).toLowerCase();
@@ -189,6 +203,7 @@ function canonical(raw: string) {
   const key = sourceKey(raw);
   if (key === "winmart") return canonicalWinmart(raw);
   if (key === "go") return canonicalGo(raw);
+  if (key === "vinamilk") return canonicalVinamilk(raw);
   if (key === "mine") return canonicalMine(raw);
   return canonicalBhx(raw);
 }
@@ -200,6 +215,7 @@ function heuristicType(url: string) {
     return /--c\d+$/i.test(last) || u.searchParams.has("cate2") ? "category" : "product";
   }
   if (key === "go") return new URL(url).pathname.includes("/product/") ? "product" : "category";
+  if (key === "vinamilk") return new URL(url).pathname.includes("/collections/") ? "category" : "product";
   if (key === "mine") return "product";
   return pathParts(url).length <= 1 ? "category" : "product";
 }
@@ -1248,6 +1264,223 @@ function normalizeGo(item:any, rootName:string, checked:string): Product | null 
   };
 }
 
+
+type VinamilkVariantItem={
+  variantId:string;
+  skuCode:string;
+  name:string;
+  thumbnail:string;
+  image?:{url?:string};
+  price?:{price?:number;originPrice?:number;currency?:string};
+  sellableInfo?:{sellable?:boolean};
+  product?:{
+    brand?:string;
+    category?:string;
+    subCategory?:string;
+    suffix?:string;
+    description?:string;
+    packagingValue?:string;
+    productId?:string;
+    productCode?:string;
+    productTitle?:string;
+    productGroup?:{handle?:string};
+    images?:Array<{url?:string;isDefault?:boolean}>;
+  };
+};
+
+function vinamilkPageUrl(categoryUrl:string,page:number):string{
+  const u=new URL(categoryUrl);
+  u.searchParams.delete("page");
+  if(page>1)u.searchParams.set("page",String(page));
+  return u.toString();
+}
+
+function vinamilkNextStrings(html:string):string[]{
+  const out:string[]=[];
+  const re=/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g;
+  for(const m of html.matchAll(re)){
+    try{out.push(JSON.parse(m[1]));}catch{}
+  }
+  return out;
+}
+
+function vinamilkBalancedArray(source:string,start:number):string|null{
+  if(source[start]!=="[")return null;
+  let depth=0,inString=false,escaped=false;
+  for(let i=start;i<source.length;i++){
+    const ch=source[i];
+    if(inString){
+      if(escaped){escaped=false;continue;}
+      if(ch==="\\"){escaped=true;continue;}
+      if(ch==='"')inString=false;
+      continue;
+    }
+    if(ch==='"'){inString=true;continue;}
+    if(ch==="[")depth++;
+    else if(ch==="]"){
+      depth--;
+      if(depth===0)return source.slice(start,i+1);
+    }
+  }
+  return null;
+}
+
+function vinamilkVariantsFromHtml(html:string):VinamilkVariantItem[]{
+  const out:VinamilkVariantItem[]=[];
+  const seen=new Set<string>();
+  for(const chunk of vinamilkNextStrings(html)){
+    let pos=0;
+    while(true){
+      const marker=chunk.indexOf('"variants":[',pos);
+      if(marker<0)break;
+      const start=marker+'"variants":'.length;
+      const raw=vinamilkBalancedArray(chunk,start);
+      pos=start+1;
+      if(!raw)continue;
+      try{
+        const arr=JSON.parse(raw);
+        if(!Array.isArray(arr))continue;
+        for(const item of arr){
+          if(!item||typeof item!=="object"||!item.variantId||!item.product||!item.price)continue;
+          const id=clean(item.variantId);
+          if(!id||seen.has(id))continue;
+          seen.add(id);
+          out.push(item as VinamilkVariantItem);
+        }
+      }catch{}
+    }
+  }
+  return out;
+}
+
+async function vinamilkFetchPage(
+  categoryUrl:string,
+  page:number,
+  capture:RawCapture
+):Promise<{page:number;items:VinamilkVariantItem[]}>{
+  const endpoint=vinamilkPageUrl(categoryUrl,page);
+  const r=await fetch(endpoint,{
+    headers:{
+      "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
+      "cache-control":"no-cache",
+      "pragma":"no-cache",
+      "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+    },
+    redirect:"follow"
+  });
+  const html=await r.text();
+  capture.entries.push({
+    seq:capture.entries.length+1,
+    endpoint,
+    method:"GET",
+    status:r.status,
+    content_type:clean(r.headers.get("content-type")||""),
+    response_body:html
+  });
+  if(!r.ok)throw new Error("vinamilk_http_"+r.status);
+  return {page,items:vinamilkVariantsFromHtml(html)};
+}
+
+async function vinamilkCategory(url:string,capture:RawCapture){
+  const categoryUrl=canonicalVinamilk(url);
+  const byVariant=new Map<string,VinamilkVariantItem>();
+  const pageCounts:Array<{page:number;count:number}>=[];
+
+  const first=await vinamilkFetchPage(categoryUrl,1,capture);
+  for(const item of first.items)byVariant.set(clean(item.variantId),item);
+  pageCounts.push({page:1,count:first.items.length});
+  if(first.items.length===0)throw new Error("vinamilk_category_products_empty");
+
+  let nextPage=2;
+  while(first.items.length>=12&&nextPage<=18){
+    const pages=[nextPage,nextPage+1,nextPage+2,nextPage+3];
+    const batch=await Promise.all(pages.map(p=>vinamilkFetchPage(categoryUrl,p,capture)));
+    let shouldContinue=true;
+    for(const result of batch){
+      let added=0;
+      for(const item of result.items){
+        const id=clean(item.variantId);
+        if(!id||byVariant.has(id))continue;
+        byVariant.set(id,item);
+        added++;
+      }
+      pageCounts.push({page:result.page,count:result.items.length});
+      if(result.items.length<12||added===0)shouldContinue=false;
+    }
+    if(!shouldContinue)break;
+    nextPage+=4;
+  }
+
+  return {items:[...byVariant.values()],rootName:"Sữa tươi",pages:pageCounts};
+}
+
+function vinamilkDisplayName(item:VinamilkVariantItem):string{
+  const p=item.product||{};
+  const base=clean(p.subCategory||p.category||"Sữa tươi");
+  const brand=clean(p.brand||"Vinamilk");
+  const suffix=clean(p.suffix||"");
+  const size=clean(p.packagingValue||"");
+  const parts=[base,brand,suffix,size].filter(Boolean);
+  const out:string[]=[];
+  for(const part of parts){
+    const key=plain(part);
+    if(!key||out.some(x=>plain(x)===key))continue;
+    out.push(part);
+  }
+  return clean(out.join(" "))||clean(p.productTitle||"")||"Sản phẩm Vinamilk";
+}
+
+function normalizeVinamilk(item:VinamilkVariantItem,checked:string):Product|null{
+  const p=item.product||{};
+  const currentRaw=Number(item.price?.price)||0;
+  if(!currentRaw)return null;
+  const originalRaw=Number(item.price?.originPrice)||0;
+  const current=Math.round(currentRaw);
+  const original=originalRaw>currentRaw?Math.round(originalRaw):null;
+  const name=vinamilkDisplayName(item);
+  const brand=clean(p.brand||"Vinamilk");
+  const packaging=clean([item.name,p.packagingValue].filter(Boolean).join(" · "));
+  const hierarchy=hierarchyFromRaw(name,packaging);
+  const comparison=comparisonFrom(current,original,hierarchy,packaging,name);
+  const size={value:comparison.size_value,unit:comparison.size_unit};
+  const ident=matchIdentity(name,brand,"",size);
+  const handle=clean(p.productGroup?.handle||"");
+  const variantId=clean(item.variantId);
+  const url=canonicalVinamilk(
+    "https://www.vinamilk.com.vn/products/"+encodeURIComponent(handle||clean(p.productId||variantId))+
+    "?variant="+encodeURIComponent(variantId)
+  );
+  const image=clean(item.image?.url||item.thumbnail||p.images?.find(x=>x?.isDefault)?.url||p.images?.[0]?.url||"");
+  const rootName=clean(p.category||"Sữa tươi");
+  return {
+    source:sourceObject("vinamilk"),
+    group:rootName,
+    branch:brand,
+    name,
+    packaging:{text:packaging},
+    hierarchy,
+    comparison,
+    price:{current,original},
+    promotion:{active:Boolean(original&&original>current),price:null,text:""},
+    url,
+    image,
+    breadcrumbs:[rootName,clean(p.subCategory||""),brand].filter(Boolean),
+    source_identity:{
+      source_product_id:variantId,
+      source_code:clean(p.productCode||""),
+      barcode:"",
+      sku:clean(item.skuCode||""),
+      brand,
+      category:rootName,
+      raw_name:clean(p.productTitle||name),
+      raw_description:clean(p.description||""),
+      ...ident
+    },
+    last_checked_at:checked
+  };
+}
+
 async function fetchSource(input:string, requestId:string){
   const url=canonical(input), key=sourceKey(url), kind=heuristicType(url), checked=new Date().toISOString();
   const capture=createRawCapture();
@@ -1291,6 +1524,25 @@ async function fetchSource(input:string, requestId:string){
 
     const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeGo(x,raw.rootName,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-go"};
+  }
+  if(key==="vinamilk"){
+    if(kind!=="category")throw new Error("vinamilk_category_link_required");
+    const raw=await vinamilkCategory(url,capture);
+
+    // HARD GATE: keep every Vinamilk HTML page before normalization.
+    await persistRawCapture(requestId,url,"category",key,capture);
+
+    const products=filterGetlinkProducts(
+      raw.items.map(item=>normalizeVinamilk(item,checked)).filter(Boolean) as Product[]
+    );
+    return {
+      payload:{
+        schema_version:20,request_id:requestId,input_url:url,input_type:"category",
+        source:sourceObject(key),checked_at:checked,category_name:raw.rootName,
+        products,variants:[],discovered_links:products.map(p=>p.url),source_pages:raw.pages
+      },
+      engine:"supabase-edge-vinamilk-rsc"
+    };
   }
   throw new Error("unsupported_source");
 }
@@ -1706,11 +1958,12 @@ function supplierGroupForName(name:unknown,rules:any[],groupByKey:Map<string,any
   return groupByKey.get("chua-phan-loai")||null;
 }
 
-function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|""{
+function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|"vinamilk"|""{
   const s=plain(value);
   if(s.includes("bach hoa xanh"))return "bhx";
   if(s.includes("winmart"))return "wm";
   if(/^go\b/.test(s)||s==="go!")return "go";
+  if(s.includes("vinamilk"))return "vinamilk";
   return "";
 }
 function managerGroupDisplay(value:unknown):string{
@@ -1720,10 +1973,10 @@ function managerGroupKey(value:unknown):string{
   return getlinkNameKey(managerGroupDisplay(value));
 }
 function sourceBucket(){
-  return {bhx:0,wm:0,go:0};
+  return {bhx:0,wm:0,go:0,vinamilk:0};
 }
 function variantBucket(){
-  return {bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>()};
+  return {bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>(),vinamilk:new Set<string>()};
 }
 
 async function fetchRowsByValues(table:string,select:string,column:string,values:string[]):Promise<any[]>{
@@ -1796,7 +2049,7 @@ async function sourceManagerManualGroupDetail(groupKey:string){
     });
   }
   items.sort((a,b)=>{
-    const rank=(x:string)=>x==="bhx"?0:(x==="wm"?1:2);
+    const rank=(x:string)=>x==="bhx"?0:(x==="wm"?1:(x==="go"?2:3));
     return (rank(a.source)-rank(b.source))||a.name.localeCompare(b.name,"vi");
   });
   return {
@@ -1813,7 +2066,7 @@ async function sourceManagerManualGroupDetail(groupKey:string){
         ?"Chưa khớp nhóm cơ bản"
         :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · ")
     },
-    products:{...counts,all:counts.bhx+counts.wm+counts.go},
+    products:{...counts,all:counts.bhx+counts.wm+counts.go+counts.vinamilk},
     items
   };
 }
@@ -1909,7 +2162,7 @@ async function sourceManagerSnapshot(force=false){
         :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · "),
       total:0,
       sources:sourceBucket(),
-      variants:{bhx:[],wm:[],go:[]}
+      variants:{bhx:[],wm:[],go:[],vinamilk:[]}
     });
   }
   for(const member of manualMembers){
@@ -1928,14 +2181,15 @@ async function sourceManagerSnapshot(force=false){
       variants:{
         bhx:[...row.variants.bhx].sort((a,b)=>a.localeCompare(b,"vi")),
         wm:[...row.variants.wm].sort((a,b)=>a.localeCompare(b,"vi")),
-        go:[...row.variants.go].sort((a,b)=>a.localeCompare(b,"vi"))
+        go:[...row.variants.go].sort((a,b)=>a.localeCompare(b,"vi")),
+        vinamilk:[...row.variants.vinamilk].sort((a,b)=>a.localeCompare(b,"vi"))
       }
     }))
     .sort((a,b)=>(b.total-a.total)||a.name.localeCompare(b.name,"vi"));
 
   sourceManagerCache={
     generated_at:new Date().toISOString(),
-    products:{...products,all:products.bhx+products.wm+products.go},
+    products:{...products,all:products.bhx+products.wm+products.go+products.vinamilk},
     brands:finalize(brandMap),
     groups:finalize(groupMap),
     manual_groups:[...manualMap.values()]

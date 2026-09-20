@@ -3591,7 +3591,7 @@ function sourceLogoMark(key){
       '<b class="source-logo-fallback">'+fallback+'</b>'+
     '</span>';
   }
-  return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>4</b></span>';
+  return '<span class="source-logo-mark source-logo-all" aria-hidden="true"><b>6</b></span>';
 }
 
 function sourceChipHtml(key,count,active,compact=false){
@@ -5938,7 +5938,7 @@ function applyAppRoleUi(){
   const legacyDetail=document.querySelector(".workspace-detail");
   if(appRole==="user"){
     libraryState="visible";
-    if(!["","mine","bhx","wm","go"].includes(activeSourceFilter))activeSourceFilter="";
+    if(!["","mine","bhx","wm","go","vinamilk","concung"].includes(activeSourceFilter))activeSourceFilter="";
     if($("#importCard"))$("#importCard").hidden=true;
     if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
     if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;

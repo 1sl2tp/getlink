@@ -27,7 +27,7 @@ jobs:
       - run: python -m unittest tests.test_chat_order_source_handoff -v
       - run: python -m unittest tests.test_mobile_standard_document_layout -v
       - run: python -m unittest discover -s tests -v
-      - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py
+      - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py scraper/probe_vinamilk_browser.py
       - run: node --check app.js
       - run: node --check order-management.js
       - run: node --check taphoa-mobile-standard.js
@@ -51,7 +51,12 @@ jobs:
       - run: node tests/test_bhx_edge_contract.mjs
       - run: node tests/test_go_edge_contract.mjs
       - run: node tests/test_vinamilk_edge_contract.mjs
-      - run: node tests/probe_vinamilk_live.mjs
+      - name: Probe Vinamilk direct transport (diagnostic)
+        run: node tests/probe_vinamilk_live.mjs || true
+      - name: Install Chromium for Vinamilk browser probe
+        run: python -m playwright install --with-deps chromium
+      - name: Probe Vinamilk signed GraphQL through Chromium
+        run: python scraper/probe_vinamilk_browser.py
       - run: node tests/test_getlink_name_filter_contract.mjs
       - name: Supabase-only gate
         run: |

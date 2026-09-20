@@ -15925,3 +15925,43 @@ body[data-app-role="admin"] #toggleImport{
     font-size:14px!important;
   }
 }
+
+
+/* Hotfix shared catalog visibility v2
+   Legacy User Work rules hid the catalog after userWorkHome was removed. */
+body[data-app-role="user"] .workspace-nav{
+  display:block!important;
+}
+body[data-app-role="user"] .catalog-sticky-head{
+  display:flex!important;
+  flex-direction:column!important;
+}
+body[data-app-role="user"] #productGrid:not([hidden]){
+  display:grid!important;
+}
+body[data-app-role="user"] #libraryEmpty:not([hidden]),
+body[data-app-role="user"] .catalog-render-more:not([hidden]){
+  display:block!important;
+}
+@media(min-width:1101px){
+  body[data-app-role="user"] .workspace{
+    display:grid!important;
+    grid-template-columns:180px minmax(0,1fr) 280px!important;
+  }
+  body[data-app-role="user"] .workspace-detail{
+    display:block!important;
+  }
+}
+@media(max-width:1100px){
+  body[data-app-role="user"] .workspace{
+    display:block!important;
+  }
+}
+@media(max-width:760px){
+  body[data-app-role="user"] .workspace-detail{
+    display:none!important;
+  }
+  body[data-app-role="user"] .workspace-detail:has(#result:not([hidden])){
+    display:block!important;
+  }
+}

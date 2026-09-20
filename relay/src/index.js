@@ -383,17 +383,20 @@ async function sha256Hex(value) {
     .join("");
 }
 
+const VNM_DEFAULT_CLIENT_ID = "54SQs8Rii747anXFUIFsiCxa7kI91drT";
+const VNM_DEFAULT_TERMINAL = "2188400000000124";
+const VNM_DEFAULT_EXTERNAL_CODE = "35766930226f44e48e8e9f373217cf755";
+const VNM_DEFAULT_SIGNATURE_SALT = "89fYD1YM2ESML5nXy6nPz0zOeh6UWauS";
+const VNM_DEFAULT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+
 function vinamilkConfig(env) {
-  const cfg = {
-    clientId: clean(env.VNM_CLIENT_ID),
-    terminal: clean(env.VNM_X_TERMINAL),
-    externalCode: clean(env.VNM_EXTERNAL_CODE),
-    salt: clean(env.VNM_SIGNATURE_SALT),
-    deviceInfo: clean(env.VNM_USER_AGENT)
+  return {
+    clientId: clean(env.VNM_CLIENT_ID || VNM_DEFAULT_CLIENT_ID),
+    terminal: clean(env.VNM_X_TERMINAL || VNM_DEFAULT_TERMINAL),
+    externalCode: clean(env.VNM_EXTERNAL_CODE || VNM_DEFAULT_EXTERNAL_CODE),
+    salt: clean(env.VNM_SIGNATURE_SALT || VNM_DEFAULT_SIGNATURE_SALT),
+    deviceInfo: clean(env.VNM_USER_AGENT || VNM_DEFAULT_USER_AGENT)
   };
-  const missing = Object.entries(cfg).filter(([,v]) => !v).map(([k]) => k);
-  if (missing.length) throw new Error("vinamilk_config_missing:" + missing.join(","));
-  return cfg;
 }
 
 async function vinamilkGraphql(raw, env) {

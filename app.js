@@ -163,8 +163,8 @@ let userWorkDesktopAutoLoadObserver=null;
 let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["mine","market","news"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị",news:"Tin tức"};
-const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk","concung"];
-const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk",concung:"Con Cưng"};
+const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -1708,7 +1708,6 @@ function sourceObjectFromRow(row){
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
   if(isVinamilkRow(row))return {key:"vinamilk",name:"Vinamilk",host:"vinamilk.com.vn"};
-  if(isConcungRow(row))return {key:"concung",name:"Con Cưng",host:"concung.com"};
   return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
 }
 
@@ -2230,20 +2229,6 @@ function isVinamilkRow(row){
   }
 }
 
-function isConcungRow(row){
-  const raw=searchKey([
-    row&&row.source,
-    row&&row.source_name
-  ].filter(Boolean).join(" "));
-  if(raw.includes("con cung"))return true;
-  try{
-    return new URL(String(row&&row.canonical_url||"")).hostname
-      .toLowerCase().replace(/^www\./,"")==="concung.com";
-  }catch{
-    return false;
-  }
-}
-
 function isMineRow(row){
   const raw=searchKey([
     row&&row.source,
@@ -2266,7 +2251,6 @@ function sourceDisplayLabel(row){
   if(isWinmartRow(row))return "WM";
   if(isGoRow(row))return "GO";
   if(isVinamilkRow(row))return "Vinamilk";
-  if(isConcungRow(row))return "Con Cưng";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
   return displayUpperFirst(raw);
@@ -2279,7 +2263,6 @@ function sourceDisplayClass(row){
   if(isWinmartRow(row))return " source-winmart";
   if(isGoRow(row))return " source-go";
   if(isVinamilkRow(row))return " source-vinamilk";
-  if(isConcungRow(row))return " source-concung";
   const key=searchKey(String(row&&row.source||""));
   if(!key||key.includes("bach hoa xanh"))return " source-bhx";
   return "";
@@ -2971,8 +2954,7 @@ function renderCategoryMenu(){
       :(activeSourceFilter==="bhx"?"BHX"
       :(activeSourceFilter==="wm"?"WinMart"
       :(activeSourceFilter==="go"?"GO!"
-      :(activeSourceFilter==="vinamilk"?"Vinamilk"
-      :(activeSourceFilter==="concung"?"Con Cưng":"Tất cả nguồn")))));
+      :(activeSourceFilter==="vinamilk"?"Vinamilk":"Tất cả nguồn"))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3067,8 +3049,7 @@ function sourceManagerSourceLabel(key){
   return key==="bhx"?"BHX"
     :(key==="wm"?"WM"
     :(key==="go"?"GO"
-    :(key==="vinamilk"?"Vinamilk"
-    :(key==="concung"?"Con Cưng":""))));
+    :(key==="vinamilk"?"Vinamilk":"")));
 }
 
 function sourceManagerActiveItems(){
@@ -3094,7 +3075,7 @@ function sourceManagerActiveItems(){
 
 function sourceManagerVariantLine(item){
   const variants=item&&item.variants||{};
-  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk","concung"]:[sourceManagerSource];
+  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk"]:[sourceManagerSource];
   const parts=[];
   for(const key of keys){
     const values=Array.isArray(variants[key])?variants[key]:[];
@@ -3106,7 +3087,7 @@ function sourceManagerVariantLine(item){
 
 function sourceManagerBadges(item){
   const sources=item&&item.sources||{};
-  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk","concung"]:[sourceManagerSource];
+  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk"]:[sourceManagerSource];
   return keys
     .filter(key=>Number(sources[key]||0)>0)
     .map(key=>'<span class="source-manager-source-badge '+key+'">'+
@@ -3136,9 +3117,7 @@ function renderSourceManager(){
   $("#sourceManagerBhxCount").textContent=String(Number(productCounts.bhx||0));
   $("#sourceManagerGoCount").textContent=String(Number(productCounts.go||0));
   $("#sourceManagerVinamilkCount").textContent=String(Number(productCounts.vinamilk||0));
-  $("#sourceManagerConcungCount").textContent=String(Number(productCounts.concung||0));
   $("#sourceManagerVinamilkCount").textContent=String(Number(productCounts.vinamilk||0));
-  $("#sourceManagerConcungCount").textContent=String(Number(productCounts.concung||0));
 
   const items=sourceManagerActiveItems();
   const visible=items.slice(0,sourceManagerLimit);
@@ -3171,7 +3150,7 @@ function renderSourceManager(){
     }).join("");
   }
 
-  const sourceLabel=sourceManagerSource==="all"?"5 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  const sourceLabel=sourceManagerSource==="all"?"4 nguồn":sourceManagerSourceLabel(sourceManagerSource);
   const kindLabel=sourceManagerKind==="brand"
     ?"hãng"
     :(sourceManagerKind==="manual"?"nhóm tự lập":"nhóm nguồn");
@@ -3219,7 +3198,7 @@ function renderSourceManagerManualDetail(){
   const host=$("#sourceManagerRows");
   const groupName=String(detail.group&&detail.group.name||"Nhóm tự lập");
   const ruleLabel=String(detail.group&&detail.group.rule_label||"");
-  const sourceLabel=sourceManagerSource==="all"?"5 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  const sourceLabel=sourceManagerSource==="all"?"4 nguồn":sourceManagerSourceLabel(sourceManagerSource);
 
   host.innerHTML=
     '<div class="source-manager-detail-head">'+
@@ -3500,7 +3479,6 @@ function rowSourceFilterKey(row){
   if(isWinmartRow(row))return "wm";
   if(isGoRow(row))return "go";
   if(isVinamilkRow(row))return "vinamilk";
-  if(isConcungRow(row))return "concung";
   return "bhx";
 }
 
@@ -3517,7 +3495,7 @@ function rowsAfterPackBeforeSource(){
   });
 }
 
-const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go","vinamilk","concung"];
+const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go","vinamilk"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
@@ -3588,8 +3566,8 @@ function sourceLogoMark(key){
     wm:"assets/logo-winmart.svg",
     go:"assets/logo-go.svg"
   };
-  if(key==="vinamilk"||key==="concung"){
-    const fallback=key==="vinamilk"?"VNM":"Con Cưng";
+  if(key==="vinamilk"){
+    const fallback="VNM";
     return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true"><b class="source-logo-fallback">'+fallback+'</b></span>';
   }
   if(logos[key]){
@@ -3609,8 +3587,7 @@ function sourceChipHtml(key,count,active,compact=false){
     bhx:{full:"Bách Hóa Xanh",short:"BHX",title:"Bách Hóa Xanh"},
     wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
     go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"},
-    vinamilk:{full:"Vinamilk",short:"Vinamilk",title:"Vinamilk"},
-    concung:{full:"Con Cưng",short:"Con Cưng",title:"Con Cưng"}
+    vinamilk:{full:"Vinamilk",short:"Vinamilk",title:"Vinamilk"}
   }[key]||{full:key,short:key,title:key};
 
   const label=escapeHtml(compact?meta.short:meta.full);
@@ -3646,13 +3623,13 @@ function renderSourceTabs(){
     base=base.filter(row=>rowIsRetail(row));
   }
 
-  const counts={mine:0,bhx:0,wm:0,go:0,vinamilk:0,concung:0};
+  const counts={mine:0,bhx:0,wm:0,go:0,vinamilk:0};
   for(const row of base){
     const sourceKey=rowSourceFilterKey(row);
     counts[sourceKey]++;
   }
 
-  if(!["","mine","bhx","wm","go","vinamilk","concung"].includes(activeSourceFilter)){
+  if(!["","mine","bhx","wm","go","vinamilk"].includes(activeSourceFilter)){
     activeSourceFilter="";
     localStorage.removeItem("getlink:filter-source");
   }
@@ -3663,8 +3640,7 @@ function renderSourceTabs(){
     ["bhx",counts.bhx,activeSourceFilter==="bhx"],
     ["wm",counts.wm,activeSourceFilter==="wm"],
     ["go",counts.go,activeSourceFilter==="go"],
-    ["vinamilk",counts.vinamilk,activeSourceFilter==="vinamilk"],
-    ["concung",counts.concung,activeSourceFilter==="concung"]
+    ["vinamilk",counts.vinamilk,activeSourceFilter==="vinamilk"]
   ];
 
   if(navHost){
@@ -3683,8 +3659,7 @@ function renderSourceTabs(){
       :(activeSourceFilter==="bhx"?"BHX"
       :(activeSourceFilter==="wm"?"WinMart"
       :(activeSourceFilter==="go"?"GO!"
-      :(activeSourceFilter==="vinamilk"?"Vinamilk"
-      :(activeSourceFilter==="concung"?"Con Cưng":"Tất cả nguồn")))));
+      :(activeSourceFilter==="vinamilk"?"Vinamilk":"Tất cả nguồn"))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -5946,7 +5921,7 @@ function applyAppRoleUi(){
   const legacyDetail=document.querySelector(".workspace-detail");
   if(appRole==="user"){
     libraryState="visible";
-    if(!["","mine","bhx","wm","go","vinamilk","concung"].includes(activeSourceFilter))activeSourceFilter="";
+    if(!["","mine","bhx","wm","go","vinamilk"].includes(activeSourceFilter))activeSourceFilter="";
     if($("#importCard"))$("#importCard").hidden=true;
     if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
     if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;
@@ -6409,8 +6384,7 @@ function supportedSourceUrl(raw){
       host==="winmart.vn"||
       host==="sieuthi-go.vn"||
       host==="vinamilk.com.vn"||
-      host==="partners.vinamilk.com.vn"||
-      host==="concung.com";
+      host==="partners.vinamilk.com.vn";
   }catch{
     return false;
   }
@@ -6422,7 +6396,6 @@ function inputSourceName(raw){
     if(host==="winmart.vn")return "WinMart";
     if(host==="sieuthi-go.vn")return "GO!";
     if(host==="vinamilk.com.vn"||host==="partners.vinamilk.com.vn")return "Vinamilk";
-    if(host==="concung.com")return "Con Cưng";
     return "Bách Hóa XANH";
   }catch{
     return "";
@@ -6434,7 +6407,7 @@ $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
   if(!supportedSourceUrl(url)){
-    setJobStage("error","Chỉ hỗ trợ link BHX, WinMart, GO!, Vinamilk hoặc Con Cưng.");
+    setJobStage("error","Chỉ hỗ trợ link BHX, WinMart, GO! hoặc Vinamilk.");
     return;
   }
   if(!API){

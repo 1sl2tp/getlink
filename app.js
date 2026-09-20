@@ -159,12 +159,15 @@ let userWorkMarketLimit=8;
 let userWorkMineLimit=12;
 let userWorkDesktopScope="market";
 let userWorkDesktopCategoryKey="";
+let userWorkMarketSourceKey="";
 let userWorkDesktopAutoLoadObserver=null;
 let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["market"];
 const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
-const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk"};
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"VNM"};
+const USER_MARKET_SOURCE_KEYS=["","bhx","wm","go","vinamilk"];
+const USER_MARKET_SOURCE_LABELS={"":"Tất cả",bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"VNM"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -189,6 +192,60 @@ function displayUpperFirst(value){
   const s=String(value||"").trim();
   return s?s.charAt(0).toLocaleUpperCase("vi-VN")+s.slice(1):"";
 }
+
+function userMarketSourceButtonsHtml(attribute){
+  return USER_MARKET_SOURCE_KEYS.map(key=>{
+    const active=key===userWorkMarketSourceKey;
+    return '<button class="user-market-source-chip '+(active?"active":"")+'" '+
+      attribute+'="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'">'+
+      escapeHtml(USER_MARKET_SOURCE_LABELS[key]||key)+
+    '</button>';
+  }).join("");
+}
+
+function sourceExternalProductUrl(product){
+  const raw=String(product&&product.url||"").trim();
+  if(!raw)return "";
+  try{
+    const u=new URL(raw);
+    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    const sourceKey=String(product&&product.source&&product.source.key||"").toLowerCase();
+    const identity=product&&product.source_identity||{};
+
+    if(sourceKey==="go"||host==="sieuthi-go.vn"){
+      const id=String(identity.source_product_id||"").trim();
+      if(id&&!/-i\.\d+$/i.test(u.pathname)){
+        u.pathname=u.pathname.replace(/\/+$/,"")+"-i."+encodeURIComponent(id);
+      }
+      return u.toString();
+    }
+
+    if(sourceKey==="vinamilk"||host==="vinamilk.com.vn"){
+      const packaging=String(product&&product.packaging&&product.packaging.text||"").trim();
+      const parts=packaging.split(/\s*·\s*/).map(x=>x.trim()).filter(Boolean);
+      const sizeChoice=parts[0]||"";
+      const cmp=product&&product.comparison||{};
+      const normalizedPack=cmp.size_value&&cmp.size_unit
+        ?String(Number(cmp.size_value)) + String(cmp.size_unit)
+        :"";
+      const packChoice=parts[1]||normalizedPack;
+
+      // Vinamilk's public product page selects the exact sellable option by
+      // pack + size. The internal GraphQL variant id is not the public URL selector.
+      u.search="";
+      if(packChoice)u.searchParams.set("pack",packChoice);
+      if(sizeChoice)u.searchParams.set("size",sizeChoice);
+      return u.toString();
+    }
+  }catch{}
+  return raw;
+}
+
+function rowExternalProductUrl(row){
+  const payload=payloadFromLibraryRow(row);
+  return sourceExternalProductUrl(payload&&payload.product)||String(row&&row.canonical_url||"");
+}
+
 
 let mobileUserScope="market";
 let mobileUserCategoryKey="";
@@ -1576,7 +1633,7 @@ function renderProduct(payload){
     source_name:p.source&&p.source.name,
     canonical_url:p.url||payload.input_url||""
   }).trim();
-  $("#result").classList.remove("source-bhx","source-winmart","source-go","source-mine");
+  $("#result").classList.remove("source-bhx","source-winmart","source-go","source-vinamilk","source-mine");
   if(detailSourceClass)$("#result").classList.add(detailSourceClass);
   $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
   $("#group").textContent=displayCategoryLabel(p.group)||"—";
@@ -1613,7 +1670,7 @@ function renderProduct(payload){
     $("#promoPrice").textContent+=" · "+money(promoUnit)+"/"+unitLabel(cmp);
   }
   $("#promoText").textContent=quantityPromo?(cmp.promotion_text||""):"";
-  $("#productLink").href=p.url||payload.input_url||"#";
+  $("#productLink").href=sourceExternalProductUrl(p)||p.url||payload.input_url||"#";
 
   wantedUrl=p.url||payload.input_url||wantedUrl;
   $("#url").value=wantedUrl||$("#url").value;
@@ -4047,6 +4104,7 @@ function userWorkCategories(scope){
   for(const row of libraryCache){
     if(String(row.preference_state||"normal")==="hidden")continue;
     if(scope==="mine"?!isMineRow(row):isMineRow(row))continue;
+    if(scope==="market"&&userWorkMarketSourceKey&&rowSourceFilterKey(row)!==userWorkMarketSourceKey)continue;
     const key=userWorkRowCategoryKey(row,scope);
     if(!key)continue;
     const item={
@@ -4063,6 +4121,7 @@ function userWorkCategories(scope){
 function userWorkRowsForScope(scope,categoryKey=""){
   return userWorkRows().filter(row=>{
     if(scope==="mine"?!isMineRow(row):isMineRow(row))return false;
+    if(scope==="market"&&userWorkMarketSourceKey&&rowSourceFilterKey(row)!==userWorkMarketSourceKey)return false;
     if(categoryKey&&userWorkRowCategoryKey(row,scope)!==categoryKey)return false;
     return true;
   });
@@ -4755,6 +4814,7 @@ function mobileUserMarketCard(row){
       (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
       '<div class="mobile-user-product-bottom">'+
         (price?'<b class="mobile-user-product-price source-'+escapeAttr(sourceKey)+'">'+money(price)+'</b>':'')+
+        '<span class="user-work-source-tag '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</span>'+
       '</div>'+
     '</div>'+
   '</article>';
@@ -4764,9 +4824,14 @@ function renderMobileUserSourceTabs(){
   const host=$("#mobileUserSourceTabs");
   if(!host)return;
 
+  const sourceRow='<div class="mobile-user-source-level parent market-sources">'+
+    userMarketSourceButtonsHtml("data-mobile-market-source")+
+    '</div>';
+
   const categoryHost=document.createElement("div");
   renderUserWorkCategoryButtons(categoryHost,"market",mobileUserCategoryKey,"data-mobile-category");
-  host.innerHTML='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
+  host.innerHTML=sourceRow+
+    '<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
 }
 
 function setupMobileUserAutoLoad(){
@@ -4807,7 +4872,7 @@ function mobileUserScopeViewKey(scope){
       String(newsItems[0]?.id||""),Number(memory?.at||0)
     ].join("|");
   }
-  return [scope,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");
+  return [scope,userWorkMarketSourceKey,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");
 }
 function stashMobileUserScopeView(scope){
   const host=$("#mobileUserResults");
@@ -4973,6 +5038,7 @@ function userWorkMarketCard(row,laneIndex=0){
       (pack?'<small class="user-work-market-pack">'+escapeHtml(pack)+'</small>':'')+
       '<div class="user-work-market-bottom">'+
         (price?'<b class="user-work-market-price source-'+escapeAttr(sourceClass)+'">'+money(price)+'</b>':'')+
+        '<span class="user-work-source-tag '+escapeAttr(sourceClass)+'">'+escapeHtml(source)+'</span>'+
       '</div>'+
     '</div>'+
   '</article>';
@@ -5138,6 +5204,11 @@ function renderUserWorkHome(){
     desktopSearch.value=newsMode?newsQuery:libraryQuery;
   }
   if(desktopSearch)desktopSearch.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";
+
+  const marketSourceHost=$("#userWorkMarketSourceTabs");
+  if(marketSourceHost){
+    marketSourceHost.innerHTML=userMarketSourceButtonsHtml("data-work-market-source");
+  }
 
   document.querySelectorAll(".user-work-jump-button").forEach(btn=>{
     const active=btn.dataset.workTarget===userWorkDesktopScope;
@@ -6459,6 +6530,31 @@ if(userWorkHome){
       return;
     }
 
+    const desktopMarketSource=e.target.closest("[data-work-market-source]");
+    if(desktopMarketSource){
+      userWorkMarketSourceKey=USER_MARKET_SOURCE_KEYS.includes(desktopMarketSource.dataset.workMarketSource)
+        ?desktopMarketSource.dataset.workMarketSource
+        :"";
+      userWorkDesktopCategoryKey="";
+      userWorkMarketLimit=8;
+      renderUserWorkHome();
+      resetUserWorkDesktopScroll();
+      return;
+    }
+
+    const mobileMarketSource=e.target.closest("[data-mobile-market-source]");
+    if(mobileMarketSource){
+      userWorkMarketSourceKey=USER_MARKET_SOURCE_KEYS.includes(mobileMarketSource.dataset.mobileMarketSource)
+        ?mobileMarketSource.dataset.mobileMarketSource
+        :"";
+      mobileUserCategoryKey="";
+      mobileUserLimit=8;
+      mobileUserScopeViewCache.clear();
+      renderUserWorkHome();
+      resetMobileUserResultsScroll();
+      return;
+    }
+
     const jump=e.target.closest(".user-work-jump-button");
     if(jump){
       const target=String(jump.dataset.workTarget||"market");
@@ -6563,12 +6659,18 @@ if(userWorkHome){
       }
       return;
     }
+    if(mobileCard&&!e.target.closest("[data-work-qty]")){
+      const row=findLibraryRow(mobileCard.dataset.url||"");
+      const href=row?rowExternalProductUrl(row):String(mobileCard.dataset.url||"");
+      if(href)window.open(href,"_blank","noopener");
+      return;
+    }
 
     const card=e.target.closest(".user-work-market-card");
     if(card){
-      // Work frame is browse-only here. Do not open the legacy product-detail
-      // drawer (Nhóm/Hãng/Quy cách/Ưu đãi/Quan tâm), because that old surface
-      // owns unrelated state and can break the isolated frame geometry.
+      const row=findLibraryRow(card.dataset.url||"");
+      const href=row?rowExternalProductUrl(row):String(card.dataset.url||"");
+      if(href)window.open(href,"_blank","noopener");
       return;
     }
   });

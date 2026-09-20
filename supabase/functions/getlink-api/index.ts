@@ -1359,26 +1359,25 @@ async function vinamilkFetchPage(
   capture:RawCapture
 ):Promise<{page:number;items:VinamilkVariantItem[]}>{
   const endpoint=vinamilkPageUrl(categoryUrl,page);
-  const r=await fetch(endpoint,{
-    headers:{
-      "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
-      "cache-control":"no-cache",
-      "pragma":"no-cache",
-      "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
-    },
-    redirect:"follow"
+  const relay=BHX_TRANSPORT_URL+"/vinamilk";
+  const r=await fetch(relay,{
+    method:"POST",
+    headers:bhxRelayHeaders(),
+    body:JSON.stringify({url:endpoint})
   });
-  const html=await r.text();
+  const body=await r.json().catch(()=>null);
+  const html=clean(body?.body||"")?String(body.body):"";
   capture.entries.push({
     seq:capture.entries.length+1,
     endpoint,
     method:"GET",
-    status:r.status,
-    content_type:clean(r.headers.get("content-type")||""),
-    response_body:html
+    status:Number(body?.upstream_status||r.status),
+    content_type:clean(body?.content_type||""),
+    response_body:html||clean(JSON.stringify(body||{}))
   });
-  if(!r.ok)throw new Error("vinamilk_http_"+r.status);
+  if(!r.ok||!body?.ok||!html){
+    throw new Error("vinamilk_relay_http_"+r.status+":"+clean(body?.error||body?.detail||"").slice(0,300));
+  }
   return {page,items:vinamilkVariantsFromHtml(html)};
 }
 
@@ -1541,7 +1540,7 @@ async function fetchSource(input:string, requestId:string){
         source:sourceObject(key),checked_at:checked,category_name:raw.rootName,
         products,variants:[],discovered_links:products.map(p=>p.url),source_pages:raw.pages
       },
-      engine:"supabase-edge-vinamilk-rsc"
+      engine:"supabase-edge-vinamilk-relay-rsc"
     };
   }
   throw new Error("unsupported_source");

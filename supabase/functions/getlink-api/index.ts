@@ -68,7 +68,7 @@ function sourceKey(raw: string) {
   if (host === "bachhoaxanh.com") return "bachhoaxanh";
   if (host === "winmart.vn") return "winmart";
   if (host === "sieuthi-go.vn") return "go";
-  if (host === "vinamilk.com.vn") return "vinamilk";
+  if (host === "vinamilk.com.vn" || host === "partners.vinamilk.com.vn") return "vinamilk";
   if (host === "concung.com") return "concung";
   if (host === "get.taphoa.xyz" && new URL(raw).pathname.startsWith("/nguon-hang/")) return "mine";
   throw new Error("unsupported_source_url");
@@ -116,6 +116,24 @@ async function readCapturedJson(
   if(!responseBody)return null;
   try{return JSON.parse(responseBody);}
   catch{return null;}
+}
+
+async function readCapturedText(
+  response:Response,
+  capture:RawCapture,
+  endpoint:string,
+  method:string
+):Promise<string>{
+  const responseBody=await response.text();
+  capture.entries.push({
+    seq:capture.entries.length+1,
+    endpoint,
+    method,
+    status:response.status,
+    content_type:clean(response.headers.get("content-type")||""),
+    response_body:responseBody
+  });
+  return responseBody;
 }
 
 async function sha256Text(value:string):Promise<string>{
@@ -188,7 +206,7 @@ function canonicalGo(raw: string) {
 function canonicalVinamilk(raw:string){
   const u=new URL(raw);
   const host=u.hostname.toLowerCase().replace(/^www\./,"");
-  if(host!=="vinamilk.com.vn")throw new Error("invalid_vinamilk_url");
+  if(host!=="vinamilk.com.vn"&&host!=="partners.vinamilk.com.vn")throw new Error("invalid_vinamilk_url");
   const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/$/,"")||"/";
   const out=new URL("https://www.vinamilk.com.vn"+path);
   const src=clean(u.searchParams.get("src")||"");

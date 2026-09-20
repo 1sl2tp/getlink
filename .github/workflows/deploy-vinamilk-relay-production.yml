@@ -1,10 +1,10 @@
-name: Deploy Vinamilk Relay Production
+name: Deploy Vinamilk Relay Preview
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-vinamilk-relay-production
+  group: deploy-vinamilk-relay-preview
   cancel-in-progress: true
 
 on:
@@ -12,6 +12,8 @@ on:
     branches:
       - feat/vinamilk-source-rsc
     paths:
+      - "relay/src/index.js"
+      - "scraper/probe_vinamilk_direct.mjs"
       - ".github/workflows/deploy-vinamilk-relay-production.yml"
   workflow_dispatch:
 
@@ -27,30 +29,62 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+
       - run: npm install -g wrangler@4.129.1
       - run: node --check relay/src/index.js
-      - name: Create production relay config
+
+      - name: Create preview relay config
         run: |
-          cat > relay/wrangler-feature-prod.toml <<EOF
-          name = "getlink-bhx-relay"
+          cat > relay/wrangler-vnm-preview.toml <<EOF
+          name = "getlink-vinamilk-relay-preview"
           main = "src/index.js"
           compatibility_date = "2026-09-08"
           workers_dev = true
           account_id = "$CLOUDFLARE_ACCOUNT_ID"
           EOF
-      - name: Preserve configured relay secret
+
+      - name: Upload relay auth secret
         run: |
           set -euo pipefail
           if [ -n "${RELAY_SHARED_SECRET:-}" ]; then
-            printf '%s' "$RELAY_SHARED_SECRET" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler-feature-prod.toml
+            printf '%s' "$RELAY_SHARED_SECRET" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler-vnm-preview.toml >/dev/null
           fi
-      - name: Deploy production relay
+
+      - name: Upload Vinamilk public client config
         run: |
           set -euo pipefail
-          wrangler deploy --config relay/wrangler-feature-prod.toml 2>&1 | tee /tmp/deploy.log
+          node <<'NODE' > /tmp/vnm-secrets.tsv
+          const fs=require("fs");
+          const src=fs.readFileSync("scraper/probe_vinamilk_direct.mjs","utf8");
+          const mapping={
+            VNM_CLIENT_ID:"CLIENT_ID",
+            VNM_X_TERMINAL:"TERMINAL",
+            VNM_EXTERNAL_CODE:"EXTERNAL_CODE",
+            VNM_SIGNATURE_SALT:"SIGNATURE_SALT",
+            VNM_USER_AGENT:"DEVICE_INFO"
+          };
+          for(const [target,source] of Object.entries(mapping)){
+            const re=new RegExp("const\\s+"+source+"\\s*=\\s*\\"([^\\"]+)\\"");
+            const m=src.match(re);
+            if(!m)throw new Error("missing "+source);
+            process.stdout.write(target+"\\t"+m[1]+"\\n");
+          }
+          NODE
+          while IFS=$'\t' read -r key value; do
+            test -n "$key"
+            test -n "$value"
+            printf '%s' "$value" | wrangler secret put "$key" --config relay/wrangler-vnm-preview.toml >/dev/null
+          done < /tmp/vnm-secrets.tsv
+          rm -f /tmp/vnm-secrets.tsv
+
+      - name: Deploy preview relay
+        run: |
+          set -euo pipefail
+          wrangler deploy --config relay/wrangler-vnm-preview.toml 2>&1 | tee /tmp/deploy.log
           URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
           test -n "$URL"
           echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
+
       - name: Wait for worker propagation
         run: |
           set -euo pipefail
@@ -64,16 +98,28 @@ jobs:
           done
           cat /tmp/health.json || true
           exit 1
+
       - name: Smoke existing BHX route
         run: |
           set -euo pipefail
           KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors             -H "x-getlink-relay: $KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}' > /tmp/bhx.json
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            -H "x-getlink-relay: $KEY" \
+            -H 'content-type: application/json' \
+            -X POST "$RELAY_URL/bhx" \
+            --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}' > /tmp/bhx.json
           jq -e '.code == 0 and .data != null and (.data.products|length)>0' /tmp/bhx.json >/dev/null
-      - name: Smoke Vinamilk route
+
+      - name: Smoke Vinamilk signed GraphQL route
         run: |
           set -euo pipefail
           KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors             -H "x-getlink-relay: $KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/vinamilk"             --data '{"url":"https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"}' > /tmp/vnm.json
-          jq '{ok,upstream_status,bytes:(.body|length),has_price:(.body|contains("originPrice"))}' /tmp/vnm.json
-          jq -e '.ok == true and .upstream_status == 200 and (.body|length)>10000 and (.body|contains("originPrice"))' /tmp/vnm.json >/dev/null
+          QUERY='query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) { eshop_searchProducts(payload: $payload) { total items { variantId name skuCode thumbnail image { url } price { price originPrice currency } sellableInfo { sellable } product { productId handle brand category packagingValue } } } }'
+          jq -nc --arg query "$QUERY" '{operationName:"GetEShopProductSelectors",variables:{payload:{collectionHandle:"sua-tuoi",offset:0,size:12,sortType:"RELEVANCE"}},query:$query}' > /tmp/vnm-request.json
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            -H "x-getlink-relay: $KEY" \
+            -H 'content-type: application/json' \
+            -X POST "$RELAY_URL/vinamilk" \
+            --data-binary @/tmp/vnm-request.json > /tmp/vnm.json
+          jq '{ok,upstream_status,total:.data.eshop_searchProducts.total,items:(.data.eshop_searchProducts.items|length),first_price:.data.eshop_searchProducts.items[0].price.price}' /tmp/vnm.json
+          jq -e '.ok == true and .upstream_status == 200 and (.data.eshop_searchProducts.total|tonumber)>0 and (.data.eshop_searchProducts.items|length)>0 and (.data.eshop_searchProducts.items[0].price.price|tonumber)>0' /tmp/vnm.json >/dev/null

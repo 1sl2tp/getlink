@@ -41,7 +41,7 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
 
     def test_mobile_uses_three_parent_scopes_with_child_sources(self):
         self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
-        self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"]',APP)
+        self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk","concung"]',APP)
         self.assertIn('mine:"Tạp hóa"',APP)
         self.assertIn('market:"Siêu thị"',APP)
         self.assertIn('news:"Tin tức"',APP)

@@ -3039,6 +3039,21 @@ h1{margin:0;font-size:28px;line-height:1.1}
   color:#e85d04!important;
 }
 
+.xls-source.source-vinamilk{
+  color:#0068b2!important;
+}
+.xls-source.source-concung{
+  color:#e91e63!important;
+}
+.grid-product.source-vinamilk .grid-price,
+.grid-price.source-price-vinamilk{
+  color:#0068b2!important;
+}
+.grid-product.source-concung .grid-price,
+.grid-price.source-price-concung{
+  color:#e91e63!important;
+}
+
 
 /* Non-destructive cross-source match audit */
 .catalog-mode-actions{
@@ -4602,12 +4617,20 @@ body.image-zoom-open{overflow:hidden!important}
 .source-chip[data-source="wm"] small{color:#df6a61}
 .source-chip[data-source="go"]{color:#e85d04}
 .source-chip[data-source="go"] small{color:#ed8b51}
+.source-chip[data-source="vinamilk"]{color:#0068b2}
+.source-chip[data-source="vinamilk"] small{color:#4a91c2}
+.source-chip[data-source="concung"]{color:#e91e63}
+.source-chip[data-source="concung"] small{color:#ed6f9b}
 .source-chip[data-source="bhx"].active{border-color:#a8d2bb;background:#eef8f2;color:#087a40}
 .source-chip[data-source="wm"].active{border-color:#efb7b2;background:#fff4f3;color:#d92d20}
 .source-chip[data-source="go"].active{border-color:#f2c8aa;background:#fff6ef;color:#e85d04}
+.source-chip[data-source="vinamilk"].active{border-color:#a8cde4;background:#eff8fd;color:#0068b2}
+.source-chip[data-source="concung"].active{border-color:#f3b8cd;background:#fff3f8;color:#e91e63}
 .source-chip[data-source="bhx"].active small{color:#5d9f7b}
 .source-chip[data-source="wm"].active small{color:#df6a61}
 .source-chip[data-source="go"].active small{color:#ed8b51}
+.source-chip[data-source="vinamilk"].active small{color:#4a91c2}
+.source-chip[data-source="concung"].active small{color:#ed6f9b}
 
 @media(max-width:720px){
   .catalog-search-row{
@@ -7098,6 +7121,25 @@ body.source-manager-open{overflow:hidden!important}
   color:#e85d04!important;
 }
 .source-logo-go b{font-size:8.5px!important}
+
+.source-logo-vinamilk{
+  border-color:#0068b2!important;
+  background:#eef8ff!important;
+  color:#0068b2!important;
+}
+.source-logo-vinamilk b{
+  font-size:8px!important;
+  font-weight:900!important;
+}
+.source-logo-concung{
+  border-color:#e91e63!important;
+  background:#fff2f7!important;
+  color:#e91e63!important;
+}
+.source-logo-concung b{
+  font-size:7.5px!important;
+  font-weight:900!important;
+}
 
 /* Sidebar: readable full names + counts. */
 .workspace-nav .nav-source-tabs .source-chip-brand{
@@ -13673,6 +13715,11 @@ html[data-getlink-embed="1"] body[data-app-role="user"] .user-work-home{
 .mobile-user-product-price.source-wm{color:#d92d20!important}
 .user-work-market-price.source-go,
 .mobile-user-product-price.source-go{color:#e85d04!important}
+
+.user-work-market-price.source-vinamilk,
+.mobile-user-product-price.source-vinamilk{color:#0068b2!important}
+.user-work-market-price.source-concung,
+.mobile-user-product-price.source-concung{color:#e91e63!important}
 
 @media(max-width:639px){
   .getlink-work-brand-mark svg{

@@ -2206,11 +2206,13 @@ function supplierGroupForName(name:unknown,rules:any[],groupByKey:Map<string,any
   return groupByKey.get("chua-phan-loai")||null;
 }
 
-function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|""{
+function managerSourceKey(value:unknown):"bhx"|"wm"|"go"|"vinamilk"|"concung"|""{
   const s=plain(value);
   if(s.includes("bach hoa xanh"))return "bhx";
   if(s.includes("winmart"))return "wm";
   if(/^go\b/.test(s)||s==="go!")return "go";
+  if(s.includes("vinamilk"))return "vinamilk";
+  if(s.includes("con cung"))return "concung";
   return "";
 }
 function managerGroupDisplay(value:unknown):string{
@@ -2220,10 +2222,13 @@ function managerGroupKey(value:unknown):string{
   return getlinkNameKey(managerGroupDisplay(value));
 }
 function sourceBucket(){
-  return {bhx:0,wm:0,go:0};
+  return {bhx:0,wm:0,go:0,vinamilk:0,concung:0};
 }
 function variantBucket(){
-  return {bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>()};
+  return {
+    bhx:new Set<string>(),wm:new Set<string>(),go:new Set<string>(),
+    vinamilk:new Set<string>(),concung:new Set<string>()
+  };
 }
 
 async function fetchRowsByValues(table:string,select:string,column:string,values:string[]):Promise<any[]>{
@@ -2313,7 +2318,7 @@ async function sourceManagerManualGroupDetail(groupKey:string){
         ?"Chưa khớp nhóm cơ bản"
         :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · ")
     },
-    products:{...counts,all:counts.bhx+counts.wm+counts.go},
+    products:{...counts,all:counts.bhx+counts.wm+counts.go+counts.vinamilk+counts.concung},
     items
   };
 }
@@ -2409,7 +2414,7 @@ async function sourceManagerSnapshot(force=false){
         :"OR · "+rules.map((r:any)=>clean(r.rule_value)).filter(Boolean).join(" · "),
       total:0,
       sources:sourceBucket(),
-      variants:{bhx:[],wm:[],go:[]}
+      variants:{bhx:[],wm:[],go:[],vinamilk:[],concung:[]}
     });
   }
   for(const member of manualMembers){
@@ -2428,14 +2433,16 @@ async function sourceManagerSnapshot(force=false){
       variants:{
         bhx:[...row.variants.bhx].sort((a,b)=>a.localeCompare(b,"vi")),
         wm:[...row.variants.wm].sort((a,b)=>a.localeCompare(b,"vi")),
-        go:[...row.variants.go].sort((a,b)=>a.localeCompare(b,"vi"))
+        go:[...row.variants.go].sort((a,b)=>a.localeCompare(b,"vi")),
+        vinamilk:[...row.variants.vinamilk].sort((a,b)=>a.localeCompare(b,"vi")),
+        concung:[...row.variants.concung].sort((a,b)=>a.localeCompare(b,"vi"))
       }
     }))
     .sort((a,b)=>(b.total-a.total)||a.name.localeCompare(b.name,"vi"));
 
   sourceManagerCache={
     generated_at:new Date().toISOString(),
-    products:{...products,all:products.bhx+products.wm+products.go},
+    products:{...products,all:products.bhx+products.wm+products.go+products.vinamilk+products.concung},
     brands:finalize(brandMap),
     groups:finalize(groupMap),
     manual_groups:[...manualMap.values()]

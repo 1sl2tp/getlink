@@ -5,6 +5,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 APP=(ROOT/"app.js").read_text(encoding="utf-8")
 
+# User and Admin must share the same source-link builder.
 class SourceExternalProductUrlContractTest(unittest.TestCase):
     def test_go_open_url_uses_public_product_route_id(self):
         block=re.search(r"function sourceExternalProductUrl\(product\)\{([\s\S]*?)\n\}",APP)

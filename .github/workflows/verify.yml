@@ -37,7 +37,6 @@ jobs:
       - run: node --check taphoa-desktop-debts.js
       - run: node --check taphoa-workspace-feedback.js
       - run: node --check relay/src/index.js
-      - run: node scraper/probe_vinamilk_direct.mjs
       - name: Inspect Vinamilk variant schema
         run: |
           python - <<'PY'

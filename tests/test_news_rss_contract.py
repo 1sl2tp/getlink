@@ -9,12 +9,12 @@ EDGE=(ROOT/"supabase/functions/getlink-api/index.ts").read_text(encoding="utf-8"
 
 
 class NewsRssContractTest(unittest.TestCase):
-    def test_news_tab_exists_on_desktop_and_mobile_runtime(self):
-        self.assertIn('data-work-target="news"',HTML)
-        self.assertIn('<span>Tin tức</span>',HTML)
+    def test_news_runtime_is_kept_but_not_an_entry_tab(self):
+        self.assertNotIn('data-work-target="news"',HTML)
+        self.assertNotIn('<span>Tin tức</span>',HTML)
         self.assertIn('id="userWorkNews"',HTML)
-        self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
-        self.assertIn('news:"Tin tức"',APP)
+        self.assertIn('const MOBILE_USER_SCOPES=["market"]',APP)
+        self.assertNotIn('news:"Tin tức"',APP)
         self.assertIn('"chinh-tri":"Chính trị"',APP)
         self.assertIn('"phap-luat":"Pháp luật"',APP)
         self.assertIn('"kinh-te":"Kinh tế"',APP)
@@ -129,10 +129,12 @@ class NewsRssContractTest(unittest.TestCase):
         self.assertIn('readNewsBrowserCache',APP)
         self.assertNotIn("NEWS_BROWSER_CACHE_TTL",APP)
         self.assertIn("Last READY package is always usable as the instant first paint.",APP)
-        self.assertIn("prewarmOtherNewsTopics();",APP)
+        self.assertIn("function prewarmOtherNewsTopics()",APP)
+        self.assertIn("function prewarmLatestNews()",APP)
         self.assertIn('writeNewsBrowserCache',APP)
-        self.assertIn('if(!newsItems.length)ensureNewsLoaded(false)',APP)
-        self.assertIn('prewarmLatestNews();',APP)
+        self.assertNotIn("prewarmOtherNewsTopics();",APP)
+        self.assertNotIn('if(!newsItems.length)ensureNewsLoaded(false)',APP)
+        self.assertNotIn('prewarmLatestNews();',APP)
         self.assertIn('NEWS_SNAPSHOT_BUCKET_MS=5*60*1000',APP)
         self.assertIn('fetchNewsSnapshot(key,force)',APP)
         self.assertIn('cache:force?"no-store":"force-cache"',APP)

@@ -163,8 +163,8 @@ let userWorkDesktopAutoLoadObserver=null;
 let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["mine","market","news"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị",news:"Tin tức"};
-const MOBILE_MARKET_SOURCES=["bhx","wm","go"];
-const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!"};
+const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk","concung"];
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk",concung:"Con Cưng"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -1707,6 +1707,8 @@ function sourceObjectFromRow(row){
   if(isMineRow(row))return {key:"mine",name:"Tạp hóa",host:"get.taphoa.xyz"};
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
+  if(isVinamilkRow(row))return {key:"vinamilk",name:"Vinamilk",host:"vinamilk.com.vn"};
+  if(isConcungRow(row))return {key:"concung",name:"Con Cưng",host:"concung.com"};
   return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
 }
 
@@ -2213,6 +2215,35 @@ function isGoRow(row){
   }
 }
 
+function isVinamilkRow(row){
+  const raw=searchKey([
+    row&&row.source,
+    row&&row.source_name
+  ].filter(Boolean).join(" "));
+  if(raw.includes("vinamilk"))return true;
+  try{
+    const host=new URL(String(row&&row.canonical_url||"")).hostname
+      .toLowerCase().replace(/^www\./,"");
+    return host==="vinamilk.com.vn"||host==="partners.vinamilk.com.vn";
+  }catch{
+    return false;
+  }
+}
+
+function isConcungRow(row){
+  const raw=searchKey([
+    row&&row.source,
+    row&&row.source_name
+  ].filter(Boolean).join(" "));
+  if(raw.includes("con cung"))return true;
+  try{
+    return new URL(String(row&&row.canonical_url||"")).hostname
+      .toLowerCase().replace(/^www\./,"")==="concung.com";
+  }catch{
+    return false;
+  }
+}
+
 function isMineRow(row){
   const raw=searchKey([
     row&&row.source,
@@ -2234,6 +2265,8 @@ function sourceDisplayLabel(row){
   if(isMineRow(row))return "Tạp hóa";
   if(isWinmartRow(row))return "WM";
   if(isGoRow(row))return "GO";
+  if(isVinamilkRow(row))return "Vinamilk";
+  if(isConcungRow(row))return "Con Cưng";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
   return displayUpperFirst(raw);
@@ -2245,6 +2278,8 @@ function sourceDisplayClass(row){
   if(isMineRow(row))return " source-mine";
   if(isWinmartRow(row))return " source-winmart";
   if(isGoRow(row))return " source-go";
+  if(isVinamilkRow(row))return " source-vinamilk";
+  if(isConcungRow(row))return " source-concung";
   const key=searchKey(String(row&&row.source||""));
   if(!key||key.includes("bach hoa xanh"))return " source-bhx";
   return "";
@@ -2932,7 +2967,12 @@ function renderCategoryMenu(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn")));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa"
+      :(activeSourceFilter==="bhx"?"BHX"
+      :(activeSourceFilter==="wm"?"WinMart"
+      :(activeSourceFilter==="go"?"GO!"
+      :(activeSourceFilter==="vinamilk"?"Vinamilk"
+      :(activeSourceFilter==="concung"?"Con Cưng":"Tất cả nguồn")))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3451,6 +3491,8 @@ function rowSourceFilterKey(row){
   if(isMineRow(row))return "mine";
   if(isWinmartRow(row))return "wm";
   if(isGoRow(row))return "go";
+  if(isVinamilkRow(row))return "vinamilk";
+  if(isConcungRow(row))return "concung";
   return "bhx";
 }
 
@@ -3467,7 +3509,7 @@ function rowsAfterPackBeforeSource(){
   });
 }
 
-const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go"];
+const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go","vinamilk","concung"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
@@ -3538,6 +3580,10 @@ function sourceLogoMark(key){
     wm:"assets/logo-winmart.svg",
     go:"assets/logo-go.svg"
   };
+  if(key==="vinamilk"||key==="concung"){
+    const fallback=key==="vinamilk"?"VNM":"Con Cưng";
+    return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true"><b class="source-logo-fallback">'+fallback+'</b></span>';
+  }
   if(logos[key]){
     const fallback=key==="mine"?"TẠP HÓA":(key==="bhx"?"BHX":(key==="wm"?"WinMart":"GO!"));
     return '<span class="source-logo-mark source-logo-'+key+'" aria-hidden="true">'+
@@ -3554,7 +3600,9 @@ function sourceChipHtml(key,count,active,compact=false){
     mine:{full:"Tạp hóa",short:"Tạp hóa",title:"Giá của mình · Tạp hóa"},
     bhx:{full:"Bách Hóa Xanh",short:"BHX",title:"Bách Hóa Xanh"},
     wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
-    go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"}
+    go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"},
+    vinamilk:{full:"Vinamilk",short:"Vinamilk",title:"Vinamilk"},
+    concung:{full:"Con Cưng",short:"Con Cưng",title:"Con Cưng"}
   }[key]||{full:key,short:key,title:key};
 
   const label=escapeHtml(compact?meta.short:meta.full);
@@ -3590,13 +3638,13 @@ function renderSourceTabs(){
     base=base.filter(row=>rowIsRetail(row));
   }
 
-  const counts={mine:0,bhx:0,wm:0,go:0};
+  const counts={mine:0,bhx:0,wm:0,go:0,vinamilk:0,concung:0};
   for(const row of base){
     const sourceKey=rowSourceFilterKey(row);
     counts[sourceKey]++;
   }
 
-  if(!["","mine","bhx","wm","go"].includes(activeSourceFilter)){
+  if(!["","mine","bhx","wm","go","vinamilk","concung"].includes(activeSourceFilter)){
     activeSourceFilter="";
     localStorage.removeItem("getlink:filter-source");
   }
@@ -3606,7 +3654,9 @@ function renderSourceTabs(){
     ["mine",counts.mine,activeSourceFilter==="mine"],
     ["bhx",counts.bhx,activeSourceFilter==="bhx"],
     ["wm",counts.wm,activeSourceFilter==="wm"],
-    ["go",counts.go,activeSourceFilter==="go"]
+    ["go",counts.go,activeSourceFilter==="go"],
+    ["vinamilk",counts.vinamilk,activeSourceFilter==="vinamilk"],
+    ["concung",counts.concung,activeSourceFilter==="concung"]
   ];
 
   if(navHost){
@@ -3621,7 +3671,12 @@ function renderSourceTabs(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":"Tất cả nguồn")));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa"
+      :(activeSourceFilter==="bhx"?"BHX"
+      :(activeSourceFilter==="wm"?"WinMart"
+      :(activeSourceFilter==="go"?"GO!"
+      :(activeSourceFilter==="vinamilk"?"Vinamilk"
+      :(activeSourceFilter==="concung"?"Con Cưng":"Tất cả nguồn")))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }

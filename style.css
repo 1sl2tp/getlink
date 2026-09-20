@@ -15424,3 +15424,51 @@ body.news-quick-open{overflow:hidden!important}
 
 .taphoa-chat-order-context{display:flex;min-width:0;max-width:100%;align-items:center;gap:6px;padding:7px 9px;border:1px solid var(--line,#dfe5e2);border-radius:10px;background:#f7faf8;font-size:12px;line-height:1.25;overflow-wrap:anywhere}
 .taphoa-chat-order-context[data-state="deferred"]{font-style:italic}
+
+
+/* VNM source mark: keep the logo slot visible even before a dedicated image asset exists. */
+.source-logo-vinamilk{
+  border:0!important;
+  border-radius:999px!important;
+  background:#0068b2!important;
+  color:#fff!important;
+}
+.source-logo-vinamilk::before{
+  content:"VINAMILK";
+  display:block!important;
+  color:#fff!important;
+  font-family:Arial,sans-serif!important;
+  font-size:7px!important;
+  font-weight:900!important;
+  line-height:1!important;
+  letter-spacing:-.04em!important;
+}
+.source-logo-vinamilk .source-logo-fallback{
+  display:none!important;
+}
+.purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-vinamilk,
+.quick-source-tabs .source-chip-logo-only.source-vinamilk{
+  width:62px!important;
+  min-width:62px!important;
+}
+.purchase-mode-row .source-tabs-inline .source-logo-vinamilk,
+.quick-source-tabs .source-logo-vinamilk{
+  width:50px!important;
+  max-width:50px!important;
+  height:20px!important;
+  max-height:20px!important;
+}
+@media(max-width:720px){
+  .purchase-mode-row .source-tabs-inline .source-chip-logo-only.source-vinamilk,
+  .quick-source-tabs .source-chip-logo-only.source-vinamilk{
+    width:58px!important;
+    min-width:58px!important;
+  }
+  .purchase-mode-row .source-tabs-inline .source-logo-vinamilk,
+  .quick-source-tabs .source-logo-vinamilk{
+    width:46px!important;
+    max-width:46px!important;
+    height:19px!important;
+    max-height:19px!important;
+  }
+}

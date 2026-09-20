@@ -27,7 +27,7 @@ jobs:
       - run: python -m unittest tests.test_chat_order_source_handoff -v
       - run: python -m unittest tests.test_mobile_standard_document_layout -v
       - run: python -m unittest discover -s tests -v
-      - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py scraper/probe_vinamilk_browser.py scraper/brightdata_vinamilk.py
+      - run: python -W error::SyntaxWarning -m py_compile scraper/scraper.py scraper/brightdata_bhx.py scraper/brightdata_go.py scraper/probe_vinamilk_browser.py scraper/brightdata_vinamilk.py scraper/probe_vinamilk_signature.py
       - run: node --check app.js
       - run: node --check order-management.js
       - run: node --check taphoa-mobile-standard.js
@@ -63,6 +63,16 @@ jobs:
           BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
           BRIGHTDATA_COUNTRY: vn
         run: python scraper/brightdata_vinamilk.py
+      - name: Inspect Vinamilk GraphQL signing code
+        env:
+          BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}
+          BRIGHTDATA_BROWSER_WSS: ${{ secrets.BRIGHTDATA_BROWSER_WSS }}
+          SBR_WS_CDP: ${{ secrets.SBR_WS_CDP }}
+          SBR_CDP_URL: ${{ secrets.SBR_CDP_URL }}
+          BRIGHTDATA_BROWSER_USERNAME: ${{ secrets.BRIGHTDATA_BROWSER_USERNAME }}
+          BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
+          BRIGHTDATA_COUNTRY: vn
+        run: python scraper/probe_vinamilk_signature.py
       - run: node tests/test_getlink_name_filter_contract.mjs
       - name: Supabase-only gate
         run: |

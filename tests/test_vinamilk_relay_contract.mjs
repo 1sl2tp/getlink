@@ -3,14 +3,20 @@ import assert from "node:assert/strict";
 
 const relay=fs.readFileSync("relay/src/index.js","utf8");
 
-assert.match(relay,/function canonicalVinamilkRelayUrl\(/);
-assert.match(relay,/host !== "vinamilk\.com\.vn"/);
-assert.match(relay,/vinamilk_catalog_url_required/);
+assert.match(relay,/const VNM_GRAPHQL_PATH = "\/api\/graphql-pub\/"/);
+assert.match(relay,/async function vinamilkGraphql\(/);
+assert.match(relay,/function vinamilkConfig\(env\)/);
+assert.match(relay,/VNM_SIGNATURE_SALT/);
+assert.match(relay,/VNM_CLIENT_ID/);
+assert.match(relay,/VNM_X_TERMINAL/);
+assert.match(relay,/VNM_EXTERNAL_CODE/);
+assert.match(relay,/\[VNM_GRAPHQL_PATH, timestamp, deviceInfo, graphqlHash, cfg\.salt\]\.join\("\."\)/);
+assert.match(relay,/"x-graphql-hash": graphqlHash/);
+assert.match(relay,/"x-signature": signature/);
 assert.match(relay,/async function handleVinamilk\(/);
 assert.match(relay,/relayAuthorized\(request, env\)/);
 assert.match(relay,/url\.pathname === "\/vinamilk"/);
-assert.match(relay,/upstream_status: upstream\.status/);
-assert.match(relay,/body\.length > 6_000_000/);
-assert.doesNotMatch(relay,/raw\?\.url[^\n]*fetch\(/,"relay must canonicalize before fetch");
+assert.doesNotMatch(relay,/canonicalVinamilkRelayUrl/,"relay must not fetch Vinamilk HTML");
+assert.doesNotMatch(relay,/text\/html,application\/xhtml\+xml/,"relay must not use the old HTML transport");
 
-console.log("Vinamilk relay contract: OK");
+console.log("Vinamilk signed relay contract: OK");

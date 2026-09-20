@@ -1309,6 +1309,28 @@ function htmlMoney(value:unknown):number|null{
   return Number.isFinite(n)&&n>0?n:null;
 }
 
+function retailStructuredMoney(value:unknown):number|null{
+  if(value===null||value===undefined||value==="")return null;
+  if(typeof value==="number")return Number.isFinite(value)&&value>0?Math.round(value):null;
+  const raw=clean(value).replace(/\s+/g,"");
+  if(!raw)return null;
+  if(/^\d+$/.test(raw)){
+    const n=Number(raw);
+    return Number.isFinite(n)&&n>0?Math.round(n):null;
+  }
+  const decimal=raw.match(/^(\d+)[.,](\d{1,2})$/);
+  if(decimal){
+    const n=Number(decimal[1]+"."+decimal[2]);
+    return Number.isFinite(n)&&n>0?Math.round(n):null;
+  }
+  const grouped=raw.replace(/[.,]/g,"");
+  if(/^\d+$/.test(grouped)){
+    const n=Number(grouped);
+    return Number.isFinite(n)&&n>0?Math.round(n):null;
+  }
+  return htmlMoney(raw);
+}
+
 function retailMoneyCandidates(value:unknown):number[]{
   const text=String(value??"").replace(/\u00a0/g," ");
   const out:number[]=[];
@@ -1482,8 +1504,8 @@ function retailJsonLdProducts(html:string,base:string,key:string,categoryUrl:str
       const offers=Array.isArray(value.offers)?value.offers[0]:value.offers||{};
       const url=retailProductUrl(value.url||value["@id"]||"",base,key);
       const name=retailPlausibleName(value.name||"");
-      const current=money(offers?.price||offers?.lowPrice||offers?.salePrice);
-      const high=money(offers?.highPrice||offers?.priceBeforeDiscount);
+      const current=retailStructuredMoney(offers?.price||offers?.lowPrice||offers?.salePrice);
+      const high=retailStructuredMoney(offers?.highPrice||offers?.priceBeforeDiscount);
       const original=high&&current&&high>current?high:null;
       const rawImage=Array.isArray(value.image)?value.image[0]:(
         typeof value.image==="object"?value.image?.url:value.image

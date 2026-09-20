@@ -75,7 +75,7 @@ function sourceKey(raw: string) {
 function sourceObject(key: string) {
   if (key === "winmart") return { key, name: "WinMart", host: "winmart.vn" };
   if (key === "go") return { key, name: "GO!", host: "sieuthi-go.vn" };
-  if (key === "vinamilk") return { key, name: "Vinamilk", host: "vinamilk.com.vn" };
+  if (key === "vinamilk") return { key, name: "VNM", host: "vinamilk.com.vn" };
   if (key === "mine") return { key, name: "Tạp hóa", host: "get.taphoa.xyz" };
   return { key: "bachhoaxanh", name: "Bách Hóa XANH", host: "bachhoaxanh.com" };
 }

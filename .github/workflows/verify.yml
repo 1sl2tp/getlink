@@ -44,13 +44,15 @@ jobs:
           from pathlib import Path
           src=Path("scraper/probe_vinamilk_direct.mjs").read_text()
           marker='console.log("VNM_DIRECT_OK");'
-          addon=r'''const variantType = await signedPost("GetEShopVariantType", { name: "eshop_Variant" }, `query GetEShopVariantType($name: String!) {
-            __type(name: $name) {
-              name
-              fields { name type { kind name ofType { kind name ofType { kind name } } } }
-            }
-          }`);
-          console.log("VNM_VARIANT_TYPE", JSON.stringify(variantType));
+          addon=r'''for (const typeName of ["eshop_Variant","eshop_Price","eshop_ImageInfo","eshop_Product","eshop_SellableInfo"]) {
+            const info = await signedPost("GetEShopType", { name: typeName }, `query GetEShopType($name: String!) {
+              __type(name: $name) {
+                name
+                fields { name type { kind name ofType { kind name ofType { kind name } } } }
+              }
+            }`);
+            console.log("VNM_TYPE", typeName, JSON.stringify(info));
+          }
           console.log("VNM_DIRECT_OK");'''
           if marker not in src:
               raise SystemExit("probe marker missing")

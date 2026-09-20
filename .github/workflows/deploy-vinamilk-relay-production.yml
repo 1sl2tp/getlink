@@ -1,10 +1,10 @@
-name: Deploy Vinamilk Relay Preview
+name: Deploy VNM Relay Preview
 
 permissions:
   contents: read
 
 concurrency:
-  group: deploy-vinamilk-relay-preview
+  group: deploy-vnm-relay-preview
   cancel-in-progress: true
 
 on:
@@ -12,8 +12,7 @@ on:
     branches:
       - feat/vinamilk-source-rsc
     paths:
-      - "relay/src/index.js"
-      - "scraper/probe_vinamilk_direct.mjs"
+      - "relay/**"
       - ".github/workflows/deploy-vinamilk-relay-production.yml"
   workflow_dispatch:
 
@@ -33,7 +32,7 @@ jobs:
       - run: npm install -g wrangler@4.129.1
       - run: node --check relay/src/index.js
 
-      - name: Create preview relay config
+      - name: Create preview config
         run: |
           cat > relay/wrangler-vnm-preview.toml <<EOF
           name = "getlink-vinamilk-relay-preview"
@@ -43,41 +42,14 @@ jobs:
           account_id = "$CLOUDFLARE_ACCOUNT_ID"
           EOF
 
-      - name: Upload relay auth secret
+      - name: Upload relay auth secret when configured
         run: |
           set -euo pipefail
           if [ -n "${RELAY_SHARED_SECRET:-}" ]; then
             printf '%s' "$RELAY_SHARED_SECRET" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler-vnm-preview.toml >/dev/null
           fi
 
-      - name: Upload Vinamilk public client config
-        run: |
-          set -euo pipefail
-          node <<'NODE' > /tmp/vnm-secrets.tsv
-          const fs=require("fs");
-          const src=fs.readFileSync("scraper/probe_vinamilk_direct.mjs","utf8");
-          const mapping={
-            VNM_CLIENT_ID:"CLIENT_ID",
-            VNM_X_TERMINAL:"TERMINAL",
-            VNM_EXTERNAL_CODE:"EXTERNAL_CODE",
-            VNM_SIGNATURE_SALT:"SIGNATURE_SALT",
-            VNM_USER_AGENT:"DEVICE_INFO"
-          };
-          for(const [target,source] of Object.entries(mapping)){
-            const re=new RegExp("const\\s+"+source+"\\s*=\\s*\\"([^\\"]+)\\"");
-            const m=src.match(re);
-            if(!m)throw new Error("missing "+source);
-            process.stdout.write(target+"\\t"+m[1]+"\\n");
-          }
-          NODE
-          while IFS=$'\t' read -r key value; do
-            test -n "$key"
-            test -n "$value"
-            printf '%s' "$value" | wrangler secret put "$key" --config relay/wrangler-vnm-preview.toml >/dev/null
-          done < /tmp/vnm-secrets.tsv
-          rm -f /tmp/vnm-secrets.tsv
-
-      - name: Deploy preview relay
+      - name: Deploy preview
         run: |
           set -euo pipefail
           wrangler deploy --config relay/wrangler-vnm-preview.toml 2>&1 | tee /tmp/deploy.log
@@ -85,21 +57,13 @@ jobs:
           test -n "$URL"
           echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
 
-      - name: Wait for worker propagation
+      - name: Health check
         run: |
           set -euo pipefail
-          for i in $(seq 1 20); do
-            CODE="$(curl --silent --output /tmp/health.json --write-out '%{http_code}' "$RELAY_URL/health" || true)"
-            if [ "$CODE" = "200" ] && jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null 2>&1; then
-              cat /tmp/health.json
-              exit 0
-            fi
-            sleep 2
-          done
-          cat /tmp/health.json || true
-          exit 1
+          curl --fail --silent --show-error --retry 8 --retry-delay 2 "$RELAY_URL/health" >/tmp/health.json
+          jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null
 
-      - name: Smoke existing BHX route
+      - name: Smoke BHX
         run: |
           set -euo pipefail
           KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
@@ -110,16 +74,16 @@ jobs:
             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}' > /tmp/bhx.json
           jq -e '.code == 0 and .data != null and (.data.products|length)>0' /tmp/bhx.json >/dev/null
 
-      - name: Smoke Vinamilk signed GraphQL route
+      - name: Smoke VNM direct GraphQL
         run: |
           set -euo pipefail
           KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          QUERY='query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) { eshop_searchProducts(payload: $payload) { total items { variantId name skuCode thumbnail image { url } price { price originPrice currency } sellableInfo { sellable } product { productId handle brand category packagingValue } } } }'
-          jq -nc --arg query "$QUERY" '{operationName:"GetEShopProductSelectors",variables:{payload:{collectionHandle:"sua-tuoi",offset:0,size:12,sortType:"RELEVANCE"}},query:$query}' > /tmp/vnm-request.json
-          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+          QUERY='query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) { eshop_searchProducts(payload: $payload) { total items { variantId price { price originPrice } } } }'
+          BODY="$(jq -nc --arg q "$QUERY" '{operationName:"GetEShopProductSelectors",variables:{payload:{collectionHandle:"sua-tuoi",offset:0,size:1,sortType:"RELEVANCE"}},query:$q}')"
+          curl --fail --silent --show-error --retry 4 --retry-delay 2 --retry-all-errors \
             -H "x-getlink-relay: $KEY" \
             -H 'content-type: application/json' \
             -X POST "$RELAY_URL/vinamilk" \
-            --data-binary @/tmp/vnm-request.json > /tmp/vnm.json
-          jq '{ok,upstream_status,total:.data.eshop_searchProducts.total,items:(.data.eshop_searchProducts.items|length),first_price:.data.eshop_searchProducts.items[0].price.price}' /tmp/vnm.json
+            --data "$BODY" > /tmp/vnm.json
+          jq '{ok,upstream_status,total:.data.eshop_searchProducts.total,price:.data.eshop_searchProducts.items[0].price.price}' /tmp/vnm.json
           jq -e '.ok == true and .upstream_status == 200 and (.data.eshop_searchProducts.total|tonumber)>0 and (.data.eshop_searchProducts.items|length)>0 and (.data.eshop_searchProducts.items[0].price.price|tonumber)>0' /tmp/vnm.json >/dev/null

@@ -12,24 +12,34 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Open Vinamilk in headless Chrome
+      - name: Probe Vinamilk static assets
         shell: bash
         run: |
-          set -o pipefail
-          CHROME="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
-          echo "chrome=$CHROME"
-          test -n "$CHROME"
-          "$CHROME"             --headless=new             --no-sandbox             --disable-gpu             --disable-dev-shm-usage             --lang=vi-VN             --window-size=1365,900             --virtual-time-budget=12000             --dump-dom             'https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL' > /tmp/vnm.html
-          echo "bytes=$(wc -c </tmp/vnm.html)"
           node <<'NODE'
-          const fs = require('fs');
-          const html = fs.readFileSync('/tmp/vnm.html','utf8');
-          console.log('has-green-farm=', /Green\s*Farm/i.test(html));
-          console.log('has-cloudfront=', /cloudfront\.net/i.test(html));
-          console.log('has-vnd=', /₫|VND|đ/i.test(html));
-          const text = html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/&nbsp;/g,' ').replace(/\s+/g,' ');
-          const m = text.match(/.{0,220}Green\s*Farm.{0,500}/i);
-          console.log('green-farm-text=', m ? m[0] : 'NONE');
-          const imgs=[...html.matchAll(/https:\/\/[^"'<>\s]+cloudfront\.net\/[^"'<>\s]+/ig)].map(x=>x[0]);
-          console.log('cloudfront-sample=', [...new Set(imgs)].slice(0,3));
+          const urls = [
+            'https://www.vinamilk.com.vn/_next/static/chunks/3893-516714ed7d90043f.js',
+            'https://www.vinamilk.com.vn/_next/static/chunks/2878-361b54eb6ab1d6fb.js',
+            'https://www.vinamilk.com.vn/_next/static/PLIMgmRUYT9GNHUiKuRcf/_buildManifest.js',
+            'https://www.vinamilk.com.vn/_next/static/PLIMgmRUYT9GNHUiKuRcf/_ssgManifest.js'
+          ];
+          for (const url of urls) {
+            try {
+              const r = await fetch(url, {
+                headers: {'user-agent':'Mozilla/5.0','accept':'*/*'}
+              });
+              const body = await r.text();
+              console.log('\nURL', url);
+              console.log('status=', r.status, 'type=', r.headers.get('content-type'), 'length=', body.length);
+              console.log('has-getClientInfos=', body.includes('getClientInfos'));
+              console.log('has-VNM_SIGNATURE_SALT=', body.includes('VNM_SIGNATURE_SALT'));
+              console.log('has-module-10059=', /(?:^|[,;{])10059\s*:/.test(body));
+              if (/Manifest/.test(url)) console.log('sample=', body.slice(0,1800));
+              if (body.includes('getClientInfos')) {
+                const i=body.indexOf('getClientInfos');
+                console.log('getClientInfos-snippet=', body.slice(Math.max(0,i-900),i+2200));
+              }
+            } catch(e) {
+              console.log('\nURL', url, 'ERROR', String(e));
+            }
+          }
           NODE

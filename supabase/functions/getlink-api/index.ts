@@ -1741,6 +1741,35 @@ async function fetchSource(input:string, requestId:string){
     const products=filterGetlinkProducts(raw.items.map((x:any)=>normalizeGo(x,raw.rootName,checked)).filter(Boolean) as Product[]);
     return {payload:{schema_version:20,request_id:requestId,input_url:url,input_type:"category",source:sourceObject(key),checked_at:checked,category_name:raw.rootName,products,variants:[],discovered_links:products.map(p=>p.url)},engine:"supabase-edge-go"};
   }
+  if(key==="vinamilk"||key==="concung"){
+    if(kind!=="category")throw new Error(key+"_category_link_required");
+    const raw=await retailHtmlCategory(url,key,capture);
+
+    // HARD GATE: keep every fetched HTML page before normalization.
+    await persistRawCapture(requestId,url,"category",key,capture);
+
+    const products=filterGetlinkProducts(
+      raw.items
+        .map((x:any)=>normalizeRetailHtml(x,key,raw.rootName,checked))
+        .filter(Boolean) as Product[]
+    );
+    return {
+      payload:{
+        schema_version:20,
+        request_id:requestId,
+        input_url:url,
+        input_type:"category",
+        source:sourceObject(key),
+        checked_at:checked,
+        category_name:raw.rootName,
+        products,
+        variants:[],
+        discovered_links:products.map(p=>p.url),
+        source_pages:raw.pages
+      },
+      engine:"supabase-edge-"+key+"-html"
+    };
+  }
   throw new Error("unsupported_source");
 }
 
@@ -3018,7 +3047,13 @@ async function saveUserFeedback(body:any){
 
 async function reconstructItem(url:string){
   const rows=await libraryRows(true); const row=rows.find((x:any)=>canonical(x.canonical_url)===canonical(url)); if(!row)return null;
-  const source=String(row.source||"").includes("Tạp hóa")?sourceObject("mine"):String(row.source||"").includes("WinMart")?sourceObject("winmart"):String(row.source||"").includes("GO")?sourceObject("go"):sourceObject("bachhoaxanh");
+  const sourceText=String(row.source||"");
+  const source=sourceText.includes("Tạp hóa")?sourceObject("mine")
+    :sourceText.includes("WinMart")?sourceObject("winmart")
+    :sourceText.includes("GO")?sourceObject("go")
+    :sourceText.includes("Vinamilk")?sourceObject("vinamilk")
+    :sourceText.includes("Con Cưng")?sourceObject("concung")
+    :sourceObject("bachhoaxanh");
   const h={label1:row.pack_label_1||"",qty1:Number(row.pack_qty_1)||0,label2:row.pack_label_2||"",qty2:Number(row.pack_qty_2)||0,label3:row.pack_label_3||"",qty3:Number(row.pack_qty_3)||0,evidence:row.pack_evidence||"",locked:false};
   const cmp={pack_kind:row.pack_kind||"",pack_quantity:Number(row.pack_quantity)||1,pack_unit:row.pack_unit||"",size_value:row.size_value??null,size_unit:row.size_unit||"",regular_pack_price:row.regular_pack_price??row.current_price,promo_pack_price:row.promo_pack_price??null,regular_unit_price:row.regular_unit_price??null,promo_unit_price:row.promo_unit_price??null,promotion_active:Boolean(row.promotion_active)};
   const product={source,group:row.group_name||"",branch:row.branch_name||"",name:row.name||"",packaging:{text:row.packaging||""},hierarchy:h,comparison:cmp,price:{current:row.current_price||null,original:row.original_price||null},promotion:{active:Boolean(row.promotion_active),price:row.promotion_price||null,text:row.promotion_text||""},url:row.canonical_url,image:row.image||"",breadcrumbs:[row.group_name,row.branch_name].filter(Boolean),last_checked_at:row.last_checked_at||row.updated_at};

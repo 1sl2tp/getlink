@@ -3594,7 +3594,7 @@ function sourceChipHtml(key,count,active,compact=false){
   return '<button class="'+classes+'" '+
     'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" '+
     'title="'+escapeAttr(meta.title)+'" aria-label="'+escapeAttr(meta.title)+'">'+
-      '<span class="source-chip-label">'+label+'</span>'+
+      '<span class="source-chip-name">'+label+'</span>'+
       (compact?'':'<small class="source-chip-count">'+count+'</small>')+
     '</button>';
 }
@@ -3646,7 +3646,7 @@ function renderSourceTabs(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"Vinamilk":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -5923,9 +5923,14 @@ function applyAppRoleUi(){
       legacyDetail.style.setProperty("display","none","important");
     }
     stopPolling();
-  }else if(legacyDetail){
-    legacyDetail.removeAttribute("aria-hidden");
-    legacyDetail.style.removeProperty("display");
+  }else{
+    // Admin lands directly on the source-update workspace.
+    // The panel can still be closed manually for the current session.
+    if($("#importCard"))$("#importCard").hidden=false;
+    if(legacyDetail){
+      legacyDetail.removeAttribute("aria-hidden");
+      legacyDetail.style.removeProperty("display");
+    }
   }
   browseRowsMemo.clear();
   for(const state of Object.values(viewRenderState)){

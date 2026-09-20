@@ -15569,3 +15569,37 @@ body.news-quick-open{overflow:hidden!important}
     white-space:nowrap!important;
   }
 }
+
+
+/* Source selector text-only v3
+   Dedicated name node bypasses legacy logo-era .source-chip-label rules. */
+.source-chip-text .source-chip-name{
+  display:block!important;
+  min-width:0!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  color:inherit!important;
+  opacity:1!important;
+  visibility:visible!important;
+  text-indent:0!important;
+  text-overflow:ellipsis!important;
+  font-size:9.5px!important;
+  font-weight:780!important;
+  line-height:1!important;
+  white-space:nowrap!important;
+}
+.purchase-mode-row .source-tabs-inline .source-vinamilk{
+  color:#0068b2!important;
+}
+.purchase-mode-row .source-tabs-inline .source-vinamilk .source-chip-name{
+  color:#0068b2!important;
+}
+.quick-source-tabs .source-vinamilk,
+.quick-source-tabs .source-vinamilk .source-chip-name{
+  color:#0068b2!important;
+}
+@media(max-width:720px){
+  .source-chip-text .source-chip-name{
+    font-size:9px!important;
+  }
+}

@@ -1,0 +1,58 @@
+name: Probe Vinamilk Relay
+
+permissions:
+  contents: read
+
+concurrency:
+  group: probe-vinamilk-relay
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - feat/vinamilk-source-rsc
+    paths:
+      - "relay/**"
+      - ".github/workflows/probe-vinamilk-relay.yml"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RELAY_SHARED_SECRET: ${{ secrets.RELAY_SHARED_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g wrangler@4.129.1
+      - name: Create isolated probe config
+        run: |
+          cat > relay/wrangler-probe.toml <<EOF
+          name = "getlink-vinamilk-probe"
+          main = "src/index.js"
+          compatibility_date = "2026-09-08"
+          workers_dev = true
+          account_id = "$CLOUDFLARE_ACCOUNT_ID"
+          EOF
+      - name: Configure relay secret
+        run: |
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          printf '%s' "$KEY" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler-probe.toml
+      - name: Deploy isolated probe worker
+        run: |
+          set -euo pipefail
+          wrangler deploy --config relay/wrangler-probe.toml 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
+          test -n "$URL"
+          echo "PROBE_URL=$URL" >> "$GITHUB_ENV"
+      - name: Probe Vinamilk collection through Cloudflare
+        run: |
+          set -euo pipefail
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2             -H "x-getlink-relay: $KEY"             -H 'content-type: application/json'             -X POST "$PROBE_URL/vinamilk"             --data '{"url":"https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"}'             > /tmp/vnm.json
+          jq '{ok,upstream_status,content_type,bytes:(.body|length),has_next:(.body|contains("self.__next_f.push")),has_price:(.body|contains("originPrice"))}' /tmp/vnm.json
+          jq -e '.ok == true and .upstream_status == 200 and (.body|length)>10000 and (.body|contains("self.__next_f.push")) and (.body|contains("originPrice"))' /tmp/vnm.json >/dev/null

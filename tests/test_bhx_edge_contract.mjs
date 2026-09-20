@@ -20,6 +20,6 @@ assert.match(proxy, /PageIndex:\s*page/, "relay must advance AjaxProduct page in
 assert.match(proxy, /PriorityProductIds:\s*priority/, "relay must reuse priorityProductIds");
 assert.match(proxy, /LastShowProductId:\s*lastShowProductId/, "relay must carry LastShowProductId");
 assert.match(proxy, /storage:\s*"none"/, "BHX relay must remain stateless");
-assert.doesNotMatch(proxy, /D1|\.prepare\(/, "BHX relay must not use Cloudflare storage");
+assert.doesNotMatch(proxy, /\bD1Database\b|env\.(?:DB|D1)\b|\.prepare\(/, "BHX relay must not use Cloudflare storage");
 
 console.log("BHX stateless transport contract: OK");

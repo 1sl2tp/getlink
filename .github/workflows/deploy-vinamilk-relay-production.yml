@@ -1,0 +1,79 @@
+name: Deploy Vinamilk Relay Production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-vinamilk-relay-production
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - feat/vinamilk-source-rsc
+    paths:
+      - ".github/workflows/deploy-vinamilk-relay-production.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RELAY_SHARED_SECRET: ${{ secrets.RELAY_SHARED_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install -g wrangler@4.129.1
+      - run: node --check relay/src/index.js
+      - name: Create production relay config
+        run: |
+          cat > relay/wrangler-feature-prod.toml <<EOF
+          name = "getlink-bhx-relay"
+          main = "src/index.js"
+          compatibility_date = "2026-09-08"
+          workers_dev = true
+          account_id = "$CLOUDFLARE_ACCOUNT_ID"
+          EOF
+      - name: Preserve configured relay secret
+        run: |
+          set -euo pipefail
+          if [ -n "${RELAY_SHARED_SECRET:-}" ]; then
+            printf '%s' "$RELAY_SHARED_SECRET" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler-feature-prod.toml
+          fi
+      - name: Deploy production relay
+        run: |
+          set -euo pipefail
+          wrangler deploy --config relay/wrangler-feature-prod.toml 2>&1 | tee /tmp/deploy.log
+          URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
+          test -n "$URL"
+          echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
+      - name: Wait for worker propagation
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            CODE="$(curl --silent --output /tmp/health.json --write-out '%{http_code}' "$RELAY_URL/health" || true)"
+            if [ "$CODE" = "200" ] && jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null 2>&1; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/health.json || true
+          exit 1
+      - name: Smoke existing BHX route
+        run: |
+          set -euo pipefail
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors             -H "x-getlink-relay: $KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}' > /tmp/bhx.json
+          jq -e '.code == 0 and .data != null and (.data.products|length)>0' /tmp/bhx.json >/dev/null
+      - name: Smoke Vinamilk route
+        run: |
+          set -euo pipefail
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors             -H "x-getlink-relay: $KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/vinamilk"             --data '{"url":"https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"}' > /tmp/vnm.json
+          jq '{ok,upstream_status,bytes:(.body|length),has_price:(.body|contains("originPrice"))}' /tmp/vnm.json
+          jq -e '.ok == true and .upstream_status == 200 and (.body|length)>10000 and (.body|contains("originPrice"))' /tmp/vnm.json >/dev/null

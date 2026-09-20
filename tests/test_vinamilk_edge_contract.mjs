@@ -13,7 +13,7 @@ assert.match(edge, /source_product_id:variantId/, "Vinamilk identity must use va
 assert.match(edge, /sku:clean\(item\.skuCode/, "Vinamilk identity must preserve SKU");
 assert.match(edge, /Math\.round\(currentRaw\)/, "Vinamilk VND price must normalize source float to integer");
 assert.match(edge, /item\.image\?\.url/, "Vinamilk image must come from source payload");
-assert.match(edge, /BHX_TRANSPORT_URL\+"\\/vinamilk"/, "Vinamilk must use the stateless transport relay");
+assert.ok(edge.includes('BHX_TRANSPORT_URL+"/vinamilk"'), "Vinamilk must use the stateless transport relay");
 assert.match(edge, /headers:bhxRelayHeaders\(\)/, "Vinamilk relay must use the shared relay auth gate");
 assert.match(edge, /engine:"supabase-edge-vinamilk-relay-rsc"/, "Vinamilk must use relayed server-rendered transport");
 assert.doesNotMatch(edge, /VNM_SIGNATURE_SALT|generateApiSignature|x-signature/i, "Vinamilk source must not depend on browser GraphQL signing");

@@ -9,8 +9,7 @@ class MobileSourceHierarchyTest(unittest.TestCase):
     def test_entry_scope_is_supermarket_only(self):
         self.assertIn('const MOBILE_USER_SCOPES=["market"];', APP)
         self.assertIn('market:"Siêu thị"', APP)
-        self.assertNotIn('mine:"Tạp hóa"', APP)
-        self.assertNotIn('news:"Tin tức"', APP)
+        self.assertIn('const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};', APP)
         self.assertIn('let mobileUserScope="market";', APP)
 
     def test_market_children_are_supermarkets(self):

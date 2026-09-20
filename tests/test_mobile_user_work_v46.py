@@ -9,13 +9,14 @@ CSS=(ROOT/"style.css").read_text(encoding="utf-8")
 
 
 class MobileUserWorkV46ContractTest(unittest.TestCase):
-    def test_mobile_has_one_search_source_and_result_workspace(self):
-        self.assertIn('id="mobileUserWork"',HTML)
-        self.assertIn('id="mobileUserSearch"',HTML)
-        self.assertIn('id="mobileUserSourceTabs"',HTML)
-        self.assertIn('id="mobileUserResults"',HTML)
-        self.assertNotIn('id="mobileUserSendOrder"',HTML)
-        self.assertNotIn('id="mobileMergePanel"',HTML)
+    def test_user_and_admin_share_one_catalog_surface(self):
+        self.assertNotIn('id="userWorkHome"',HTML)
+        self.assertNotIn('id="mobileUserWork"',HTML)
+        self.assertIn('id="librarySearch"',HTML)
+        self.assertIn('id="packTabs"',HTML)
+        self.assertIn('id="sourceTabsInline"',HTML)
+        self.assertIn('id="productGrid"',HTML)
+        self.assertIn('class="workspace-detail"',HTML)
 
     def test_mobile_is_a_separate_layout_below_640(self):
         self.assertRegex(CSS,r"\.mobile-user-work\s*\{[^}]*display\s*:\s*none")
@@ -59,18 +60,13 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('market-pack-carton',APP)
         self.assertIn('grid-source-tag',APP)
 
-    def test_supermarket_only_user_surface_has_source_selector(self):
-        self.assertIn('id="userWorkSourceTabs"',HTML)
-        self.assertNotIn('id="userWorkMine"',HTML)
-        self.assertNotIn('id="userWorkSendOrder"',HTML)
-        self.assertNotIn('Bán hàng · Lướt giá siêu thị',HTML)
-        self.assertNotIn('Bán hàng · Siêu thị',HTML)
-        self.assertIn('Lướt giá siêu thị',HTML)
-        self.assertIn('const USER_WORK_SOURCE_KEYS=["",...MOBILE_MARKET_SOURCES]',APP)
-        self.assertIn('USER_WORK_SOURCE_LABELS={"":"Tất cả",...MOBILE_MARKET_SOURCE_LABELS}',APP)
-        self.assertIn('data-work-source-filter',APP)
-        self.assertIn('data-mobile-source-filter',APP)
-        self.assertIn('userWorkSourceFilter',APP)
+    def test_supermarket_filters_live_on_shared_catalog(self):
+        self.assertNotIn('id="userWorkSourceTabs"',HTML)
+        self.assertIn('id="sourceTabsInline"',HTML)
+        self.assertIn('id="packTabs"',HTML)
+        self.assertIn('id="librarySearch"',HTML)
+        self.assertIn('const TABLE_SOURCE_CYCLE=["","bhx","wm","go","vinamilk"]',APP)
+        self.assertIn('let libraryView="grid";',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
         block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)

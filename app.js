@@ -3000,7 +3000,6 @@ function renderCategoryMenu(){
   }
 }
 function gridProductCard(row){
-  if(appRole==="user")return userGridProductCard(row);
   const levels=rowPriceLevels(row);
   const displayName=canonicalDisplayName(row);
   const hierarchy=levels.hierarchy;
@@ -5283,12 +5282,6 @@ function renderUserWorkHome(){
 }
 
 function renderLibraryProducts(){
-  const home=$("#userWorkHome");
-  if(appRole==="user"){
-    renderUserWorkHome();
-    return;
-  }
-  if(home)home.hidden=true;
   if(matchAuditActive){
     syncMatchAuditMode();
     return;
@@ -5729,18 +5722,9 @@ $("#productGrid").addEventListener("click",async e=>{
     e.stopPropagation();
     return;
   }
-  if(appRole==="user")return;
-
-  const zoomImage=e.target.closest(".grid-product-image img");
-  if(zoomImage&&isCompactBrowse()){
-    e.preventDefault();
-    e.stopPropagation();
-    openImageZoom(zoomImage.currentSrc||zoomImage.src,zoomImage.alt||"Ảnh sản phẩm");
-    return;
-  }
-
   const watch=e.target.closest(".grid-watch-button");
   if(watch){
+    if(appRole!=="admin")return;
     e.preventDefault();
     e.stopPropagation();
     if(watch.disabled)return;
@@ -5772,7 +5756,6 @@ $("#productGrid").addEventListener("click",async e=>{
     }
     return;
   }
-  if(isCompactBrowse())return;
   const button=e.target.closest(".grid-product-name");
   const card=e.target.closest(".grid-product");
   const url=(button&&button.dataset.url)||(card&&card.dataset.url)||"";
@@ -5789,9 +5772,7 @@ $("#productGrid").addEventListener("input",e=>{
 });
 
 $("#productGrid").addEventListener("keydown",e=>{
-  if(appRole==="user")return;
   if(e.key!=="Enter"&&e.key!==" ")return;
-  if(isCompactBrowse())return;
   const card=e.target.closest(".grid-product");
   if(!card)return;
   e.preventDefault();
@@ -5942,36 +5923,24 @@ function applyAppRoleUi(){
   if(badge)badge.textContent=appRole==="admin"?"Admin":"Khách";
   if(button)button.textContent=appRole==="admin"?"Thoát Admin":"Admin";
   if(subtitle)subtitle.textContent=appRole==="admin"
-    ?"Quản trị GETLINK · nguồn giá · cập nhật"
-    :"Bảng giá Tạp hóa · xem giá bán và gửi giá mặc cả";
+    ?"Siêu thị · cập nhật nguồn"
+    :"Lướt giá siêu thị";
 
-  const legacyDetail=document.querySelector(".workspace-detail");
-  if(appRole==="user"){
-    libraryState="visible";
-    if(!["","mine","bhx","wm","go","vinamilk"].includes(activeSourceFilter))activeSourceFilter="";
-    if($("#importCard"))$("#importCard").hidden=true;
-    if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
-    if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;
-    if($("#sourceManagerPanel"))$("#sourceManagerPanel").hidden=true;
+  libraryState="visible";
+  if(!["","bhx","wm","go","vinamilk"].includes(activeSourceFilter))activeSourceFilter="";
 
-    // The customer Work frame must not expose legacy catalog detail fields
-    // such as Hãng/Nhóm/Ưu đãi/Quan tâm. Keep that entire surface out of the
-    // frame instead of trying to maintain two overlapping state owners.
-    resetBrowseDetail();
-    if(legacyDetail){
-      legacyDetail.setAttribute("aria-hidden","true");
-      legacyDetail.style.setProperty("display","none","important");
-    }
-    stopPolling();
-  }else{
-    // Admin lands directly on the source-update workspace.
-    // The panel can still be closed manually for the current session.
-    if($("#importCard"))$("#importCard").hidden=false;
-    if(legacyDetail){
-      legacyDetail.removeAttribute("aria-hidden");
-      legacyDetail.style.removeProperty("display");
-    }
+  if($("#importCard"))$("#importCard").hidden=true;
+  if($("#updateSettingsPanel"))$("#updateSettingsPanel").hidden=true;
+  if($("#updateSettingsGate"))$("#updateSettingsGate").hidden=true;
+  if(appRole!=="admin"&&$("#sourceManagerPanel"))$("#sourceManagerPanel").hidden=true;
+
+  const detail=document.querySelector(".workspace-detail");
+  if(detail){
+    detail.removeAttribute("aria-hidden");
+    detail.style.removeProperty("display");
   }
+  if(appRole!=="admin")stopPolling();
+
   browseRowsMemo.clear();
   for(const state of Object.values(viewRenderState)){
     state.key="";

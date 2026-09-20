@@ -2957,7 +2957,7 @@ function renderCategoryMenu(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"Vinamilk":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3585,23 +3585,16 @@ function sourceChipHtml(key,count,active,compact=false){
     bhx:{full:"Bách Hóa Xanh",short:"BHX",title:"Bách Hóa Xanh"},
     wm:{full:"WinMart",short:"WinMart",title:"WinMart"},
     go:{full:"Siêu thị GO!",short:"GO!",title:"Siêu thị GO!"},
-    vinamilk:{full:"Vinamilk",short:"Vinamilk",title:"Vinamilk"}
+    vinamilk:{full:"VNM",short:"VNM",title:"Vinamilk"}
   }[key]||{full:key,short:key,title:key};
 
   const label=escapeHtml(compact?meta.short:meta.full);
-  const classes='source-chip source-chip-brand '+(active?"active ":"")+'source-'+(key||"all")+(compact&&key?" source-chip-logo-only":"");
-
-  if(compact&&key){
-    return '<button class="'+classes+'" '+
-      'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" '+
-      'title="'+escapeAttr(meta.title)+'" aria-label="'+escapeAttr(meta.title)+'">'+
-        sourceLogoMark(key)+
-      '</button>';
-  }
+  const classes='source-chip source-chip-brand source-chip-text '+(active?"active ":"")+'source-'+(key||"all");
 
   return '<button class="'+classes+'" '+
-    'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" title="'+escapeAttr(meta.title)+'">'+
-      '<span class="source-chip-main"><span class="source-chip-label">'+label+'</span>'+sourceLogoMark(key)+'</span>'+
+    'data-source="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" '+
+    'title="'+escapeAttr(meta.title)+'" aria-label="'+escapeAttr(meta.title)+'">'+
+      '<span class="source-chip-label">'+label+'</span>'+
       (compact?'':'<small class="source-chip-count">'+count+'</small>')+
     '</button>';
 }

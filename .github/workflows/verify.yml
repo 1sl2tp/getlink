@@ -53,10 +53,6 @@ jobs:
       - run: node tests/test_vinamilk_edge_contract.mjs
       - name: Probe Vinamilk direct transport (diagnostic)
         run: node tests/probe_vinamilk_live.mjs || true
-      - name: Install Chromium for Vinamilk browser probe
-        run: python -m playwright install --with-deps chromium
-      - name: Probe Vinamilk signed GraphQL through Chromium (diagnostic)
-        run: python scraper/probe_vinamilk_browser.py || true
       - name: Probe Vinamilk through Bright Data browser
         env:
           BRIGHTDATA_BROWSER_WS: ${{ secrets.BRIGHTDATA_BROWSER_WS }}

@@ -3064,7 +3064,11 @@ async function fetchLibraryFromSupabase(){
 const SOURCE_MANAGER_CACHE_MS=5*60*1000;
 
 function sourceManagerSourceLabel(key){
-  return key==="bhx"?"BHX":(key==="wm"?"WM":(key==="go"?"GO":""));
+  return key==="bhx"?"BHX"
+    :(key==="wm"?"WM"
+    :(key==="go"?"GO"
+    :(key==="vinamilk"?"Vinamilk"
+    :(key==="concung"?"Con Cưng":""))));
 }
 
 function sourceManagerActiveItems(){
@@ -3090,7 +3094,7 @@ function sourceManagerActiveItems(){
 
 function sourceManagerVariantLine(item){
   const variants=item&&item.variants||{};
-  const keys=sourceManagerSource==="all"?["bhx","wm","go"]:[sourceManagerSource];
+  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk","concung"]:[sourceManagerSource];
   const parts=[];
   for(const key of keys){
     const values=Array.isArray(variants[key])?variants[key]:[];
@@ -3102,7 +3106,7 @@ function sourceManagerVariantLine(item){
 
 function sourceManagerBadges(item){
   const sources=item&&item.sources||{};
-  const keys=sourceManagerSource==="all"?["bhx","wm","go"]:[sourceManagerSource];
+  const keys=sourceManagerSource==="all"?["bhx","wm","go","vinamilk","concung"]:[sourceManagerSource];
   return keys
     .filter(key=>Number(sources[key]||0)>0)
     .map(key=>'<span class="source-manager-source-badge '+key+'">'+
@@ -3131,6 +3135,10 @@ function renderSourceManager(){
   $("#sourceManagerWmCount").textContent=String(Number(productCounts.wm||0));
   $("#sourceManagerBhxCount").textContent=String(Number(productCounts.bhx||0));
   $("#sourceManagerGoCount").textContent=String(Number(productCounts.go||0));
+  $("#sourceManagerVinamilkCount").textContent=String(Number(productCounts.vinamilk||0));
+  $("#sourceManagerConcungCount").textContent=String(Number(productCounts.concung||0));
+  $("#sourceManagerVinamilkCount").textContent=String(Number(productCounts.vinamilk||0));
+  $("#sourceManagerConcungCount").textContent=String(Number(productCounts.concung||0));
 
   const items=sourceManagerActiveItems();
   const visible=items.slice(0,sourceManagerLimit);
@@ -3163,7 +3171,7 @@ function renderSourceManager(){
     }).join("");
   }
 
-  const sourceLabel=sourceManagerSource==="all"?"3 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  const sourceLabel=sourceManagerSource==="all"?"5 nguồn":sourceManagerSourceLabel(sourceManagerSource);
   const kindLabel=sourceManagerKind==="brand"
     ?"hãng"
     :(sourceManagerKind==="manual"?"nhóm tự lập":"nhóm nguồn");
@@ -3211,7 +3219,7 @@ function renderSourceManagerManualDetail(){
   const host=$("#sourceManagerRows");
   const groupName=String(detail.group&&detail.group.name||"Nhóm tự lập");
   const ruleLabel=String(detail.group&&detail.group.rule_label||"");
-  const sourceLabel=sourceManagerSource==="all"?"3 nguồn":sourceManagerSourceLabel(sourceManagerSource);
+  const sourceLabel=sourceManagerSource==="all"?"5 nguồn":sourceManagerSourceLabel(sourceManagerSource);
 
   host.innerHTML=
     '<div class="source-manager-detail-head">'+

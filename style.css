@@ -15684,3 +15684,28 @@ body.news-quick-open{overflow:hidden!important}
     width:100%;
   }
 }
+
+
+/* Supermarket-only outside catalog: image cards, carton before retail. */
+.workspace-list .grid-product.market-pack-carton{
+  border-color:#cfe6d8!important;
+  background:#f8fcf9!important;
+  box-shadow:inset 3px 0 0 rgba(10,143,77,.28),0 1px 5px #10182808!important;
+}
+.grid-source-tag{
+  flex:0 0 auto;
+  height:20px;
+  display:inline-flex;
+  align-items:center;
+  padding:0 6px;
+  border-radius:999px;
+  background:#f2f4f7;
+  color:#667085;
+  font-size:9px;
+  font-weight:750;
+  white-space:nowrap;
+}
+.grid-source-tag.bhx{background:#edf8f2;color:#087a40}
+.grid-source-tag.wm{background:#fff1f1;color:#c92a2a}
+.grid-source-tag.go{background:#fff4e8;color:#c75b00}
+.grid-source-tag.vinamilk{background:#eef5ff;color:#2458a6}

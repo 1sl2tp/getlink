@@ -49,6 +49,16 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('let mobileUserCategoryKey=""',APP)
         self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"',APP)
 
+    def test_admin_outside_is_image_only_supermarket_catalog(self):
+        self.assertNotIn('class="view-switch"',HTML)
+        self.assertIn('let libraryView="grid";',APP)
+        self.assertIn('libraryCache.filter(row=>!isMineRow(row))',APP)
+        self.assertIn('const TABLE_SOURCE_CYCLE=["","bhx","wm","go","vinamilk"]',APP)
+        self.assertNotIn('["mine",counts.mine,activeSourceFilter==="mine"]',APP)
+        self.assertIn('return userWorkMarketSortRows(products);',APP)
+        self.assertIn('market-pack-carton',APP)
+        self.assertIn('grid-source-tag',APP)
+
     def test_supermarket_only_user_surface_has_source_selector(self):
         self.assertIn('id="userWorkSourceTabs"',HTML)
         self.assertNotIn('id="userWorkMine"',HTML)

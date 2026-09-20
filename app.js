@@ -115,6 +115,7 @@ let activeGroupUrl="";
 let activeBrand="";
 let activePackKind=localStorage.getItem("getlink:filter-pack")||"";
 let activeSourceFilter=localStorage.getItem("getlink:filter-source")||"";
+if(activeSourceFilter==="mine"){activeSourceFilter="";try{localStorage.removeItem("getlink:filter-source");}catch{}}
 let tableSourceSort="";
 let libraryQuery="";
 let libraryCache=[];
@@ -125,7 +126,8 @@ let selectedLibraryUrl="";
 let libraryGroups=[];
 let categoryPage=1;
 let libraryPage=1;
-let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
+let libraryView="grid";
+try{localStorage.removeItem("getlink:view-mode");}catch{}
 let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
@@ -2925,7 +2927,7 @@ function renderCategoryMenu(){
   if(!host)return;
 
   let visibleLibrary=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"
+    String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
   );
   if(activeSourceFilter){
     visibleLibrary=visibleLibrary.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
@@ -2993,7 +2995,7 @@ function renderCategoryMenu(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3018,8 +3020,11 @@ function gridProductCard(row){
   const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
   const supplierChangeHtml=supplierPriceChangeHtml(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
+  const marketPackClass=userWorkMarketPackGroup(row)==="carton"?" market-pack-carton":" market-pack-retail";
+  const sourceLabel=sourceDisplayLabel(row);
+  const sourceKey=rowSourceFilterKey(row);
 
-  return '<article class="grid-product product-card'+catalogSourceDisplayClass(row)+' '+
+  return '<article class="grid-product product-card'+marketPackClass+catalogSourceDisplayClass(row)+' '+
     (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -3038,6 +3043,7 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<small class="grid-source-tag '+escapeAttr(sourceKey)+'">'+escapeHtml(sourceLabel)+'</small>'+
           '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+(supplierChangeHtml?" has-change":"")+'">'+
             '<strong class="grid-price'+(activeSourceFilter==="mine"||isMineRow(row)?" source-price-mine":"")+(supplierStock?" is-out-of-stock":"")+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+(supplierStock?supplierStock:money(price))+'</strong>'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
@@ -3433,7 +3439,7 @@ function scheduleCategoryMenuRefresh(){
 function rowsBeforeSearch(){
   const key=["before",libraryState,activeSourceFilter,activeRootGroup,activeGroupUrl,activeBrand].join("|");
   return memoBrowseRows(key,()=>{
-    let products=libraryCache.slice();
+    let products=libraryCache.filter(row=>!isMineRow(row));
 
     if(libraryState==="watch"){
       products=products.filter(row=>String(row.preference_state||"normal")==="watch");
@@ -3471,7 +3477,9 @@ function visibleRowsBeforePack(){
 function categoryBaseRows(){
   const key=["category-base",activeSourceFilter,activeRootGroup,activeGroupUrl].join("|");
   return memoBrowseRows(key,()=>{
-    let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+    let rows=libraryCache.filter(row=>
+      String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
+    );
     if(activeSourceFilter)rows=rows.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     if(activeRootGroup)rows=rows.filter(row=>rowBrowseGroupKey(row)===activeRootGroup);
     activeGroupUrl="";
@@ -3530,7 +3538,7 @@ function rowsAfterPackBeforeSource(){
   });
 }
 
-const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go","vinamilk"];
+const TABLE_SOURCE_CYCLE=["","bhx","wm","go","vinamilk"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
@@ -3542,6 +3550,7 @@ function sourceRowsForSelection(source){
   const key=["source-selection",source].join("|");
   return memoBrowseRows(key,()=>libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden" &&
+    !isMineRow(row) &&
     rowMatchesSourceFilter(row,source)
   ));
 }
@@ -3642,7 +3651,7 @@ function renderSourceTabs(){
   if(!navHost&&!inlineHost&&!quickHost)return;
 
   let base=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"
+    String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
   );
   if(activePackKind==="Thùng"){
     base=base.filter(row=>rowIsCarton(row));
@@ -3656,14 +3665,13 @@ function renderSourceTabs(){
     counts[sourceKey]++;
   }
 
-  if(!["","mine","bhx","wm","go","vinamilk"].includes(activeSourceFilter)){
+  if(!["","bhx","wm","go","vinamilk"].includes(activeSourceFilter)){
     activeSourceFilter="";
     localStorage.removeItem("getlink:filter-source");
   }
 
   const rows=[
     ["",base.length,!activeSourceFilter],
-    ["mine",counts.mine,activeSourceFilter==="mine"],
     ["bhx",counts.bhx,activeSourceFilter==="bhx"],
     ["wm",counts.wm,activeSourceFilter==="wm"],
     ["go",counts.go,activeSourceFilter==="go"],
@@ -3682,7 +3690,7 @@ function renderSourceTabs(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3697,11 +3705,7 @@ function filteredLibraryProducts(){
       products=products.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     }
 
-    return [...products].sort((a,b)=>{
-      const nameA=String(a.source_name||a.name||"");
-      const nameB=String(b.source_name||b.name||"");
-      return nameA.localeCompare(nameB,"vi");
-    });
+    return userWorkMarketSortRows(products);
   });
 }
 
@@ -5707,23 +5711,6 @@ $("#tableSourceSort").addEventListener("click",()=>{
   viewRenderState.table.key="";
   viewRenderState.table.rendered=0;
   setActiveSourceFilter(nextTableSourceFilter());
-});
-
-document.querySelector(".view-switch").addEventListener("click",e=>{
-  const button=e.target.closest(".view-button");
-  if(!button)return;
-  const next=button.dataset.view==="table"?"table":"grid";
-  if(next===libraryView)return;
-  libraryView=next;
-  localStorage.setItem("getlink:view-mode",libraryView);
-  syncViewMode();
-  renderActiveProductView(filteredLibraryProducts());
-  requestAnimationFrame(()=>{
-    const host=libraryView==="table"?$("#tableView"):$("#productGrid");
-    if(host&&host.scrollHeight-host.clientHeight<900){
-      appendLocalViewBatch(libraryView);
-    }
-  });
 });
 
 $("#productGrid").addEventListener("click",async e=>{

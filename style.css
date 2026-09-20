@@ -15533,3 +15533,39 @@ body.news-quick-open{overflow:hidden!important}
     font-size:9px!important;
   }
 }
+
+
+/* Source selector text-only v2
+   Always keep all six source buttons visible in the main source filter. */
+@media(min-width:721px){
+  .purchase-mode-row .filter-block-source{
+    flex:1 1 auto!important;
+    min-width:0!important;
+    max-width:none!important;
+    overflow:visible!important;
+  }
+  .purchase-mode-row .filter-block-source .source-tabs-inline{
+    flex:1 1 auto!important;
+    width:100%!important;
+    min-width:0!important;
+    display:grid!important;
+    grid-template-columns:repeat(6,minmax(0,1fr))!important;
+    gap:6px!important;
+    overflow:visible!important;
+  }
+  .purchase-mode-row .filter-block-source .source-chip-text,
+  .purchase-mode-row .filter-block-source .source-all{
+    width:100%!important;
+    min-width:0!important;
+    max-width:none!important;
+    flex:1 1 0!important;
+    padding-left:5px!important;
+    padding-right:5px!important;
+  }
+  .purchase-mode-row .filter-block-source .source-chip-text .source-chip-label{
+    font-size:9px!important;
+    overflow:hidden!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+}

@@ -43,11 +43,10 @@ class CanonicalProductLearningContractTest(unittest.TestCase):
         self.assertIn("applyMobileMergePreview",APP)
         self.assertIn("canonical_product_id",APP)
 
-    def test_merge_panel_is_quick_and_identity_is_learned_automatically(self):
-        self.assertIn('id="mobileMergeTarget"',HTML)
-        self.assertIn('id="mobileMergePassword"',HTML)
-        self.assertNotIn('id="mobileMergeIdentitySource"',HTML)
-        self.assertNotIn('id="mobileMergeConfirm"',HTML)
+    def test_merge_ui_is_not_exposed_but_identity_learning_remains(self):
+        self.assertNotIn('id="mobileMergeTarget"',HTML)
+        self.assertNotIn('id="mobileMergePassword"',HTML)
+        self.assertNotIn('id="mobileMergePanel"',HTML)
         self.assertIn("canonicalIdentityRowScore",EDGE)
         self.assertIn("barcode",EDGE)
         self.assertIn("sku",EDGE)

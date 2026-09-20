@@ -9,15 +9,18 @@ EDGE=(ROOT/"supabase/functions/getlink-api/index.ts").read_text(encoding="utf-8"
 
 
 class QuickMobileMergeContractTest(unittest.TestCase):
-    def test_merge_panel_is_quick_target_status_not_attribute_form(self):
-        self.assertIn('id="mobileMergeTarget"',HTML)
-        self.assertIn('id="mobileMergeStatus"',HTML)
-        self.assertIn('id="mobileMergePassword"',HTML)
-        self.assertNotIn('id="mobileMergeIdentitySource"',HTML)
-        self.assertNotIn('id="mobileMergeNameSource"',HTML)
-        self.assertNotIn('id="mobileMergePackSource"',HTML)
-        self.assertNotIn('id="mobileMergeImageSource"',HTML)
-        self.assertNotIn('id="mobileMergeConfirm"',HTML)
+    def test_merge_panel_is_not_exposed_in_supermarket_only_ui(self):
+        for token in [
+            'id="mobileMergeTarget"',
+            'id="mobileMergeStatus"',
+            'id="mobileMergePassword"',
+            'id="mobileMergeIdentitySource"',
+            'id="mobileMergeNameSource"',
+            'id="mobileMergePackSource"',
+            'id="mobileMergeImageSource"',
+            'id="mobileMergeConfirm"',
+        ]:
+            self.assertNotIn(token,HTML)
 
     def test_merge_mode_has_one_persistent_own_target(self):
         self.assertIn("let mobileMergeTargetUrl",APP)

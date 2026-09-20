@@ -11,11 +11,8 @@ class MobileMergeTemporarilyDisabledTest(unittest.TestCase):
     def test_merge_feature_flag_is_off(self):
         self.assertIn("const MOBILE_MERGE_ENABLED=false;", APP)
 
-    def test_merge_entry_button_is_hidden(self):
-        self.assertRegex(
-            INDEX,
-            r'<button id="mobileMergeToggle"[^>]*\bhidden\b[^>]*>Hợp nhất</button>'
-        )
+    def test_merge_entry_button_is_not_in_user_surface(self):
+        self.assertNotIn('id="mobileMergeToggle"',INDEX)
 
     def test_render_forces_merge_ui_off(self):
         block=re.search(r"function renderMobileMergePanel\(\)\{([\s\S]*?)\n\}",APP)

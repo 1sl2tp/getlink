@@ -49,16 +49,16 @@ class CanonicalProductMergeContractTest(unittest.TestCase):
             self.assertIn(token,EDGE)
         self.assertIn("current_price:Number(row?.current_price",EDGE)
 
-    def test_mobile_has_quick_merge_mode(self):
+    def test_supermarket_only_mobile_does_not_expose_merge_ui(self):
         for token in [
             'id="mobileMergeToggle"',
             'id="mobileMergePanel"',
             'id="mobileMergeTarget"',
             'id="mobileMergePassword"',
             'id="mobileMergeStatus"',
+            'id="mobileMergeConfirm"',
         ]:
-            self.assertIn(token,HTML)
-        self.assertNotIn('id="mobileMergeConfirm"',HTML)
+            self.assertNotIn(token,HTML)
 
     def test_mobile_merge_previews_then_posts_only_on_apply(self):
         for token in [

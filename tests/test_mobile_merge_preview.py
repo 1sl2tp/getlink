@@ -9,7 +9,7 @@ EDGE=(ROOT/"supabase/functions/getlink-api/index.ts").read_text(encoding="utf-8"
 
 
 class MobileMergePreviewContractTest(unittest.TestCase):
-    def test_merge_panel_has_preview_and_single_apply_action(self):
+    def test_merge_preview_ui_is_not_exposed_in_supermarket_only_surface(self):
         for token in [
             'id="mobileMergePreview"',
             'id="mobileMergePreviewImage"',
@@ -20,8 +20,7 @@ class MobileMergePreviewContractTest(unittest.TestCase):
             'id="mobileMergePreviewSources"',
             'id="mobileMergeApply"',
         ]:
-            self.assertIn(token,HTML)
-        self.assertIn("Bản xem trước",HTML)
+            self.assertNotIn(token,HTML)
 
     def test_selecting_sources_only_stages_preview_and_does_not_write(self):
         self.assertIn("function toggleMobileMergeSource",APP)

@@ -24,16 +24,10 @@ class OrderSubmitSingleOwnerContract(unittest.TestCase):
             "app.js must not save a local draft when the real order runtime owns Gửi đơn",
         )
 
-    def test_send_buttons_start_clickable_even_if_cart_summary_was_stale(self):
+    def test_supermarket_only_getlink_has_no_send_order_buttons(self):
         html = INDEX.read_text(encoding="utf-8")
-        for button_id in ("userWorkSendOrder", "mobileUserSendOrder"):
-            match = re.search(rf'<button\b[^>]*\bid="{button_id}"[^>]*>', html)
-            self.assertIsNotNone(match, f"missing {button_id}")
-            self.assertNotRegex(
-                match.group(0),
-                r"\sdisabled(?:\s|=|>)",
-                f"{button_id} must not be born disabled from stale cart render state",
-            )
+        self.assertNotIn('id="userWorkSendOrder"', html)
+        self.assertNotIn('id="mobileUserSendOrder"', html)
 
     def test_app_is_single_owner_for_cart_clear_and_cache_refresh(self):
         text = APP.read_text(encoding="utf-8")

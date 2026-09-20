@@ -9,6 +9,12 @@ CSS=(ROOT/"style.css").read_text(encoding="utf-8")
 
 
 class MobileUserWorkV46ContractTest(unittest.TestCase):
+    def test_user_catalog_is_not_hidden_by_legacy_user_work_rules(self):
+        self.assertIn('Hotfix shared catalog visibility v2',CSS)
+        self.assertRegex(CSS,r'body\[data-app-role="user"\]\s+\.catalog-sticky-head\s*\{[^}]*display\s*:\s*flex!important')
+        self.assertRegex(CSS,r'body\[data-app-role="user"\]\s+#productGrid:not\(\[hidden\]\)\s*\{[^}]*display\s*:\s*grid!important')
+        self.assertRegex(CSS,r'body\[data-app-role="user"\]\s+\.workspace-nav\s*\{[^}]*display\s*:\s*block!important')
+
     def test_user_and_admin_share_one_catalog_surface(self):
         self.assertNotIn('id="userWorkHome"',HTML)
         self.assertNotIn('id="mobileUserWork"',HTML)

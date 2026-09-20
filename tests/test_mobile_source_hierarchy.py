@@ -13,7 +13,7 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         self.assertIn('news:"Tin tức"', APP)
 
     def test_market_children_are_supermarkets(self):
-        self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go"];', APP)
+        self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk","concung"];', APP)
 
     def test_supplier_child_uses_supplier_source_key(self):
         self.assertRegex(APP, r'function mobileSupplierSourceKey\(row\)[\s\S]*?supplier_source_key')

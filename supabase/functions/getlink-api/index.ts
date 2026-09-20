@@ -1283,135 +1283,135 @@ type VinamilkVariantItem={
     productId?:string;
     productCode?:string;
     productTitle?:string;
-    productGroup?:{handle?:string};
+    handle?:string;
+    categorySlug?:string;
     images?:Array<{url?:string;isDefault?:boolean}>;
   };
 };
 
-function vinamilkPageUrl(categoryUrl:string,page:number):string{
-  const u=new URL(categoryUrl);
-  u.searchParams.delete("page");
-  if(page>1)u.searchParams.set("page",String(page));
-  return u.toString();
-}
-
-function vinamilkNextStrings(html:string):string[]{
-  const out:string[]=[];
-  const re=/self\.__next_f\.push\(\[1,("(?:\\.|[^"\\])*")\]\)/g;
-  for(const m of html.matchAll(re)){
-    try{out.push(JSON.parse(m[1]));}catch{}
-  }
-  return out;
-}
-
-function vinamilkBalancedArray(source:string,start:number):string|null{
-  if(source[start]!=="[")return null;
-  let depth=0,inString=false,escaped=false;
-  for(let i=start;i<source.length;i++){
-    const ch=source[i];
-    if(inString){
-      if(escaped){escaped=false;continue;}
-      if(ch==="\\"){escaped=true;continue;}
-      if(ch==='"')inString=false;
-      continue;
-    }
-    if(ch==='"'){inString=true;continue;}
-    if(ch==="[")depth++;
-    else if(ch==="]"){
-      depth--;
-      if(depth===0)return source.slice(start,i+1);
+const VINAMILK_GRAPHQL_ENDPOINT="https://open-p04-vn.vinamilk.com.vn/api/graphql-pub/";
+const VINAMILK_PAGE_SIZE=24;
+const VINAMILK_SEARCH_QUERY=`query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) {
+  eshop_searchProducts(payload: $payload) {
+    total
+    items {
+      variantId
+      skuCode
+      name
+      thumbnail
+      image { url isDefault }
+      price { price originPrice currency discount }
+      sellableInfo { sellable }
+      product {
+        productId
+        productCode
+        productTitle
+        handle
+        brand
+        category
+        categorySlug
+        subCategory
+        suffix
+        description
+        packagingValue
+        images { url isDefault }
+      }
     }
   }
-  return null;
+}`;
+
+function vinamilkCollectionHandle(categoryUrl:string):string{
+  const parts=pathParts(categoryUrl);
+  const idx=parts.indexOf("collections");
+  const handle=clean(idx>=0?parts[idx+1]:"");
+  if(!handle||!/^[a-z0-9-]{1,160}$/i.test(handle))throw new Error("vinamilk_collection_handle_missing");
+  return handle;
 }
 
-function vinamilkVariantsFromHtml(html:string):VinamilkVariantItem[]{
-  const out:VinamilkVariantItem[]=[];
-  const seen=new Set<string>();
-  for(const chunk of vinamilkNextStrings(html)){
-    let pos=0;
-    while(true){
-      const marker=chunk.indexOf('"variants":[',pos);
-      if(marker<0)break;
-      const start=marker+'"variants":'.length;
-      const raw=vinamilkBalancedArray(chunk,start);
-      pos=start+1;
-      if(!raw)continue;
-      try{
-        const arr=JSON.parse(raw);
-        if(!Array.isArray(arr))continue;
-        for(const item of arr){
-          if(!item||typeof item!=="object"||!item.variantId||!item.product||!item.price)continue;
-          const id=clean(item.variantId);
-          if(!id||seen.has(id))continue;
-          seen.add(id);
-          out.push(item as VinamilkVariantItem);
-        }
-      }catch{}
-    }
-  }
-  return out;
-}
-
-async function vinamilkFetchPage(
-  categoryUrl:string,
-  page:number,
+async function vinamilkSearchPage(
+  collectionHandle:string,
+  offset:number,
+  size:number,
   capture:RawCapture
-):Promise<{page:number;items:VinamilkVariantItem[]}>{
-  const endpoint=vinamilkPageUrl(categoryUrl,page);
+):Promise<{offset:number;total:number;items:VinamilkVariantItem[]}>{
   const relay=BHX_TRANSPORT_URL+"/vinamilk";
+  const variables={
+    payload:{
+      collectionHandle,
+      offset,
+      size,
+      sortType:"RELEVANCE"
+    }
+  };
   const r=await fetch(relay,{
     method:"POST",
     headers:bhxRelayHeaders(),
-    body:JSON.stringify({url:endpoint})
+    body:JSON.stringify({
+      operationName:"GetEShopProductSelectors",
+      variables,
+      query:VINAMILK_SEARCH_QUERY
+    })
   });
   const body=await r.json().catch(()=>null);
-  const html=clean(body?.body||"")?String(body.body):"";
+  const responseBody=clean(body?.body||"")?String(body.body):clean(JSON.stringify(body||{}));
   capture.entries.push({
     seq:capture.entries.length+1,
-    endpoint,
-    method:"GET",
+    endpoint:VINAMILK_GRAPHQL_ENDPOINT,
+    method:"POST",
     status:Number(body?.upstream_status||r.status),
-    content_type:clean(body?.content_type||""),
-    response_body:html||clean(JSON.stringify(body||{}))
+    content_type:clean(body?.content_type||"application/json"),
+    response_body:responseBody
   });
-  if(!r.ok||!body?.ok||!html){
-    throw new Error("vinamilk_relay_http_"+r.status+":"+clean(body?.error||body?.detail||"").slice(0,300));
+  if(!r.ok||!body?.ok){
+    throw new Error("vinamilk_relay_http_"+r.status+":"+clean(body?.error||body?.detail||"").slice(0,500));
   }
-  return {page,items:vinamilkVariantsFromHtml(html)};
+  const root=body?.data?.eshop_searchProducts;
+  const items=Array.isArray(root?.items)?root.items as VinamilkVariantItem[]:[];
+  const total=Math.max(0,Number(root?.total)||0);
+  return {offset,total,items};
 }
 
 async function vinamilkCategory(url:string,capture:RawCapture){
   const categoryUrl=canonicalVinamilk(url);
+  const collectionHandle=vinamilkCollectionHandle(categoryUrl);
+  const first=await vinamilkSearchPage(collectionHandle,0,VINAMILK_PAGE_SIZE,capture);
+  if(!first.items.length)throw new Error("vinamilk_category_products_empty");
+
   const byVariant=new Map<string,VinamilkVariantItem>();
-  const pageCounts:Array<{page:number;count:number}>=[];
-
-  const first=await vinamilkFetchPage(categoryUrl,1,capture);
-  for(const item of first.items)byVariant.set(clean(item.variantId),item);
-  pageCounts.push({page:1,count:first.items.length});
-  if(first.items.length===0)throw new Error("vinamilk_category_products_empty");
-
-  let nextPage=2;
-  while(first.items.length>=12&&nextPage<=18){
-    const pages=[nextPage,nextPage+1,nextPage+2,nextPage+3];
-    const batch=await Promise.all(pages.map(p=>vinamilkFetchPage(categoryUrl,p,capture)));
-    let shouldContinue=true;
-    for(const result of batch){
-      let added=0;
-      for(const item of result.items){
-        const id=clean(item.variantId);
-        if(!id||byVariant.has(id))continue;
-        byVariant.set(id,item);
-        added++;
-      }
-      pageCounts.push({page:result.page,count:result.items.length});
-      if(result.items.length<12||added===0)shouldContinue=false;
+  const pageCounts:Array<{offset:number;count:number}>=[];
+  const add=(page:{offset:number;items:VinamilkVariantItem[]})=>{
+    let added=0;
+    for(const item of page.items){
+      const id=clean(item?.variantId);
+      if(!id||byVariant.has(id))continue;
+      byVariant.set(id,item);
+      added++;
     }
-    if(!shouldContinue)break;
-    nextPage+=4;
+    pageCounts.push({offset:page.offset,count:page.items.length});
+    return added;
+  };
+  add(first);
+
+  const total=first.total||first.items.length;
+  const offsets:number[]=[];
+  for(let offset=VINAMILK_PAGE_SIZE;offset<total&&offset<VINAMILK_PAGE_SIZE*30;offset+=VINAMILK_PAGE_SIZE){
+    offsets.push(offset);
+  }
+  for(let i=0;i<offsets.length;i+=4){
+    const batchOffsets=offsets.slice(i,i+4);
+    const batch=await Promise.all(
+      batchOffsets.map(offset=>vinamilkSearchPage(collectionHandle,offset,VINAMILK_PAGE_SIZE,capture))
+    );
+    let anyAdded=false;
+    for(const page of batch){
+      if(add(page)>0)anyAdded=true;
+    }
+    if(!anyAdded)break;
   }
 
-  return {items:[...byVariant.values()],rootName:"Sữa tươi",pages:pageCounts};
+  const items=[...byVariant.values()];
+  const rootName=clean(items[0]?.product?.category||"")||slugTitle(categoryUrl);
+  return {items,rootName,pages:pageCounts,total,collectionHandle};
 }
 
 function vinamilkDisplayName(item:VinamilkVariantItem):string{
@@ -1444,7 +1444,7 @@ function normalizeVinamilk(item:VinamilkVariantItem,checked:string):Product|null
   const comparison=comparisonFrom(current,original,hierarchy,packaging,name);
   const size={value:comparison.size_value,unit:comparison.size_unit};
   const ident=matchIdentity(name,brand,"",size);
-  const handle=clean(p.productGroup?.handle||"");
+  const handle=clean(p.handle||"");
   const variantId=clean(item.variantId);
   const url=canonicalVinamilk(
     "https://www.vinamilk.com.vn/products/"+encodeURIComponent(handle||clean(p.productId||variantId))+

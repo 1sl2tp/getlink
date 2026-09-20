@@ -77,22 +77,38 @@ console.log("VNM_SHELF_OK", JSON.stringify({
   products: groups.reduce((n,g)=>n+(Array.isArray(g?.products)?g.products.length:0),0)
 }));
 
-const searchVariables = {
-  payload: {
-    filters: { category_slugs: ["sua-tuoi"] },
-    offset: 0,
-    size: 12,
-    sortType: "RELEVANCE"
+const inputType = await signedPost("GetEShopSearchInputType", {
+  name: "eshop_getSearchProductRequest"
+}, `query GetEShopSearchInputType($name: String!) {
+  __type(name: $name) {
+    name
+    inputFields {
+      name
+      type { kind name ofType { kind name ofType { kind name } } }
+    }
   }
-};
-const searchQuery = `query GetEShopProductSelectors($payload: eshop_searchProductsRequest!) {
+}`);
+console.log("VNM_SEARCH_INPUT_TYPE", JSON.stringify(inputType));
+
+const inputFields = new Set(
+  (inputType?.data?.__type?.inputFields || []).map(x => String(x?.name || ""))
+);
+const payload = {};
+if (inputFields.has("category")) payload.category = "sua-tuoi";
+if (inputFields.has("offset")) payload.offset = 0;
+if (inputFields.has("size")) payload.size = 12;
+if (inputFields.has("sortType")) payload.sortType = "RELEVANCE";
+if (inputFields.has("categorySlug")) payload.categorySlug = "sua-tuoi";
+if (inputFields.has("categorySlugs")) payload.categorySlugs = ["sua-tuoi"];
+
+const searchQuery = `query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) {
   eshop_searchProducts(payload: $payload) {
     total
     __typename
   }
 }`;
-const search = await signedPost("GetEShopProductSelectors", searchVariables, searchQuery);
-console.log("VNM_SEARCH_PROBE", JSON.stringify(search));
+const search = await signedPost("GetEShopProductSelectors", { payload }, searchQuery);
+console.log("VNM_SEARCH_PROBE", JSON.stringify({ payload, response: search }));
 if (search?.errors?.length) process.exit(6);
 const searchRoot = search?.data?.eshop_searchProducts;
 if (!searchRoot || !Number.isFinite(Number(searchRoot.total))) process.exit(7);

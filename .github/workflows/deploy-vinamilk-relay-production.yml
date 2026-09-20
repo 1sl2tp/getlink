@@ -60,8 +60,16 @@ jobs:
       - name: Health check
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --retry 8 --retry-delay 2 "$RELAY_URL/health" >/tmp/health.json
-          jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null
+          for i in $(seq 1 20); do
+            CODE="$(curl --silent --output /tmp/health.json --write-out '%{http_code}' "$RELAY_URL/health" || true)"
+            if [ "$CODE" = "200" ] && jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null 2>&1; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/health.json || true
+          exit 1
 
       - name: Smoke BHX
         run: |

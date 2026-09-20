@@ -379,7 +379,7 @@ assert.equal(money(0),"—");
   const sourceCycleHandler=app.match(/\$\("#tableSourceSort"\)\.addEventListener\("click",[\s\S]*?\n\}\);/);
   assert.ok(sourceCycleHandler,"table source cycle handler not found");
   assert.match(sourceCycleHandler[0],/setActiveSourceFilter\(nextTableSourceFilter\(\)\)/);
-  assert.match(app,/const TABLE_SOURCE_CYCLE=\["","mine","bhx","wm","go"\]/);
+  assert.match(app,/const TABLE_SOURCE_CYCLE=\["","mine","bhx","wm","go","vinamilk"\]/);
   assert.match(app,/function nextTableSourceFilter\(\)/);
   assert.match(app,/function memoBrowseRows\(key,builder\)/);
   assert.match(app,/function scheduleCategoryMenuRefresh\(\)/);

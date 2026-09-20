@@ -14,7 +14,8 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('id="mobileUserSearch"',HTML)
         self.assertIn('id="mobileUserSourceTabs"',HTML)
         self.assertIn('id="mobileUserResults"',HTML)
-        self.assertIn('id="mobileUserSendOrder"',HTML)
+        self.assertNotIn('id="mobileUserSendOrder"',HTML)
+        self.assertNotIn('id="mobileMergePanel"',HTML)
 
     def test_mobile_is_a_separate_layout_below_640(self):
         self.assertRegex(CSS,r"\.mobile-user-work\s*\{[^}]*display\s*:\s*none")
@@ -47,6 +48,19 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('let mobileUserScope="market"',APP)
         self.assertIn('let mobileUserCategoryKey=""',APP)
         self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"',APP)
+
+    def test_supermarket_only_user_surface_has_source_selector(self):
+        self.assertIn('id="userWorkSourceTabs"',HTML)
+        self.assertNotIn('id="userWorkMine"',HTML)
+        self.assertNotIn('id="userWorkSendOrder"',HTML)
+        self.assertNotIn('Bán hàng · Lướt giá siêu thị',HTML)
+        self.assertNotIn('Bán hàng · Siêu thị',HTML)
+        self.assertIn('Lướt giá siêu thị',HTML)
+        self.assertIn('const USER_WORK_SOURCE_KEYS=["",...MOBILE_MARKET_SOURCES]',APP)
+        self.assertIn('USER_WORK_SOURCE_LABELS={"":"Tất cả",...MOBILE_MARKET_SOURCE_LABELS}',APP)
+        self.assertIn('data-work-source-filter',APP)
+        self.assertIn('data-mobile-source-filter',APP)
+        self.assertIn('userWorkSourceFilter',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
         block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)

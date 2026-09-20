@@ -335,65 +335,27 @@
     </aside>
 
     <section class="card catalog workspace-list">
-      <section id="userWorkHome" class="user-work-home" hidden aria-label="Công việc mua hàng">
+      <section id="userWorkHome" class="user-work-home" hidden aria-label="Tra giá siêu thị">
         <header class="getlink-work-frame-head" aria-label="GETLINK">
           <div class="getlink-work-brand">
             <span class="getlink-work-brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 24 24"><path d="M3 5h2l2.2 9.2a2 2 0 0 0 2 1.5h7.7a2 2 0 0 0 1.9-1.4L21 8H7"/><circle cx="10" cy="19" r="1.3"/><circle cx="18" cy="19" r="1.3"/></svg>
+              <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></svg>
             </span>
-            <span class="getlink-work-brand-copy"><strong>GETLINK</strong><small>Bán hàng · Lướt giá siêu thị</small></span>
+            <span class="getlink-work-brand-copy"><strong>GETLINK</strong><small>Lướt giá siêu thị</small></span>
           </div>
-          <span class="getlink-work-frame-note">Bán hàng · Siêu thị</span>
+          <span class="getlink-work-frame-note">Siêu thị</span>
         </header>
-        <section id="mobileUserWork" class="mobile-user-work" aria-label="Tìm và mua hàng trên mobile">
+        <section id="mobileUserWork" class="mobile-user-work" aria-label="Tra giá siêu thị trên mobile">
           <div class="mobile-user-toolbar">
             <label class="mobile-user-search" for="mobileUserSearch">
               <input id="mobileUserSearch" type="search" name="getlink-mobile-product-query" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" aria-autocomplete="none" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="searchbox" placeholder="Tìm kiếm">
             </label>
             <div class="mobile-user-source-row">
-              <div id="mobileUserSourceTabs" class="mobile-user-source-tabs" role="group" aria-label="Chọn nguồn tìm kiếm"></div>
-              <button id="mobileMergeToggle" class="mobile-merge-toggle" type="button" aria-pressed="false" hidden>Hợp nhất</button>
+              <div id="mobileUserSourceTabs" class="mobile-user-source-tabs" role="group" aria-label="Chọn nguồn siêu thị"></div>
             </div>
           </div>
-          <section id="mobileMergePanel" class="mobile-merge-panel mobile-merge-quick" hidden aria-label="Xem trước hợp nhất sản phẩm">
-            <div class="mobile-merge-summary">
-              <div>
-                <strong id="mobileMergeTarget">Chọn hàng Tạp hóa làm sản phẩm đích</strong>
-                <small id="mobileMergeHint">Chọn nguồn liên quan để tạo bản xem trước. Chưa ghi dữ liệu.</small>
-              </div>
-              <button id="mobileMergeCancel" type="button">Hủy</button>
-            </div>
-            <div id="mobileMergePreview" class="mobile-merge-preview" hidden>
-              <div class="mobile-merge-preview-head">
-                <strong>Bản xem trước</strong>
-                <small id="mobileMergePreviewSources">0 nguồn</small>
-              </div>
-              <div class="mobile-merge-preview-body">
-                <div id="mobileMergePreviewImage" class="mobile-merge-preview-image"><span>GL</span></div>
-                <dl class="mobile-merge-preview-fields">
-                  <div><dt>Nhãn hàng</dt><dd id="mobileMergePreviewBrand">—</dd></div>
-                  <div><dt>Dung tích</dt><dd id="mobileMergePreviewSize">—</dd></div>
-                  <div><dt>Quy cách</dt><dd id="mobileMergePreviewPack">—</dd></div>
-                  <div><dt>Barcode/QR</dt><dd id="mobileMergePreviewCode">—</dd></div>
-                </dl>
-              </div>
-              <button id="mobileMergeApply" class="mobile-merge-apply" type="button" disabled>Áp dụng</button>
-            </div>
-            <label id="mobileMergePasswordWrap" class="mobile-merge-password">Mật khẩu quản trị
-              <input id="mobileMergePassword" type="password" inputmode="numeric" autocomplete="off" placeholder="Nhập một lần" disabled>
-            </label>
-            <div id="mobileMergeStatus" class="mobile-merge-status" aria-live="polite"></div>
-          </section>
           <div id="mobileUserResults" class="mobile-user-results" aria-live="polite"></div>
           <div id="mobileUserEmpty" class="mobile-user-empty" hidden>Không có sản phẩm phù hợp.</div>
-          <div class="mobile-user-order-bar">
-            <span id="mobileUserSelectedCount">Đã chọn 0 sản phẩm</span>
-            <button id="mobileUserSendOrder" class="mobile-user-send-order" type="button">
-              <svg class="ui-icon work-icon work-icon-package-export" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/><path d="M8 5.25 16 9.75"/><path d="M16 16h5M19 13l3 3-3 3"/></svg>
-              <span>Gửi đơn</span>
-            </button>
-          </div>
-          <div id="mobileUserOrderStatus" class="mobile-user-order-status" aria-live="polite"></div>
         </section>
 
         <div class="user-work-desktop">
@@ -402,12 +364,7 @@
             <svg class="ui-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
             <input id="userWorkSearch" type="search" name="getlink-desktop-product-query" autocomplete="new-password" autocorrect="off" autocapitalize="none" spellcheck="false" inputmode="search" enterkeyhint="search" aria-autocomplete="none" data-1p-ignore="true" data-lpignore="true" data-form-type="other" role="searchbox" placeholder="Tìm kiếm">
           </div>
-          <div class="user-work-jump" role="group" aria-label="Siêu thị">
-            <button class="user-work-jump-button active" data-work-target="market" type="button" aria-pressed="true">
-              <svg class="ui-icon work-icon work-icon-shopping-cart" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h2l2 10h9l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>
-              <span>Siêu thị</span>
-            </button>
-          </div>
+          <div id="userWorkSourceTabs" class="user-work-source-tabs" role="group" aria-label="Chọn nguồn siêu thị"></div>
         </div>
 
         <div id="userWorkDesktopCategories" class="user-work-category-panel" aria-label="Danh mục sản phẩm"></div>
@@ -416,40 +373,13 @@
           <div class="user-work-section-head">
             <div class="user-work-section-title">
               <span class="user-work-section-icon market">
-                <svg class="ui-icon work-icon work-icon-shopping-cart" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 4h2l2 10h9l2-7H7"/><circle cx="9" cy="19" r="1.5"/><circle cx="17" cy="19" r="1.5"/></svg>
+                <svg class="ui-icon work-icon work-icon-search" aria-hidden="true" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></svg>
               </span>
               <div><strong>Lướt siêu thị</strong><small>Ảnh · tên · giá, xem nhanh và mượt.</small></div>
             </div>
           </div>
           <div id="userWorkMarketGrid" class="user-work-market-grid"></div>
           <div id="userWorkMarketEmpty" class="user-work-empty" hidden>Không có sản phẩm siêu thị phù hợp.</div>
-        </section>
-
-        <section id="userWorkMine" class="user-work-section user-work-mine">
-          <div class="user-work-section-head">
-            <div class="user-work-section-title">
-              <span class="user-work-section-icon mine">
-                <svg class="ui-icon work-icon work-icon-building-store" aria-hidden="true" viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/></svg>
-              </span>
-              <div><strong>Mua hàng tạp hóa</strong><small>Chọn số lượng, xem giá thùng / lẻ và nhập mặc cả.</small></div>
-            </div>
-          </div>
-
-          <div class="user-work-order-wrap">
-            <div class="user-work-order-head">
-              <span>Sản phẩm</span><span>Giá thùng</span><span>Giá lẻ</span><span>Số lượng</span><span>Mặc cả</span>
-            </div>
-            <div id="userWorkMineRows" class="user-work-order-rows"></div>
-            <div id="userWorkMineEmpty" class="user-work-empty" hidden>Chưa có sản phẩm Tạp hóa phù hợp.</div>
-            <div class="user-work-order-foot">
-              <span id="userWorkSelectedCount">Đã chọn 0 sản phẩm</span>
-              <button id="userWorkSendOrder" class="user-work-send-order" type="button">
-                <svg class="ui-icon work-icon work-icon-package-export" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z"/><path d="m4 7.5 8 4.5 8-4.5M12 12v9"/><path d="M8 5.25 16 9.75"/><path d="M16 16h5M19 13l3 3-3 3"/></svg>
-                <span>Gửi đơn</span>
-              </button>
-            </div>
-            <div id="userWorkOrderStatus" class="user-work-order-status" aria-live="polite"></div>
-          </div>
         </section>
 
         <section id="userWorkNews" class="user-work-section user-work-news" hidden aria-label="Tin tức RSS">

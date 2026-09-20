@@ -38,6 +38,25 @@ jobs:
       - run: node --check taphoa-workspace-feedback.js
       - run: node --check relay/src/index.js
       - run: node scraper/probe_vinamilk_direct.mjs
+      - name: Inspect Vinamilk variant schema
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          src=Path("scraper/probe_vinamilk_direct.mjs").read_text()
+          marker='console.log("VNM_DIRECT_OK");'
+          addon=r'''const variantType = await signedPost("GetEShopVariantType", { name: "eshop_Variant" }, `query GetEShopVariantType($name: String!) {
+            __type(name: $name) {
+              name
+              fields { name type { kind name ofType { kind name ofType { kind name } } } }
+            }
+          }`);
+          console.log("VNM_VARIANT_TYPE", JSON.stringify(variantType));
+          console.log("VNM_DIRECT_OK");'''
+          if marker not in src:
+              raise SystemExit("probe marker missing")
+          Path("/tmp/probe_vinamilk_variant.mjs").write_text(src.replace(marker,addon))
+          PY
+          node /tmp/probe_vinamilk_variant.mjs
       - run: node tests/test_taphoa_desktop_hot_paths.mjs
       - run: node tests/test_taphoa_desktop_layout_v2.mjs
       - uses: denoland/setup-deno@v2

@@ -6,11 +6,11 @@ ROOT=Path(__file__).resolve().parents[1]
 APP=(ROOT/"app.js").read_text(encoding="utf-8")
 
 class MobileSourceHierarchyTest(unittest.TestCase):
-    def test_parent_scope_has_mine_market_and_news(self):
-        self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"];', APP)
-        self.assertIn('mine:"Tạp hóa"', APP)
+    def test_entry_scope_is_supermarket_only(self):
+        self.assertIn('const MOBILE_USER_SCOPES=["market"];', APP)
         self.assertIn('market:"Siêu thị"', APP)
-        self.assertIn('news:"Tin tức"', APP)
+        self.assertIn('const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};', APP)
+        self.assertIn('let mobileUserScope="market";', APP)
 
     def test_market_children_are_supermarkets(self):
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];', APP)
@@ -26,14 +26,15 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         self.assertIn('mobileUserScope==="market"', body)
         self.assertIn('userWorkMarketSortRows(baseRows)', body)
 
-    def test_source_tabs_render_parent_and_child_levels(self):
+    def test_source_tabs_render_supermarket_categories_directly(self):
         m=re.search(r'function renderMobileUserSourceTabs\(\)\{([\s\S]*?)\n\}', APP)
         self.assertIsNotNone(m)
         body=m.group(1)
-        self.assertIn('mobile-user-source-level parent', body)
+        self.assertNotIn('mobile-user-source-level parent', body)
         self.assertIn('mobile-user-source-level child', body)
-        self.assertIn('data-mobile-scope', body)
+        self.assertNotIn('data-mobile-scope', body)
         self.assertIn('data-mobile-category', body)
+        self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"', body)
 
 if __name__=="__main__":
     unittest.main()

@@ -157,12 +157,12 @@ let classificationRefreshBusy=false;
 
 let userWorkMarketLimit=8;
 let userWorkMineLimit=12;
-let userWorkDesktopScope="mine";
+let userWorkDesktopScope="market";
 let userWorkDesktopCategoryKey="";
 let userWorkDesktopAutoLoadObserver=null;
 let userWorkDesktopAutoLoadBusy=false;
-const MOBILE_USER_SCOPES=["mine","market","news"];
-const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị",news:"Tin tức"};
+const MOBILE_USER_SCOPES=["market"];
+const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
 const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk"};
 const WORK_ICON_PATHS={
@@ -190,7 +190,7 @@ function displayUpperFirst(value){
   return s?s.charAt(0).toLocaleUpperCase("vi-VN")+s.slice(1):"";
 }
 
-let mobileUserScope="mine";
+let mobileUserScope="market";
 let mobileUserCategoryKey="";
 let mobileUserLimit=8;
 const mobileUserScopeViewCache=new Map();
@@ -4764,28 +4764,9 @@ function renderMobileUserSourceTabs(){
   const host=$("#mobileUserSourceTabs");
   if(!host)return;
 
-  const parent=
-    '<div class="mobile-user-source-level parent">'+
-      MOBILE_USER_SCOPES.map(key=>{
-        const icon=key==="mine"?"building-store":(key==="news"?"news":"shopping-cart");
-        return '<button class="mobile-user-source-chip '+(key===mobileUserScope?"active":"")+'" '+
-          'data-mobile-scope="'+escapeAttr(key)+'" type="button" aria-pressed="'+(key===mobileUserScope?"true":"false")+'">'+
-          workIconSvg(icon,"ui-icon")+
-          '<span>'+escapeHtml(MOBILE_USER_SCOPE_LABELS[key]||key)+'</span>'+
-        '</button>';
-      }).join("")+
-    '</div>';
-
-  if(mobileUserScope==="news"){
-    host.innerHTML=parent+
-      '<div class="mobile-user-source-level child news-mobile-topics">'+newsTopicButtons()+'</div>';
-    return;
-  }
-
   const categoryHost=document.createElement("div");
-  renderUserWorkCategoryButtons(categoryHost,mobileUserScope,mobileUserCategoryKey,"data-mobile-category");
-  const child='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
-  host.innerHTML=parent+child;
+  renderUserWorkCategoryButtons(categoryHost,"market",mobileUserCategoryKey,"data-mobile-category");
+  host.innerHTML='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
 }
 
 function setupMobileUserAutoLoad(){
@@ -4860,7 +4841,7 @@ function restoreMobileUserScopeView(scope){
   return true;
 }
 function switchMobileUserScope(next){
-  next=MOBILE_USER_SCOPES.includes(next)?next:"mine";
+  next=MOBILE_USER_SCOPES.includes(next)?next:"market";
   if(next===mobileUserScope)return;
   stashMobileUserScopeView(mobileUserScope);
   mobileUserScope=next;
@@ -6480,8 +6461,8 @@ if(userWorkHome){
 
     const jump=e.target.closest(".user-work-jump-button");
     if(jump){
-      const target=String(jump.dataset.workTarget||"mine");
-      userWorkDesktopScope=["mine","market","news"].includes(target)?target:"mine";
+      const target=String(jump.dataset.workTarget||"market");
+      userWorkDesktopScope=target==="market"?"market":"market";
       userWorkDesktopCategoryKey="";
       userWorkMarketLimit=8;
       userWorkMineLimit=12;
@@ -6543,7 +6524,7 @@ if(userWorkHome){
     if(mobileScope){
       const next=MOBILE_USER_SCOPES.includes(mobileScope.dataset.mobileScope)
         ?mobileScope.dataset.mobileScope
-        :"mine";
+        :"market";
       switchMobileUserScope(next);
       return;
     }
@@ -6640,12 +6621,7 @@ window.addEventListener("resize",()=>{
 
 (async()=>{
   await restoreAppRole();
-  prewarmLatestNews();
-prewarmOtherNewsTopics();
   await refreshCatalog();
-  setTimeout(()=>{
-    if(!newsItems.length)ensureNewsLoaded(false);
-  },800);
   if(requestId&&API&&appRole==="admin"){
     $("#importCard").hidden=false;
     setGetBusy(true);

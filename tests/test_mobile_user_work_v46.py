@@ -39,15 +39,14 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         )
         self.assertRegex(CSS,r"\.mobile-user-mine-card\s*,\s*\n\s*\.mobile-user-merged-card\.has-own\s*\{[^}]*grid-column\s*:\s*1\s*/\s*-1")
 
-    def test_mobile_uses_three_parent_scopes_with_child_sources(self):
-        self.assertIn('const MOBILE_USER_SCOPES=["mine","market","news"]',APP)
+    def test_mobile_enters_supermarket_directly(self):
+        self.assertIn('const MOBILE_USER_SCOPES=["market"]',APP)
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"]',APP)
-        self.assertIn('mine:"Tạp hóa"',APP)
         self.assertIn('market:"Siêu thị"',APP)
-        self.assertIn('news:"Tin tức"',APP)
-        self.assertIn('let mobileUserScope="mine"',APP)
+        self.assertIn('const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};',APP)
+        self.assertIn('let mobileUserScope="market"',APP)
         self.assertIn('let mobileUserCategoryKey=""',APP)
-        self.assertIn('userWorkCategories(scope)',APP)
+        self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):
         block=re.search(r"function\s+mobileUserPackRank\s*\(row\)\{([\s\S]*?)\n\}",APP)

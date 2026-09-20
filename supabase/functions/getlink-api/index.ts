@@ -1528,7 +1528,7 @@ async function fetchSource(input:string, requestId:string){
     if(kind!=="category")throw new Error("vinamilk_category_link_required");
     const raw=await vinamilkCategory(url,capture);
 
-    // HARD GATE: keep every Vinamilk HTML page before normalization.
+    // HARD GATE: keep every Vinamilk GraphQL response before normalization.
     await persistRawCapture(requestId,url,"category",key,capture);
 
     const products=filterGetlinkProducts(
@@ -1540,7 +1540,7 @@ async function fetchSource(input:string, requestId:string){
         source:sourceObject(key),checked_at:checked,category_name:raw.rootName,
         products,variants:[],discovered_links:products.map(p=>p.url),source_pages:raw.pages
       },
-      engine:"supabase-edge-vinamilk-relay-rsc"
+      engine:"supabase-edge-vinamilk-direct-graphql"
     };
   }
   throw new Error("unsupported_source");

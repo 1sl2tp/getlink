@@ -42,10 +42,12 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
     def test_mobile_enters_supermarket_directly(self):
         self.assertIn('const MOBILE_USER_SCOPES=["market"]',APP)
         self.assertIn('const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"]',APP)
+        self.assertIn('const USER_MARKET_SOURCE_KEYS=["","bhx","wm","go","vinamilk"]',APP)
         self.assertIn('market:"Siêu thị"',APP)
         self.assertIn('const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};',APP)
         self.assertIn('let mobileUserScope="market"',APP)
         self.assertIn('let mobileUserCategoryKey=""',APP)
+        self.assertIn('userMarketSourceButtonsHtml("data-mobile-market-source")',APP)
         self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"',APP)
 
     def test_market_pack_rank_uses_hierarchy_not_supplier_fallback(self):

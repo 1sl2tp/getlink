@@ -37,6 +37,7 @@ jobs:
       - run: node --check taphoa-desktop-debts.js
       - run: node --check taphoa-workspace-feedback.js
       - run: node --check relay/src/index.js
+      - run: node scraper/probe_vinamilk_direct.mjs
       - run: node tests/test_taphoa_desktop_hot_paths.mjs
       - run: node tests/test_taphoa_desktop_layout_v2.mjs
       - uses: denoland/setup-deno@v2

@@ -392,7 +392,7 @@ function matchIdentity(name: string, brand: string, barcode: string, size: any) 
 type Product = {
   source:any; group:string; branch:string; name:string; packaging:{text:string};
   hierarchy:any; comparison:any; price:{current:number|null;original:number|null};
-  promotion:any; url:string; image:string; breadcrumbs:string[];
+  promotion:any; url:string; open_url?:string; image:string; breadcrumbs:string[];
   source_identity:any; last_checked_at:string;
 };
 
@@ -1446,8 +1446,17 @@ function normalizeVinamilk(item:VinamilkVariantItem,checked:string):Product|null
   const ident=matchIdentity(name,brand,"",size);
   const handle=clean(p.handle||"");
   const variantId=clean(item.variantId);
-  const url=canonicalVinamilk(
-    "https://www.vinamilk.com.vn/products/"+encodeURIComponent(handle||clean(p.productId||variantId))+
+  // Vinamilk can return handle=null for real products. Keep the numeric route
+  // only as a stable internal identity key; never expose it as a verified
+  // source product link.
+  const directUrl=handle
+    ?canonicalVinamilk(
+      "https://www.vinamilk.com.vn/products/"+encodeURIComponent(handle)+
+      "?variant="+encodeURIComponent(variantId)
+    )
+    :"";
+  const url=directUrl||canonicalVinamilk(
+    "https://www.vinamilk.com.vn/products/"+encodeURIComponent(clean(p.productId||variantId))+
     "?variant="+encodeURIComponent(variantId)
   );
   const image=clean(item.image?.url||item.thumbnail||p.images?.find(x=>x?.isDefault)?.url||p.images?.[0]?.url||"");
@@ -1463,6 +1472,7 @@ function normalizeVinamilk(item:VinamilkVariantItem,checked:string):Product|null
     price:{current,original},
     promotion:{active:Boolean(original&&original>current),price:null,text:""},
     url,
+    open_url:directUrl,
     image,
     breadcrumbs:[rootName,clean(p.subCategory||""),brand].filter(Boolean),
     source_identity:{

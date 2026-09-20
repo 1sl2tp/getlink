@@ -134,6 +134,13 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn("user-work-source-tag",desktop.group(1))
         self.assertIn("escapeHtml(source)",desktop.group(1))
 
+    def test_vinamilk_numeric_source_url_is_not_opened(self):
+        self.assertIn("function verifiedSourceOpenUrl(raw)",APP)
+        self.assertIn('host==="vinamilk.com.vn"',APP)
+        self.assertIn('syncProductSourceLink(p.open_url||p.url||payload.input_url||"")',APP)
+        self.assertNotIn('$("#productLink").href=p.url||payload.input_url||"#";',APP)
+        self.assertIn('"source-vinamilk"',APP)
+
     def test_mobile_search_updates_on_every_input_including_ime(self):
         block=re.search(
             r'const mobileUserSearch=\$\("#mobileUserSearch"\);([\s\S]*?)\n\}',

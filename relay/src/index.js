@@ -372,17 +372,84 @@ async function fetchWholeCategory(rawUrl, env) {
 }
 
 
-function canonicalVinamilkRelayUrl(raw) {
-  const u = new URL(clean(raw));
-  const host = u.hostname.toLowerCase().replace(/^www\./, "");
-  if (host !== "vinamilk.com.vn") throw new Error("invalid_vinamilk_url");
-  if (!/^\/(collections|products)\//.test(u.pathname)) {
-    throw new Error("vinamilk_catalog_url_required");
+const VNM_GRAPHQL_ORIGIN = "https://open-p04-vn.vinamilk.com.vn";
+const VNM_GRAPHQL_PATH = "/api/graphql-pub/";
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(String(value ?? ""));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map(x => x.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function vinamilkConfig(env) {
+  const cfg = {
+    clientId: clean(env.VNM_CLIENT_ID),
+    terminal: clean(env.VNM_X_TERMINAL),
+    externalCode: clean(env.VNM_EXTERNAL_CODE),
+    salt: clean(env.VNM_SIGNATURE_SALT),
+    deviceInfo: clean(env.VNM_USER_AGENT)
+  };
+  const missing = Object.entries(cfg).filter(([,v]) => !v).map(([k]) => k);
+  if (missing.length) throw new Error("vinamilk_config_missing:" + missing.join(","));
+  return cfg;
+}
+
+async function vinamilkGraphql(raw, env) {
+  const operationName = clean(raw?.operationName);
+  const query = String(raw?.query || "");
+  const variables = raw?.variables && typeof raw.variables === "object" ? raw.variables : {};
+  if (!operationName || !query) throw new Error("vinamilk_graphql_payload_required");
+
+  const cfg = vinamilkConfig(env);
+  const body = JSON.stringify({ operationName, variables, query });
+  const graphqlHash = await sha256Hex(body);
+  const timestamp = String(Date.now());
+  const deviceInfo = cfg.deviceInfo;
+  const signature = await sha256Hex(
+    [VNM_GRAPHQL_PATH, timestamp, deviceInfo, graphqlHash, cfg.salt].join(".")
+  );
+
+  const upstream = await fetch(VNM_GRAPHQL_ORIGIN + VNM_GRAPHQL_PATH, {
+    method: "POST",
+    redirect: "follow",
+    headers: {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "origin": "https://www.vinamilk.com.vn",
+      "referer": "https://www.vinamilk.com.vn/",
+      "client-id": cfg.clientId,
+      "x-device-info": deviceInfo,
+      "x-external-code": cfg.externalCode,
+      "x-graphql-hash": graphqlHash,
+      "x-language": "vi",
+      "x-signature": signature,
+      "x-terminal": cfg.terminal,
+      "x-timestamp": timestamp,
+      "x-trace-group": operationName,
+      "user-agent": deviceInfo
+    },
+    body
+  });
+  const responseBody = await upstream.text();
+  if (!upstream.ok) {
+    throw new Error("vinamilk_graphql_http_" + upstream.status + ":" + responseBody.slice(0, 800));
   }
-  u.protocol = "https:";
-  u.hostname = "www.vinamilk.com.vn";
-  u.hash = "";
-  return u.toString();
+  let parsed;
+  try { parsed = JSON.parse(responseBody); }
+  catch { throw new Error("vinamilk_graphql_invalid_json"); }
+  if (Array.isArray(parsed?.errors) && parsed.errors.length) {
+    throw new Error("vinamilk_graphql_error:" + JSON.stringify(parsed.errors).slice(0, 1000));
+  }
+  return {
+    ok: true,
+    upstream_status: upstream.status,
+    content_type: clean(upstream.headers.get("content-type") || "application/json"),
+    body: responseBody,
+    data: parsed?.data ?? null,
+    graphql_hash: graphqlHash
+  };
 }
 
 async function handleVinamilk(request, env) {
@@ -394,36 +461,7 @@ async function handleVinamilk(request, env) {
   catch { return json({ error: "invalid_json" }, 400); }
 
   try {
-    const target = canonicalVinamilkRelayUrl(raw?.url);
-    const upstream = await fetch(target, {
-      method: "GET",
-      redirect: "follow",
-      headers: {
-        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "accept-language": "vi-VN,vi;q=0.9,en;q=0.7",
-        "cache-control": "no-cache",
-        "pragma": "no-cache",
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
-      }
-    });
-    const body = await upstream.text();
-    if (!upstream.ok) {
-      return json({
-        error: "vinamilk_upstream_failed",
-        upstream_status: upstream.status,
-        detail: body.slice(0, 800)
-      }, 502);
-    }
-    if (body.length > 6_000_000) {
-      return json({ error: "vinamilk_response_too_large" }, 502);
-    }
-    return json({
-      ok: true,
-      url: target,
-      upstream_status: upstream.status,
-      content_type: clean(upstream.headers.get("content-type") || ""),
-      body
-    });
+    return json(await vinamilkGraphql(raw, env));
   } catch (error) {
     return json({
       error: "vinamilk_relay_failed",

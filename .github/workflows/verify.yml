@@ -51,6 +51,7 @@ jobs:
       - run: node tests/test_bhx_edge_contract.mjs
       - run: node tests/test_go_edge_contract.mjs
       - run: node tests/test_vinamilk_edge_contract.mjs
+      - run: node tests/test_vinamilk_relay_contract.mjs
       - name: Probe Vinamilk direct transport (diagnostic)
         run: node tests/probe_vinamilk_live.mjs || true
       - name: Probe Vinamilk through Bright Data browser (diagnostic)
@@ -63,8 +64,6 @@ jobs:
           BRIGHTDATA_BROWSER_PASSWORD: ${{ secrets.BRIGHTDATA_BROWSER_PASSWORD }}
           BRIGHTDATA_COUNTRY: vn
         run: python scraper/brightdata_vinamilk.py || true
-      - name: Inspect Vinamilk signing from public static chunks
-        run: python scraper/probe_vinamilk_static.py
       - run: node tests/test_getlink_name_filter_contract.mjs
       - name: Supabase-only gate
         run: |

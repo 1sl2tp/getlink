@@ -371,6 +371,108 @@ async function fetchWholeCategory(rawUrl, env) {
   };
 }
 
+
+const VNM_GRAPHQL_ORIGIN = "https://open-p04-vn.vinamilk.com.vn";
+const VNM_GRAPHQL_PATH = "/api/graphql-pub/";
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(String(value ?? ""));
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return [...new Uint8Array(digest)]
+    .map(x => x.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+const VNM_DEFAULT_CLIENT_ID = "54SQs8Rii747anXFUIFsiCxa7kI91drT";
+const VNM_DEFAULT_TERMINAL = "2188400000000124";
+const VNM_DEFAULT_EXTERNAL_CODE = "35766930226f44e48e8e9f373217cf755";
+const VNM_DEFAULT_SIGNATURE_SALT = "89fYD1YM2ESML5nXy6nPz0zOeh6UWauS";
+const VNM_DEFAULT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1";
+
+function vinamilkConfig(env) {
+  return {
+    clientId: clean(env.VNM_CLIENT_ID || VNM_DEFAULT_CLIENT_ID),
+    terminal: clean(env.VNM_X_TERMINAL || VNM_DEFAULT_TERMINAL),
+    externalCode: clean(env.VNM_EXTERNAL_CODE || VNM_DEFAULT_EXTERNAL_CODE),
+    salt: clean(env.VNM_SIGNATURE_SALT || VNM_DEFAULT_SIGNATURE_SALT),
+    deviceInfo: clean(env.VNM_USER_AGENT || VNM_DEFAULT_USER_AGENT)
+  };
+}
+
+async function vinamilkGraphql(raw, env) {
+  const operationName = clean(raw?.operationName);
+  const query = String(raw?.query || "");
+  const variables = raw?.variables && typeof raw.variables === "object" ? raw.variables : {};
+  if (!operationName || !query) throw new Error("vinamilk_graphql_payload_required");
+
+  const cfg = vinamilkConfig(env);
+  const body = JSON.stringify({ operationName, variables, query });
+  const graphqlHash = await sha256Hex(body);
+  const timestamp = String(Date.now());
+  const deviceInfo = cfg.deviceInfo;
+  const signature = await sha256Hex(
+    [VNM_GRAPHQL_PATH, timestamp, deviceInfo, graphqlHash, cfg.salt].join(".")
+  );
+
+  const upstream = await fetch(VNM_GRAPHQL_ORIGIN + VNM_GRAPHQL_PATH, {
+    method: "POST",
+    redirect: "follow",
+    headers: {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "origin": "https://www.vinamilk.com.vn",
+      "referer": "https://www.vinamilk.com.vn/",
+      "client-id": cfg.clientId,
+      "x-device-info": deviceInfo,
+      "x-external-code": cfg.externalCode,
+      "x-graphql-hash": graphqlHash,
+      "x-language": "vi",
+      "x-signature": signature,
+      "x-terminal": cfg.terminal,
+      "x-timestamp": timestamp,
+      "x-trace-group": operationName,
+      "user-agent": deviceInfo
+    },
+    body
+  });
+  const responseBody = await upstream.text();
+  if (!upstream.ok) {
+    throw new Error("vinamilk_graphql_http_" + upstream.status + ":" + responseBody.slice(0, 800));
+  }
+  let parsed;
+  try { parsed = JSON.parse(responseBody); }
+  catch { throw new Error("vinamilk_graphql_invalid_json"); }
+  if (Array.isArray(parsed?.errors) && parsed.errors.length) {
+    throw new Error("vinamilk_graphql_error:" + JSON.stringify(parsed.errors).slice(0, 1000));
+  }
+  return {
+    ok: true,
+    upstream_status: upstream.status,
+    content_type: clean(upstream.headers.get("content-type") || "application/json"),
+    body: responseBody,
+    data: parsed?.data ?? null,
+    graphql_hash: graphqlHash
+  };
+}
+
+async function handleVinamilk(request, env) {
+  if (!relayAuthorized(request, env)) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  let raw;
+  try { raw = await request.json(); }
+  catch { return json({ error: "invalid_json" }, 400); }
+
+  try {
+    return json(await vinamilkGraphql(raw, env));
+  } catch (error) {
+    return json({
+      error: "vinamilk_relay_failed",
+      detail: String(error?.message || error).slice(0, 1200)
+    }, 502);
+  }
+}
+
 async function handleCategory(request, env) {
   if (!relayAuthorized(request, env)) {
     return json({ error: "unauthorized" }, 401);
@@ -403,6 +505,10 @@ export default {
 
     if (request.method === "POST" && url.pathname === "/category") {
       return handleCategory(request, env);
+    }
+
+    if (request.method === "POST" && url.pathname === "/vinamilk") {
+      return handleVinamilk(request, env);
     }
 
     return json({ error: "not_found" }, 404);

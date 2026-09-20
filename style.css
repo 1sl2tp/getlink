@@ -3039,6 +3039,15 @@ h1{margin:0;font-size:28px;line-height:1.1}
   color:#e85d04!important;
 }
 
+/* Source 4: Vinamilk */
+.xls-source.source-vinamilk{
+  color:#0068b2!important;
+}
+.grid-product.source-vinamilk .grid-price,
+.grid-price.source-price-vinamilk{
+  color:#0068b2!important;
+}
+
 
 /* Non-destructive cross-source match audit */
 .catalog-mode-actions{
@@ -4602,12 +4611,16 @@ body.image-zoom-open{overflow:hidden!important}
 .source-chip[data-source="wm"] small{color:#df6a61}
 .source-chip[data-source="go"]{color:#e85d04}
 .source-chip[data-source="go"] small{color:#ed8b51}
+.source-chip[data-source="vinamilk"]{color:#0068b2}
+.source-chip[data-source="vinamilk"] small{color:#4a91c2}
 .source-chip[data-source="bhx"].active{border-color:#a8d2bb;background:#eef8f2;color:#087a40}
 .source-chip[data-source="wm"].active{border-color:#efb7b2;background:#fff4f3;color:#d92d20}
 .source-chip[data-source="go"].active{border-color:#f2c8aa;background:#fff6ef;color:#e85d04}
+.source-chip[data-source="vinamilk"].active{border-color:#b9d8ee;background:#f3f9fd;color:#0068b2}
 .source-chip[data-source="bhx"].active small{color:#5d9f7b}
 .source-chip[data-source="wm"].active small{color:#df6a61}
 .source-chip[data-source="go"].active small{color:#ed8b51}
+.source-chip[data-source="vinamilk"].active small{color:#4a91c2}
 
 @media(max-width:720px){
   .catalog-search-row{
@@ -6793,9 +6806,11 @@ body.source-manager-open{overflow:hidden!important}
 .source-manager-source-badge.bhx{border-color:#c9e4d4;color:#087a40;background:#f4fbf7}
 .source-manager-source-badge.wm{border-color:#efc7c3;color:#d92d20;background:#fff7f6}
 .source-manager-source-badge.go{border-color:#f0d1ba;color:#e85d04;background:#fff8f2}
+.source-manager-source-badge.vinamilk{border-color:#b9d8ee;color:#0068b2;background:#f3f9fd}
 .source-manager-source-badge.bhx small{color:#5d9f7b}
 .source-manager-source-badge.wm small{color:#df6a61}
 .source-manager-source-badge.go small{color:#ed8b51}
+.source-manager-source-badge.vinamilk small{color:#4a91c2}
 .source-manager-total{
   justify-self:end;
   color:var(--green-strong);
@@ -6848,7 +6863,7 @@ body.source-manager-open{overflow:hidden!important}
     grid-template-columns:repeat(2,minmax(0,1fr));
   }
   .source-manager-source-tabs{
-    grid-template-columns:repeat(4,minmax(0,1fr));
+    grid-template-columns:repeat(5,minmax(0,1fr));
   }
   .source-manager-segment button{
     width:100%;

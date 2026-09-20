@@ -22,17 +22,17 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         m=re.search(r'function mobileUserRows\(\)\{([\s\S]*?)\n\}', APP)
         self.assertIsNotNone(m)
         body=m.group(1)
-        self.assertIn('userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey)', body)
+        self.assertIn('userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey,userWorkSourceFilter)', body)
         self.assertIn('mobileUserScope==="market"', body)
         self.assertIn('userWorkMarketSortRows(baseRows)', body)
 
-    def test_source_tabs_render_supermarket_categories_directly(self):
+    def test_source_tabs_render_source_then_category(self):
         m=re.search(r'function renderMobileUserSourceTabs\(\)\{([\s\S]*?)\n\}', APP)
         self.assertIsNotNone(m)
         body=m.group(1)
-        self.assertNotIn('mobile-user-source-level parent', body)
+        self.assertIn('mobile-user-source-level parent', body)
         self.assertIn('mobile-user-source-level child', body)
-        self.assertNotIn('data-mobile-scope', body)
+        self.assertIn('data-mobile-source-filter', body)
         self.assertIn('data-mobile-category', body)
         self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"', body)
 

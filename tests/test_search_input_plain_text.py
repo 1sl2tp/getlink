@@ -35,10 +35,8 @@ class SearchInputPlainTextTest(unittest.TestCase):
         ):
             self.assertIn(attr, tag)
 
-    def test_disabled_merge_password_cannot_trigger_password_manager(self):
-        tag=self._tag("mobileMergePassword")
-        self.assertIn('disabled', tag)
-        self.assertIn('autocomplete="off"', tag)
+    def test_merge_password_input_is_not_exposed(self):
+        self.assertNotIn('id="mobileMergePassword"', INDEX)
 
 if __name__=="__main__":
     unittest.main()

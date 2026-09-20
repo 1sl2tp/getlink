@@ -115,6 +115,7 @@ let activeGroupUrl="";
 let activeBrand="";
 let activePackKind=localStorage.getItem("getlink:filter-pack")||"";
 let activeSourceFilter=localStorage.getItem("getlink:filter-source")||"";
+if(activeSourceFilter==="mine"){activeSourceFilter="";try{localStorage.removeItem("getlink:filter-source");}catch{}}
 let tableSourceSort="";
 let libraryQuery="";
 let libraryCache=[];
@@ -125,7 +126,8 @@ let selectedLibraryUrl="";
 let libraryGroups=[];
 let categoryPage=1;
 let libraryPage=1;
-let libraryView=localStorage.getItem("getlink:view-mode")==="table"?"table":"grid";
+let libraryView="grid";
+try{localStorage.removeItem("getlink:view-mode");}catch{}
 let matchAuditActive=false;
 let matchAuditLoaded=false;
 let matchAuditData=null;
@@ -165,6 +167,10 @@ const MOBILE_USER_SCOPES=["market"];
 const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
 const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"VNM"};
+const USER_WORK_SOURCE_KEYS=["",...MOBILE_MARKET_SOURCES];
+const USER_WORK_SOURCE_LABELS={"":"Tất cả",...MOBILE_MARKET_SOURCE_LABELS};
+let userWorkSourceFilter=localStorage.getItem("getlink:user-work-source")||"";
+if(!USER_WORK_SOURCE_KEYS.includes(userWorkSourceFilter))userWorkSourceFilter="";
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -2921,7 +2927,7 @@ function renderCategoryMenu(){
   if(!host)return;
 
   let visibleLibrary=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"
+    String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
   );
   if(activeSourceFilter){
     visibleLibrary=visibleLibrary.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
@@ -2989,7 +2995,7 @@ function renderCategoryMenu(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3014,8 +3020,11 @@ function gridProductCard(row){
   const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
   const supplierChangeHtml=supplierPriceChangeHtml(row);
   const isWatch=String(row.preference_state||"normal")==="watch";
+  const marketPackClass=userWorkMarketPackGroup(row)==="carton"?" market-pack-carton":" market-pack-retail";
+  const sourceLabel=sourceDisplayLabel(row);
+  const sourceKey=rowSourceFilterKey(row);
 
-  return '<article class="grid-product product-card'+catalogSourceDisplayClass(row)+' '+
+  return '<article class="grid-product product-card'+marketPackClass+catalogSourceDisplayClass(row)+' '+
     (String(row.preference_state||"normal")==="hidden"?"is-hidden ":"")+
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
@@ -3034,6 +3043,7 @@ function gridProductCard(row){
         '<button class="grid-product-name" type="button" data-url="'+escapeAttr(row.canonical_url)+'" title="'+escapeAttr(levels.rawName)+'">'+escapeHtml(displayName)+'</button>'+
         '<div class="grid-product-bottom">'+
           '<span class="grid-qc">'+escapeHtml(qc||"—")+'</span>'+
+          '<small class="grid-source-tag '+escapeAttr(sourceKey)+'">'+escapeHtml(sourceLabel)+'</small>'+
           '<span class="grid-price-group'+(unitPriceText?" has-unit":"")+(supplierChangeHtml?" has-change":"")+'">'+
             '<strong class="grid-price'+(activeSourceFilter==="mine"||isMineRow(row)?" source-price-mine":"")+(supplierStock?" is-out-of-stock":"")+(isWinmartRow(row)?" source-price-winmart":(isGoRow(row)?" source-price-go":""))+'">'+(supplierStock?supplierStock:money(price))+'</strong>'+
             (unitPriceText?'<span class="grid-unit-price">'+escapeHtml(unitPriceText)+'</span>':'')+
@@ -3429,7 +3439,7 @@ function scheduleCategoryMenuRefresh(){
 function rowsBeforeSearch(){
   const key=["before",libraryState,activeSourceFilter,activeRootGroup,activeGroupUrl,activeBrand].join("|");
   return memoBrowseRows(key,()=>{
-    let products=libraryCache.slice();
+    let products=libraryCache.filter(row=>!isMineRow(row));
 
     if(libraryState==="watch"){
       products=products.filter(row=>String(row.preference_state||"normal")==="watch");
@@ -3467,7 +3477,9 @@ function visibleRowsBeforePack(){
 function categoryBaseRows(){
   const key=["category-base",activeSourceFilter,activeRootGroup,activeGroupUrl].join("|");
   return memoBrowseRows(key,()=>{
-    let rows=libraryCache.filter(row=>String(row.preference_state||"normal")!=="hidden");
+    let rows=libraryCache.filter(row=>
+      String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
+    );
     if(activeSourceFilter)rows=rows.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     if(activeRootGroup)rows=rows.filter(row=>rowBrowseGroupKey(row)===activeRootGroup);
     activeGroupUrl="";
@@ -3526,7 +3538,7 @@ function rowsAfterPackBeforeSource(){
   });
 }
 
-const TABLE_SOURCE_CYCLE=["","mine","bhx","wm","go","vinamilk"];
+const TABLE_SOURCE_CYCLE=["","bhx","wm","go","vinamilk"];
 
 function rowMatchesSourceFilter(row,source){
   if(!source)return true;
@@ -3538,6 +3550,7 @@ function sourceRowsForSelection(source){
   const key=["source-selection",source].join("|");
   return memoBrowseRows(key,()=>libraryCache.filter(row=>
     String(row.preference_state||"normal")!=="hidden" &&
+    !isMineRow(row) &&
     rowMatchesSourceFilter(row,source)
   ));
 }
@@ -3638,7 +3651,7 @@ function renderSourceTabs(){
   if(!navHost&&!inlineHost&&!quickHost)return;
 
   let base=libraryCache.filter(row=>
-    String(row.preference_state||"normal")!=="hidden"
+    String(row.preference_state||"normal")!=="hidden"&&!isMineRow(row)
   );
   if(activePackKind==="Thùng"){
     base=base.filter(row=>rowIsCarton(row));
@@ -3652,14 +3665,13 @@ function renderSourceTabs(){
     counts[sourceKey]++;
   }
 
-  if(!["","mine","bhx","wm","go","vinamilk"].includes(activeSourceFilter)){
+  if(!["","bhx","wm","go","vinamilk"].includes(activeSourceFilter)){
     activeSourceFilter="";
     localStorage.removeItem("getlink:filter-source");
   }
 
   const rows=[
     ["",base.length,!activeSourceFilter],
-    ["mine",counts.mine,activeSourceFilter==="mine"],
     ["bhx",counts.bhx,activeSourceFilter==="bhx"],
     ["wm",counts.wm,activeSourceFilter==="wm"],
     ["go",counts.go,activeSourceFilter==="go"],
@@ -3678,7 +3690,7 @@ function renderSourceTabs(){
 
   const quickCurrent=$("#quickBrowseCurrent");
   if(quickCurrent){
-    const sourceLabel=activeSourceFilter==="mine"?"Tạp hóa":(activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn"))));
+    const sourceLabel=activeSourceFilter==="bhx"?"BHX":(activeSourceFilter==="wm"?"WinMart":(activeSourceFilter==="go"?"GO!":(activeSourceFilter==="vinamilk"?"VNM":"Tất cả nguồn")));
     quickCurrent.textContent=(activeManualGroupName()||"Tất cả")+" · "+sourceLabel;
   }
 }
@@ -3693,11 +3705,7 @@ function filteredLibraryProducts(){
       products=products.filter(row=>rowMatchesSourceFilter(row,activeSourceFilter));
     }
 
-    return [...products].sort((a,b)=>{
-      const nameA=String(a.source_name||a.name||"");
-      const nameB=String(b.source_name||b.name||"");
-      return nameA.localeCompare(nameB,"vi");
-    });
+    return userWorkMarketSortRows(products);
   });
 }
 
@@ -4074,11 +4082,12 @@ function userWorkRowCategorySort(row,scope){
   return rowManualGroupKey(row)?rowManualGroupSort(row):9999999;
 }
 
-function userWorkCategories(scope){
+function userWorkCategories(scope,sourceFilter=""){
   const groups=new Map();
   for(const row of libraryCache){
     if(String(row.preference_state||"normal")==="hidden")continue;
     if(scope==="mine"?!isMineRow(row):isMineRow(row))continue;
+    if(scope!=="mine"&&sourceFilter&&rowSourceFilterKey(row)!==sourceFilter)continue;
     const key=userWorkRowCategoryKey(row,scope);
     if(!key)continue;
     const item={
@@ -4092,9 +4101,10 @@ function userWorkCategories(scope){
   return [...groups.values()].sort((a,b)=>a.sort-b.sort||a.name.localeCompare(b.name,"vi"));
 }
 
-function userWorkRowsForScope(scope,categoryKey=""){
+function userWorkRowsForScope(scope,categoryKey="",sourceFilter=""){
   return userWorkRows().filter(row=>{
     if(scope==="mine"?!isMineRow(row):isMineRow(row))return false;
+    if(scope!=="mine"&&sourceFilter&&rowSourceFilterKey(row)!==sourceFilter)return false;
     if(categoryKey&&userWorkRowCategoryKey(row,scope)!==categoryKey)return false;
     return true;
   });
@@ -4123,9 +4133,36 @@ function userWorkCategoryDisplayLabel(name,scope,compact=false){
   return displayUpperFirst(short||raw);
 }
 
-function renderUserWorkCategoryButtons(host,scope,activeKey,attribute){
+function userWorkSourceButtons(attribute,compact=false){
+  return USER_WORK_SOURCE_KEYS.map(key=>{
+    const active=key===userWorkSourceFilter;
+    const label=USER_WORK_SOURCE_LABELS[key]||key;
+    return '<button class="'+(compact?"mobile-user-source-chip":"user-work-source-filter")+' '+(active?"active":"")+'" '+
+      attribute+'="'+escapeAttr(key)+'" type="button" aria-pressed="'+(active?"true":"false")+'" title="'+escapeAttr(label)+'">'+
+      escapeHtml(label)+'</button>';
+  }).join("");
+}
+
+function setUserWorkSourceFilter(next){
+  userWorkSourceFilter=USER_WORK_SOURCE_KEYS.includes(next)?next:"";
+  if(userWorkSourceFilter)localStorage.setItem("getlink:user-work-source",userWorkSourceFilter);
+  else localStorage.removeItem("getlink:user-work-source");
+  userWorkDesktopCategoryKey="";
+  mobileUserCategoryKey="";
+  userWorkMarketLimit=8;
+  mobileUserLimit=8;
+  mobileUserScopeViewCache.delete("market");
+}
+
+function renderUserWorkDesktopSourceTabs(){
+  const host=$("#userWorkSourceTabs");
   if(!host)return;
-  const categories=userWorkCategories(scope);
+  host.innerHTML=userWorkSourceButtons("data-work-source-filter");
+}
+
+function renderUserWorkCategoryButtons(host,scope,activeKey,attribute,sourceFilter=""){
+  if(!host)return;
+  const categories=userWorkCategories(scope,sourceFilter);
   const compact=attribute==="data-mobile-category";
   host.innerHTML=[
     '<button class="user-work-category-button '+(!activeKey?"active":"")+'" '+attribute+'="" type="button" aria-pressed="'+(!activeKey?"true":"false")+'">'+
@@ -4312,7 +4349,7 @@ function mobileSupplierSources(){
 }
 
 function mobileUserRows(){
-  let baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey);
+  let baseRows=userWorkRowsForScope(mobileUserScope,mobileUserCategoryKey,userWorkSourceFilter);
   if(mobileUserScope==="market"){
     // Market browsing is deterministic: multi-pack first, then retail;
     // cheapest first inside each group.
@@ -4798,8 +4835,10 @@ function renderMobileUserSourceTabs(){
   if(!host)return;
 
   const categoryHost=document.createElement("div");
-  renderUserWorkCategoryButtons(categoryHost,"market",mobileUserCategoryKey,"data-mobile-category");
-  host.innerHTML='<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
+  renderUserWorkCategoryButtons(categoryHost,"market",mobileUserCategoryKey,"data-mobile-category",userWorkSourceFilter);
+  host.innerHTML=
+    '<div class="mobile-user-source-level parent">'+userWorkSourceButtons("data-mobile-source-filter",true)+'</div>'+
+    '<div class="mobile-user-source-level child">'+categoryHost.innerHTML+'</div>';
 }
 
 function setupMobileUserAutoLoad(){
@@ -4840,7 +4879,7 @@ function mobileUserScopeViewKey(scope){
       String(newsItems[0]?.id||""),Number(memory?.at||0)
     ].join("|");
   }
-  return [scope,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");
+  return [scope,userWorkSourceFilter,mobileUserCategoryKey,libraryQuery,mobileUserLimit,libraryRenderVersion].join("|");
 }
 function stashMobileUserScopeView(scope){
   const host=$("#mobileUserResults");
@@ -5173,6 +5212,8 @@ function renderUserWorkHome(){
   }
   if(desktopSearch)desktopSearch.placeholder=newsMode?"Tìm tin...":"Tìm kiếm";
 
+  renderUserWorkDesktopSourceTabs();
+
   document.querySelectorAll(".user-work-jump-button").forEach(btn=>{
     const active=btn.dataset.workTarget===userWorkDesktopScope;
     btn.classList.toggle("active",active);
@@ -5187,7 +5228,8 @@ function renderUserWorkHome(){
         categoryHost,
         userWorkDesktopScope,
         userWorkDesktopCategoryKey,
-        "data-work-category"
+        "data-work-category",
+        userWorkSourceFilter
       );
     }
   }
@@ -5208,7 +5250,7 @@ function renderUserWorkHome(){
     return;
   }
 
-  const scopedRaw=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey);
+  const scopedRaw=userWorkRowsForScope(userWorkDesktopScope,userWorkDesktopCategoryKey,userWorkSourceFilter);
   const scoped=userWorkDesktopScope==="market"?userWorkMarketSortRows(scopedRaw):scopedRaw;
   const marketHost=$("#userWorkMarketGrid");
   const marketEmpty=$("#userWorkMarketEmpty");
@@ -5669,23 +5711,6 @@ $("#tableSourceSort").addEventListener("click",()=>{
   viewRenderState.table.key="";
   viewRenderState.table.rendered=0;
   setActiveSourceFilter(nextTableSourceFilter());
-});
-
-document.querySelector(".view-switch").addEventListener("click",e=>{
-  const button=e.target.closest(".view-button");
-  if(!button)return;
-  const next=button.dataset.view==="table"?"table":"grid";
-  if(next===libraryView)return;
-  libraryView=next;
-  localStorage.setItem("getlink:view-mode",libraryView);
-  syncViewMode();
-  renderActiveProductView(filteredLibraryProducts());
-  requestAnimationFrame(()=>{
-    const host=libraryView==="table"?$("#tableView"):$("#productGrid");
-    if(host&&host.scrollHeight-host.clientHeight<900){
-      appendLocalViewBatch(libraryView);
-    }
-  });
 });
 
 $("#productGrid").addEventListener("click",async e=>{
@@ -6490,6 +6515,22 @@ if(userWorkHome){
       newsError="";
       ensureNewsLoaded(true);
       resetUserWorkDesktopScroll();
+      return;
+    }
+
+    const desktopSource=e.target.closest("[data-work-source-filter]");
+    if(desktopSource){
+      setUserWorkSourceFilter(String(desktopSource.dataset.workSourceFilter||""));
+      renderUserWorkHome();
+      resetUserWorkDesktopScroll();
+      return;
+    }
+
+    const mobileSource=e.target.closest("[data-mobile-source-filter]");
+    if(mobileSource){
+      setUserWorkSourceFilter(String(mobileSource.dataset.mobileSourceFilter||""));
+      renderUserWorkHome();
+      resetMobileUserResultsScroll();
       return;
     }
 

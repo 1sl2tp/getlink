@@ -12452,7 +12452,7 @@ body[data-app-role="user"] .workspace-detail{
 }
 .user-work-source-tag.bhx{background:#e9f7ef;color:#087a40}
 .user-work-source-tag.wm{background:#fff0f0;color:#d92d20}
-.user-work-source-tag.go{background:#fff3ea;color:#e85d04}
+.user-work-source-tag.go{background:#fff3ea;color:#e85d04}\n.user-work-source-tag.vinamilk{background:#eef2ff;color:#3538cd}
 
 .user-work-order-wrap{
   --work-col-product-min:160px;
@@ -13082,7 +13082,7 @@ body[data-app-role="user"] .workspace-detail{
   .mobile-user-product-source.mine{background:#edf8f2;color:#087a40}
   .mobile-user-product-source.bhx{background:#eef8f2;color:#087a40}
   .mobile-user-product-source.wm{background:#fff1f3;color:#b42318}
-  .mobile-user-product-source.go{background:#fff7e8;color:#9a6700}
+  .mobile-user-product-source.go{background:#fff7e8;color:#9a6700}\n  .mobile-user-product-source.vinamilk{background:#eef2ff;color:#3538cd}
   .mobile-user-qty{
     width:94px;
     height:32px;
@@ -15602,4 +15602,18 @@ body.news-quick-open{overflow:hidden!important}
   .source-chip-text .source-chip-name{
     font-size:9px!important;
   }
+}
+
+
+/* Text-only source names for customer-facing source cells. */
+.user-source-text{
+  display:inline-block;
+  max-width:100%;
+  overflow:hidden;
+  color:#475467;
+  font-size:9px;
+  font-weight:780;
+  line-height:1.1;
+  text-overflow:ellipsis;
+  white-space:nowrap;
 }

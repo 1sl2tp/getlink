@@ -112,8 +112,27 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         block=re.search(r"function\s+mobileUserMarketCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         body=block.group(1)
-        for token in ["image","canonicalDisplayName","userWorkPrimaryMarketPrice","rowPrimaryQc","sourceDisplayLabel"]:
+        for token in ["image","canonicalDisplayName","userWorkPrimaryMarketPrice","rowPrimaryQc","sourceDisplayLabel","mobile-user-product-source","escapeHtml(source)"]:
             self.assertIn(token,body)
+        self.assertIn('vinamilk:"VNM"',APP)
+        self.assertIn('if(isVinamilkRow(row))return "VNM";',APP)
+
+    def test_user_source_cells_are_text_only(self):
+        block=re.search(r"function\\s+userSourceCell\\s*\\(row\\)\\{([\\s\\S]*?)\\n\\}",APP)
+        self.assertIsNotNone(block)
+        body=block.group(1)
+        self.assertIn("user-source-text",body)
+        self.assertNotIn("sourceLogoMark",body)
+
+    def test_user_grid_and_desktop_market_cards_render_source_name(self):
+        grid=re.search(r"function\\s+userGridProductCard\\s*\\(row\\)\\{([\\s\\S]*?)\\n\\}",APP)
+        desktop=re.search(r"function\\s+userWorkMarketCard\\s*\\(row,laneIndex=0\\)\\{([\\s\\S]*?)\\n\\}",APP)
+        self.assertIsNotNone(grid)
+        self.assertIsNotNone(desktop)
+        self.assertIn("user-grid-field-source",grid.group(1))
+        self.assertIn("publicSourceCompactLabel",grid.group(1))
+        self.assertIn("user-work-source-tag",desktop.group(1))
+        self.assertIn("escapeHtml(source)",desktop.group(1))
 
     def test_mobile_search_updates_on_every_input_including_ime(self):
         block=re.search(

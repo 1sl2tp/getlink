@@ -164,7 +164,7 @@ let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["market"];
 const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
-const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk"};
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"VNM"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -2255,9 +2255,9 @@ function isMineRow(row){
 function sourceDisplayLabel(row){
   const raw=String(row&&row.source||"").trim();
   if(isMineRow(row))return "Tạp hóa";
-  if(isWinmartRow(row))return "WM";
-  if(isGoRow(row))return "GO";
-  if(isVinamilkRow(row))return "Vinamilk";
+  if(isWinmartRow(row))return "WinMart";
+  if(isGoRow(row))return "GO!";
+  if(isVinamilkRow(row))return "VNM";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
   return displayUpperFirst(raw);
@@ -2574,6 +2574,7 @@ function publicSourceCompactLabel(row){
   if(key==="bhx")return "BHX";
   if(key==="wm")return "WinMart";
   if(key==="go")return "GO!";
+  if(key==="vinamilk")return "VNM";
   return String(row&&row.source||"").trim()||"Nguồn";
 }
 
@@ -2596,10 +2597,9 @@ function userPublicPackInfo(row,levels){
 }
 
 function userSourceCell(row){
-  const key=rowSourceFilterKey(row);
-  const logo=sourceLogoMark(key);
-  return '<span class="user-source-cell" title="'+escapeAttr(publicSourceCompactLabel(row))+'">'+
-    (logo||'<span class="user-source-text">'+escapeHtml(publicSourceCompactLabel(row))+'</span>')+
+  const label=publicSourceCompactLabel(row);
+  return '<span class="user-source-cell" title="'+escapeAttr(label)+'">'+
+    '<span class="user-source-text">'+escapeHtml(label)+'</span>'+
   '</span>';
 }
 
@@ -2656,6 +2656,7 @@ function userGridProductCard(row){
   const retail=Number(levels.promoLeafPrice||levels.leafPrice||0);
   const primaryPrice=carton||middle||retail||Number(row.current_price||0);
   const packText=rowPrimaryQc(row);
+  const source=publicSourceCompactLabel(row);
 
   return '<article class="grid-product product-card user-grid-product user-grid-product-compact" data-url="'+escapeAttr(row.canonical_url)+'">'+
     '<div class="grid-product-image">'+
@@ -2666,6 +2667,7 @@ function userGridProductCard(row){
       '<div class="user-grid-fields user-grid-fields-compact">'+
         '<div class="user-grid-field user-grid-field-pack"><span>Quy cách</span><strong>'+escapeHtml(packText||"—")+'</strong></div>'+
         '<div class="user-grid-field user-grid-field-price"><span>Giá</span><strong>'+(stock?escapeHtml(stock):(primaryPrice?money(primaryPrice):"—"))+'</strong></div>'+
+        '<div class="user-grid-field user-grid-field-source"><span>Nguồn</span><strong class="user-source-text">'+escapeHtml(source)+'</strong></div>'+
       '</div>'+
     '</div>'+
   '</article>';
@@ -3049,7 +3051,7 @@ async function fetchLibraryFromSupabase(){
 const SOURCE_MANAGER_CACHE_MS=5*60*1000;
 
 function sourceManagerSourceLabel(key){
-  return key==="bhx"?"BHX":(key==="wm"?"WM":(key==="go"?"GO":(key==="vinamilk"?"Vinamilk":"")));
+  return key==="bhx"?"BHX":(key==="wm"?"WinMart":(key==="go"?"GO!":(key==="vinamilk"?"VNM":"")));
 }
 
 function sourceManagerActiveItems(){
@@ -4755,6 +4757,7 @@ function mobileUserMarketCard(row){
       (qc?'<small class="mobile-user-product-qc">'+escapeHtml(qc)+'</small>':'')+
       '<div class="mobile-user-product-bottom">'+
         (price?'<b class="mobile-user-product-price source-'+escapeAttr(sourceKey)+'">'+money(price)+'</b>':'')+
+        '<small class="mobile-user-product-source '+escapeAttr(sourceKey)+'">'+escapeHtml(source)+'</small>'+
       '</div>'+
     '</div>'+
   '</article>';
@@ -4973,6 +4976,7 @@ function userWorkMarketCard(row,laneIndex=0){
       (pack?'<small class="user-work-market-pack">'+escapeHtml(pack)+'</small>':'')+
       '<div class="user-work-market-bottom">'+
         (price?'<b class="user-work-market-price source-'+escapeAttr(sourceClass)+'">'+money(price)+'</b>':'')+
+        '<small class="user-work-source-tag '+escapeAttr(sourceClass)+'">'+escapeHtml(source)+'</small>'+
       '</div>'+
     '</div>'+
   '</article>';

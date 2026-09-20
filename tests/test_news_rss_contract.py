@@ -12,7 +12,8 @@ class NewsRssContractTest(unittest.TestCase):
     def test_news_runtime_is_kept_but_not_an_entry_tab(self):
         self.assertNotIn('data-work-target="news"',HTML)
         self.assertNotIn('<span>Tin tức</span>',HTML)
-        self.assertIn('id="userWorkNews"',HTML)
+        self.assertNotIn('id="userWorkNews"',HTML)
+        self.assertNotIn('id="userWorkHome"',HTML)
         self.assertIn('const MOBILE_USER_SCOPES=["market"]',APP)
         self.assertNotIn('news:"Tin tức"',APP)
         self.assertIn('"chinh-tri":"Chính trị"',APP)

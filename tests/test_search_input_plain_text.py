@@ -11,8 +11,8 @@ class SearchInputPlainTextTest(unittest.TestCase):
         self.assertIsNotNone(m, input_id)
         return m.group(0)
 
-    def test_mobile_search_disables_browser_text_assists(self):
-        tag=self._tag("mobileUserSearch")
+    def test_shared_catalog_search_disables_browser_text_assists(self):
+        tag=self._tag("librarySearch")
         for attr in (
             'autocomplete="new-password"',
             'autocorrect="off"',
@@ -23,17 +23,8 @@ class SearchInputPlainTextTest(unittest.TestCase):
             'data-lpignore="true"',
         ):
             self.assertIn(attr, tag)
-
-    def test_desktop_search_disables_browser_text_assists(self):
-        tag=self._tag("userWorkSearch")
-        for attr in (
-            'autocomplete="new-password"',
-            'autocorrect="off"',
-            'autocapitalize="none"',
-            'spellcheck="false"',
-            'role="searchbox"',
-        ):
-            self.assertIn(attr, tag)
+        self.assertNotIn('id="mobileUserSearch"', INDEX)
+        self.assertNotIn('id="userWorkSearch"', INDEX)
 
     def test_merge_password_input_is_not_exposed(self):
         self.assertNotIn('id="mobileMergePassword"', INDEX)

@@ -68,12 +68,16 @@ function sourceKey(raw: string) {
   if (host === "bachhoaxanh.com") return "bachhoaxanh";
   if (host === "winmart.vn") return "winmart";
   if (host === "sieuthi-go.vn") return "go";
+  if (host === "vinamilk.com.vn") return "vinamilk";
+  if (host === "concung.com") return "concung";
   if (host === "get.taphoa.xyz" && new URL(raw).pathname.startsWith("/nguon-hang/")) return "mine";
   throw new Error("unsupported_source_url");
 }
 function sourceObject(key: string) {
   if (key === "winmart") return { key, name: "WinMart", host: "winmart.vn" };
   if (key === "go") return { key, name: "GO!", host: "sieuthi-go.vn" };
+  if (key === "vinamilk") return { key, name: "Vinamilk", host: "vinamilk.com.vn" };
+  if (key === "concung") return { key, name: "Con Cưng", host: "concung.com" };
   if (key === "mine") return { key, name: "Tạp hóa", host: "get.taphoa.xyz" };
   return { key: "bachhoaxanh", name: "Bách Hóa XANH", host: "bachhoaxanh.com" };
 }
@@ -181,6 +185,23 @@ function canonicalGo(raw: string) {
   const path = (u.pathname || "/").replace(/\/+/g, "/").replace(/\/$/, "") || "/";
   return "https://sieuthi-go.vn" + path;
 }
+function canonicalVinamilk(raw:string){
+  const u=new URL(raw);
+  const host=u.hostname.toLowerCase().replace(/^www\./,"");
+  if(host!=="vinamilk.com.vn")throw new Error("invalid_vinamilk_url");
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/$/,"")||"/";
+  const out=new URL("https://www.vinamilk.com.vn"+path);
+  const src=clean(u.searchParams.get("src")||"");
+  if(src)out.searchParams.set("src",src);
+  return out.toString().replace(/\?$/,"");
+}
+function canonicalConcung(raw:string){
+  const u=new URL(raw);
+  const host=u.hostname.toLowerCase().replace(/^www\./,"");
+  if(host!=="concung.com")throw new Error("invalid_concung_url");
+  const path=(u.pathname||"/").replace(/\/+/g,"/").replace(/\/$/,"")||"/";
+  return "https://concung.com"+path;
+}
 function canonicalMine(raw:string){
   const u=new URL(raw);
   return ("https://get.taphoa.xyz"+(u.pathname||"/").replace(/\/+$/,"")).toLowerCase();
@@ -189,6 +210,8 @@ function canonical(raw: string) {
   const key = sourceKey(raw);
   if (key === "winmart") return canonicalWinmart(raw);
   if (key === "go") return canonicalGo(raw);
+  if (key === "vinamilk") return canonicalVinamilk(raw);
+  if (key === "concung") return canonicalConcung(raw);
   if (key === "mine") return canonicalMine(raw);
   return canonicalBhx(raw);
 }
@@ -200,6 +223,8 @@ function heuristicType(url: string) {
     return /--c\d+$/i.test(last) || u.searchParams.has("cate2") ? "category" : "product";
   }
   if (key === "go") return new URL(url).pathname.includes("/product/") ? "product" : "category";
+  if (key === "vinamilk") return new URL(url).pathname.includes("/products/") ? "product" : "category";
+  if (key === "concung") return "category";
   if (key === "mine") return "product";
   return pathParts(url).length <= 1 ? "category" : "product";
 }

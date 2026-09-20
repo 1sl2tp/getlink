@@ -1291,6 +1291,412 @@ function normalizeGo(item:any, rootName:string, checked:string): Product | null 
   };
 }
 
+
+type RetailHtmlItem={
+  url:string;
+  name:string;
+  current:number|null;
+  original:number|null;
+  image:string;
+  brand:string;
+  description:string;
+};
+
+function htmlMoney(value:unknown):number|null{
+  const digits=String(value??"").replace(/[^0-9]/g,"");
+  if(!digits)return null;
+  const n=Number(digits);
+  return Number.isFinite(n)&&n>0?n:null;
+}
+
+function retailMoneyCandidates(value:unknown):number[]{
+  const text=String(value??"").replace(/\u00a0/g," ");
+  const out:number[]=[];
+  const re=/(\d[\d\s.,]{0,18})\s*(?:₫|đ|vnd|vnđ)/giu;
+  for(const m of text.matchAll(re)){
+    const n=htmlMoney(m[1]);
+    if(n&&n>=500&&!out.includes(n))out.push(n);
+  }
+  return out;
+}
+
+function retailAbsoluteAsset(value:unknown,base:string):string{
+  const raw=clean(value);
+  if(!raw||raw.startsWith("data:"))return "";
+  try{
+    const u=new URL(raw.startsWith("//")?"https:"+raw:raw,base);
+    return /^https?:$/.test(u.protocol)?u.toString():"";
+  }catch{return "";}
+}
+
+function retailImageFromNode(node:any,base:string):string{
+  const img=node?.querySelector?.("img");
+  if(!img)return "";
+  for(const attr of ["src","data-src","data-original","data-lazy-src","data-image"]){
+    const found=retailAbsoluteAsset(img.getAttribute?.(attr)||"",base);
+    if(found)return found;
+  }
+  const srcset=clean(img.getAttribute?.("srcset")||img.getAttribute?.("data-srcset")||"");
+  if(srcset){
+    const first=clean(srcset.split(",")[0]?.trim().split(/\s+/)[0]||"");
+    const found=retailAbsoluteAsset(first,base);
+    if(found)return found;
+  }
+  return "";
+}
+
+function retailProductUrl(raw:unknown,base:string,key:string):string{
+  const href=clean(raw);
+  if(!href||href.startsWith("#")||/^javascript:/i.test(href))return "";
+  try{
+    const absolute=new URL(href,base).toString();
+    if(key==="vinamilk")return canonicalVinamilk(absolute);
+    if(key==="concung")return canonicalConcung(absolute);
+  }catch{}
+  return "";
+}
+
+function retailIsProductUrl(url:string,key:string,categoryUrl:string):boolean{
+  if(!url||url===categoryUrl)return false;
+  const path=new URL(url).pathname.toLowerCase();
+  if(key==="vinamilk")return path.includes("/products/");
+  if(key==="concung")return /-\d{4,}\.html$/.test(path);
+  return false;
+}
+
+function retailCardNode(anchor:any):any{
+  let node=anchor;
+  let fallback=anchor?.parentNode||anchor;
+  for(let i=0;i<7&&node;i++){
+    const text=clean(node.textContent||"");
+    const prices=retailMoneyCandidates(text);
+    if(prices.length){
+      fallback=node;
+      if(node.querySelector?.("img"))return node;
+    }
+    node=node.parentNode;
+  }
+  return fallback;
+}
+
+function retailNodePrices(node:any):{current:number|null;original:number|null}{
+  const ordered:number[]=[];
+  const pushText=(value:unknown)=>{
+    for(const n of retailMoneyCandidates(value)){
+      if(!ordered.includes(n))ordered.push(n);
+    }
+  };
+  for(const selector of [
+    ".price",".product-price",".price-new",".price-sale",".sale-price",
+    ".current-price",".special-price","del","s"
+  ]){
+    for(const el of node?.querySelectorAll?.(selector)||[])pushText(el.textContent||"");
+  }
+  if(!ordered.length)pushText(node?.textContent||"");
+  const current=ordered[0]||null;
+  const original=current?(ordered.find(n=>n>current)||null):null;
+  return {current,original};
+}
+
+function retailPlausibleName(value:unknown):string{
+  const text=clean(value);
+  if(text.length<4||text.length>220)return "";
+  if(!/[\p{L}]/u.test(text))return "";
+  if(/^(mua ngay|thêm vào giỏ|xem thêm|chi tiết|sản phẩm)$/iu.test(text))return "";
+  if(retailMoneyCandidates(text).length)return "";
+  return text;
+}
+
+function retailNameFromNode(anchor:any,card:any):string{
+  const candidates:string[]=[];
+  const add=(value:unknown)=>{
+    const name=retailPlausibleName(value);
+    if(name&&!candidates.includes(name))candidates.push(name);
+  };
+  add(anchor?.getAttribute?.("title"));
+  add(anchor?.getAttribute?.("aria-label"));
+  const img=anchor?.querySelector?.("img")||card?.querySelector?.("img");
+  add(img?.getAttribute?.("alt"));
+  for(const selector of [
+    ".product-name",".product-title",".item-name",".card-title",
+    ".name",".title","h2","h3","h4"
+  ]){
+    for(const el of card?.querySelectorAll?.(selector)||[])add(el.textContent||"");
+  }
+  add(anchor?.textContent||"");
+  if(!candidates.length)return "";
+  return [...candidates].sort((a,b)=>{
+    const av=/\b(?:ml|g|kg|l|hộp|gói|chai|lốc|thùng)\b/iu.test(a)?1:0;
+    const bv=/\b(?:ml|g|kg|l|hộp|gói|chai|lốc|thùng)\b/iu.test(b)?1:0;
+    return (bv-av)||(b.length-a.length);
+  })[0];
+}
+
+const RETAIL_BRAND_HINTS=[
+  "TH true Milk","Dalat Milk","Dutch Lady","Nutimilk","Vinamilk","Probi","SuSu",
+  "Meadow Fresh","Metafresh","NutiFood","Abbott","Ensure","Friso","Nestlé",
+  "Nestle","Morinaga","Meiji","PediaSure","GrowPLUS","Ovaltine","Milo"
+];
+
+function retailInferBrand(name:unknown):string{
+  const raw=clean(name);
+  const key=plain(raw);
+  for(const hint of RETAIL_BRAND_HINTS){
+    if(key.includes(plain(hint)))return hint;
+  }
+  return "";
+}
+
+function retailBrandFromNode(anchor:any,card:any,name:string,key:string):string{
+  for(const node of [anchor,card]){
+    for(const attr of ["data-brand","data-brand-name","brand"]){
+      const value=clean(node?.getAttribute?.(attr)||"");
+      if(value)return value;
+    }
+  }
+  for(const selector of [".brand",".product-brand",".brand-name"]){
+    const value=clean(card?.querySelector?.(selector)?.textContent||"");
+    if(value)return value;
+  }
+  return retailInferBrand(name)||(key==="vinamilk"?"Vinamilk":"");
+}
+
+function retailRootName(html:string,url:string):string{
+  const root=parseHtml(html);
+  const h1=clean(root.querySelector("h1")?.textContent||"");
+  if(h1&&h1.length<180)return h1;
+  const title=clean(root.querySelector("title")?.textContent||"")
+    .replace(/\s*[|–—-]\s*(Vinamilk|Con Cưng).*$/iu,"");
+  return title&&title.length<180?title:slugTitle(url);
+}
+
+function retailJsonLdProducts(html:string,base:string,key:string,categoryUrl:string):RetailHtmlItem[]{
+  const root=parseHtml(html);
+  const out:RetailHtmlItem[]=[];
+  const visit=(value:any)=>{
+    if(Array.isArray(value)){for(const x of value)visit(x);return;}
+    if(!value||typeof value!=="object")return;
+    const rawType=value["@type"];
+    const types=(Array.isArray(rawType)?rawType:[rawType]).map((x:any)=>plain(x));
+    if(types.includes("product")){
+      const offers=Array.isArray(value.offers)?value.offers[0]:value.offers||{};
+      const url=retailProductUrl(value.url||value["@id"]||"",base,key);
+      const name=retailPlausibleName(value.name||"");
+      const current=money(offers?.price||offers?.lowPrice||offers?.salePrice);
+      const high=money(offers?.highPrice||offers?.priceBeforeDiscount);
+      const original=high&&current&&high>current?high:null;
+      const rawImage=Array.isArray(value.image)?value.image[0]:(
+        typeof value.image==="object"?value.image?.url:value.image
+      );
+      const image=retailAbsoluteAsset(rawImage||"",base);
+      const rawBrand=typeof value.brand==="object"?value.brand?.name:value.brand;
+      const brand=clean(rawBrand||"")||retailInferBrand(name)||(key==="vinamilk"?"Vinamilk":"");
+      if(url&&name&&current&&retailIsProductUrl(url,key,categoryUrl)){
+        out.push({
+          url,name,current,original,image,brand,
+          description:clean(value.description||"")
+        });
+      }
+    }
+    for(const child of Object.values(value))visit(child);
+  };
+  for(const script of root.querySelectorAll('script[type="application/ld+json"]')){
+    const raw=String(script.textContent||"").trim();
+    if(!raw)continue;
+    try{visit(JSON.parse(raw));}catch{}
+  }
+  return out;
+}
+
+function retailDomProducts(html:string,base:string,key:string,categoryUrl:string):RetailHtmlItem[]{
+  const root=parseHtml(html);
+  const out:RetailHtmlItem[]=[];
+  for(const anchor of root.querySelectorAll("a[href]")){
+    const url=retailProductUrl(anchor.getAttribute("href")||"",base,key);
+    if(!retailIsProductUrl(url,key,categoryUrl))continue;
+    const card=retailCardNode(anchor);
+    const {current,original}=retailNodePrices(card);
+    if(!current)continue;
+    const name=retailNameFromNode(anchor,card);
+    if(!name)continue;
+    const image=retailImageFromNode(anchor,base)||retailImageFromNode(card,base);
+    const brand=retailBrandFromNode(anchor,card,name,key);
+    out.push({
+      url,name,current,original,image,brand,
+      description:clean(card?.textContent||"").slice(0,600)
+    });
+  }
+  return out;
+}
+
+function mergeRetailItems(items:RetailHtmlItem[]):RetailHtmlItem[]{
+  const byUrl=new Map<string,RetailHtmlItem>();
+  for(const item of items){
+    const prev=byUrl.get(item.url);
+    if(!prev){byUrl.set(item.url,item);continue;}
+    byUrl.set(item.url,{
+      url:item.url,
+      name:prev.name||item.name,
+      current:prev.current||item.current,
+      original:prev.original||item.original,
+      image:prev.image||item.image,
+      brand:prev.brand||item.brand,
+      description:prev.description||item.description
+    });
+  }
+  return [...byUrl.values()];
+}
+
+function retailPageUrl(categoryUrl:string,page:number):string{
+  const u=new URL(categoryUrl);
+  if(page>1)u.searchParams.set("page",String(page));
+  return u.toString();
+}
+
+async function retailFetchHtml(
+  pageUrl:string,
+  source:string,
+  capture:RawCapture
+):Promise<{html:string;responseUrl:string}>{
+  const candidates=[pageUrl];
+  if(source==="vinamilk"){
+    const u=new URL(pageUrl);
+    if(u.hostname.toLowerCase().replace(/^www\./,"")==="vinamilk.com.vn"){
+      const fallback=new URL(pageUrl);
+      fallback.hostname="partners.vinamilk.com.vn";
+      candidates.push(fallback.toString());
+    }
+  }
+
+  let last="";
+  for(const endpoint of candidates){
+    try{
+      const r=await fetch(endpoint,{
+        headers:{
+          "accept":"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "accept-language":"vi-VN,vi;q=0.9,en;q=0.7",
+          "cache-control":"no-cache",
+          "pragma":"no-cache",
+          "user-agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36"
+        },
+        redirect:"follow"
+      });
+      const html=await readCapturedText(r,capture,endpoint,"GET");
+      if(r.ok&&html.length>500)return {html,responseUrl:r.url||endpoint};
+      last="http_"+r.status;
+    }catch(e){
+      last=errorText(e).slice(0,300);
+    }
+  }
+  throw new Error(source+"_html_failed:"+last);
+}
+
+async function retailHtmlCategory(
+  url:string,
+  source:"vinamilk"|"concung",
+  capture:RawCapture
+){
+  const categoryUrl=source==="vinamilk"?canonicalVinamilk(url):canonicalConcung(url);
+  const map=new Map<string,RetailHtmlItem>();
+  let rootName="";
+  let fetchedPages=0;
+
+  for(let page=1;page<=10;page++){
+    const requested=retailPageUrl(categoryUrl,page);
+    let fetched:{html:string;responseUrl:string};
+    try{
+      fetched=await retailFetchHtml(requested,source,capture);
+    }catch(e){
+      if(page===1)throw e;
+      break;
+    }
+    fetchedPages++;
+    if(!rootName)rootName=retailRootName(fetched.html,categoryUrl);
+
+    const parsed=mergeRetailItems([
+      ...retailJsonLdProducts(fetched.html,fetched.responseUrl,source,categoryUrl),
+      ...retailDomProducts(fetched.html,fetched.responseUrl,source,categoryUrl)
+    ]);
+    let added=0;
+    for(const item of parsed){
+      if(!map.has(item.url)){map.set(item.url,item);added++;}
+      else{
+        const prev=map.get(item.url)!;
+        map.set(item.url,mergeRetailItems([prev,item])[0]);
+      }
+    }
+
+    if(page===1&&map.size===0)throw new Error(source+"_category_products_empty");
+    if(page>1&&added===0)break;
+    if(parsed.length<4&&page>1)break;
+  }
+
+  return {
+    items:[...map.values()],
+    rootName:rootName||slugTitle(categoryUrl),
+    pages:fetchedPages
+  };
+}
+
+function retailSourceProductId(url:string,key:string):string{
+  try{
+    const path=new URL(url).pathname;
+    if(key==="concung"){
+      const m=path.match(/-(\d{4,})\.html$/);
+      return m?m[1]:"";
+    }
+    return pathParts(url).slice(-1)[0]||"";
+  }catch{return "";}
+}
+
+function normalizeRetailHtml(
+  item:RetailHtmlItem,
+  source:"vinamilk"|"concung",
+  rootName:string,
+  checked:string
+):Product|null{
+  const name=clean(item.name);
+  const current=Number(item.current)||0;
+  if(!name||current<=0)return null;
+  const original=Number(item.original)||0;
+  const brand=clean(item.brand)||retailInferBrand(name)||(source==="vinamilk"?"Vinamilk":"");
+  const packaging="";
+  const h=hierarchyFromRaw(name,packaging);
+  const cmp=comparisonFrom(current,original>current?original:null,h,packaging,name);
+  const size={value:cmp.size_value,unit:cmp.size_unit};
+  const ident=matchIdentity(name,brand,"",size);
+  return {
+    source:sourceObject(source),
+    group:clean(rootName),
+    branch:brand,
+    name,
+    packaging:{text:packaging},
+    hierarchy:h,
+    comparison:cmp,
+    price:{current,original:original>current?original:null},
+    promotion:{
+      active:Boolean(original>current),
+      price:null,
+      text:""
+    },
+    url:item.url,
+    image:clean(item.image),
+    breadcrumbs:[rootName,brand].filter(Boolean),
+    source_identity:{
+      source_product_id:retailSourceProductId(item.url,source),
+      source_code:"",
+      barcode:"",
+      sku:"",
+      brand,
+      category:rootName,
+      raw_name:name,
+      raw_description:clean(item.description),
+      ...ident
+    },
+    last_checked_at:checked
+  };
+}
+
 async function fetchSource(input:string, requestId:string){
   const url=canonical(input), key=sourceKey(url), kind=heuristicType(url), checked=new Date().toISOString();
   const capture=createRawCapture();

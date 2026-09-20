@@ -20,7 +20,7 @@ assert.match(edge,/await persistRawCapture\(requestId,url,"category",key,capture
 assert.match(edge,/engine:"supabase-edge-"\+key\+"-html"/);
 assert.match(edge,/source_pages:raw\.pages/);
 assert.match(edge,/fallback\.hostname="partners\.vinamilk\.com\.vn"/);
-assert.match(edge,/return \/-\(\\d\{4,\}\)\\\.html\$\//);
+assert.match(edge,/path\.match\(\/-\(\\d\{4,\}\)\\\.html\$\/\)/);
 
 assert.match(app,/MOBILE_MARKET_SOURCES=\["bhx","wm","go","vinamilk","concung"\]/);
 assert.match(app,/function isVinamilkRow\(/);
@@ -31,6 +31,11 @@ assert.match(app,/TABLE_SOURCE_CYCLE=\["","mine","bhx","wm","go","vinamilk","con
 assert.match(app,/vinamilk:\{full:"Vinamilk"/);
 assert.match(app,/concung:\{full:"Con Cưng"/);
 assert.match(app,/<b>6<\/b>/);
+assert.match(app,/host==="vinamilk\.com\.vn"/);
+assert.match(app,/host==="partners\.vinamilk\.com\.vn"/);
+assert.match(app,/host==="concung\.com"/);
+assert.match(app,/sourceManagerVinamilkCount/);
+assert.match(app,/sourceManagerConcungCount/);
 
 assert.match(css,/source-vinamilk/);
 assert.match(css,/source-concung/);

@@ -1,0 +1,43 @@
+name: Vinamilk one-page probe
+
+on:
+  push:
+    branches:
+      - feat/vinamilk-concung-sources
+    paths:
+      - .github/workflows/vinamilk-probe.yml
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fetch one Vinamilk category page
+        shell: bash
+        run: |
+          node <<'NODE'
+          const url = 'https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL';
+          const r = await fetch(url, {
+            redirect: 'follow',
+            headers: {
+              'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'accept-language': 'vi-VN,vi;q=0.9,en;q=0.7',
+              'cache-control': 'no-cache',
+              'pragma': 'no-cache',
+              'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36'
+            }
+          });
+          const html = await r.text();
+          console.log('status=', r.status);
+          console.log('url=', r.url);
+          console.log('content-type=', r.headers.get('content-type'));
+          console.log('length=', html.length);
+          console.log('has-green-farm=', /Green\s*Farm/i.test(html));
+          console.log('has-product-link=', /\/products\//i.test(html));
+          console.log('has-cloudfront-image=', /cloudfront\.net/i.test(html));
+          const links = [...html.matchAll(/href=["']([^"']*\/products\/[^"'#?]+[^"']*)["']/ig)].map(m=>m[1]);
+          console.log('product-links=', [...new Set(links)].slice(0,3));
+          const around = html.match(/.{0,240}Green\s*Farm.{0,600}/is);
+          console.log('green-farm-snippet=', around ? around[0].replace(/\s+/g,' ').slice(0,900) : 'NONE');
+          if (!r.ok) process.exit(2);
+          NODE

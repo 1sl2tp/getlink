@@ -10,6 +10,7 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         self.assertIn('const MOBILE_USER_SCOPES=["market"];', APP)
         self.assertIn('market:"Siêu thị"', APP)
         self.assertIn('const MOBILE_USER_SCOPE_LABELS={market:"Siêu thị"};', APP)
+        self.assertIn('const USER_MARKET_SOURCE_KEYS=["","bhx","wm","go","vinamilk"];', APP)
         self.assertIn('let mobileUserScope="market";', APP)
 
     def test_market_children_are_supermarkets(self):
@@ -26,13 +27,14 @@ class MobileSourceHierarchyTest(unittest.TestCase):
         self.assertIn('mobileUserScope==="market"', body)
         self.assertIn('userWorkMarketSortRows(baseRows)', body)
 
-    def test_source_tabs_render_supermarket_categories_directly(self):
+    def test_source_tabs_render_market_sources_then_categories(self):
         m=re.search(r'function renderMobileUserSourceTabs\(\)\{([\s\S]*?)\n\}', APP)
         self.assertIsNotNone(m)
         body=m.group(1)
-        self.assertNotIn('mobile-user-source-level parent', body)
+        self.assertIn('mobile-user-source-level parent market-sources', body)
         self.assertIn('mobile-user-source-level child', body)
         self.assertNotIn('data-mobile-scope', body)
+        self.assertIn('data-mobile-market-source', body)
         self.assertIn('data-mobile-category', body)
         self.assertIn('renderUserWorkCategoryButtons(categoryHost,"market"', body)
 

@@ -107,19 +107,50 @@ async def main():
                 try:
                     url=response.url
                     ctype=(response.headers.get("content-type") or "").lower()
+                    body=await response.text()
+                    low=body.lower()
+
+                    # Config values are public browser configuration. Capture exact
+                    # surrounding JSON so the direct transport can reproduce the
+                    # same request without keeping a browser in the hot path.
+                    if "vnm_signature_salt" in low or "vnm_client_id" in low:
+                        for marker in ("VNM_SIGNATURE_SALT","VNM_CLIENT_ID","VNM_X_TERMINAL","VNM_EXTERNAL_CODE"):
+                            p=body.find(marker)
+                            if p>=0:
+                                print("VNM_PUBLIC_CONFIG",json.dumps({
+                                    "url":url,
+                                    "marker":marker,
+                                    "snippet":snippet(body,p,2200),
+                                },ensure_ascii=False))
+
                     is_js=("javascript" in ctype or url.split("?")[0].endswith(".js"))
                     if not is_js or url in seen_js:
                         return
                     seen_js.add(url)
-                    body=await response.text()
-                    low=body.lower()
+
+                    # Print every generateApiSignature occurrence with a wider
+                    # window. Calls and the library definition can live in
+                    # separate webpack modules/chunks.
+                    start=0
+                    occurrence=0
+                    while occurrence<12:
+                        p=body.find("generateApiSignature",start)
+                        if p<0:break
+                        print("VNM_SIGNATURE_IMPL",json.dumps({
+                            "url":url,
+                            "occurrence":occurrence+1,
+                            "snippet":snippet(body,p,4200),
+                        },ensure_ascii=False))
+                        start=p+20
+                        occurrence+=1
+
                     for keyword in KEYWORDS:
                         start=0
                         hits=0
-                        while hits<4:
+                        while hits<6:
                             pos=low.find(keyword,start)
                             if pos<0:break
-                            row={"url":url,"keyword":keyword,"snippet":snippet(body,pos,900)}
+                            row={"url":url,"keyword":keyword,"snippet":snippet(body,pos,1200)}
                             js_hits.append(row)
                             print("VNM_SIGNATURE_JS",json.dumps(row,ensure_ascii=False))
                             start=pos+len(keyword)
@@ -139,6 +170,26 @@ async def main():
             except Exception:
                 pass
             await page.wait_for_timeout(5000)
+
+            try:
+                page_html=await page.content()
+                for marker in ("VNM_SIGNATURE_SALT","VNM_CLIENT_ID","VNM_X_TERMINAL","VNM_EXTERNAL_CODE"):
+                    p=page_html.find(marker)
+                    if p>=0:
+                        print("VNM_PAGE_CONFIG",json.dumps({
+                            "marker":marker,
+                            "snippet":snippet(page_html,p,2600),
+                        },ensure_ascii=False))
+                storage=await page.evaluate("""() => ({
+                  local:Object.fromEntries(Object.entries(localStorage)),
+                  session:Object.fromEntries(Object.entries(sessionStorage)),
+                  nextData:window.__NEXT_DATA__ || null
+                })""")
+                raw_storage=json.dumps(storage,ensure_ascii=False)
+                if "VNM_" in raw_storage or "signature" in raw_storage.lower():
+                    print("VNM_STORAGE_CONFIG",raw_storage[:16000])
+            except Exception as exc:
+                print("VNM_CONFIG_INSPECT_WARN",type(exc).__name__,str(exc)[:300],file=sys.stderr)
 
             print("VNM_SIGNATURE_SUMMARY",json.dumps({
                 "graphql_requests":len(graphql),

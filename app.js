@@ -6397,7 +6397,12 @@ function startPolling(){
 function supportedSourceUrl(raw){
   try{
     const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
-    return host==="bachhoaxanh.com"||host==="winmart.vn"||host==="sieuthi-go.vn";
+    return host==="bachhoaxanh.com"||
+      host==="winmart.vn"||
+      host==="sieuthi-go.vn"||
+      host==="vinamilk.com.vn"||
+      host==="partners.vinamilk.com.vn"||
+      host==="concung.com";
   }catch{
     return false;
   }
@@ -6408,6 +6413,8 @@ function inputSourceName(raw){
     const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
     if(host==="winmart.vn")return "WinMart";
     if(host==="sieuthi-go.vn")return "GO!";
+    if(host==="vinamilk.com.vn"||host==="partners.vinamilk.com.vn")return "Vinamilk";
+    if(host==="concung.com")return "Con Cưng";
     return "Bách Hóa XANH";
   }catch{
     return "";
@@ -6419,7 +6426,7 @@ $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
   if(!supportedSourceUrl(url)){
-    setJobStage("error","Chỉ hỗ trợ link bachhoaxanh.com, winmart.vn hoặc sieuthi-go.vn.");
+    setJobStage("error","Chỉ hỗ trợ link BHX, WinMart, GO!, Vinamilk hoặc Con Cưng.");
     return;
   }
   if(!API){

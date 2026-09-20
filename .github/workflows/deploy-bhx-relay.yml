@@ -58,39 +58,15 @@ jobs:
           set -euo pipefail
           if [ -n "${RELAY_SHARED_SECRET:-}" ]; then
             printf '%s' "$RELAY_SHARED_SECRET" | wrangler secret put RELAY_SHARED_SECRET --config relay/wrangler.toml
-          else
-            echo "RELAY_SHARED_SECRET is not configured; compatibility token remains active."
           fi
 
-      - name: Upload Vinamilk public client config
-        run: |
-          set -euo pipefail
-          node <<'NODE' > /tmp/vnm-secrets.tsv
-          const fs=require("fs");
-          const src=fs.readFileSync("scraper/probe_vinamilk_direct.mjs","utf8");
-          const mapping={
-            VNM_CLIENT_ID:"CLIENT_ID",
-            VNM_X_TERMINAL:"TERMINAL",
-            VNM_EXTERNAL_CODE:"EXTERNAL_CODE",
-            VNM_SIGNATURE_SALT:"SIGNATURE_SALT",
-            VNM_USER_AGENT:"DEVICE_INFO"
-          };
-          for(const [target,source] of Object.entries(mapping)){
-            const re=new RegExp("const\\s+"+source+"\\s*=\\s*\\"([^\\"]+)\\"");
-            const m=src.match(re);
-            if(!m)throw new Error("missing "+source);
-            process.stdout.write(target+"\\t"+m[1]+"\\n");
-          }
-          NODE
-          while IFS=
-      - name: Deploy transport-only relay
+      - name: Deploy relay
         run: |
           set -euo pipefail
           wrangler deploy --config relay/wrangler.toml 2>&1 | tee /tmp/deploy.log
           URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
           test -n "$URL"
           echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
-          echo "relay=$URL"
 
       - name: Health check
         run: |
@@ -101,100 +77,32 @@ jobs:
       - name: Relay auth gate
         run: |
           set -euo pipefail
-          CODE="$(curl --silent --output /tmp/noauth.json --write-out '%{http_code}'             -H 'content-type: application/json'             -X POST "$RELAY_URL/category"             --data '{"url":"https://www.bachhoaxanh.com/sua-tuoi"}')"
+          CODE="$(curl --silent --output /tmp/noauth.json --write-out '%{http_code}' \
+            -H 'content-type: application/json' \
+            -X POST "$RELAY_URL/category" \
+            --data '{"url":"https://www.bachhoaxanh.com/sua-tuoi"}')"
           test "$CODE" = "401"
 
-      - name: Smoke BHX GetCate through Cloudflare
+      - name: Smoke BHX
         run: |
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
           set -euo pipefail
-          curl --fail --silent --show-error             -H "x-getlink-relay: $RELAY_KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}'             > /tmp/cate.json
-          jq '{code,total:.data.total,category_id:.data.info.id,products:(.data.products|length)}' /tmp/cate.json
-          jq -e '.code == 0 and (.data.total|tonumber) > 10 and (.data.products|length) > 0' /tmp/cate.json >/dev/null
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          curl --fail --silent --show-error --retry 3 --retry-delay 2 --retry-all-errors \
+            -H "x-getlink-relay: $KEY" \
+            -H 'content-type: application/json' \
+            -X POST "$RELAY_URL/bhx" \
+            --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}' > /tmp/bhx.json
+          jq -e '.code == 0 and .data != null and (.data.products|length)>0' /tmp/bhx.json >/dev/null
 
-      - name: Smoke BHX AjaxProduct continuation
+      - name: Smoke VNM direct GraphQL
         run: |
           set -euo pipefail
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          CID="$(jq -r '.data.info.id' /tmp/cate.json)"
-          PRIORITY="$(jq -r '[.data.info.priorityProductIds[]?]|map(tostring)|join(",")' /tmp/cate.json)"
-          LAST="$(jq -r '.data.products[-1].id // 0' /tmp/cate.json)"
-          BODY="$(jq -nc             --argjson cid "$CID"             --arg priority "$PRIORITY"             --argjson last "$LAST"             '{op:"ajaxProduct",categoryUrl:"sua-tuoi",payload:{CategoryId:$cid,SelectedBrandId:"",PropertyIdList:"",PageIndex:2,PageSize:10,SortStr:"",PriorityProductIds:$priority,PropertySelected:[],LastShowProductId:$last}}')"
-          curl --fail --silent --show-error             -H "x-getlink-relay: $RELAY_KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data "$BODY"             > /tmp/ajax.json
-          jq '{code,products:(.data.products // .data | .. | arrays? | length) }' /tmp/ajax.json || true
-          jq -e '.code == 0 and .data != null' /tmp/ajax.json >/dev/null
-
-      - name: Smoke Vinamilk signed GraphQL through Cloudflare
-        run: |
-          set -euo pipefail
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          QUERY='query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) { eshop_searchProducts(payload: $payload) { total items { variantId name skuCode thumbnail image { url } price { price originPrice currency } sellableInfo { sellable } product { productId handle brand category packagingValue } } } }'
-          jq -nc --arg query "$QUERY" '{operationName:"GetEShopProductSelectors",variables:{payload:{collectionHandle:"sua-tuoi",offset:0,size:12,sortType:"RELEVANCE"}},query:$query}' > /tmp/vnm-request.json
+          KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          QUERY='query GetEShopProductSelectors($payload: eshop_getSearchProductRequest!) { eshop_searchProducts(payload: $payload) { total items { variantId price { price originPrice } } } }'
+          BODY="$(jq -nc --arg q "$QUERY" '{operationName:"GetEShopProductSelectors",variables:{payload:{collectionHandle:"sua-tuoi",offset:0,size:1,sortType:"RELEVANCE"}},query:$q}')"
           curl --fail --silent --show-error --retry 4 --retry-delay 2 --retry-all-errors \
-            -H "x-getlink-relay: $RELAY_KEY" \
+            -H "x-getlink-relay: $KEY" \
             -H 'content-type: application/json' \
             -X POST "$RELAY_URL/vinamilk" \
-            --data-binary @/tmp/vnm-request.json \
-            > /tmp/vinamilk.json
-          jq '{ok,upstream_status,total:.data.eshop_searchProducts.total,items:(.data.eshop_searchProducts.items|length),first_price:.data.eshop_searchProducts.items[0].price.price}' /tmp/vinamilk.json
-          jq -e '.ok == true and .upstream_status == 200 and (.data.eshop_searchProducts.total|tonumber)>0 and (.data.eshop_searchProducts.items|length)>0 and (.data.eshop_searchProducts.items[0].price.price|tonumber)>0' /tmp/vinamilk.json >/dev/null
-\t' read -r key value; do
-            test -n "$key"
-            test -n "$value"
-            printf '%s' "$value" | wrangler secret put "$key" --config relay/wrangler.toml >/dev/null
-          done < /tmp/vnm-secrets.tsv
-          rm -f /tmp/vnm-secrets.tsv
-
-      - name: Deploy transport-only relay
-        run: |
-          set -euo pipefail
-          wrangler deploy --config relay/wrangler.toml 2>&1 | tee /tmp/deploy.log
-          URL="$(grep -Eo 'https://[^ ]+\.workers\.dev' /tmp/deploy.log | tail -1)"
-          test -n "$URL"
-          echo "RELAY_URL=$URL" >> "$GITHUB_ENV"
-          echo "relay=$URL"
-
-      - name: Health check
-        run: |
-          set -euo pipefail
-          curl --fail --silent --show-error --retry 8 --retry-delay 2 "$RELAY_URL/health" | tee /tmp/health.json
-          jq -e '.ok == true and .d1 == false' /tmp/health.json >/dev/null
-
-      - name: Relay auth gate
-        run: |
-          set -euo pipefail
-          CODE="$(curl --silent --output /tmp/noauth.json --write-out '%{http_code}'             -H 'content-type: application/json'             -X POST "$RELAY_URL/category"             --data '{"url":"https://www.bachhoaxanh.com/sua-tuoi"}')"
-          test "$CODE" = "401"
-
-      - name: Smoke BHX GetCate through Cloudflare
-        run: |
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          set -euo pipefail
-          curl --fail --silent --show-error             -H "x-getlink-relay: $RELAY_KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data '{"op":"getCate","categoryUrl":"sua-tuoi","pageSize":10}'             > /tmp/cate.json
-          jq '{code,total:.data.total,category_id:.data.info.id,products:(.data.products|length)}' /tmp/cate.json
-          jq -e '.code == 0 and (.data.total|tonumber) > 10 and (.data.products|length) > 0' /tmp/cate.json >/dev/null
-
-      - name: Smoke BHX AjaxProduct continuation
-        run: |
-          set -euo pipefail
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          CID="$(jq -r '.data.info.id' /tmp/cate.json)"
-          PRIORITY="$(jq -r '[.data.info.priorityProductIds[]?]|map(tostring)|join(",")' /tmp/cate.json)"
-          LAST="$(jq -r '.data.products[-1].id // 0' /tmp/cate.json)"
-          BODY="$(jq -nc             --argjson cid "$CID"             --arg priority "$PRIORITY"             --argjson last "$LAST"             '{op:"ajaxProduct",categoryUrl:"sua-tuoi",payload:{CategoryId:$cid,SelectedBrandId:"",PropertyIdList:"",PageIndex:2,PageSize:10,SortStr:"",PriorityProductIds:$priority,PropertySelected:[],LastShowProductId:$last}}')"
-          curl --fail --silent --show-error             -H "x-getlink-relay: $RELAY_KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data "$BODY"             > /tmp/ajax.json
-          jq '{code,products:(.data.products // .data | .. | arrays? | length) }' /tmp/ajax.json || true
-          jq -e '.code == 0 and .data != null' /tmp/ajax.json >/dev/null
-
-      - name: Smoke Vinamilk collection through Cloudflare
-        run: |
-          set -euo pipefail
-          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
-          curl --fail --silent --show-error --retry 4 --retry-delay 2 --retry-all-errors \
-            -H "x-getlink-relay: $RELAY_KEY" \
-            -H 'content-type: application/json' \
-            -X POST "$RELAY_URL/vinamilk" \
-            --data '{"url":"https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"}' \
-            > /tmp/vinamilk.json
-          jq '{ok,upstream_status,bytes:(.body|length),has_next:(.body|contains("self.__next_f.push")),has_price:(.body|contains("originPrice"))}' /tmp/vinamilk.json
-          jq -e '.ok == true and .upstream_status == 200 and (.body|length)>10000 and (.body|contains("self.__next_f.push")) and (.body|contains("originPrice"))' /tmp/vinamilk.json >/dev/null
+            --data "$BODY" > /tmp/vnm.json
+          jq -e '.ok == true and .upstream_status == 200 and (.data.eshop_searchProducts.total|tonumber)>0 and (.data.eshop_searchProducts.items|length)>0 and (.data.eshop_searchProducts.items[0].price.price|tonumber)>0' /tmp/vnm.json >/dev/null

@@ -164,7 +164,7 @@ let userWorkDesktopAutoLoadBusy=false;
 const MOBILE_USER_SCOPES=["mine","market","news"];
 const MOBILE_USER_SCOPE_LABELS={mine:"Tạp hóa",market:"Siêu thị",news:"Tin tức"};
 const MOBILE_MARKET_SOURCES=["bhx","wm","go","vinamilk"];
-const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"VNM"};
+const MOBILE_MARKET_SOURCE_LABELS={bhx:"BHX",wm:"WinMart",go:"GO!",vinamilk:"Vinamilk"};
 const WORK_ICON_PATHS={
   // Small inline subset from the Tabler Icons visual system (24x24 outline).
   "building-store":'<path d="M3 21h18"/><path d="M3 7h18"/><path d="M5 7l2-4h10l2 4"/><path d="M4 7v2a3 3 0 0 0 6 0V7"/><path d="M10 7v2a3 3 0 0 0 6 0V7"/><path d="M16 7v2a3 3 0 0 0 4 2.83"/><path d="M5 12v9M19 12v9"/><path d="M9 21v-5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v5"/>',
@@ -1715,7 +1715,7 @@ function sourceObjectFromRow(row){
   if(isMineRow(row))return {key:"mine",name:"Tạp hóa",host:"get.taphoa.xyz"};
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
-  if(isVinamilkRow(row))return {key:"vinamilk",name:"VNM",host:"vinamilk.com.vn"};
+  if(isVinamilkRow(row))return {key:"vinamilk",name:"Vinamilk",host:"vinamilk.com.vn"};
   return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
 }
 
@@ -2257,7 +2257,7 @@ function sourceDisplayLabel(row){
   if(isMineRow(row))return "Tạp hóa";
   if(isWinmartRow(row))return "WM";
   if(isGoRow(row))return "GO";
-  if(isVinamilkRow(row))return "VNM";
+  if(isVinamilkRow(row))return "Vinamilk";
   const key=searchKey(raw);
   if(!raw||key.includes("bach hoa xanh"))return "BHX";
   return displayUpperFirst(raw);
@@ -6385,7 +6385,7 @@ function inputSourceName(raw){
     const host=new URL(String(raw||"")).hostname.toLowerCase().replace(/^www\./,"");
     if(host==="winmart.vn")return "WinMart";
     if(host==="sieuthi-go.vn")return "GO!";
-    if(host==="vinamilk.com.vn")return "VNM";
+    if(host==="vinamilk.com.vn")return "Vinamilk";
     return "Bách Hóa XANH";
   }catch{
     return "";
@@ -6397,7 +6397,7 @@ $("#get").addEventListener("click",async()=>{
   const url=$("#url").value.trim();
 
   if(!supportedSourceUrl(url)){
-    setJobStage("error","Chỉ hỗ trợ link BHX, WinMart, GO! hoặc VNM.");
+    setJobStage("error","Chỉ hỗ trợ link BHX, WinMart, GO! hoặc Vinamilk.");
     return;
   }
   if(!API){

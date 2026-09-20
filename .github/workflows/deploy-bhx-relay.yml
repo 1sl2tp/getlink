@@ -102,3 +102,16 @@ jobs:
           curl --fail --silent --show-error             -H "x-getlink-relay: $RELAY_KEY"             -H 'content-type: application/json'             -X POST "$RELAY_URL/bhx"             --data "$BODY"             > /tmp/ajax.json
           jq '{code,products:(.data.products // .data | .. | arrays? | length) }' /tmp/ajax.json || true
           jq -e '.code == 0 and .data != null' /tmp/ajax.json >/dev/null
+
+      - name: Smoke Vinamilk collection through Cloudflare
+        run: |
+          set -euo pipefail
+          RELAY_KEY="${RELAY_SHARED_SECRET:-supabase-bhx-v1}"
+          curl --fail --silent --show-error --retry 4 --retry-delay 2 --retry-all-errors \
+            -H "x-getlink-relay: $RELAY_KEY" \
+            -H 'content-type: application/json' \
+            -X POST "$RELAY_URL/vinamilk" \
+            --data '{"url":"https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"}' \
+            > /tmp/vinamilk.json
+          jq '{ok,upstream_status,bytes:(.body|length),has_next:(.body|contains("self.__next_f.push")),has_price:(.body|contains("originPrice"))}' /tmp/vinamilk.json
+          jq -e '.ok == true and .upstream_status == 200 and (.body|length)>10000 and (.body|contains("self.__next_f.push")) and (.body|contains("originPrice"))' /tmp/vinamilk.json >/dev/null

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import asyncio
 import json
+import hashlib
 import os
 import re
 import sys
@@ -10,7 +11,7 @@ from playwright.async_api import async_playwright
 
 TARGET="https://www.vinamilk.com.vn/collections/sua-tuoi?src=ALL"
 GRAPHQL="open-p04-vn.vinamilk.com.vn/api/graphql-pub/"
-KEYWORDS=("x-signature","x-graphql-hash","x-timestamp","graphql-hash")
+KEYWORDS=("x-signature","x-graphql-hash","x-timestamp","graphql-hash","generateapisignature","vnm_signature_salt","vnm_client_id","sha256","hmac")
 BLOCK_TYPES={"image","media","font"}
 
 
@@ -87,11 +88,17 @@ async def main():
                         "client-id","x-external-code","x-graphql-hash","x-signature",
                         "x-terminal","x-timestamp","x-trace-group"
                     )}
+                    body_sha256=hashlib.sha256(body.encode("utf-8")).hexdigest()
+                    body_md5=hashlib.md5(body.encode("utf-8")).hexdigest()
                     graphql.append({"operation":op,"headers":picked,"body":body})
                     print("VNM_SIGNED_REQUEST",json.dumps({
                         "operation":op,
                         "headers":picked,
                         "body_length":len(body),
+                        "body_sha256":body_sha256,
+                        "body_md5":body_md5,
+                        "graphql_hash_matches_body_sha256":picked.get("x-graphql-hash")==body_sha256,
+                        "graphql_hash_matches_body_md5":picked.get("x-graphql-hash")==body_md5,
                     },ensure_ascii=False))
                 except Exception as exc:
                     print("VNM_SIGNED_REQUEST_WARN",type(exc).__name__,str(exc)[:300],file=sys.stderr)
@@ -107,11 +114,16 @@ async def main():
                     body=await response.text()
                     low=body.lower()
                     for keyword in KEYWORDS:
-                        pos=low.find(keyword)
-                        if pos>=0:
-                            row={"url":url,"keyword":keyword,"snippet":snippet(body,pos)}
+                        start=0
+                        hits=0
+                        while hits<4:
+                            pos=low.find(keyword,start)
+                            if pos<0:break
+                            row={"url":url,"keyword":keyword,"snippet":snippet(body,pos,900)}
                             js_hits.append(row)
                             print("VNM_SIGNATURE_JS",json.dumps(row,ensure_ascii=False))
+                            start=pos+len(keyword)
+                            hits+=1
                 except Exception:
                     pass
 

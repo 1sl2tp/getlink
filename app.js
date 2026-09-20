@@ -1545,6 +1545,36 @@ function closeImageZoom(){
 }
 
 
+function verifiedSourceOpenUrl(raw){
+  const value=String(raw||"").trim();
+  if(!value)return "";
+  try{
+    const u=new URL(value);
+    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    if(host==="vinamilk.com.vn"&&/^\/products\/\d+\/?$/i.test(u.pathname))return "";
+    return value;
+  }catch{
+    return "";
+  }
+}
+
+function syncProductSourceLink(raw){
+  const link=$("#productLink");
+  if(!link)return;
+  const href=verifiedSourceOpenUrl(raw);
+  if(!href){
+    link.hidden=true;
+    link.removeAttribute("href");
+    link.setAttribute("aria-disabled","true");
+    link.tabIndex=-1;
+    return;
+  }
+  link.hidden=false;
+  link.href=href;
+  link.removeAttribute("aria-disabled");
+  link.tabIndex=0;
+}
+
 function renderProduct(payload){
   const p=payload&&payload.product?payload.product:payload;
   if(!p)return false;
@@ -1576,7 +1606,7 @@ function renderProduct(payload){
     source_name:p.source&&p.source.name,
     canonical_url:p.url||payload.input_url||""
   }).trim();
-  $("#result").classList.remove("source-bhx","source-winmart","source-go","source-mine");
+  $("#result").classList.remove("source-bhx","source-winmart","source-go","source-vinamilk","source-mine");
   if(detailSourceClass)$("#result").classList.add(detailSourceClass);
   $("#name").textContent=compactCartonDisplayName(p.name||"Sản phẩm",p.hierarchy||{});
   $("#group").textContent=displayCategoryLabel(p.group)||"—";
@@ -1613,7 +1643,7 @@ function renderProduct(payload){
     $("#promoPrice").textContent+=" · "+money(promoUnit)+"/"+unitLabel(cmp);
   }
   $("#promoText").textContent=quantityPromo?(cmp.promotion_text||""):"";
-  $("#productLink").href=p.url||payload.input_url||"#";
+  syncProductSourceLink(p.open_url||p.url||payload.input_url||"");
 
   wantedUrl=p.url||payload.input_url||wantedUrl;
   $("#url").value=wantedUrl||$("#url").value;
@@ -1669,7 +1699,7 @@ function renderCategory(payload){
   $("#group").textContent=displayCategoryLabel(first.group)||"—";
   $("#branch").textContent="—";
   $("#packaging").textContent=products.length+" link chi tiết";
-  $("#productLink").href=payload.input_url||wantedUrl||"#";
+  syncProductSourceLink(payload.input_url||wantedUrl||"");
   $("#childCount").textContent=products.length+" sản phẩm";
 
   $("#childList").innerHTML=products.length
@@ -1715,7 +1745,7 @@ function sourceObjectFromRow(row){
   if(isMineRow(row))return {key:"mine",name:"Tạp hóa",host:"get.taphoa.xyz"};
   if(isWinmartRow(row))return {key:"winmart",name:"WinMart",host:"winmart.vn"};
   if(isGoRow(row))return {key:"go",name:"GO!",host:"sieuthi-go.vn"};
-  if(isVinamilkRow(row))return {key:"vinamilk",name:"Vinamilk",host:"vinamilk.com.vn"};
+  if(isVinamilkRow(row))return {key:"vinamilk",name:"VNM",host:"vinamilk.com.vn"};
   return {key:"bachhoaxanh",name:"Bách Hóa XANH",host:"bachhoaxanh.com"};
 }
 

@@ -17,6 +17,9 @@ assert.match(edge, /source_product_id:variantId/, "Vinamilk identity must use va
 assert.match(edge, /sku:clean\(item\.skuCode/, "Vinamilk identity must preserve SKU");
 assert.match(edge, /Math\.round\(currentRaw\)/, "Vinamilk VND price must normalize source float to integer");
 assert.match(edge, /item\.image\?\.url/, "Vinamilk image must come from source payload");
+assert.match(edge, /const directUrl=handle[\s\S]*encodeURIComponent\(handle\)/, "Vinamilk direct URL must require a real handle");
+assert.match(edge, /open_url:directUrl/, "Vinamilk payload must keep verified direct URL separate");
+assert.doesNotMatch(edge, /handle\|\|clean\(p\.productId/, "Vinamilk productId must not be treated as a verified direct handle");
 assert.ok(edge.includes('BHX_TRANSPORT_URL+"/vinamilk"'), "Vinamilk must use the stateless signed relay");
 assert.match(edge, /headers:bhxRelayHeaders\(\)/, "Vinamilk relay must use the shared relay auth gate");
 assert.match(edge, /engine:"supabase-edge-vinamilk-direct-graphql"/, "Vinamilk must use direct GraphQL transport");

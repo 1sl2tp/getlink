@@ -1,27 +1,12 @@
 {
   "version": "GETLINK",
-  "build_id": "0a7822e96530c58289e4f4661875dcf96ece8d40cfe88b1c2080e0743d3e3796",
+  "build_id": "f01355ca80107e60bc893a07972fd43904cfa852dcab1f085e8635c73aa01a45",
   "update_policy": "auto-when-safe",
   "published_from": "github-main",
   "assets": [
     "index.html",
     "style.css",
     "config.js",
-    "app.js",
-    "order-management.js",
-    "order-management.css",
-    "taphoa-desktop-workspace.js",
-    "taphoa-desktop-workspace.css",
-    "taphoa-desktop-data.js",
-    "taphoa-desktop-sales.js",
-    "taphoa-desktop-orders.js",
-    "taphoa-desktop-debts.js",
-    "taphoa-workspace-feedback.js",
-    "taphoa-workspace-feedback.css",
-    "taphoa-order-workspace-v2.css",
-    "taphoa-hot-path-runtime.js",
-    "taphoa-hot-path-runtime.css",
-    "taphoa-mobile-standard.js",
-    "taphoa-mobile-standard.css"
+    "app.js"
   ]
 }

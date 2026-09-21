@@ -44,7 +44,7 @@ class OrderWorkspaceLayoutScrollFeedbackTest(unittest.TestCase):
         css = read("taphoa-order-workspace-v2.css")
         config = read("config.js")
         self.assertRegex(js, r"dòng · [^\n]{0,60}SP")
-        self.assertIn("taphoa-order-workspace-v2.css", config)
+        self.assertNotIn("taphoa-order-workspace-v2.css", config)
         self.assertIn("clip:auto!important", css)
         self.assertIn("overflow:visible!important", css)
 

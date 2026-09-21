@@ -6,12 +6,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class TaphoaHotPathPerformanceContract(unittest.TestCase):
-    def test_runtime_loads_before_feedback_layer(self):
+    def test_legacy_hot_path_and_feedback_runtime_are_not_loaded(self):
         config = (ROOT / "config.js").read_text(encoding="utf-8")
-        hot = config.find("taphoa-hot-path-runtime.js")
-        feedback = config.find("taphoa-workspace-feedback.js")
-        self.assertGreaterEqual(hot, 0, "hot-path runtime must be loaded")
-        self.assertGreater(feedback, hot, "hot-path runtime must install capture/filter guards before feedback runtime")
+        self.assertNotIn("taphoa-hot-path-runtime.js", config)
+        self.assertNotIn("taphoa-workspace-feedback.js", config)
 
     def test_runtime_js_syntax(self):
         result = subprocess.run(

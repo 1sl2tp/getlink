@@ -3,33 +3,29 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "index.html"
-APP = ROOT / "app.js"
 CONFIG = ROOT / "config.js"
 
 
 class OrderRuntimeBootstrapContract(unittest.TestCase):
-    def test_order_management_assets_are_loaded_once_after_app(self):
+    def test_legacy_sales_runtime_is_not_loaded_by_getlink(self):
         text = INDEX.read_text(encoding="utf-8")
         config = CONFIG.read_text(encoding="utf-8")
+        for asset in [
+            "order-management.js",
+            "order-management.css",
+            "order-customer-picker.css",
+            "taphoa-mobile-standard.js",
+            "taphoa-mobile-standard.css",
+        ]:
+            self.assertNotIn(asset, text)
+            self.assertNotIn(asset, config)
 
-        self.assertIn('runtime.assetUrl("order-management.css",build)', text)
-        self.assertIn('runtime.assetUrl("order-customer-picker.css",build)', text)
-        self.assertIn('runtime.assetUrl("order-management.js",build)', text)
-        self.assertIn('await loadScript(orderManagementUrl,build)', text)
-
-        app_load = text.index('await loadScript(appUrl,build)')
-        order_load = text.index('await loadScript(orderManagementUrl,build)')
-        self.assertLess(app_load, order_load, "order management must bind after app.js defines Tạp hóa UI")
-
-        self.assertNotIn('order-management.js', config, "config.js must not inject a second/early order runtime")
-        self.assertNotIn('order-management.css', config, "order CSS has one bootstrap owner")
-        self.assertNotIn('order-customer-picker.css', config, "customer picker CSS has one bootstrap owner")
-
-    def test_app_exports_the_live_selected_cart_to_order_runtime(self):
-        text = APP.read_text(encoding="utf-8")
-        self.assertIn('window.userWorkSelectedItems=userWorkSelectedItems', text)
-        self.assertIn('window.renderUserWorkHome=renderUserWorkHome', text)
-        self.assertIn('window.updateUserWorkOrderSummary=updateUserWorkOrderSummary', text)
+    def test_bootstrap_loads_only_config_then_catalog_app(self):
+        text = INDEX.read_text(encoding="utf-8")
+        config_load = text.index('runtime.assetUrl("config.js",build)')
+        app_load = text.index('runtime.assetUrl("app.js",build)')
+        self.assertLess(config_load, app_load)
+        self.assertNotIn("getlinkTaphoa", CONFIG.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

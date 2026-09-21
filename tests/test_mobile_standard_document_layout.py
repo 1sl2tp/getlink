@@ -10,12 +10,11 @@ MOBILE_CSS_PATH = ROOT / "taphoa-mobile-standard.css"
 
 
 class MobileStandardDocumentLayoutTest(unittest.TestCase):
-    def test_mobile_standard_assets_exist_and_boot_after_order_owner(self):
+    def test_legacy_mobile_assets_are_not_booted_by_supermarket_catalog(self):
         self.assertTrue(MOBILE_JS_PATH.exists())
         self.assertTrue(MOBILE_CSS_PATH.exists())
-        self.assertIn('runtime.assetUrl("taphoa-mobile-standard.css",build)', INDEX)
-        self.assertIn('runtime.assetUrl("taphoa-mobile-standard.js",build)', INDEX)
-        self.assertLess(INDEX.index('await loadScript(orderManagementUrl,build)'), INDEX.index('await loadScript(mobileStandardJsUrl,build)'))
+        self.assertNotIn('taphoa-mobile-standard.css', INDEX)
+        self.assertNotIn('taphoa-mobile-standard.js', INDEX)
 
     def test_mobile_owner_is_event_driven_not_dom_observer_driven(self):
         js = MOBILE_JS_PATH.read_text(encoding="utf-8")
@@ -80,9 +79,9 @@ class MobileStandardDocumentLayoutTest(unittest.TestCase):
         self.assertIn('.debt-customer-card', js)
         self.assertIn('data-debt-order-id', js)
 
-    def test_mobile_assets_are_part_of_static_build_hash(self):
-        self.assertIn("'taphoa-mobile-standard.js'", STAMP)
-        self.assertIn("'taphoa-mobile-standard.css'", STAMP)
+    def test_legacy_mobile_assets_are_not_part_of_static_build_hash(self):
+        self.assertNotIn("'taphoa-mobile-standard.js'", STAMP)
+        self.assertNotIn("'taphoa-mobile-standard.css'", STAMP)
 
 
 if __name__ == "__main__":

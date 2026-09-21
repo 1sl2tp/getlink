@@ -2181,11 +2181,10 @@ function rowPackHierarchy(row){
 }
 
 function rowIsCarton(row){
-  const supplier=Boolean(
-    String(row&&row.supplier_source_key||"").trim() ||
-    String(row&&row.supplier_primary_packaging||"").trim()
-  );
-  if(supplier){
+  // Supplier/NCC packaging belongs only to the Tạp hóa row itself.
+  // Supermarket rows must be classified from their own source hierarchy so
+  // Tất cả = Thùng + Lẻ and supplier metadata cannot steal market rows.
+  if(isMineRow(row)){
     const primary=searchKey(String(row&&row.supplier_primary_packaging||""));
     return Boolean(
       Number(row&&row.supplier_carton_price_vnd||0)>0 ||
@@ -2197,17 +2196,16 @@ function rowIsCarton(row){
 }
 
 function rowIsRetail(row){
-  const supplier=Boolean(
-    String(row&&row.supplier_source_key||"").trim() ||
-    String(row&&row.supplier_primary_packaging||"").trim()
-  );
-  if(supplier){
+  if(isMineRow(row)){
     return Boolean(
       Number(row&&row.supplier_retail_price_vnd||0)>0 ||
       String(row&&row.supplier_retail_packaging||"").trim() ||
       String(row&&row.supplier_retail_unit||"").trim()
     );
   }
+  // The public selector intentionally has only two shopping modes.
+  // Every supermarket item that is not an explicit carton belongs to Lẻ,
+  // including middle packs such as lốc/khay/vỉ and rows without pack metadata.
   return !rowIsCarton(row);
 }
 
@@ -2395,28 +2393,9 @@ function rowCartonCardMeta(row,packPrice){
   const h=rowPackHierarchy(row);
   if(h.label1!=="Thùng")return {pack:rowPrimaryQc(row),unitPrice:""};
 
-  // Prefer the actual repeated child of the carton.
-  let qty=0,label="";
-  if(h.label2&&Number(h.qty2)>1){
-    qty=Number(h.qty2); label=String(h.label2);
-  }else if(h.label3&&Number(h.qty3)>1){
-    qty=Number(h.qty3); label=String(h.label3);
-  }
-
-  if(!qty||!label)return {pack:"Thùng",unitPrice:""};
-
-  const unit=label.toLocaleLowerCase("vi-VN");
-  const total=Number(packPrice||0);
-  const each=total>0?total/qty:0;
-
-  // The chip already tells the user the inner unit (e.g. "24 lon"),
-  // so the compact per-unit price only needs the number.
-  return {
-    // Keep the relationship in one compact chip: "12 hộp × 14".
-    // The red value at the right remains the whole-carton price.
-    pack:qty+" "+unit+(each>0?" × "+money(each):""),
-    unitPrice:""
-  };
+  // Browsing cards need only the actual pack label and one source price.
+  // Do not derive or show a second per-unit number inside the QC chip.
+  return {pack:rowPrimaryQc(row),unitPrice:""};
 }
 
 function productHierarchyText(p){
@@ -3069,7 +3048,6 @@ function gridProductCard(row){
   const qc=cartonMeta?cartonMeta.pack:rowPrimaryQc(row);
   const unitPriceText=cartonMeta?cartonMeta.unitPrice:"";
   const supplierChangeHtml=supplierPriceChangeHtml(row);
-  const isWatch=String(row.preference_state||"normal")==="watch";
   const marketPackClass=userWorkMarketPackGroup(row)==="carton"?" market-pack-carton":" market-pack-retail";
   const sourceLabel=sourceDisplayLabel(row);
   const sourceKey=rowSourceFilterKey(row);
@@ -3079,12 +3057,6 @@ function gridProductCard(row){
     (canonical(selectedLibraryUrl)===canonical(row.canonical_url)?"selected ":"")+
     '" tabindex="0" data-url="'+escapeAttr(row.canonical_url)+'">'+
       '<div class="grid-product-image">'+
-        '<button class="grid-watch-button '+(isWatch?"active":"")+'" type="button" '+
-          'data-url="'+escapeAttr(row.canonical_url)+'" data-watch="'+(isWatch?"1":"0")+'" '+
-          'aria-label="'+(isWatch?"Bỏ quan tâm":"Đánh dấu quan tâm")+'" '+
-          'title="'+(isWatch?"Bỏ quan tâm":"Quan tâm")+'">'+
-          watchIconSvg(isWatch)+
-        '</button>'+
         (image
           ?'<img src="'+escapeAttr(image)+'" alt="" loading="lazy" decoding="async">'
           :'<span class="grid-product-fallback">GL</span>')+

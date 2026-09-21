@@ -1564,10 +1564,57 @@ function verifiedSourceOpenUrl(raw){
   }
 }
 
-function syncProductSourceLink(raw){
+function sourceExternalProductUrl(product){
+  const raw=String(product&&product.open_url||product&&product.url||"").trim();
+  if(!raw)return "";
+  try{
+    const u=new URL(raw);
+    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    const sourceKey=String(product&&product.source&&product.source.key||"").toLowerCase();
+    const identity=product&&product.source_identity||{};
+
+    if(sourceKey==="go"||host==="sieuthi-go.vn"){
+      const id=String(identity.source_product_id||"").trim();
+      if(id&&!/-i\.\d+$/i.test(u.pathname)){
+        u.pathname=u.pathname.replace(/\/+$/,"")+"-i."+encodeURIComponent(id);
+      }
+      return u.toString();
+    }
+
+    if(sourceKey==="vinamilk"||host==="vinamilk.com.vn"){
+      const packaging=String(product&&product.packaging&&product.packaging.text||"").trim();
+      const parts=packaging.split(/\s*·\s*/).map(x=>x.trim()).filter(Boolean);
+      const sizeChoice=parts[0]||"";
+      const cmp=product&&product.comparison||{};
+      const normalizedPack=cmp.size_value&&cmp.size_unit
+        ?String(Number(cmp.size_value))+String(cmp.size_unit)
+        :"";
+      const packChoice=parts[1]||normalizedPack;
+
+      // Vinamilk public pages select the sellable option by pack + size.
+      // Do not expose the internal GraphQL variant selector in User/Admin links.
+      u.search="";
+      if(packChoice)u.searchParams.set("pack",packChoice);
+      if(sizeChoice)u.searchParams.set("size",sizeChoice);
+      return u.toString();
+    }
+
+    return verifiedSourceOpenUrl(raw);
+  }catch{
+    return verifiedSourceOpenUrl(raw);
+  }
+}
+
+function rowExternalProductUrl(row){
+  const payload=payloadFromLibraryRow(row);
+  return sourceExternalProductUrl(payload&&payload.product)||
+    verifiedSourceOpenUrl(String(row&&row.canonical_url||""));
+}
+
+function syncProductSourceLink(product){
   const link=$("#productLink");
   if(!link)return;
-  const href=verifiedSourceOpenUrl(raw);
+  const href=sourceExternalProductUrl(product);
   if(!href){
     link.hidden=true;
     link.removeAttribute("href");
@@ -1649,7 +1696,7 @@ function renderProduct(payload){
     $("#promoPrice").textContent+=" · "+money(promoUnit)+"/"+unitLabel(cmp);
   }
   $("#promoText").textContent=quantityPromo?(cmp.promotion_text||""):"";
-  syncProductSourceLink(p.open_url||p.url||payload.input_url||"");
+  syncProductSourceLink({...p,open_url:p.open_url||p.url||payload.input_url||""});
 
   wantedUrl=p.url||payload.input_url||wantedUrl;
   $("#url").value=wantedUrl||$("#url").value;
@@ -6608,11 +6655,20 @@ if(userWorkHome){
       return;
     }
 
+    if(mobileCard&&!e.target.closest("[data-work-qty]")){
+      const row=findLibraryRow(mobileCard.dataset.url||"");
+      if(row&&!isMineRow(row)){
+        const href=rowExternalProductUrl(row);
+        if(href)window.open(href,"_blank","noopener");
+      }
+      return;
+    }
+
     const card=e.target.closest(".user-work-market-card");
     if(card){
-      // Work frame is browse-only here. Do not open the legacy product-detail
-      // drawer (Nhóm/Hãng/Quy cách/Ưu đãi/Quan tâm), because that old surface
-      // owns unrelated state and can break the isolated frame geometry.
+      const row=findLibraryRow(card.dataset.url||"");
+      const href=row?rowExternalProductUrl(row):verifiedSourceOpenUrl(card.dataset.url||"");
+      if(href)window.open(href,"_blank","noopener");
       return;
     }
   });

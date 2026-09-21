@@ -169,6 +169,11 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertNotIn('$("#productLink").href=p.url||payload.input_url||"#";',APP)
         self.assertIn('"source-vinamilk"',APP)
 
+    def test_catalog_cards_hide_redundant_source_badge_on_all_widths(self):
+        style=(ROOT/"style.css").read_text(encoding="utf-8")
+        self.assertIn("Shared supermarket card cleanup v2",style)
+        self.assertIn(".workspace-list .grid-source-tag{\n  display:none!important;",style)
+
     def test_mobile_market_cards_hide_redundant_source_badge(self):
         style=(ROOT/"style.css").read_text(encoding="utf-8")
         self.assertIn("Mobile supermarket card cleanup v1",style)

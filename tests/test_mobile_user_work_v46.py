@@ -163,7 +163,9 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
     def test_vinamilk_numeric_source_url_is_not_opened(self):
         self.assertIn("function verifiedSourceOpenUrl(raw)",APP)
         self.assertIn('host==="vinamilk.com.vn"',APP)
-        self.assertIn('syncProductSourceLink(p.open_url||p.url||payload.input_url||"")',APP)
+        self.assertIn('const normalized=typeof product==="string"?{url:product}:product;',APP)
+        self.assertIn('const verified=verifiedSourceOpenUrl(raw);',APP)
+        self.assertIn('if(!verified)return "";',APP)
         self.assertNotIn('$("#productLink").href=p.url||payload.input_url||"#";',APP)
         self.assertIn('"source-vinamilk"',APP)
 

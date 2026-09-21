@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - main
+      - verify/catalog-source-badge-cleanup-head-20260921
 
 jobs:
   verify:

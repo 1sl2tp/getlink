@@ -650,34 +650,9 @@ window.GETLINK_API_BASE=window.GETLINK_API_BASE||"https://getlink-api.taphoa-4ab
   const build=runtime&&runtime.activeBuild||document.querySelector('meta[name="app-build-id"]')?.content||"dev";
   const loadScript=runtime&&runtime.loadScript;
   if(!loadScript)return;
-  const loadStyle=(id,url)=>new Promise((resolve,reject)=>{
-    const existing=document.getElementById(id);
-    if(existing){resolve();return;}
-    const link=document.createElement("link");
-    link.id=id;
-    link.rel="stylesheet";
-    link.href=url;
-    link.onload=()=>resolve();
-    link.onerror=()=>reject(new Error("Không tải được "+url));
-    document.head.appendChild(link);
-  });
   try{
-    const configUrl=runtime.assetUrl("config.js",build);
-    const appUrl=runtime.assetUrl("app.js",build);
-    const orderCssUrl=runtime.assetUrl("order-management.css",build);
-    const orderCustomerCssUrl=runtime.assetUrl("order-customer-picker.css",build);
-    const orderManagementUrl=runtime.assetUrl("order-management.js",build);
-    const mobileStandardCssUrl=runtime.assetUrl("taphoa-mobile-standard.css",build);
-    const mobileStandardJsUrl=runtime.assetUrl("taphoa-mobile-standard.js",build);
-    await loadScript(configUrl,build);
-    await loadScript(appUrl,build);
-    await Promise.all([
-      loadStyle("getlinkOrderCss",orderCssUrl),
-      loadStyle("getlinkOrderCustomerCss",orderCustomerCssUrl),
-      loadStyle("getlinkMobileStandardCss",mobileStandardCssUrl)
-    ]);
-    await loadScript(orderManagementUrl,build);
-    await loadScript(mobileStandardJsUrl,build);
+    await loadScript(runtime.assetUrl("config.js",build),build);
+    await loadScript(runtime.assetUrl("app.js",build),build);
   }catch(error){
     console.error("GETLINK bootstrap failed",error);
   }

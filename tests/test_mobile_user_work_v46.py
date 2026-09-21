@@ -209,6 +209,13 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn("Browse-only cleanup v3",CSS)
         self.assertRegex(CSS,r"#result\s+label\.watch[\s\S]*?display\s*:\s*none!important")
 
+
+    def test_pack_tabs_still_expose_exactly_all_carton_retail_modes(self):
+        block=APP.split("function renderPackTabs(){",1)[1].split("function rowSourceFilterKey(row){",1)[0]
+        self.assertIn('data-pack=""',block)
+        self.assertIn('data-pack="Thùng"',block)
+        self.assertIn('data-pack="Lẻ"',block)
+
     def test_mobile_search_updates_on_every_input_including_ime(self):
         block=re.search(
             r'const mobileUserSearch=\$\("#mobileUserSearch"\);([\s\S]*?)\n\}',

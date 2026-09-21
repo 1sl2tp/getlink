@@ -108,9 +108,8 @@ assert.ok(workspace.includes("event.stopImmediatePropagation()"),"fresh shell ev
 assert.ok(!workspace.includes("MutationObserver"),"fresh shell must not coordinate with mutation observers");
 assert.ok(!workspace.includes("root.remove()"),"view switching must preserve shell node identity");
 
-const legacy=block(config,"const loadLegacyMobile=", "const mobileMedia=");
-assert.ok(legacy.includes("taphoa-hot-path-runtime.js"));
-assert.ok(legacy.includes("taphoa-workspace-feedback.js"));
-assert.ok(config.includes('(max-width:999px)'),"legacy patch runtime must be mobile-only for the fresh desktop path");
+assert.ok(!config.includes("taphoa-hot-path-runtime.js"),"legacy hot-path runtime must stay out of GETLINK production");
+assert.ok(!config.includes("taphoa-workspace-feedback.js"),"legacy feedback runtime must stay out of GETLINK production");
+assert.ok(!config.includes("taphoa-desktop-workspace.js"),"legacy desktop workspace must stay out of GETLINK production");
 
 console.log("Tạp hóa desktop hot paths PASS");

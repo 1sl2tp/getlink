@@ -31,7 +31,7 @@ class SourceExternalProductUrlContractTest(unittest.TestCase):
         self.assertGreaterEqual(APP.count('window.open(href,"_blank","noopener")'),2)
 
     def test_other_sources_keep_verified_original_url(self):
-        block=re.search(r"function sourceExternalProductUrl\\(product\\)\\{([\\s\\S]*?)\\n\\}",APP)
+        block=re.search(r"function sourceExternalProductUrl\(product\)\{([\s\S]*?)\n\}",APP)
         self.assertIsNotNone(block)
         self.assertIn('return verifiedSourceOpenUrl(raw)',block.group(1))
 

@@ -216,6 +216,13 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn('data-pack="Thùng"',block)
         self.assertIn('data-pack="Lẻ"',block)
 
+    def test_mobile_catalog_has_no_horizontal_overflow_or_card_heart(self):
+        style=(ROOT/"style.css").read_text(encoding="utf-8")
+        self.assertIn("Mobile overflow guard v1",style)
+        self.assertIn(".workspace-list{\n    overflow-x:hidden!important;",style)
+        self.assertIn(".workspace-list .product-grid{\n    width:100%!important;",style)
+        self.assertIn(".workspace-list .grid-watch-button{\n  display:none!important;",style)
+
     def test_mobile_search_updates_on_every_input_including_ime(self):
         block=re.search(
             r'const mobileUserSearch=\$\("#mobileUserSearch"\);([\s\S]*?)\n\}',

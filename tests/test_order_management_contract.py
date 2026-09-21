@@ -68,11 +68,11 @@ class OrderFrontendContractTests(unittest.TestCase):
         self.assertTrue(JS.exists(), "order-management.js must exist")
         return JS.read_text(encoding="utf-8")
 
-    def test_bootstrap_loads_order_module_and_customer_picker(self):
+    def test_bootstrap_does_not_load_legacy_order_module_or_customer_picker(self):
         text = INDEX.read_text(encoding="utf-8")
-        self.assertIn('runtime.assetUrl("order-management.js",build)', text)
-        self.assertIn('runtime.assetUrl("order-management.css",build)', text)
-        self.assertIn('runtime.assetUrl("order-customer-picker.css",build)', text)
+        self.assertNotIn("order-management.js", text)
+        self.assertNotIn("order-management.css", text)
+        self.assertNotIn("order-customer-picker.css", text)
 
     def test_send_buttons_are_intercepted_before_other_handlers(self):
         text = self.js_text()

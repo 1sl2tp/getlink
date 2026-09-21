@@ -6,12 +6,7 @@ INDEX=ROOT/'index.html'
 VERSION=ROOT/'version.json'
 PLACEHOLDER='__GETLINK_BUILD_ID__'
 ASSETS=(
-    'app.js','style.css','config.js','order-management.js','order-management.css',
-    'taphoa-desktop-workspace.js','taphoa-desktop-workspace.css','taphoa-desktop-data.js',
-    'taphoa-desktop-sales.js','taphoa-desktop-orders.js','taphoa-desktop-debts.js',
-    'taphoa-workspace-feedback.js','taphoa-workspace-feedback.css','taphoa-order-workspace-v2.css',
-    'taphoa-hot-path-runtime.js','taphoa-hot-path-runtime.css',
-    'taphoa-mobile-standard.js','taphoa-mobile-standard.css'
+    'app.js','style.css','config.js'
 )
 
 def normalized_index(text):
@@ -52,7 +47,7 @@ def calculate():
         'build_id':build_id,
         'update_policy':'auto-when-safe',
         'published_from':'github-main',
-        'assets':['index.html','style.css','config.js','app.js','order-management.js','order-management.css','taphoa-desktop-workspace.js','taphoa-desktop-workspace.css','taphoa-desktop-data.js','taphoa-desktop-sales.js','taphoa-desktop-orders.js','taphoa-desktop-debts.js','taphoa-workspace-feedback.js','taphoa-workspace-feedback.css','taphoa-order-workspace-v2.css','taphoa-hot-path-runtime.js','taphoa-hot-path-runtime.css','taphoa-mobile-standard.js','taphoa-mobile-standard.css'],
+        'assets':['index.html','style.css','config.js','app.js'],
     }
     version_text=json.dumps(payload,ensure_ascii=False,indent=2)+'\n'
     return build_id,stamped,version_text

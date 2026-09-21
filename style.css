@@ -16014,3 +16014,10 @@ body[data-app-role="user"] .catalog-render-more:not([hidden]){
     grid-template-columns:minmax(0,1fr) 36px!important;
   }
 }
+
+
+/* Shared supermarket card cleanup v2
+   Source is already encoded by price color and the source filter above. */
+.workspace-list .grid-source-tag{
+  display:none!important;
+}

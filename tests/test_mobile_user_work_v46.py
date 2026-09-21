@@ -171,8 +171,10 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
 
     def test_catalog_cards_hide_redundant_source_badge_on_all_widths(self):
         style=(ROOT/"style.css").read_text(encoding="utf-8")
+        index=(ROOT/"index.html").read_text(encoding="utf-8")
         self.assertIn("Shared supermarket card cleanup v2",style)
         self.assertIn(".workspace-list .grid-source-tag{\n  display:none!important;",style)
+        self.assertIn('id="sourceTabsInline"',index)
 
     def test_mobile_market_cards_hide_redundant_source_badge(self):
         style=(ROOT/"style.css").read_text(encoding="utf-8")

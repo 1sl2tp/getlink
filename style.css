@@ -16031,3 +16031,47 @@ body[data-app-role="user"] .catalog-render-more:not([hidden]){
 #result .watch{
   display:none!important;
 }
+
+
+/* Mobile overflow guard v1
+   Override legacy 610px browse minimums so the supermarket grid fits the viewport. */
+@media(max-width:760px){
+  html,
+  body{
+    max-width:100%!important;
+    overflow-x:hidden!important;
+  }
+  .wrap,
+  .workspace,
+  .workspace-list,
+  .catalog-sticky-head,
+  .catalog-search-row,
+  .purchase-mode-row,
+  .workspace-list .catalog-toolbar,
+  .workspace-list .catalog-search,
+  .workspace-list .product-grid{
+    min-width:0!important;
+    max-width:100%!important;
+    box-sizing:border-box!important;
+  }
+  .workspace,
+  .workspace-list{
+    width:100%!important;
+  }
+  .workspace-list{
+    overflow-x:hidden!important;
+  }
+  .workspace-list .product-grid{
+    width:100%!important;
+    overflow-x:hidden!important;
+  }
+  .grid-product{
+    min-width:0!important;
+    max-width:100%!important;
+  }
+}
+
+/* Supermarket browse has no per-card favourite action. */
+.workspace-list .grid-watch-button{
+  display:none!important;
+}

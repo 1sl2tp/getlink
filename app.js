@@ -147,9 +147,14 @@ let libraryByUrl=new Map();
 let searchFrame=0;
 let catalogObserver=null;
 const viewRenderState={
-  grid:{key:"",products:[],rendered:0},
-  table:{key:"",products:[],rendered:0}
+  grid:{key:"",products:[],rendered:0,cacheVersion:-1},
+  table:{key:"",products:[],rendered:0,cacheVersion:-1}
 };
+const productViewDomCache={
+  grid:new Map(),
+  table:new Map()
+};
+const PRODUCT_VIEW_DOM_CACHE_LIMIT=8;
 const productSearchWordsCache=new WeakMap();
 const LOCAL_LIBRARY_CACHE_TTL=10*60*1000;
 const CLASSIFICATION_CHECK_MS=15000;
@@ -3614,8 +3619,6 @@ function setActiveSourceFilter(nextSource,{scroll=true}={}){
   libraryPage=1;
   resetBrowseDetail();
 
-  if(scroll)resetActiveCatalogScroll();
-
   renderLibraryProducts();
   scheduleCategoryMenuRefresh();
 }
@@ -3937,25 +3940,81 @@ function appendLocalViewBatch(view){
   updateCatalogRenderMore();
 }
 
+function productViewNodeHost(view){
+  return view==="grid"?$("#productGrid"):$("#libraryProducts");
+}
+function productViewScrollHost(view){
+  return view==="grid"?$("#productGrid"):$("#tableView");
+}
+function trimProductViewDomCache(view){
+  const cache=productViewDomCache[view];
+  while(cache.size>PRODUCT_VIEW_DOM_CACHE_LIMIT){
+    const first=cache.keys().next().value;
+    if(first===undefined)break;
+    cache.delete(first);
+  }
+}
+function stashRenderedProductView(view){
+  const state=viewRenderState[view];
+  const host=productViewNodeHost(view);
+  if(!host||!state.key||state.rendered===0||state.cacheVersion!==libraryRenderVersion||!host.childNodes.length)return;
+  const scrollHost=productViewScrollHost(view);
+  const fragment=document.createDocumentFragment();
+  const scrollTop=Number(scrollHost?.scrollTop)||0;
+  while(host.firstChild)fragment.appendChild(host.firstChild);
+  const cache=productViewDomCache[view];
+  cache.delete(state.key);
+  cache.set(state.key,{
+    fragment,
+    rendered:state.rendered,
+    scrollTop
+  });
+  trimProductViewDomCache(view);
+}
+function restoreRenderedProductView(view,key,viewProducts){
+  const cache=productViewDomCache[view];
+  const cached=cache.get(key);
+  const host=productViewNodeHost(view);
+  if(!cached||!host)return false;
+  cache.delete(key);
+  host.replaceChildren(cached.fragment);
+  const state=viewRenderState[view];
+  state.key=key;
+  state.products=viewProducts;
+  state.rendered=Math.min(Number(cached.rendered)||0,viewProducts.length);
+  state.cacheVersion=libraryRenderVersion;
+  const scrollHost=productViewScrollHost(view);
+  if(scrollHost)scrollHost.scrollTop=Number(cached.scrollTop)||0;
+  return true;
+}
+
 function renderActiveProductView(products){
   const view=libraryView;
   const viewProducts=view==="table"?sortTableProducts(products):products;
   const key=productViewKey(viewProducts)+(view==="table"?"|source-sort:"+tableSourceSort:"");
   const state=viewRenderState[view];
+
+  if(state.cacheVersion!==libraryRenderVersion){
+    productViewDomCache.grid.clear();
+    productViewDomCache.table.clear();
+  }
+
   if(state.key!==key){
-    state.key=key;
-    state.products=viewProducts;
-    state.rendered=0;
-    if(view==="grid"){
-      const host=$("#productGrid");
+    stashRenderedProductView(view);
+    if(!restoreRenderedProductView(view,key,viewProducts)){
+      state.key=key;
+      state.products=viewProducts;
+      state.rendered=0;
+      state.cacheVersion=libraryRenderVersion;
+      const host=productViewNodeHost(view);
+      const scrollHost=productViewScrollHost(view);
       if(host)host.innerHTML="";
-    }else{
-      const body=$("#libraryProducts");
-      if(body)body.innerHTML="";
+      if(scrollHost)scrollHost.scrollTop=0;
+      appendLocalViewBatch(view);
     }
-    appendLocalViewBatch(view);
   }else if(state.rendered===0){
     state.products=viewProducts;
+    state.cacheVersion=libraryRenderVersion;
     appendLocalViewBatch(view);
   }
   syncTableSourceSortHeader();

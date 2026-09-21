@@ -371,13 +371,22 @@
     if(!mounted&& !mountMobileStandard())return;
     syncCustomer();syncCartBar();if(cartOpen)renderCartSheet();syncView();
   }
+  let asyncOwnerTimers=[];
   function queueSync(delay=0){
     if(delay>0){window.setTimeout(syncAll,delay);return;}
     if(syncQueued)return;syncQueued=true;
     queueMicrotask(()=>{syncQueued=false;syncAll();});
   }
   function queueAfterAsyncOwner(){
-    queueSync();queueSync(80);queueSync(320);queueSync(1000);
+    queueSync();
+    for(const timer of asyncOwnerTimers)window.clearTimeout(timer);
+    asyncOwnerTimers=[
+      window.setTimeout(()=>queueSync(),120),
+      window.setTimeout(()=>{
+        queueSync();
+        asyncOwnerTimers=[];
+      },600)
+    ];
   }
 
   document.addEventListener("click",event=>{

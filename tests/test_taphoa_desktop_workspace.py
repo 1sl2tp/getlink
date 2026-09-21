@@ -22,7 +22,7 @@ class TaphoaDesktopWorkspaceContract(unittest.TestCase):
         self.assertNotIn("MutationObserver", js)
         self.assertNotIn("replaceChildren(fresh", js)
 
-    def test_config_loads_new_workspace_assets(self):
+    def test_legacy_workspace_assets_are_not_loaded_by_config(self):
         config = (ROOT / "config.js").read_text("utf-8")
         for asset in [
             "taphoa-desktop-workspace.css",
@@ -32,9 +32,9 @@ class TaphoaDesktopWorkspaceContract(unittest.TestCase):
             "taphoa-desktop-orders.js",
             "taphoa-desktop-debts.js",
         ]:
-            self.assertIn(asset, config)
+            self.assertNotIn(asset, config)
 
-    def test_build_stamp_tracks_new_workspace_assets(self):
+    def test_legacy_workspace_assets_are_not_part_of_static_build_hash(self):
         stamp = (ROOT / "tools" / "stamp_static_build.py").read_text("utf-8")
         for asset in [
             "taphoa-desktop-workspace.js",
@@ -44,7 +44,7 @@ class TaphoaDesktopWorkspaceContract(unittest.TestCase):
             "taphoa-desktop-orders.js",
             "taphoa-desktop-debts.js",
         ]:
-            self.assertIn(asset, stamp)
+            self.assertNotIn(asset, stamp)
 
     def test_desktop_data_owns_taphoa_only_product_index(self):
         js = (ROOT / "taphoa-desktop-data.js").read_text("utf-8")

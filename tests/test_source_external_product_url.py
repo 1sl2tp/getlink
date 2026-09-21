@@ -22,6 +22,8 @@ class SourceExternalProductUrlContractTest(unittest.TestCase):
         self.assertIn('u.searchParams.set("pack",packChoice)',body)
         self.assertIn('u.searchParams.set("size",sizeChoice)',body)
         self.assertIn('u.search=""',body)
+        self.assertIn('const verified=verifiedSourceOpenUrl(raw);',body)
+        self.assertIn('if(!verified)return "";',body)
 
     def test_admin_and_user_share_external_url_builder(self):
         self.assertIn('syncProductSourceLink({...p,open_url:',APP)

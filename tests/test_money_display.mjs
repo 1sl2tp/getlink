@@ -28,6 +28,7 @@ assert.equal(money(0),"—");
   assert.ok(winmartMatch&&hierarchyMatch&&cartonMatch,"hierarchy helpers not found");
   const api=new Function(
     "function isWinmartRow(row){return String(row&&row.source||'').toLowerCase()==='winmart';}\n"+
+    "function isMineRow(){return false;}\n"+
     winmartMatch[0]+"\n"+hierarchyMatch[0]+"\n"+cartonMatch[0]+
     "\nreturn {winmartDisplayPack,rowPackHierarchy,rowIsCarton};"
   )();
@@ -145,13 +146,13 @@ assert.equal(money(0),"—");
   const api=new Function(
     moneyMatch2[0]+"\n"+
     "function rowPackHierarchy(row){return row.h;}\n"+
-    "function rowPrimaryQc(){return '—';}\n"+
+    "function rowPrimaryQc(row){const h=row.h||{};if(h.label1==='Thùng'&&h.label3)return 'Thùng · '+(h.qty3||1)+' '+h.label3;return h.label1||'—';}\n"+
     cartonCardMatch[0]+
     "\nreturn {rowCartonCardMeta};"
   )();
   assert.deepEqual(
     api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"Hộp",qty3:24}},240000),
-    {pack:"24 hộp × 10",unitPrice:""}
+    {pack:"Thùng · 24 Hộp",unitPrice:""}
   );
   assert.deepEqual(
     api.rowCartonCardMeta({h:{label1:"Thùng",qty1:1,label2:"",qty2:0,label3:"",qty3:0}},240000),

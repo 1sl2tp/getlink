@@ -182,6 +182,40 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
         self.assertIn(".grid-source-tag{\n    display:none!important;",style)
         self.assertIn("grid-template-columns:minmax(0,1fr) 38px!important;",style)
 
+
+    def test_market_pack_modes_partition_public_catalog(self):
+        carton=APP.split("function rowIsCarton(row){",1)[1].split("function rowIsRetail(row){",1)[0]
+        retail=APP.split("function rowIsRetail(row){",1)[1].split("function rowPriceLevels(row){",1)[0]
+        self.assertIn("if(isMineRow(row)){",carton)
+        self.assertIn('return rowPackHierarchy(row).label1==="Thùng";',carton)
+        self.assertIn("if(isMineRow(row)){",retail)
+        self.assertIn("return !rowIsCarton(row);",retail)
+        self.assertNotIn("const supplier=Boolean",carton)
+        self.assertNotIn("const supplier=Boolean",retail)
+
+    def test_carton_card_keeps_one_price_and_plain_pack_label(self):
+        block=re.search(r"function\s+rowCartonCardMeta\s*\(row,packPrice\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(block)
+        body=block.group(1)
+        self.assertIn("return {pack:rowPrimaryQc(row),unitPrice:",body)
+        self.assertNotIn("total/qty",body)
+        self.assertNotIn('" × "',body)
+
+    def test_catalog_cards_and_detail_have_no_watch_control(self):
+        grid=re.search(r"function\s+gridProductCard\s*\(row\)\{([\s\S]*?)\n\}",APP)
+        self.assertIsNotNone(grid)
+        self.assertNotIn("grid-watch-button",grid.group(1))
+        self.assertNotIn("watchIconSvg",grid.group(1))
+        self.assertIn("Browse-only cleanup v3",CSS)
+        self.assertRegex(CSS,r"#result\s+label\.watch[\s\S]*?display\s*:\s*none!important")
+
+
+    def test_pack_tabs_still_expose_exactly_all_carton_retail_modes(self):
+        block=APP.split("function renderPackTabs(){",1)[1].split("function rowSourceFilterKey(row){",1)[0]
+        self.assertIn('data-pack=""',block)
+        self.assertIn('data-pack="Thùng"',block)
+        self.assertIn('data-pack="Lẻ"',block)
+
     def test_mobile_search_updates_on_every_input_including_ime(self):
         block=re.search(
             r'const mobileUserSearch=\$\("#mobileUserSearch"\);([\s\S]*?)\n\}',

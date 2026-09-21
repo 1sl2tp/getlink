@@ -16021,3 +16021,13 @@ body[data-app-role="user"] .catalog-render-more:not([hidden]){
 .workspace-list .grid-source-tag{
   display:none!important;
 }
+
+
+/* Browse-only cleanup v3
+   Card hearts and detail preference controls are outside the supermarket
+   browsing flow; keep the catalog focused on product + pack + price. */
+.workspace-list .grid-watch-button,
+#result label.watch,
+#result .watch{
+  display:none!important;
+}

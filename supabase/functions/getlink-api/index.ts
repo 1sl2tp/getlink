@@ -3994,6 +3994,7 @@ async function refreshUpdateRunMetrics(runId:string){
 }
 
 async function processAutoUpdateBatch(allowScheduledCreate=true){
+  const staleJobsCleaned=await expireStaleJobs();
   let run=await activeUpdateRun();
   if(!run&&allowScheduledCreate){
     const settings=await getUpdateSettingsRow();
@@ -4001,7 +4002,7 @@ async function processAutoUpdateBatch(allowScheduledCreate=true){
       run=await createUpdateRun("schedule");
     }
   }
-  if(!run)return {status:"idle",snapshot:await updateSettingsSnapshot()};
+  if(!run)return {status:"idle",stale_jobs_cleaned:staleJobsCleaned,snapshot:await updateSettingsSnapshot()};
 
   const staleCutoff=new Date(Date.now()-12*60*1000).toISOString();
   await sb.from("getlink_update_queue").update({
@@ -4023,6 +4024,7 @@ async function processAutoUpdateBatch(allowScheduledCreate=true){
   return {
     status:metrics.active===0?(metrics.failed?"complete_with_errors":"complete"):"running",
     processed_now:items.length,
+    stale_jobs_cleaned:staleJobsCleaned,
     run_id:run.id,
     metrics,
     snapshot:await updateSettingsSnapshot()

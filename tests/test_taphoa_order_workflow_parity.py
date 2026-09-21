@@ -92,7 +92,7 @@ class TapHoaOrderWorkflowParity(unittest.TestCase):
 
     def test_order_manager_reloads_when_server_revision_changes(self):
         order = text(ORDER)
-        self.assertIn("const ORDER_SYNC_MS=3000", order)
+        self.assertIn("const ORDER_SYNC_MS=6000", order)
         self.assertIn("async function checkRemoteRevision", order)
         self.assertIn('orderFetch("/sync",{method:"GET"})', order)
         self.assertIn("if(!syncBusy)await checkRemoteRevision(true);", order)

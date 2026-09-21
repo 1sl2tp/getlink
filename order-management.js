@@ -11,7 +11,8 @@
   const CATALOG_API=String(window.GETLINK_API_BASE||"").replace(/\/$/,"");
   const ORDER_API=CATALOG_API.replace(/\/getlink-api$/,"/getlink-orders");
   const STATUS_LABELS={pending:"Đơn tạm",delivered:"Đã giao",returned:"Đã hoàn"};
-  const ORDER_SYNC_MS=3000;
+  const ORDER_SYNC_MS=6000;
+  const WORKSPACE_RECONCILE_MS=5000;
   const DEBT_EVENT_LABELS={
     order_debt:"Đã giao",
     payment:"Thanh toán",
@@ -1381,7 +1382,7 @@
   requestChatAuth();
   document.addEventListener("getlink-cart-change",()=>{ensureSalesContextPanel();renderSalesContext();});
   window.addEventListener("resize",()=>{ensureTaphoaWorkspaceNav();syncTaphoaWorkspace();});
-  window.setInterval(()=>{ensureTaphoaWorkspaceNav();ensureInlineCustomerButtons();ensureCartActions();syncCustomerControls();syncTaphoaWorkspace();},1500);
+  window.setInterval(()=>{ensureTaphoaWorkspaceNav();ensureInlineCustomerButtons();ensureCartActions();syncCustomerControls();syncTaphoaWorkspace();},WORKSPACE_RECONCILE_MS);
   window.setInterval(()=>{void checkRemoteRevision();},ORDER_SYNC_MS);
   document.addEventListener("visibilitychange",()=>{if(!document.hidden)void checkRemoteRevision();});
   window.addEventListener("focus",()=>{void checkRemoteRevision();});

@@ -152,7 +152,7 @@ const viewRenderState={
 };
 const productSearchWordsCache=new WeakMap();
 const LOCAL_LIBRARY_CACHE_TTL=10*60*1000;
-const CLASSIFICATION_CHECK_MS=4000;
+const CLASSIFICATION_CHECK_MS=15000;
 let classificationVersion="";
 let classificationCheckTimer=0;
 let classificationRefreshBusy=false;
@@ -5974,17 +5974,40 @@ function applyAppRoleUi(){
   syncSupplierTableMode();
 }
 
-async function reloadCatalogForRole(){
-  libraryCache=[];
-  libraryLoaded=false;
+async function reloadCatalogForRole(discardCurrent=false){
   libraryGroups=[];
-  libraryRenderVersion+=1;
-  rebuildLibraryIndex();
-  browseRowsMemo.clear();
-  for(const state of Object.values(viewRenderState)){
-    state.key="";
-    state.products=[];
-    state.rendered=0;
+  const cached=await readUiLibraryCache();
+  if(cached&&Array.isArray(cached.rows)&&cached.rows.length){
+    libraryCache=cached.rows;
+    libraryLoaded=true;
+    libraryRenderVersion+=1;
+    rebuildLibraryIndex();
+    browseRowsMemo.clear();
+    for(const state of Object.values(viewRenderState)){
+      state.key="";
+      state.products=[];
+      state.rendered=0;
+    }
+    const registry=$("#registryCount");
+    if(registry)registry.textContent="Kho link: "+libraryCache.length;
+    renderCategoryMenu();
+    renderLibraryProducts();
+    const age=Date.now()-Number(cached.savedAt||0);
+    if(age>LOCAL_LIBRARY_CACHE_TTL)setTimeout(refreshLibraryInBackground,0);
+    return;
+  }
+
+  if(discardCurrent){
+    libraryCache=[];
+    libraryLoaded=false;
+    libraryRenderVersion+=1;
+    rebuildLibraryIndex();
+    browseRowsMemo.clear();
+    for(const state of Object.values(viewRenderState)){
+      state.key="";
+      state.products=[];
+      state.rendered=0;
+    }
   }
   await fetchLibraryFromSupabase();
   renderCategoryMenu();
@@ -5992,13 +6015,14 @@ async function reloadCatalogForRole(){
 }
 
 async function setAppRole(nextRole,reload=true){
+  const previousRole=appRole;
   appRole=nextRole==="admin"?"admin":"user";
   if(appRole==="user"){
     updateAdminToken="";
     sessionStorage.removeItem(UPDATE_ADMIN_TOKEN_KEY);
   }
   applyAppRoleUi();
-  if(reload)await reloadCatalogForRole();
+  if(reload)await reloadCatalogForRole(previousRole==="admin"&&appRole==="user");
 }
 
 function closeAdminLogin(){
@@ -6039,10 +6063,8 @@ async function unlockAdminRole(){
     }
     updateAdminToken=String(data.token||"");
     sessionStorage.setItem(UPDATE_ADMIN_TOKEN_KEY,updateAdminToken);
-    appRole="admin";
     closeAdminLogin();
-    applyAppRoleUi();
-    await reloadCatalogForRole();
+    await setAppRole("admin",true);
   }catch{
     if(status)status.textContent="Chưa kết nối được.";
   }

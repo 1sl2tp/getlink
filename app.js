@@ -1568,20 +1568,23 @@ function sourceExternalProductUrl(product){
   const raw=String(product&&product.open_url||product&&product.url||"").trim();
   if(!raw)return "";
   try{
-    const u=new URL(raw);
-    const host=u.hostname.toLowerCase().replace(/^www\./,"");
+    const rawUrl=new URL(raw);
+    const host=rawUrl.hostname.toLowerCase().replace(/^www\./,"");
     const sourceKey=String(product&&product.source&&product.source.key||"").toLowerCase();
     const identity=product&&product.source_identity||{};
 
     if(sourceKey==="go"||host==="sieuthi-go.vn"){
       const id=String(identity.source_product_id||"").trim();
-      if(id&&!/-i\.\d+$/i.test(u.pathname)){
-        u.pathname=u.pathname.replace(/\/+$/,"")+"-i."+encodeURIComponent(id);
+      if(id&&!/-i\.\d+$/i.test(rawUrl.pathname)){
+        rawUrl.pathname=rawUrl.pathname.replace(/\/+$/,"")+"-i."+encodeURIComponent(id);
       }
-      return u.toString();
+      return rawUrl.toString();
     }
 
     if(sourceKey==="vinamilk"||host==="vinamilk.com.vn"){
+      const verified=verifiedSourceOpenUrl(raw);
+      if(!verified)return "";
+      const u=new URL(verified);
       const packaging=String(product&&product.packaging&&product.packaging.text||"").trim();
       const parts=packaging.split(/\s*·\s*/).map(x=>x.trim()).filter(Boolean);
       const sizeChoice=parts[0]||"";
@@ -1592,7 +1595,7 @@ function sourceExternalProductUrl(product){
       const packChoice=parts[1]||normalizedPack;
 
       // Vinamilk public pages select the sellable option by pack + size.
-      // Do not expose the internal GraphQL variant selector in User/Admin links.
+      // Numeric internal /products/<id> URLs remain blocked by verifiedSourceOpenUrl.
       u.search="";
       if(packChoice)u.searchParams.set("pack",packChoice);
       if(sizeChoice)u.searchParams.set("size",sizeChoice);
@@ -1614,7 +1617,8 @@ function rowExternalProductUrl(row){
 function syncProductSourceLink(product){
   const link=$("#productLink");
   if(!link)return;
-  const href=sourceExternalProductUrl(product);
+  const normalized=typeof product==="string"?{url:product}:product;
+  const href=sourceExternalProductUrl(normalized);
   if(!href){
     link.hidden=true;
     link.removeAttribute("href");

@@ -184,16 +184,14 @@ class MobileUserWorkV46ContractTest(unittest.TestCase):
 
 
     def test_market_pack_modes_partition_public_catalog(self):
-        carton=re.search(r"function\s+rowIsCarton\s*\(row\)\{([\s\S]*?)\n\}",APP)
-        retail=re.search(r"function\s+rowIsRetail\s*\(row\)\{([\s\S]*?)\n\}",APP)
-        self.assertIsNotNone(carton)
-        self.assertIsNotNone(retail)
-        self.assertIn("if(isMineRow(row)){",carton.group(1))
-        self.assertIn('return rowPackHierarchy(row).label1==="Thùng";',carton.group(1))
-        self.assertIn("if(isMineRow(row)){",retail.group(1))
-        self.assertIn("return !rowIsCarton(row);",retail.group(1))
-        self.assertNotIn("const supplier=Boolean",carton.group(1))
-        self.assertNotIn("const supplier=Boolean",retail.group(1))
+        carton=APP.split("function rowIsCarton(row){",1)[1].split("function rowIsRetail(row){",1)[0]
+        retail=APP.split("function rowIsRetail(row){",1)[1].split("function rowPriceLevels(row){",1)[0]
+        self.assertIn("if(isMineRow(row)){",carton)
+        self.assertIn('return rowPackHierarchy(row).label1==="Thùng";',carton)
+        self.assertIn("if(isMineRow(row)){",retail)
+        self.assertIn("return !rowIsCarton(row);",retail)
+        self.assertNotIn("const supplier=Boolean",carton)
+        self.assertNotIn("const supplier=Boolean",retail)
 
     def test_carton_card_keeps_one_price_and_plain_pack_label(self):
         block=re.search(r"function\s+rowCartonCardMeta\s*\(row,packPrice\)\{([\s\S]*?)\n\}",APP)

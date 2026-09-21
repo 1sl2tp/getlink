@@ -15965,3 +15965,52 @@ body[data-app-role="user"] .catalog-render-more:not([hidden]){
     display:block!important;
   }
 }
+
+
+/* Mobile supermarket card cleanup v1
+   Keep the browse card focused on image, product, compact pack info and price.
+   Source identity stays in the price color and top source filter. */
+@media(max-width:760px){
+  .catalog-search-row{
+    grid-template-columns:minmax(0,1fr) 38px!important;
+  }
+  .catalog-search-row .catalog-search{
+    grid-column:1!important;
+    grid-row:1!important;
+  }
+  .mobile-filter-toggle{
+    grid-column:2!important;
+    grid-row:1!important;
+  }
+  .grid-product-bottom{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    align-items:end!important;
+    column-gap:7px!important;
+    row-gap:2px!important;
+  }
+  .grid-source-tag{
+    display:none!important;
+  }
+  .grid-qc{
+    min-width:0!important;
+    max-width:100%!important;
+    overflow:hidden!important;
+    color:#8a9390!important;
+    text-overflow:ellipsis!important;
+    white-space:nowrap!important;
+  }
+  .grid-price-group{
+    justify-self:end!important;
+    margin-left:0!important;
+  }
+  .grid-price{
+    font-size:14.5px!important;
+    line-height:1!important;
+  }
+}
+@media(max-width:390px){
+  .catalog-search-row{
+    grid-template-columns:minmax(0,1fr) 36px!important;
+  }
+}

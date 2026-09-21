@@ -8,10 +8,10 @@ class TaphoaWorkspaceDocumentFeedbackContract(unittest.TestCase):
     def read(self, relative):
         return (ROOT / relative).read_text(encoding="utf-8")
 
-    def test_feedback_runtime_is_loaded_from_config(self):
+    def test_feedback_runtime_is_not_loaded_from_config(self):
         config = self.read("config.js")
-        self.assertIn("taphoa-workspace-feedback.css", config)
-        self.assertIn("taphoa-workspace-feedback.js", config)
+        self.assertNotIn("taphoa-workspace-feedback.css", config)
+        self.assertNotIn("taphoa-workspace-feedback.js", config)
 
     def test_sales_surface_is_four_columns_with_one_price_and_note(self):
         js = self.read("taphoa-workspace-feedback.js")

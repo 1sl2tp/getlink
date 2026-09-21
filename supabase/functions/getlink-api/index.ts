@@ -3,6 +3,7 @@ import * as he from "npm:he@1.2.0";
 import { parse as parseHtml } from "npm:node-html-parser@7.0.1";
 import { Readability } from "npm:@mozilla/readability@0.6.0";
 import { parseHTML as parseDomHtml } from "npm:linkedom@0.18.12";
+import { createHash } from "node:crypto";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -1121,21 +1122,65 @@ function normalizeWinmart(item:any, rootName:string, store:string, checked:strin
 
 const GO_API_CLIENT_ID=(Deno.env.get("GO_API_CLIENT_ID")||"8472594").trim();
 const GO_STORE_ID=Number(Deno.env.get("GO_STORE_ID")||"151")||151;
+const GO_AUTH_SALT="JI82u7&Ue932-suIbIGC-829jsPHe81=Jdu39d8#jds--";
+const GO_INIT_URL="https://sieuthi-go.vn/api/init";
 
 function goCategoryId(url:string){
   const m=new URL(url).pathname.match(/-i\.(\d+)$/i); return m?Number(m[1]):0;
 }
+function goAuthSign(token:string,apiclientid:string){
+  return createHash("md5").update(token+apiclientid+GO_AUTH_SALT).digest("hex");
+}
 
 let GO_RUNTIME_CACHE:any=null;
+async function goFreshRuntimeConfig(storeHint=""){
+  const response=await fetch(GO_INIT_URL,{
+    method:"POST",
+    headers:{
+      "content-type":"application/json",
+      "accept":"application/json",
+      "origin":"https://sieuthi-go.vn",
+      "referer":"https://sieuthi-go.vn/",
+      "user-agent":"Mozilla/5.0"
+    },
+    body:JSON.stringify({
+      api_version:"1.0.0",
+      name:"go_website",
+      platform_version:"13",
+      uid:crypto.randomUUID(),
+      platform_name:"web",
+      notificationToken:""
+    })
+  });
+  const body=await response.json().catch(()=>null);
+  const token=clean(body?.token||"");
+  const apiclientid=clean(body?.apiclientid||"");
+  const store=clean(storeHint||Deno.env.get("GO_STORE_ID")||String(GO_STORE_ID));
+  if(!response.ok||body?.status!=="success"||!token||!apiclientid||!store){
+    throw new Error("go_auth_refresh_failed");
+  }
+  const out={
+    apiclientid,
+    token,
+    sign:goAuthSign(token,apiclientid),
+    store
+  };
+  GO_RUNTIME_CACHE=out;
+  return out;
+}
+
 async function goRuntimeConfig(){
+  if(GO_RUNTIME_CACHE)return GO_RUNTIME_CACHE;
   const env={
     apiclientid:clean(Deno.env.get("GO_API_CLIENT_ID")||""),
     sign:clean(Deno.env.get("GO_API_SIGN")||""),
     token:clean(Deno.env.get("GO_API_TOKEN")||""),
     store:clean(Deno.env.get("GO_STORE_ID")||"")
   };
-  if(env.apiclientid&&env.sign&&env.token&&env.store)return env;
-  if(GO_RUNTIME_CACHE)return GO_RUNTIME_CACHE;
+  if(env.apiclientid&&env.sign&&env.token&&env.store){
+    GO_RUNTIME_CACHE=env;
+    return env;
+  }
 
   const {data,error}=await sb.rpc("getlink_go_runtime_config");
   if(error)throw new Error("go_runtime_config_error");
@@ -1147,7 +1192,7 @@ async function goRuntimeConfig(){
     store:clean(cfg.store||"")
   };
   if(!out.apiclientid||!out.sign||!out.token||!out.store){
-    throw new Error("go_runtime_config_missing");
+    return goFreshRuntimeConfig(out.store);
   }
   GO_RUNTIME_CACHE=out;
   return out;
@@ -1157,35 +1202,46 @@ async function goCategory(url:string,capture:RawCapture){
   const c=canonicalGo(url), category=goCategoryId(c);
   if(!category)throw new Error("go_category_id_missing");
 
-  const cfg=await goRuntimeConfig();
+  let cfg=await goRuntimeConfig();
+  let refreshPromise:Promise<any>|null=null;
   const endpoint="https://sieuthi-go.vn/api/order2_listProduct?platform=2&lang=vi";
-  const store=Number(cfg.store)||cfg.store;
-  const headers={
-    "content-type":"application/json",
-    "accept":"application/json, text/plain, */*",
-    "origin":"https://sieuthi-go.vn",
-    "referer":c,
-    "language":"vi",
-    "user-agent":"Mozilla/5.0",
-    "apiclientid":cfg.apiclientid,
-    "sign":cfg.sign,
-    "token":cfg.token,
-    "storeid":String(store)
-  };
-  const base:any={
-    page:1,
-    category,
-    filter_brand:[],
-    filter_subfamily:[],
-    search:null,
-    store,
-    sitecode:store,
-    platform:2,
-    lang:"vi"
+
+  const refreshAuth=async(attemptCfg:any)=>{
+    if(cfg!==attemptCfg)return cfg;
+    if(!refreshPromise){
+      refreshPromise=goFreshRuntimeConfig(clean(attemptCfg?.store||""))
+        .then(next=>{cfg=next;return next;})
+        .finally(()=>{refreshPromise=null;});
+    }
+    return await refreshPromise;
   };
 
-  const fetchPage=async(page:number)=>{
-    const payload={...base,page};
+  const fetchPage=async(page:number,retryAuth=true):Promise<any>=>{
+    const attemptCfg=cfg;
+    const store=Number(attemptCfg.store)||attemptCfg.store;
+    const headers={
+      "content-type":"application/json",
+      "accept":"application/json, text/plain, */*",
+      "origin":"https://sieuthi-go.vn",
+      "referer":c,
+      "language":"vi",
+      "user-agent":"Mozilla/5.0",
+      "apiclientid":attemptCfg.apiclientid,
+      "sign":attemptCfg.sign,
+      "token":attemptCfg.token,
+      "storeid":String(store)
+    };
+    const payload:any={
+      page,
+      category,
+      filter_brand:[],
+      filter_subfamily:[],
+      search:null,
+      store,
+      sitecode:store,
+      platform:2,
+      lang:"vi"
+    };
     const r=await fetch(endpoint,{
       method:"POST",
       headers,
@@ -1194,10 +1250,12 @@ async function goCategory(url:string,capture:RawCapture){
     const b=await readCapturedJson(r,capture,endpoint,"POST");
     if(!r.ok||b?.status!=="success"||!Array.isArray(b?.products)){
       const message=clean(b?.message||"");
-      if(r.status===403&&/token|signature|client/i.test(message)){
-        GO_RUNTIME_CACHE=null;
-        throw new Error("go_auth_refresh_required");
+      const authExpired=r.status===403&&/token|signature|client/i.test(message);
+      if(authExpired&&retryAuth){
+        await refreshAuth(attemptCfg);
+        return fetchPage(page,false);
       }
+      if(authExpired)throw new Error("go_auth_refresh_required");
       throw new Error("go_page_"+page+"_http_"+r.status);
     }
     return b;
@@ -1219,16 +1277,17 @@ async function goCategory(url:string,capture:RawCapture){
   // large category stays fast without hammering the source.
   for(let start=2;start<=pages;start+=10){
     const nums=Array.from({length:Math.min(10,pages-start+1)},(_,i)=>start+i);
-    const bodies=await Promise.all(nums.map(fetchPage));
+    const bodies=await Promise.all(nums.map(page=>fetchPage(page)));
     for(const body of bodies)add(body.products||[]);
   }
 
+  const finalStore=Number(cfg.store)||cfg.store;
   return {
     items:[...byId.values()],
     rootName:slugTitle(c),
     totalPages:pages,
     pageSize:Number(first.pagination?.page_size)||15,
-    store:Number(first.metadata?.store)||store
+    store:Number(first.metadata?.store)||finalStore
   };
 }
 function goDetailValue(product:any, label:string){

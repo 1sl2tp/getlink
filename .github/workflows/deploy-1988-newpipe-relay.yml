@@ -74,19 +74,10 @@ jobs:
           cat /tmp/health.json || true
           exit 1
 
-      - name: Probe relay watch page
-        continue-on-error: true
-        run: |
-          set -u
-          TARGET='https://www.youtube.com/watch?v=dQw4w9WgXcQ'
-          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$TARGET")"
-          HTTP="$(curl -sS -L --max-time 20 -o /tmp/watch.html -w '%{http_code}' "$RELAY_URL/?url=$ENCODED" || true)"
-          echo "WATCH_HTTP=$HTTP"
-          echo "WATCH_BYTES=$(wc -c </tmp/watch.html 2>/dev/null || echo 0)"
-
       - name: Smoke NewPipe WASM in Chrome
         run: |
           set -euo pipefail
+          sleep 20
           mkdir -p /tmp/np
           curl -fsSL 'https://raw.githubusercontent.com/thegrims/newpipe-extractor-wasm/main/browser-wrapper/webdemo/browser-wrapper.wasm-runtime.js' -o /tmp/np/browser-wrapper.wasm-runtime.js
           curl -fsSL 'https://raw.githubusercontent.com/thegrims/newpipe-extractor-wasm/main/browser-wrapper/webdemo/browser-wrapper.wasm' -o /tmp/np/browser-wrapper.wasm

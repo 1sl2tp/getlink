@@ -102,7 +102,7 @@ jobs:
               const teavm=await TeaVM.wasmGC.load('browser-wrapper.wasm');
               const media=String(teavm.exports.getFirstProgressiveStreamUrl(relay,'https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
               document.getElementById('out').textContent=JSON.stringify({
-                ok: media.startsWith('https://') && media.includes('googlevideo.com'),
+                ok: media.startsWith('https://') && media.includes('/media?'),
                 ms: Math.round(performance.now()-t),
                 media
               });
@@ -129,12 +129,11 @@ jobs:
           open('/tmp/media-url.txt','w').write(r['media'])
           PY
 
-      - name: Smoke proxied media range
+      - name: Smoke refreshed media range
         run: |
           set -euo pipefail
           MEDIA_URL="$(cat /tmp/media-url.txt)"
-          ENCODED="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$MEDIA_URL")"
-          curl -fsSL --max-time 20 -H 'Range: bytes=0-65535' -D /tmp/media.headers "$RELAY_URL/?url=$ENCODED" -o /tmp/media.bin
+          curl -fsSL --max-time 25 -H 'Range: bytes=0-65535' -D /tmp/media.headers "$MEDIA_URL" -o /tmp/media.bin
           cat /tmp/media.headers
           FIRST="$(head -1 /tmp/media.headers | tr -d '\r')"
           echo "FIRST=$FIRST"
@@ -142,3 +141,4 @@ jobs:
           echo "BYTES=$BYTES"
           test "$BYTES" -ge 1024
           grep -Eiq '^content-range:' /tmp/media.headers
+          grep -Eiq '^accept-ranges: *bytes' /tmp/media.headers

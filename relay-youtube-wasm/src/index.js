@@ -218,6 +218,170 @@ function directFormats(player) {
   ].filter((x) => typeof x?.url === "string" && x.url);
 }
 
+
+function xmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function parseMime(mimeType) {
+  const raw = String(mimeType || "");
+  const [mimePart, ...rest] = raw.split(";");
+  const match = raw.match(/codecs="([^"]+)"/i);
+  return {
+    mime: mimePart.trim() || "application/octet-stream",
+    codecs: match ? match[1] : ""
+  };
+}
+
+function chooseDirectVideo(formats, maxHeight = 480) {
+  const candidates = formats.filter((x) => {
+    const mime = String(x?.mimeType || "");
+    const hasVideo = Boolean(x?.width || x?.height || x?.qualityLabel);
+    const hasAudio = Boolean(x?.audioQuality || x?.audioChannels);
+    return mime.includes("video/mp4") && hasVideo && !hasAudio
+      && x?.initRange?.start != null && x?.initRange?.end != null
+      && x?.indexRange?.start != null && x?.indexRange?.end != null;
+  });
+  if (!candidates.length) return null;
+  const bounded = candidates.filter((x) => Number(x?.height || 0) <= maxHeight);
+  const pool = bounded.length ? bounded : candidates;
+  return pool.sort((a, b) => {
+    const ah = Number(a?.height || 0);
+    const bh = Number(b?.height || 0);
+    if (ah !== bh) return bh - ah;
+    return Number(b?.bitrate || 0) - Number(a?.bitrate || 0);
+  })[0] || null;
+}
+
+function chooseDirectAudio(formats) {
+  const candidates = formats.filter((x) => {
+    const mime = String(x?.mimeType || "");
+    const hasVideo = Boolean(x?.width || x?.height || x?.qualityLabel);
+    const hasAudio = Boolean(x?.audioQuality || x?.audioChannels);
+    return mime.includes("audio/mp4") && hasAudio && !hasVideo
+      && x?.initRange?.start != null && x?.initRange?.end != null
+      && x?.indexRange?.start != null && x?.indexRange?.end != null;
+  });
+  if (!candidates.length) return null;
+  return candidates.sort((a, b) => {
+    const abr = Number(a?.bitrate || 0);
+    const bbr = Number(b?.bitrate || 0);
+    const target = 160000;
+    return Math.abs(abr - target) - Math.abs(bbr - target);
+  })[0] || null;
+}
+
+function directMediaUrl(origin, requestInfo, itag) {
+  return mediaRelayUrl(
+    origin,
+    requestInfo.url,
+    requestInfo.body,
+    requestInfo.headers,
+    itag
+  );
+}
+
+function segmentBaseXml(format) {
+  const initStart = String(format?.initRange?.start ?? "0");
+  const initEnd = String(format?.initRange?.end ?? "0");
+  const indexStart = String(format?.indexRange?.start ?? "0");
+  const indexEnd = String(format?.indexRange?.end ?? "0");
+  return '<SegmentBase indexRange="' + xmlEscape(indexStart + "-" + indexEnd) + '">'
+    + '<Initialization range="' + xmlEscape(initStart + "-" + initEnd) + '"/>'
+    + '</SegmentBase>';
+}
+
+async function handleDirectManifest(request) {
+  const u = new URL(request.url);
+  const id = String(u.searchParams.get("id") || "");
+  const requestedHeight = Math.max(240, Math.min(720, Number(u.searchParams.get("h") || 480)));
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) {
+    return new Response("invalid_video", { status: 400, headers: corsHeaders() });
+  }
+
+  const client = DIRECT_CLIENTS.find((x) => x.name === "IOS");
+  try {
+    const resolved = await directPlayer(client, id);
+    const player = resolved.data;
+    const formats = directFormats(player);
+    const video = chooseDirectVideo(formats, requestedHeight);
+    const audio = chooseDirectAudio(formats);
+    if (!video || !audio) {
+      return json({
+        ok: false,
+        error: "adaptive_formats_missing",
+        available: formats.map((x) => ({
+          itag: x?.itag,
+          mimeType: x?.mimeType,
+          height: x?.height,
+          audioQuality: x?.audioQuality,
+          hasInit: Boolean(x?.initRange),
+          hasIndex: Boolean(x?.indexRange)
+        })).slice(0, 40)
+      }, 502);
+    }
+
+    const origin = u.origin;
+    const duration = Math.max(
+      1,
+      Number(player?.videoDetails?.lengthSeconds || 0)
+        || Number(video?.approxDurationMs || audio?.approxDurationMs || 0) / 1000
+        || 1
+    );
+    const videoMime = parseMime(video.mimeType);
+    const audioMime = parseMime(audio.mimeType);
+    const videoUrl = directMediaUrl(origin, resolved.request, video.itag);
+    const audioUrl = directMediaUrl(origin, resolved.request, audio.itag);
+
+    const mpd = '<?xml version="1.0" encoding="UTF-8"?>'
+      + '<MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" '
+      + 'profiles="urn:mpeg:dash:profile:isoff-on-demand:2011" '
+      + 'mediaPresentationDuration="PT' + duration.toFixed(3) + 'S" minBufferTime="PT1.5S">'
+      + '<Period start="PT0S">'
+      + '<AdaptationSet id="1" contentType="video" mimeType="' + xmlEscape(videoMime.mime) + '" '
+      + 'segmentAlignment="true" startWithSAP="1">'
+      + '<Representation id="v' + xmlEscape(video.itag) + '" bandwidth="' + Math.max(1, Number(video.bitrate || 1)) + '" '
+      + 'width="' + Math.max(1, Number(video.width || 1)) + '" height="' + Math.max(1, Number(video.height || 1)) + '" '
+      + 'frameRate="' + xmlEscape(video.fps || 30) + '" codecs="' + xmlEscape(videoMime.codecs) + '">'
+      + '<BaseURL>' + xmlEscape(videoUrl) + '</BaseURL>'
+      + segmentBaseXml(video)
+      + '</Representation></AdaptationSet>'
+      + '<AdaptationSet id="2" contentType="audio" mimeType="' + xmlEscape(audioMime.mime) + '" '
+      + 'segmentAlignment="true" startWithSAP="1">'
+      + '<Representation id="a' + xmlEscape(audio.itag) + '" bandwidth="' + Math.max(1, Number(audio.bitrate || 1)) + '" '
+      + 'audioSamplingRate="' + xmlEscape(audio.audioSampleRate || 44100) + '" codecs="' + xmlEscape(audioMime.codecs) + '">'
+      + '<AudioChannelConfiguration schemeIdUri="urn:mpeg:dash:23003:3:audio_channel_configuration:2011" '
+      + 'value="' + Math.max(1, Number(audio.audioChannels || 2)) + '"/>'
+      + '<BaseURL>' + xmlEscape(audioUrl) + '</BaseURL>'
+      + segmentBaseXml(audio)
+      + '</Representation></AdaptationSet>'
+      + '</Period></MPD>';
+
+    return new Response(mpd, {
+      status: 200,
+      headers: {
+        ...corsHeaders(),
+        "content-type": "application/dash+xml; charset=utf-8",
+        "cache-control": "no-store",
+        "x-1988-client": "IOS",
+        "x-1988-video-itag": String(video.itag),
+        "x-1988-audio-itag": String(audio.itag),
+        "x-1988-duration": String(duration)
+      }
+    });
+  } catch (error) {
+    return json({
+      ok: false,
+      error: "direct_manifest_failed",
+      detail: String(error?.message || error).slice(0, 900)
+    }, 502);
+  }
+}
+
 async function handleDirectProbe(request) {
   const u = new URL(request.url);
   const id = String(u.searchParams.get("id") || "");
@@ -378,6 +542,10 @@ export default {
 
     if (incoming.pathname === "/probe-direct") {
       return handleDirectProbe(request);
+    }
+
+    if (incoming.pathname === "/direct/manifest") {
+      return handleDirectManifest(request);
     }
 
     if (incoming.pathname !== "/") {

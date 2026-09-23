@@ -496,6 +496,30 @@ const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 const YOUTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
 const YOUTUBE_CLIENTS = [
   {
+    name: "TVHTML5",
+    id: "7",
+    version: "7.20260707.07.00",
+    userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/25.lts.30.1034943-gold (unlike Gecko), Unknown_TV_Unknown_0/Unknown (Unknown, Unknown)",
+    context: {
+      clientName: "TVHTML5",
+      clientVersion: "7.20260707.07.00",
+      hl: "vi",
+      gl: "VN"
+    }
+  },
+  {
+    name: "TVHTML5_DOWNGRADED",
+    id: "7",
+    version: "5.20260707",
+    userAgent: "Mozilla/5.0 (ChromiumStylePlatform) Cobalt/Version",
+    context: {
+      clientName: "TVHTML5",
+      clientVersion: "5.20260707",
+      hl: "vi",
+      gl: "VN"
+    }
+  },
+  {
     name: "ANDROID_VR",
     id: "28",
     version: "1.65.10",

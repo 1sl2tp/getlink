@@ -491,12 +491,339 @@ async function handleCategory(request, env) {
   }
 }
 
+
+const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+const YOUTUBE_API_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const YOUTUBE_CLIENTS = [
+  {
+    name: "ANDROID_VR",
+    id: "28",
+    version: "1.65.10",
+    userAgent: "com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip",
+    context: {
+      clientName: "ANDROID_VR",
+      clientVersion: "1.65.10",
+      deviceMake: "Oculus",
+      deviceModel: "Quest 3",
+      androidSdkVersion: 32,
+      osName: "Android",
+      osVersion: "12L",
+      hl: "vi",
+      gl: "VN"
+    }
+  },
+  {
+    name: "WEB_EMBEDDED_PLAYER",
+    id: "56",
+    version: "2.20260708.00.00",
+    userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/15.5 Safari/605.1.15",
+    context: {
+      clientName: "WEB_EMBEDDED_PLAYER",
+      clientVersion: "2.20260708.00.00",
+      clientScreen: "EMBED",
+      hl: "vi",
+      gl: "VN"
+    },
+    thirdParty: { embedUrl: "https://www.youtube.com/" }
+  }
+];
+
+function youtubeCors(headers = {}) {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET,HEAD,OPTIONS",
+    "access-control-allow-headers": "Range,Content-Type",
+    "access-control-expose-headers": "Content-Length,Content-Range,Accept-Ranges,Content-Type,X-1988-Cloud",
+    ...headers
+  };
+}
+
+function googleVideoUrl(raw) {
+  try {
+    const u = new URL(String(raw || ""));
+    const host = u.hostname.toLowerCase();
+    return (host === "googlevideo.com" || host.endsWith(".googlevideo.com")) ? u.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function youtubeFormats(player) {
+  const streaming = player?.streamingData || {};
+  return [
+    ...(Array.isArray(streaming.formats) ? streaming.formats : []),
+    ...(Array.isArray(streaming.adaptiveFormats) ? streaming.adaptiveFormats : [])
+  ].filter((format) => googleVideoUrl(format?.url));
+}
+
+function youtubeFormatRank(format, kind) {
+  const mime = clean(format?.mimeType).toLowerCase();
+  const itag = Number(format?.itag) || 0;
+  const bitrate = Number(format?.bitrate) || 0;
+  const height = Number(format?.height) || 0;
+  const hasAudio = Boolean(format?.audioQuality || format?.audioChannels);
+  const hasVideo = Boolean(format?.qualityLabel || format?.width || format?.height);
+
+  if (kind === "audio") {
+    const audioOnly = hasAudio && !hasVideo ? 4 : 0;
+    const mp4 = mime.includes("audio/mp4") || mime.includes("video/mp4") ? 3 : 0;
+    const progressive18 = itag === 18 ? 2 : 0;
+    return audioOnly * 1e12 + mp4 * 1e11 + progressive18 * 1e10 + bitrate;
+  }
+
+  const progressive = hasAudio && hasVideo ? 5 : 0;
+  const progressive18 = itag === 18 ? 4 : 0;
+  const mp4 = mime.includes("video/mp4") ? 3 : 0;
+  const boundedHeight = Math.min(height || 0, 720);
+  return progressive * 1e12 + progressive18 * 1e11 + mp4 * 1e10 + boundedHeight * 1e6 + bitrate;
+}
+
+function selectYoutubeFormat(player, kind) {
+  return youtubeFormats(player)
+    .filter((format) => {
+      const hasAudio = Boolean(format?.audioQuality || format?.audioChannels);
+      const hasVideo = Boolean(format?.qualityLabel || format?.width || format?.height);
+      return kind === "audio" ? hasAudio : (hasAudio && hasVideo);
+    })
+    .sort((a, b) => youtubeFormatRank(b, kind) - youtubeFormatRank(a, kind))[0] || null;
+}
+
+async function youtubePlayer(videoId, client) {
+  const endpoint = new URL("https://www.youtube.com/youtubei/v1/player");
+  endpoint.searchParams.set("key", YOUTUBE_API_KEY);
+  endpoint.searchParams.set("prettyPrint", "false");
+
+  const body = {
+    context: {
+      client: {
+        ...client.context,
+        userAgent: client.userAgent
+      },
+      ...(client.thirdParty ? { thirdParty: client.thirdParty } : {})
+    },
+    videoId,
+    contentCheckOk: true,
+    racyCheckOk: true,
+    playbackContext: {
+      contentPlaybackContext: {
+        html5Preference: "HTML5_PREF_WANTS"
+      }
+    }
+  };
+
+  const response = await fetch(endpoint.toString(), {
+    method: "POST",
+    headers: {
+      "accept": "*/*",
+      "content-type": "application/json",
+      "origin": "https://www.youtube.com",
+      "referer": client.name === "WEB_EMBEDDED_PLAYER"
+        ? "https://www.youtube.com/embed/" + videoId
+        : "https://www.youtube.com/",
+      "user-agent": client.userAgent,
+      "x-youtube-client-name": client.id,
+      "x-youtube-client-version": client.version
+    },
+    body: JSON.stringify(body)
+  });
+
+  if (!response.ok) {
+    throw new Error("youtube_player_http_" + response.status);
+  }
+
+  const player = await response.json();
+  const status = clean(player?.playabilityStatus?.status || "");
+  if (status !== "OK") {
+    throw new Error("youtube_player_" + (status || "unavailable"));
+  }
+  return player;
+}
+
+async function probeYoutubeMedia(url, client) {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      "accept": "*/*",
+      "range": "bytes=0-1",
+      "origin": "https://www.youtube.com",
+      "referer": "https://www.youtube.com/",
+      "user-agent": client.userAgent
+    },
+    redirect: "follow"
+  });
+  const ok = response.status === 200 || response.status === 206;
+  try { await response.body?.cancel(); } catch {}
+  return { ok, status: response.status };
+}
+
+async function resolveYoutubeMedia(videoId, kind = "video") {
+  if (!YOUTUBE_ID_RE.test(videoId)) throw new Error("invalid_video");
+  if (kind !== "video" && kind !== "audio") throw new Error("invalid_kind");
+
+  const errors = [];
+  for (const client of YOUTUBE_CLIENTS) {
+    try {
+      const player = await youtubePlayer(videoId, client);
+      const format = selectYoutubeFormat(player, kind);
+      if (!format?.url) {
+        errors.push(client.name + ":no_direct_format");
+        continue;
+      }
+
+      const url = googleVideoUrl(format.url);
+      if (!url) {
+        errors.push(client.name + ":non_googlevideo");
+        continue;
+      }
+
+      const probe = await probeYoutubeMedia(url, client);
+      if (!probe.ok) {
+        errors.push(client.name + ":media_http_" + probe.status);
+        continue;
+      }
+
+      return {
+        videoId,
+        kind,
+        client,
+        player,
+        format,
+        url
+      };
+    } catch (error) {
+      errors.push(client.name + ":" + String(error?.message || error).slice(0, 160));
+    }
+  }
+  throw new Error("youtube_media_unavailable:" + errors.join("|"));
+}
+
+async function handleYoutubeResolve(request) {
+  const url = new URL(request.url);
+  const videoId = clean(url.searchParams.get("id"));
+  const kind = clean(url.searchParams.get("kind") || "video");
+  if (!YOUTUBE_ID_RE.test(videoId)) return new Response(JSON.stringify({ ok: false, error: "invalid_video" }), {
+    status: 400,
+    headers: youtubeCors({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+  });
+
+  try {
+    const resolved = await resolveYoutubeMedia(videoId, kind);
+    const details = resolved.player?.videoDetails || {};
+    const base = new URL(request.url);
+    base.pathname = "/youtube/media";
+    base.search = "";
+    base.searchParams.set("id", videoId);
+    base.searchParams.set("kind", kind);
+
+    return new Response(JSON.stringify({
+      ok: true,
+      engine: "cloudflare-innertube",
+      data: {
+        id: videoId,
+        kind,
+        title: clean(details.title),
+        author: clean(details.author),
+        duration: Number(details.lengthSeconds) || 0,
+        client: resolved.client.name,
+        itag: Number(resolved.format?.itag) || 0,
+        mimeType: clean(resolved.format?.mimeType),
+        quality: clean(resolved.format?.qualityLabel || resolved.format?.audioQuality),
+        mediaUrl: base.toString()
+      }
+    }), {
+      headers: youtubeCors({
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": "no-store",
+        "x-1988-cloud": resolved.client.name
+      })
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: "youtube_resolve_failed",
+      detail: String(error?.message || error).slice(0, 900)
+    }), {
+      status: 502,
+      headers: youtubeCors({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    });
+  }
+}
+
+async function handleYoutubeMedia(request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: youtubeCors() });
+
+  const requestUrl = new URL(request.url);
+  const videoId = clean(requestUrl.searchParams.get("id"));
+  const kind = clean(requestUrl.searchParams.get("kind") || "video");
+  if (!YOUTUBE_ID_RE.test(videoId)) return new Response("invalid_video", { status: 400, headers: youtubeCors() });
+
+  try {
+    const resolved = await resolveYoutubeMedia(videoId, kind);
+    const headers = {
+      "accept": "*/*",
+      "origin": "https://www.youtube.com",
+      "referer": "https://www.youtube.com/",
+      "user-agent": resolved.client.userAgent
+    };
+    const incomingRange = request.headers.get("Range");
+    if (incomingRange) headers["range"] = incomingRange;
+
+    const upstream = await fetch(resolved.url, {
+      method: request.method === "HEAD" ? "HEAD" : "GET",
+      headers,
+      redirect: "follow"
+    });
+
+    if (!(upstream.status === 200 || upstream.status === 206)) {
+      try { await upstream.body?.cancel(); } catch {}
+      return new Response(JSON.stringify({ ok: false, error: "youtube_upstream_http", status: upstream.status }), {
+        status: 502,
+        headers: youtubeCors({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+      });
+    }
+
+    const responseHeaders = youtubeCors({
+      "content-type": upstream.headers.get("content-type") || clean(resolved.format?.mimeType) || "video/mp4",
+      "accept-ranges": upstream.headers.get("accept-ranges") || "bytes",
+      "cache-control": "no-store",
+      "x-1988-cloud": resolved.client.name
+    });
+    for (const name of ["content-length", "content-range", "etag", "last-modified"]) {
+      const value = upstream.headers.get(name);
+      if (value) responseHeaders[name] = value;
+    }
+
+    if (request.method === "HEAD") {
+      try { await upstream.body?.cancel(); } catch {}
+      return new Response(null, { status: upstream.status, headers: responseHeaders });
+    }
+    return new Response(upstream.body, { status: upstream.status, headers: responseHeaders });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      ok: false,
+      error: "youtube_media_failed",
+      detail: String(error?.message || error).slice(0, 900)
+    }), {
+      status: 502,
+      headers: youtubeCors({ "content-type": "application/json; charset=utf-8", "cache-control": "no-store" })
+    });
+  }
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
     if (request.method === "GET" && url.pathname === "/health") {
-      return json({ ok: true, mode: "bhx-transport-only", d1: false });
+      return json({ ok: true, mode: "bhx-youtube-transport", d1: false });
+    }
+
+    if (request.method === "GET" && url.pathname === "/youtube/resolve") {
+      return handleYoutubeResolve(request);
+    }
+
+    if ((request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS") && url.pathname === "/youtube/media") {
+      return handleYoutubeMedia(request);
     }
 
     if (request.method === "POST" && url.pathname === "/bhx") {

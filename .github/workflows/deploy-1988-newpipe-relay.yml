@@ -74,6 +74,14 @@ jobs:
           cat /tmp/health.json || true
           exit 1
 
+      - name: Probe exact NewPipe clients
+        run: |
+          set -euo pipefail
+          curl -fsSL --max-time 30 "$RELAY_URL/probe-direct?id=dQw4w9WgXcQ" -o /tmp/direct.json
+          cat /tmp/direct.json
+          echo
+          jq -e '.results | length >= 1' /tmp/direct.json >/dev/null
+
       - name: Smoke NewPipe WASM in Chrome
         run: |
           set -euo pipefail

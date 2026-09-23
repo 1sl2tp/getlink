@@ -229,8 +229,10 @@ export default {
     }
 
     let body;
+    let bodyText = "";
     if (request.method !== "GET" && request.method !== "HEAD") {
       body = await request.arrayBuffer();
+      bodyText = new TextDecoder().decode(body.slice(0));
     }
 
     let upstream;
@@ -272,12 +274,11 @@ export default {
         const text = await upstream.text();
         const player = JSON.parse(text);
         const replayHeaders = Object.fromEntries(headers.entries());
-        const requestBody = body ? new TextDecoder().decode(body) : "";
         const rewritten = rewritePlayerStreams(
           player,
           incoming.origin,
           target.toString(),
-          requestBody,
+          bodyText,
           replayHeaders
         );
         if (rewritten > 0) {

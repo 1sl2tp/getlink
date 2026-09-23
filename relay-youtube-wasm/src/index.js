@@ -74,6 +74,180 @@ function rewritePlayerStreams(player, origin, targetUrl, requestBody, replayHead
   return count;
 }
 
+
+const DIRECT_CLIENTS = [
+  {
+    name: "IOS",
+    version: "21.03.2",
+    ua: "com.google.ios.youtube/21.03.2(iPhone16,2; U; CPU iOS 18_7_2 like Mac OS X; VN)",
+    visitorHost: "https://www.youtube.com",
+    playerHost: "https://youtubei.googleapis.com",
+    client: {
+      clientName: "IOS",
+      clientVersion: "21.03.2",
+      clientScreen: "WATCH",
+      platform: "MOBILE",
+      deviceMake: "Apple",
+      deviceModel: "iPhone16,2",
+      osName: "iOS",
+      osVersion: "18.7.2.22H124",
+      hl: "vi",
+      gl: "VN",
+      utcOffsetMinutes: 0
+    }
+  },
+  {
+    name: "VISIONOS",
+    version: "1.02",
+    ua: "com.google.visionos.youtube/1.02(RealityDevice14,1; U; CPU visionOS 25_6_0 like Mac OS X; VN)",
+    visitorHost: "https://www.youtube.com",
+    playerHost: "https://youtubei.googleapis.com",
+    client: {
+      clientName: "VISIONOS",
+      clientVersion: "1.02",
+      clientScreen: "WATCH",
+      platform: "MOBILE",
+      deviceMake: "Apple",
+      deviceModel: "RealityDevice14,1",
+      osName: "visionOS",
+      osVersion: "25.6.0.23O471",
+      hl: "vi",
+      gl: "VN",
+      utcOffsetMinutes: 0
+    }
+  },
+  {
+    name: "WEB",
+    version: "2.20260120.01.00",
+    ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36",
+    visitorHost: "https://www.youtube.com",
+    playerHost: "https://www.youtube.com",
+    client: {
+      clientName: "WEB",
+      clientVersion: "2.20260120.01.00",
+      clientScreen: "WATCH",
+      platform: "DESKTOP",
+      hl: "vi",
+      gl: "VN",
+      utcOffsetMinutes: 0
+    }
+  }
+];
+
+function randomToken(length) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  let out = "";
+  for (const b of bytes) out += chars[b % chars.length];
+  return out;
+}
+
+function baseContext(client) {
+  return {
+    context: {
+      client: { ...client.client },
+      request: { internalExperimentFlags: [], useSsl: true },
+      user: { lockedSafetyMode: false }
+    }
+  };
+}
+
+function mobileHeaders(client) {
+  return {
+    "accept": "*/*",
+    "content-type": "application/json",
+    "user-agent": client.ua,
+    "x-goog-api-format-version": "2"
+  };
+}
+
+async function directVisitorData(client) {
+  const url = client.visitorHost + "/youtubei/v1/visitor_id?prettyPrint=false";
+  const response = await fetch(url, {
+    method: "POST",
+    headers: mobileHeaders(client),
+    body: JSON.stringify(baseContext(client)),
+    redirect: "follow"
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(client.name + "_visitor_http_" + response.status + ":" + text.slice(0, 160));
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(client.name + "_visitor_not_json:" + text.slice(0, 160)); }
+  const visitor = String(data?.responseContext?.visitorData || "");
+  if (!visitor) throw new Error(client.name + "_visitor_missing");
+  return visitor;
+}
+
+async function directPlayer(client, videoId) {
+  const visitorData = await directVisitorData(client);
+  const body = baseContext(client);
+  body.context.client.visitorData = visitorData;
+  body.videoId = videoId;
+  body.cpn = randomToken(16);
+  body.contentCheckOk = true;
+  body.racyCheckOk = true;
+
+  const t = randomToken(12);
+  const url = client.playerHost + "/youtubei/v1/player?prettyPrint=false&t=" + encodeURIComponent(t) + "&id=" + encodeURIComponent(videoId);
+  const headers = mobileHeaders(client);
+  if (client.name === "WEB") {
+    headers["x-youtube-client-name"] = "1";
+    headers["x-youtube-client-version"] = client.version;
+    headers["origin"] = "https://www.youtube.com";
+    headers["referer"] = "https://www.youtube.com";
+    headers["cookie"] = "SOCS=CAE=";
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    redirect: "follow"
+  });
+  const text = await response.text();
+  if (!response.ok) throw new Error(client.name + "_player_http_" + response.status + ":" + text.slice(0, 200));
+  let data;
+  try { data = JSON.parse(text); } catch { throw new Error(client.name + "_player_not_json:" + text.slice(0, 180)); }
+  return { data, request: { url, headers, body: JSON.stringify(body) } };
+}
+
+function directFormats(player) {
+  return [
+    ...(Array.isArray(player?.streamingData?.formats) ? player.streamingData.formats : []),
+    ...(Array.isArray(player?.streamingData?.adaptiveFormats) ? player.streamingData.adaptiveFormats : [])
+  ].filter((x) => typeof x?.url === "string" && x.url);
+}
+
+async function handleDirectProbe(request) {
+  const u = new URL(request.url);
+  const id = String(u.searchParams.get("id") || "");
+  if (!/^[A-Za-z0-9_-]{11}$/.test(id)) return json({ ok: false, error: "invalid_video" }, 400);
+
+  const results = [];
+  for (const client of DIRECT_CLIENTS) {
+    try {
+      const { data } = await directPlayer(client, id);
+      const formats = directFormats(data);
+      const progressive = formats.filter((x) => {
+        const mime = String(x?.mimeType || "");
+        const audio = Boolean(x?.audioQuality || x?.audioChannels);
+        const video = Boolean(x?.qualityLabel || x?.width || x?.height);
+        return mime.includes("video/mp4") && audio && video;
+      });
+      results.push({
+        client: client.name,
+        status: String(data?.playabilityStatus?.status || ""),
+        reason: String(data?.playabilityStatus?.reason || ""),
+        formats: formats.length,
+        progressive: progressive.map((x) => ({ itag: x.itag, quality: x.qualityLabel, bitrate: x.bitrate })).slice(0, 5)
+      });
+    } catch (error) {
+      results.push({ client: client.name, error: String(error?.message || error).slice(0, 500) });
+    }
+  }
+  return json({ ok: results.some((x) => x.formats > 0), results });
+}
+
 async function handleMediaRelay(request) {
   if (request.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders() });
@@ -200,6 +374,10 @@ export default {
 
     if (incoming.pathname === "/media") {
       return handleMediaRelay(request);
+    }
+
+    if (incoming.pathname === "/probe-direct") {
+      return handleDirectProbe(request);
     }
 
     if (incoming.pathname !== "/") {

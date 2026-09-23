@@ -235,12 +235,29 @@ export default {
 
     let upstream;
     try {
-      upstream = await fetch(target.toString(), {
-        method: request.method,
-        headers,
-        body,
-        redirect: "follow"
-      });
+      const youtubeJson = target.pathname.startsWith("/youtubei/");
+      const attempts = youtubeJson ? 3 : 1;
+
+      for (let attempt = 0; attempt < attempts; attempt++) {
+        upstream = await fetch(target.toString(), {
+          method: request.method,
+          headers,
+          body,
+          redirect: "follow"
+        });
+
+        if (!youtubeJson) break;
+
+        const contentType = String(upstream.headers.get("content-type") || "").toLowerCase();
+        if (upstream.ok && contentType.includes("application/json")) break;
+
+        if (attempt < attempts - 1) {
+          try { await upstream.body?.cancel(); } catch {}
+          upstream = undefined;
+        }
+      }
+
+      if (!upstream) throw new Error("no_upstream_response");
     } catch (error) {
       return json({ error: "upstream_fetch_failed", detail: String(error).slice(0, 300) }, 502);
     }

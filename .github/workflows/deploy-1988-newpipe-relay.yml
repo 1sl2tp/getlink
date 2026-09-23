@@ -82,63 +82,36 @@ jobs:
           echo
           jq -e '.results | length >= 1' /tmp/direct.json >/dev/null
 
-      - name: Smoke NewPipe WASM in Chrome
+      - name: Smoke direct DASH manifest and ranges
         run: |
           set -euo pipefail
-          sleep 20
-          mkdir -p /tmp/np
-          curl -fsSL 'https://raw.githubusercontent.com/thegrims/newpipe-extractor-wasm/main/browser-wrapper/webdemo/browser-wrapper.wasm-runtime.js' -o /tmp/np/browser-wrapper.wasm-runtime.js
-          curl -fsSL 'https://raw.githubusercontent.com/thegrims/newpipe-extractor-wasm/main/browser-wrapper/webdemo/browser-wrapper.wasm' -o /tmp/np/browser-wrapper.wasm
-          cat >/tmp/np/index.html <<'HTML'
-          <!doctype html><meta charset="utf-8">
-          <script src="browser-wrapper.wasm-runtime.js"></script>
-          <pre id="out">loading</pre>
-          <script>
-          (async()=>{
-            const q=new URLSearchParams(location.search);
-            const relay=q.get('relay');
-            const t=performance.now();
-            try {
-              const teavm=await TeaVM.wasmGC.load('browser-wrapper.wasm');
-              const media=String(teavm.exports.getFirstProgressiveStreamUrl(relay,'https://www.youtube.com/watch?v=dQw4w9WgXcQ'));
-              document.getElementById('out').textContent=JSON.stringify({
-                ok: media.startsWith('https://') && media.includes('/media?'),
-                ms: Math.round(performance.now()-t),
-                media
-              });
-            } catch(e) {
-              document.getElementById('out').textContent=JSON.stringify({ok:false,error:String(e)});
-            }
-          })();
-          </script>
-          HTML
-          cd /tmp/np
-          python3 -m http.server 8934 >/tmp/http.log 2>&1 &
-          sleep 1
-          CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
-          RELAY_BASE="$RELAY_URL/?url="
-          ENC="$(python3 -c 'import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1],safe=""))' "$RELAY_BASE")"
-          timeout 40s "$CHROME" --headless=new --disable-gpu --no-sandbox --disable-dev-shm-usage             --virtual-time-budget=30000 "http://127.0.0.1:8934/?relay=$ENC" --dump-dom > /tmp/dom.html
-          sed -n 's/.*<pre id="out">\([^<]*\).*/\1/p' /tmp/dom.html > /tmp/result.txt
-          cat /tmp/result.txt
+          MANIFEST="$RELAY_URL/direct/manifest?id=dQw4w9WgXcQ&h=480"
+          curl -fsSL --max-time 30 -D /tmp/manifest.headers "$MANIFEST" -o /tmp/manifest.mpd
+          cat /tmp/manifest.headers
+          head -c 1200 /tmp/manifest.mpd
+          echo
+          grep -q '<MPD' /tmp/manifest.mpd
           python3 - <<'PY'
-          import json
-          r=json.load(open('/tmp/result.txt'))
-          assert r.get('ok') is True, r
-          assert r.get('ms',99999) < 15000, r
-          open('/tmp/media-url.txt','w').write(r['media'])
+          import xml.etree.ElementTree as ET
+          root=ET.parse('/tmp/manifest.mpd').getroot()
+          ns={'m':'urn:mpeg:dash:schema:mpd:2011'}
+          urls=[(x.text or '').strip() for x in root.findall('.//m:BaseURL',ns)]
+          assert len(urls)>=2, urls
+          open('/tmp/video-url.txt','w').write(urls[0])
+          open('/tmp/audio-url.txt','w').write(urls[1])
+          print('VIDEO_URL_HOST',urls[0].split('/')[2])
+          print('AUDIO_URL_HOST',urls[1].split('/')[2])
           PY
-
-      - name: Smoke refreshed media range
-        run: |
-          set -euo pipefail
-          MEDIA_URL="$(cat /tmp/media-url.txt)"
-          curl -fsSL --max-time 25 -H 'Range: bytes=0-65535' -D /tmp/media.headers "$MEDIA_URL" -o /tmp/media.bin
-          cat /tmp/media.headers
-          FIRST="$(head -1 /tmp/media.headers | tr -d '\r')"
-          echo "FIRST=$FIRST"
-          BYTES="$(wc -c </tmp/media.bin)"
-          echo "BYTES=$BYTES"
-          test "$BYTES" -ge 1024
-          grep -Eiq '^content-range:' /tmp/media.headers
-          grep -Eiq '^accept-ranges: *bytes' /tmp/media.headers
+          for KIND in video audio; do
+            URL="$(cat /tmp/$KIND-url.txt)"
+            echo "=== $KIND RANGE ==="
+            curl -fsSL --max-time 30 -H 'Range: bytes=0-65535' -D "/tmp/$KIND.headers" "$URL" -o "/tmp/$KIND.bin"
+            cat "/tmp/$KIND.headers"
+            STATUS="$(head -1 "/tmp/$KIND.headers" | tr -d '\r')"
+            BYTES="$(wc -c <"/tmp/$KIND.bin")"
+            echo "STATUS=$STATUS BYTES=$BYTES"
+            grep -Eiq '^content-range: *bytes ' "/tmp/$KIND.headers"
+            grep -Eiq '^accept-ranges: *bytes' "/tmp/$KIND.headers"
+            test "$BYTES" -ge 1024
+            test "$BYTES" -le 131072
+          done

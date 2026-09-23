@@ -63,13 +63,9 @@ export default {
       const value = request.headers.get(name);
       if (value) headers.set(name, value);
     }
-
-    // Do not forward browser Origin/Referer to googleapis: a mismatched Origin
-    // causes XD3 errors. For youtube.com requests, give the upstream a normal
-    // YouTube browsing context.
-    if (target.hostname === "www.youtube.com" || target.hostname.endsWith(".youtube.com")) {
-      headers.set("origin", "https://www.youtube.com");
-      headers.set("referer", "https://www.youtube.com/");
+    const ua = headers.get("user-agent") || "";
+    if (!/Mozilla\//i.test(ua)) {
+      headers.set("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36");
     }
 
     let body;

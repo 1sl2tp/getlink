@@ -4,7 +4,8 @@ const ALLOWED_HOSTS = new Set([
   "m.youtube.com",
   "music.youtube.com",
   "youtubei.googleapis.com",
-  "www.google.com"
+  "www.google.com",
+  "googlevideo.com"
 ]);
 
 function corsHeaders() {
